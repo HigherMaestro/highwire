@@ -1,0 +1,16 @@
+/* Highwire colour and type tokens. Source of truth: tokens.json. */
+:root {
+  --hw-paper: #F6F4EE;
+  --hw-ink: #0E1116;
+  --hw-muted: #4A4F57;
+  --hw-line: #D9D6CE;
+  --hw-surface-dark: #1A1D23;
+  --hw-signal: #93E2FB;
+  --hw-wire-blue: #3D8CDB;
+  --hw-wire: linear-gradient(90deg, #F7C84C, #F6A9C4 35%, #93E2FB 70%, #A6EFCB);
+
+  --hw-font-display: "Space Grotesk", system-ui, sans-serif;
+  --hw-font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --hw-radius-card: 20px;
+  --hw-radius-control: 12px;
+}

@@ -24,6 +24,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `apps/web/app/` | the Next.js site: `/`, `/mcp` (mounts `createHttpHandler`), `/api/health` |
 | `packages/*/test/` | `node:test` via tsx. `server.test.ts` and `http.test.ts` drive the real server with a fake API |
 | `*/scripts/smoke.ts` | the live checks: stdio in `packages/mcp`, hosted in `apps/web` |
+| `brand/` | logo, icons, social images and colour tokens. `brand/README.md` says which file goes where; regenerate with `brand/scripts/build.py`, never by hand-editing the exports |
 
 ## Conventions
 
