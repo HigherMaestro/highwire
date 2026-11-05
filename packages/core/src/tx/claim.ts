@@ -21,7 +21,7 @@ import type { HigherApi } from "../higher/api.ts";
 import { COMPUTE_UNITS } from "../higher/constants.ts";
 import { WSOL, type Chain } from "./chain.ts";
 import { UnsafeTransactionError } from "./decode.ts";
-import { finish, priorityFee, withoutLookupTables, type BuiltTx, type Envelope } from "./envelope.ts";
+import { finish, MAX_TX_BYTES, MEMO_RESERVE_BYTES, priorityFee, type BuiltTx, type Envelope } from "./envelope.ts";
 import { lamportsNumber, tokensNumber } from "./units.ts";
 
 // build_claim_creator_fees. A creator earns in three places:
@@ -127,7 +127,7 @@ export async function buildClaimCreatorFees(
     if (!(transaction instanceof VersionedTransaction)) throw new Error("expected a v0 transaction from claimCreatorFee");
     // Unwrap the claimed SOL, as higher.fun's site does.
     const tables = await chain.lookupTables([transaction]);
-    const msg = TransactionMessage.decompile(withoutLookupTables(transaction, tables).message, { addressLookupTableAccounts: tables });
+    const msg = TransactionMessage.decompile(transaction.message, { addressLookupTableAccounts: tables });
     msg.instructions.push(unwrap);
     txs.push({ tx: new VersionedTransaction(msg.compileToV0Message(tables)), label: "claim curve creator fees", expect: { wallet, allowCpmm: false } });
   }
@@ -174,7 +174,8 @@ export async function buildClaimCreatorFees(
       );
     const fits = (groups: TransactionInstruction[][]) => {
       try {
-        return compile(groups).serialize().length <= 1232;
+        // Leave room for the memo finish() adds.
+        return compile(groups).serialize().length <= MAX_TX_BYTES - MEMO_RESERVE_BYTES;
       } catch {
         return false;
       }

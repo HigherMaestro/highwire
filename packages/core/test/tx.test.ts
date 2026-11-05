@@ -12,7 +12,7 @@ import { buildLaunch, LaunchKeys, launchFingerprint, validateLaunch, type Launch
 import { formatLamports, formatTokens, solToLamports, tokensToBase } from "../src/tx/units.ts";
 import { replayFetch, type Recording } from "./replay.ts";
 import { runScenario } from "./run-scenario.ts";
-import { CREATOR, CURVE_COIN, GRADUATED_COIN, LAUNCH_MINT, LAUNCH_URI, TRADER, type Scenario } from "./scenarios.ts";
+import { CLAIM_COIN, CREATOR, CURVE_COIN, GRADUATED_COIN, LAUNCH_MINT, LAUNCH_URI, TRADER, type Scenario } from "./scenarios.ts";
 
 const fixture = (name: Scenario): Recording => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), "utf8"));
 const replay = (name: Scenario) => runScenario(name, replayFetch(fixture(name)));
@@ -183,7 +183,7 @@ test("creator fee claims cover the curve vault and the graduated pool", async ()
   const r = await replay("claim");
   assert.ok(r && "claimable" in r);
   assert.ok(r.claimable.curveSol > 0);
-  assert.ok(r.claimable.pools.some((p) => p.mint === GRADUATED_COIN.toBase58() && p.sol > 0));
+  assert.ok(r.claimable.pools.some((p) => p.mint === CLAIM_COIN.toBase58() && p.sol > 0));
   const env = envelopeOf(r);
   checkEnvelope(env, CREATOR);
   assert.ok(env.transactions.every((t) => t.simulation.ok));

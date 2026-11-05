@@ -1,70 +1,22 @@
 import {
   PublicKey,
+  TransactionInstruction,
   TransactionMessage,
   VersionedTransaction,
   type AddressLookupTableAccount,
   type Keypair,
 } from "@solana/web3.js";
-import { PRIORITY_FEE_MICRO_LAMPORTS, type Cluster } from "../higher/constants.ts";
+import { HIGHWIRE_MEMO, MEMO_PROGRAM_ID, PRIORITY_FEE_MICRO_LAMPORTS } from "../higher/constants.ts";
+import { HigherError } from "../lib/errors.ts";
 import type { Chain } from "./chain.ts";
 import { assertSafe, describeTransaction, summaryLines, type DecodedTransaction, type Expectations } from "./decode.ts";
+import { ENVELOPE_FORMAT, HOW_TO_SIGN, type Envelope, type Simulation, type UnsignedTransaction } from "./format.ts";
 
-// The unsigned-transaction contract every build tool returns, and the
-// simulation that checks each transaction before it is handed over.
-// docs/unsigned-transactions.md describes the format for wallets and for the
-// signing page on highwire.fun.
+// Every built transaction ends here: the Highwire memo is added, then the
+// allow-list check, plain-language decoding and simulation, and the result is
+// wrapped in the envelope (format.ts, docs/unsigned-transactions.md).
 
-export const ENVELOPE_FORMAT = "highwire.unsigned-tx/v1";
-
-export interface Simulation {
-  ok: boolean;
-  /** Not simulated: why. */
-  skipped?: string;
-  unitsConsumed?: number | null;
-  error?: string;
-  /** The last program log lines, for debugging a failure. */
-  logs?: string[];
-}
-
-export interface UnsignedTransaction {
-  index: number;
-  label: string;
-  /** A serialized v0 VersionedTransaction, base64. Signature slots are zero except presigned ones. */
-  base64: string;
-  encoding: "base64";
-  version: 0;
-  feePayer: string;
-  /** Every signer the message requires, in order. */
-  signers: string[];
-  /** Signers whose signatures are already in the transaction (the new mint on a launch). */
-  presigned: string[];
-  /** The signer the user's wallet must add. */
-  walletSigner: string;
-  recentBlockhash: string;
-  lastValidBlockHeight: number;
-  /** Indexes of transactions that must land first. */
-  dependsOn: number[];
-  summary: string[];
-  fullyDecoded: boolean;
-  simulation: Simulation;
-}
-
-export interface Envelope {
-  format: typeof ENVELOPE_FORMAT;
-  cluster: Cluster;
-  wallet: string;
-  kind: "trade" | "launch" | "claim";
-  /** Sign and send in this order, each after the one before has confirmed. */
-  transactions: UnsignedTransaction[];
-  /** The block height after which the first transaction's blockhash expires; rebuild after it. */
-  expiresAfterBlockHeight: number;
-  howToSign: string;
-}
-
-export const HOW_TO_SIGN =
-  "Each transaction is unsigned (except for any presigned new mint). Have the wallet in `walletSigner` sign it, " +
-  "without changing it, and send the transactions in order, each after the one before has confirmed. " +
-  "Blockhashes expire after about a minute: rebuild if sending fails with an expired blockhash. Never share a private key.";
+export * from "./format.ts";
 
 /** Priority fee in micro-lamports per CU: the 75th percentile on these accounts, clamped as higher.fun's site does. */
 export async function priorityFee(chain: Chain, accounts: PublicKey[]): Promise<number> {
@@ -100,17 +52,40 @@ export async function simulate(chain: Chain, tx: VersionedTransaction): Promise<
   return { ok: true, unitsConsumed: res.value.unitsConsumed ?? null };
 }
 
-/** Rebuilds a transaction without lookup tables when it still fits, so every account is visible in the bytes. */
-export function withoutLookupTables(tx: VersionedTransaction, tables: AddressLookupTableAccount[]): VersionedTransaction {
-  if (tx.message.addressTableLookups.length === 0) return tx;
+/** The largest serialized transaction Solana accepts. */
+export const MAX_TX_BYTES = 1232;
+/** What the memo adds to a transaction at most: its program's address and the instruction. */
+export const MEMO_RESERVE_BYTES = 48;
+
+/** The attribution memo: SPL Memo v2 with the text "highwire", and no accounts (so no extra signer). */
+export function highwireMemo(): TransactionInstruction {
+  return new TransactionInstruction({ programId: new PublicKey(MEMO_PROGRAM_ID), keys: [], data: Buffer.from(HIGHWIRE_MEMO, "utf8") });
+}
+
+/**
+ * Recompiles a transaction with the Highwire memo as its last instruction. Lookup tables are dropped when the
+ * transaction still fits without them, so every account is visible in the bytes; otherwise they are kept.
+ */
+export function withHighwireMemo(tx: VersionedTransaction, tables: AddressLookupTableAccount[]): VersionedTransaction {
   const msg = TransactionMessage.decompile(tx.message, { addressLookupTableAccounts: tables });
+  msg.instructions.push(highwireMemo());
+  const fits = (t: VersionedTransaction) => {
+    try {
+      return t.serialize().length <= MAX_TX_BYTES;
+    } catch {
+      return false;
+    }
+  };
   try {
     const flat = new VersionedTransaction(msg.compileToV0Message());
-    if (flat.serialize().length <= 1232) return flat;
+    if (fits(flat)) return flat;
   } catch {
-    /* too large without the tables */
+    /* too many accounts without the tables */
   }
-  return tx;
+  const used = tables.filter((t) => tx.message.addressTableLookups.some((l) => l.accountKey.equals(t.key)));
+  const packed = new VersionedTransaction(msg.compileToV0Message(used));
+  if (!fits(packed)) throw new HigherError("the transaction is too large for Solana once the Highwire memo is added", { code: "too_large" });
+  return packed;
 }
 
 export interface BuiltTx {
@@ -147,9 +122,9 @@ export async function finish(opts: FinishOptions): Promise<Finished> {
   const decoded: DecodedTransaction[] = [];
   const out: UnsignedTransaction[] = [];
   for (const [index, b] of opts.txs.entries()) {
-    const flat = withoutLookupTables(b.tx, tables);
-    flat.message.recentBlockhash = blockhash;
-    const tx = new VersionedTransaction(flat.message);
+    const rebuilt = withHighwireMemo(b.tx, tables);
+    rebuilt.message.recentBlockhash = blockhash;
+    const tx = new VersionedTransaction(rebuilt.message);
     assertSafe(tx, chain.cluster, b.expect, tables);
     if (b.presign?.length) tx.sign(b.presign);
     const d = describeTransaction(tx, chain.cluster, tables);

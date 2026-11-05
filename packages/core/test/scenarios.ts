@@ -12,8 +12,10 @@ export const GRADUATED_COIN = new PublicKey("ESWuXHiwswpkfhQtA6A1tAtiBJh9A5hUDYj
 export const TRADER = new PublicKey("H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5");
 /** A wallet holding $Fischer. */
 export const GRADUATED_HOLDER = new PublicKey("DFZYHaTZiRFWo23q5NQZCBTxXGZi36ZwVNP62iyB2Vmj");
-/** $Fischer's creator, with curve and pool creator fees to claim. */
-export const CREATOR = new PublicKey("6y8Gcu2nSKBiscAM4sZLVXLEYsRGcnbtW9nSci1u2YhE");
+/** $PHILCOIN's creator, with curve and pool creator fees to claim (and SOL to pay for the claim). */
+export const CREATOR = new PublicKey("3nG8WsVqotPWH74NRUpLwfQ1NMabdorWQ52YvbrVHA2E");
+/** $PHILCOIN: a graduated coin with pool creator fees waiting. */
+export const CLAIM_COIN = new PublicKey("Ea5dBrJZN58yV1nm1Q4DybJNYKeTvwpb2GEkXyW64bUH");
 
 /** A fixed mint for the launch scenario, so the replayed build is deterministic. Never funded. */
 export const LAUNCH_MINT = Keypair.fromSeed(createHash("sha256").update("highwire simulation launch mint").digest());

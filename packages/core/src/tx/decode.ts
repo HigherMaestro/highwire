@@ -1,13 +1,13 @@
-import { getAssociatedTokenAddressSync, NATIVE_MINT, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { Buffer } from "buffer";
+import { PublicKey, TransactionMessage, type AddressLookupTableAccount, type VersionedTransaction } from "@solana/web3.js";
 import {
-  ComputeBudgetProgram,
-  PublicKey,
-  SystemProgram,
-  TransactionMessage,
-  type AddressLookupTableAccount,
-  type VersionedTransaction,
-} from "@solana/web3.js";
-import { ADDRESSES, COMPUTE_UNITS, PRIORITY_FEE_MICRO_LAMPORTS, type Cluster } from "../higher/constants.ts";
+  ADDRESSES,
+  COMPUTE_UNITS,
+  HIGHWIRE_MEMO,
+  MEMO_PROGRAM_ID,
+  PRIORITY_FEE_MICRO_LAMPORTS,
+  type Cluster,
+} from "../higher/constants.ts";
 import { HigherError } from "../lib/errors.ts";
 import { formatLamports, formatTokens } from "./units.ts";
 
@@ -16,6 +16,10 @@ import { formatLamports, formatTokens } from "./units.ts";
 // before it hands a transaction to a wallet (its allow-list of programs,
 // "only the signer's own accounts", and "the trade in the bytes is the trade
 // you quoted").
+//
+// The signing page runs this module in the browser too, so it imports only
+// web3.js and plain modules: no Node built-ins (Buffer comes from the "buffer"
+// package there) and no Raydium SDK.
 
 /** A built transaction failed a safety check. Never hand such a transaction to a wallet. */
 export class UnsafeTransactionError extends HigherError {
@@ -26,12 +30,26 @@ export class UnsafeTransactionError extends HigherError {
 }
 
 export const PROGRAMS = {
-  system: SystemProgram.programId.toBase58(),
-  computeBudget: ComputeBudgetProgram.programId.toBase58(),
-  token: TOKEN_PROGRAM_ID.toBase58(),
-  token2022: TOKEN_2022_PROGRAM_ID.toBase58(),
+  system: "11111111111111111111111111111111",
+  computeBudget: "ComputeBudget111111111111111111111111111111",
+  token: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  token2022: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
   associatedToken: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+  memo: MEMO_PROGRAM_ID,
 } as const;
+
+/** Wrapped SOL. */
+export const NATIVE_MINT_ADDRESS = "So11111111111111111111111111111111111111112";
+
+/** The associated token account of `owner` for `mint` under `tokenProgram`. */
+export function associatedTokenAddress(mint: PublicKey, owner: PublicKey, tokenProgram: PublicKey = new PublicKey(PROGRAMS.token)): PublicKey {
+  return PublicKey.findProgramAddressSync([owner.toBuffer(), tokenProgram.toBuffer(), mint.toBuffer()], new PublicKey(PROGRAMS.associatedToken))[0];
+}
+
+/** The plain-language line for the Highwire memo. */
+export const MEMO_LINE = `Tags the transaction as built by Highwire (memo "${HIGHWIRE_MEMO}")`;
+
+const isHighwireMemo = (ix: { keys: unknown[]; data: Buffer }) => ix.keys.length === 0 && ix.data.toString("utf8") === HIGHWIRE_MEMO;
 
 const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
 
@@ -78,7 +96,11 @@ export interface DecodedTransaction {
   /** SOL transfers, by recipient. */
   transfers: { to: string; lamports: bigint }[];
   /** Coins created by initialize_v2: the mint and the creator recorded on-chain. */
-  launches: { mint: string; creator: string; platform: string; name: string; symbol: string; uri: string }[];
+  launches: { mint: string; creator: string; platform: string; pool: string; name: string; symbol: string; uri: string }[];
+  /** Creator fee claims: the curve vault, or a CPMM pool. */
+  claims: { kind: "curve" | "pool"; from: string }[];
+  /** Creator-lock assignments: the pool and the locked amount in base units. */
+  locks: { pool: string; beneficiary: string; amount: bigint }[];
   computeUnitLimit?: number;
   microLamportsPerCu?: bigint;
 }
@@ -112,7 +134,16 @@ export function describeTransaction(
   const a = ADDRESSES[cluster];
   const keys = tx.message.staticAccountKeys;
   const signers = keys.slice(0, tx.message.header.numRequiredSignatures).map((k) => k.toBase58());
-  const out: DecodedTransaction = { feePayer: signers[0] ?? "?", signers, instructions: [], trades: [], transfers: [], launches: [] };
+  const out: DecodedTransaction = {
+    feePayer: signers[0] ?? "?",
+    signers,
+    instructions: [],
+    trades: [],
+    transfers: [],
+    launches: [],
+    claims: [],
+    locks: [],
+  };
 
   for (const ix of resolveInstructions(tx, lookupTables)) {
     const program = ix.programId.toBase58();
@@ -173,11 +204,13 @@ export function describeTransaction(
         } catch {
           /* leave "?" */
         }
-        out.launches.push({ mint: k(6), creator: k(1), platform: k(3), name, symbol, uri });
+        out.launches.push({ mint: k(6), creator: k(1), platform: k(3), pool: k(5), name, symbol, uri });
         known(`Create coin ${k(6)} ("${name}", $${symbol}) on the LaunchLab curve: creator ${k(1)}, platform ${k(3)}, pool ${k(5)}, metadata ${uri}`);
       } else if (disc === L.createVestingAccount) {
+        out.locks.push({ pool: k(2), beneficiary: k(1), amount: u64(d, 8) });
         known(`Assign ${formatTokens(u64(d, 8))} locked tokens of pool ${k(2)} to ${k(1)} (vesting record ${k(3)})`);
       } else if (disc === L.claimCreatorFee) {
+        out.claims.push({ kind: "curve", from: k(2) });
         known(`Claim curve creator fees for ${k(0)} from vault ${k(2)} into ${k(3)}`);
       } else unknown("LaunchLab instruction");
     } else if (program === a.cpmmProgram) {
@@ -188,15 +221,21 @@ export function describeTransaction(
         const inputMint = k(10);
         const outputMint = k(11);
         out.trades.push({ kind: "cpmm-swap", amountIn, minOut, inputMint, outputMint });
-        const isBuy = inputMint === NATIVE_MINT.toBase58();
+        const isBuy = inputMint === NATIVE_MINT_ADDRESS;
         known(
           isBuy
             ? `Buy coin ${outputMint} in Raydium CPMM pool ${k(3)}: pay ${formatLamports(amountIn)} SOL, receive at least ${formatTokens(minOut)} tokens`
             : `Sell ${formatTokens(amountIn)} tokens of ${inputMint} in Raydium CPMM pool ${k(3)}, receive at least ${formatLamports(minOut)} SOL`,
         );
       } else if (disc === C.collectCreatorFee) {
-        known(`Collect the pool creator fees of Raydium CPMM pool ${k(3)} into ${k(9)} and ${k(10)}`);
+        // Accounts: creator, authority, pool, config, vault A, vault B, mint A, mint B, owner's account A, owner's account B, ...
+        out.claims.push({ kind: "pool", from: k(2) });
+        known(`Collect the pool creator fees of Raydium CPMM pool ${k(2)} into ${k(8)} and ${k(9)}`);
       } else unknown("CPMM instruction");
+    } else if (program === PROGRAMS.memo) {
+      // Never echo another memo's text: on the signing page it would be a stranger's words in Highwire's voice.
+      if (isHighwireMemo(ix)) known(MEMO_LINE);
+      else out.instructions.push({ program, text: "UNKNOWN memo (not the Highwire memo)", known: false });
     } else unknown("instruction");
   }
   return out;
@@ -242,7 +281,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
   const ixs = resolveInstructions(tx, lookupTables);
   // Token accounts this transaction may move the wallet's SOL into: its ATAs, and accounts it initialises for itself.
   const own = new Set(
-    [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID].map((p) => getAssociatedTokenAddressSync(NATIVE_MINT, wallet, true, p).toBase58()),
+    [PROGRAMS.token, PROGRAMS.token2022].map((p) => associatedTokenAddress(new PublicKey(NATIVE_MINT_ADDRESS), wallet, new PublicKey(p)).toBase58()),
   );
   for (const ix of ixs) {
     const p = ix.programId.toBase58();
@@ -254,6 +293,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
   }
 
   let feeTransfers = 0;
+  let memos = 0;
   ixs.forEach((ix, i) => {
     const p = ix.programId.toBase58();
     const d = ix.data;
@@ -298,7 +338,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
       const disc = hex(d.subarray(0, 8));
       if (disc === L.claimCreatorFee) {
         if (!key(0).equals(wallet)) fail(`instruction ${i + 1}: creator fee claim for someone else`);
-        if (!key(3).equals(getAssociatedTokenAddressSync(key(4), wallet, true, key(5)))) fail(`instruction ${i + 1}: creator fee claim into someone else's account`);
+        if (!key(3).equals(associatedTokenAddress(key(4), wallet, key(5)))) fail(`instruction ${i + 1}: creator fee claim into someone else's account`);
         return;
       }
       if (disc === L.createVestingAccount) {
@@ -316,7 +356,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
       const C = DISCRIMINATORS.cpmm;
       const disc = hex(d.subarray(0, 8));
       const ownAta = (acct: number, mint: number, prog: number) =>
-        own.has(key(acct).toBase58()) || key(acct).equals(getAssociatedTokenAddressSync(key(mint), wallet, true, key(prog)));
+        own.has(key(acct).toBase58()) || key(acct).equals(associatedTokenAddress(key(mint), wallet, key(prog)));
       if (disc === C.swapBaseInput) {
         if (!key(0).equals(wallet)) fail(`instruction ${i + 1}: CPMM swap for someone else`);
         if (!key(2).toBase58() || key(2).toBase58() !== a.cpmmConfig) fail(`instruction ${i + 1}: CPMM swap outside higher.fun's fee tier`);
@@ -326,6 +366,9 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
         if (key(3).toBase58() !== a.cpmmConfig) fail(`instruction ${i + 1}: creator fee collect outside higher.fun's fee tier`);
         if (!ownAta(8, 6, 10) || !ownAta(9, 7, 11)) fail(`instruction ${i + 1}: creator fee collect into an account that isn't the wallet's`);
       } else fail(`instruction ${i + 1}: a CPMM instruction Highwire does not build`);
+    } else if (p === PROGRAMS.memo) {
+      if (!isHighwireMemo(ix)) fail(`instruction ${i + 1}: a memo other than Highwire's`);
+      if (++memos > 1) fail(`instruction ${i + 1}: more than one memo`);
     } else fail(`instruction ${i + 1} calls a program outside the allow-list: ${p}`);
   });
   if (exp.launchFee && feeTransfers !== 1) fail("the launch fee must be paid exactly once");
