@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../src/server.ts";
-import { ALL_TOOLS, FAKE_OPTIONS } from "./fake.ts";
+import { ALL_TOOLS, BUILD_TOOLS, FAKE_OPTIONS } from "./fake.ts";
 
 async function connect() {
   const server = createServer(FAKE_OPTIONS);
@@ -18,12 +18,56 @@ function parse(result: Awaited<ReturnType<Client["callTool"]>>) {
   return JSON.parse(content[0]!.text);
 }
 
-test("lists every tool, all read-only", async () => {
+test("lists every tool; only the build tools are not read-only, and none is destructive", async () => {
   const client = await connect();
   const { tools } = await client.listTools();
   const names = tools.map((t) => t.name).sort();
   assert.deepEqual(names, ALL_TOOLS);
-  for (const t of tools) assert.equal(t.annotations?.readOnlyHint, true, t.name);
+  for (const t of tools) {
+    assert.equal(t.annotations?.readOnlyHint, !BUILD_TOOLS.includes(t.name), t.name);
+    assert.equal(t.annotations?.destructiveHint, false, t.name);
+  }
+});
+
+test("build tools demand their confirm flag and cap slippage", async () => {
+  const client = await connect();
+  const base = {
+    wallet: "H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5",
+    mint: "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix",
+    side: "buy",
+    sol: 0.1,
+    max_sol: 1,
+    max_slippage_bps: 200,
+  };
+  for (const args of [base, { ...base, confirm_trade: false }, { ...base, confirm_trade: true, max_slippage_bps: 1501 }, { ...base, confirm_trade: true, max_sol: 11 }]) {
+    const res = await client.callTool({ name: "build_trade", arguments: args });
+    assert.equal(res.isError, true, JSON.stringify(args));
+  }
+  const launch = await client.callTool({
+    name: "build_launch",
+    arguments: { wallet: base.wallet, name: "X", ticker: "X", fee_mode: "classic", idempotency_key: "launch-key-1" },
+  });
+  assert.equal(launch.isError, true, "confirm_launch is required");
+});
+
+test("no tool takes a private key", async () => {
+  const client = await connect();
+  const { tools } = await client.listTools();
+  for (const t of tools) {
+    for (const prop of Object.keys((t.inputSchema as { properties?: object }).properties ?? {})) {
+      assert.doesNotMatch(prop, /secret|private|seed|keypair|mnemonic/i, `${t.name}.${prop}`);
+    }
+  }
+});
+
+test("quote_trade wants sol for a buy and tokens for a sell", async () => {
+  const client = await connect();
+  const res = await client.callTool({
+    name: "quote_trade",
+    arguments: { mint: "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix", side: "buy", tokens: 5 },
+  });
+  assert.equal(res.isError, true);
+  assert.equal(parse(res).code, "bad_request");
 });
 
 test("list_coins converts units and keeps the cursor", async () => {

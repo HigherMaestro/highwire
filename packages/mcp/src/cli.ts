@@ -12,10 +12,14 @@ if (args.includes("--help")) {
   console.log(`highwire ${VERSION}: the MCP server for higher.fun (stdio)
 
 Environment (all optional):
-  HIGHER_API_URL     default https://api.higher.fun
-  SOLANA_RPC_URL     default https://api.mainnet-beta.solana.com
-  HIGHER_TIMEOUT_MS  default 15000
-  HIGHER_RETRIES     default 2`);
+  HIGHWIRE_CLUSTER         mainnet or devnet, default mainnet (where transactions are built)
+  SOLANA_RPC_URL           default the cluster's public RPC
+  HIGHWIRE_MAX_SOL_PER_TX  default 10 (the most SOL one built transaction may move)
+  HIGHER_API_URL           default https://api.higher.fun
+  HIGHER_TIMEOUT_MS        default 15000
+  HIGHER_RETRIES           default 2
+
+Highwire never signs: build tools return unsigned transactions for your own wallet.`);
   process.exit(0);
 }
 

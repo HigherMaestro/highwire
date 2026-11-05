@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createHttpHandler, createRateLimiter, type HttpHandlerOptions } from "../src/http.ts";
-import { ALL_TOOLS, FAKE_OPTIONS } from "./fake.ts";
+import { FAKE_OPTIONS, READ_TOOLS } from "./fake.ts";
 
 const URL_ = "https://highwire.test/mcp";
 
@@ -33,7 +33,8 @@ const initialize = () =>
 test("an MCP client lists every tool and calls one over HTTP", async () => {
   const client = await connect();
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ALL_TOOLS);
+  // The hosted endpoint is public: the read tools only, never the transaction tools.
+  assert.deepEqual(tools.map((t) => t.name).sort(), READ_TOOLS);
   const res = await client.callTool({ name: "list_coins", arguments: { sort: "new", limit: 1 } });
   const out = JSON.parse((res.content as Array<{ text: string }>)[0]!.text);
   assert.equal(out.coins[0].ticker, "HE");

@@ -7,4 +7,4 @@ export {
   type HttpHandlerOptions,
   type RateLimit,
 } from "./http.ts";
-export { INSTRUCTIONS, VERSION, createDeps, createServer, type ServerOptions } from "./server.ts";
+export { DEFAULT_MAX_SOL_PER_TX, INSTRUCTIONS, VERSION, createDeps, createServer, type ServerOptions } from "./server.ts";

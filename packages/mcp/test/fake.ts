@@ -40,7 +40,7 @@ export const fakeFetch = (async (input: string | URL | Request) => {
 
 export const FAKE_OPTIONS = { apiUrl: "https://api.test", rpcUrl: "https://rpc.test", fetch: fakeFetch, retries: 0 };
 
-export const ALL_TOOLS = [
+export const READ_TOOLS = [
   "check_ticker",
   "get_chat",
   "get_coin",
@@ -59,3 +59,7 @@ export const ALL_TOOLS = [
   "rug_check",
   "search_coins",
 ];
+
+export const TRANSACTION_TOOLS = ["build_claim_creator_fees", "build_launch", "build_trade", "get_wallet_positions", "quote_trade"];
+export const BUILD_TOOLS = ["build_claim_creator_fees", "build_launch", "build_trade"];
+export const ALL_TOOLS = [...READ_TOOLS, ...TRANSACTION_TOOLS].sort();

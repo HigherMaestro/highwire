@@ -1,0 +1,23 @@
+import { createHash } from "node:crypto";
+import { Keypair, PublicKey } from "@solana/web3.js";
+
+// Real mainnet coins and wallets the transaction tests replay. Recorded with
+// `npm run record-fixtures -w highwire-core`; every build only ever simulated.
+
+/** $SI: a New school coin on the bonding curve when recorded. */
+export const CURVE_COIN = new PublicKey("EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix");
+/** $Fischer: an Old school coin that has graduated to its CPMM pool. */
+export const GRADUATED_COIN = new PublicKey("ESWuXHiwswpkfhQtA6A1tAtiBJh9A5hUDYj5fEYhigh");
+/** A wallet holding SOL and $SI. */
+export const TRADER = new PublicKey("H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5");
+/** A wallet holding $Fischer. */
+export const GRADUATED_HOLDER = new PublicKey("DFZYHaTZiRFWo23q5NQZCBTxXGZi36ZwVNP62iyB2Vmj");
+/** $Fischer's creator, with curve and pool creator fees to claim. */
+export const CREATOR = new PublicKey("6y8Gcu2nSKBiscAM4sZLVXLEYsRGcnbtW9nSci1u2YhE");
+
+/** A fixed mint for the launch scenario, so the replayed build is deterministic. Never funded. */
+export const LAUNCH_MINT = Keypair.fromSeed(createHash("sha256").update("highwire simulation launch mint").digest());
+export const LAUNCH_URI = "https://highwire.fun/sim/metadata.json";
+
+export const SCENARIOS = ["buy-curve", "sell-curve", "buy-graduated", "sell-graduated", "launch-rewards", "claim", "positions"] as const;
+export type Scenario = (typeof SCENARIOS)[number];

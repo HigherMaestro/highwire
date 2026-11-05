@@ -26,6 +26,36 @@ export const MAINNET = {
   rewardsPlatform: "6ngXxsSPUxp9YEX2QBXQP1DEdNud12tobUmnJVN74D5v",
 } as const;
 
+/** The same programs and higher.fun's platform configs on devnet, from the web bundle. */
+export const DEVNET = {
+  launchLabProgram: "DRay6fNdQ5J82H7xV6uq2aV3mNrUZ1J4PgSKsWgptcm6",
+  launchLabAuth: "5xqNaZXX5eUi4p5HU4oz9i5QnwRNT2y6oN7yyn4qENeq",
+  launchLabSolConfig: "7ZR4zD7PYfY2XxoG1Gxcy2EgEeGYrpxrwzPuwdUBssEt",
+  cpmmProgram: "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb",
+  cpmmAuth: "CXniRufdq5xL8t8jZAPxsPZDpuudwuJSPWnbcD5Y5Nxq",
+  cpmmConfig: "5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy",
+  lockCpmmProgram: "DRay25Usp3YJAi7beckgpGUC7mGJ2cR1AVPxhYfwVCUX",
+  lockCpmmAuth: "7qWVV8UY2bRJfDLP4s37YzBPKUkVB46DStYJBpYbQzu3",
+  classicPlatform: "6UuHHt8Dv4j4edbWf1DcY34WUNhBF48tAQaMxwVvFJtz",
+  rewardsPlatform: "5YMKfjGk6sigE6baKyGGCHDQjJTEHHVLSF3cXNvLKKfJ",
+} as const;
+
+export const CLUSTERS = ["mainnet", "devnet"] as const;
+export type Cluster = (typeof CLUSTERS)[number];
+export type ClusterAddresses = { readonly [K in keyof typeof MAINNET]: string };
+
+export const ADDRESSES: Record<Cluster, ClusterAddresses> = { mainnet: MAINNET, devnet: DEVNET };
+export const DEFAULT_RPC_URLS: Record<Cluster, string> = {
+  mainnet: DEFAULT_RPC_URL,
+  devnet: "https://api.devnet.solana.com",
+};
+
+/** Raydium publishes LaunchLab's default curve parameters here; its SDK reads them when building a launch. */
+export const LAUNCH_CONFIGS_URLS: Record<Cluster, string> = {
+  mainnet: "https://launch-mint-v1.raydium.io/main/configs",
+  devnet: "https://launch-mint-v1-devnet.raydium.io/main/configs",
+};
+
 /** The $HIGH coin itself. */
 export const HIGH_MINT = "7ymF66Z6VhgNiwadtVhjTtT6U7iQRpSxeiRrhfufhigh";
 
@@ -45,13 +75,13 @@ export const RAYDIUM_TRADE_FEE_BPS = 25;
 export const FEE_MODES = {
   classic: {
     label: "Old school",
-    summary: "Cheapest. No trading fee to the creator or higher.fun, only Raydium's 0.25%.",
+    summary: "Cheapest. On the curve, no trading fee to the creator or higher.fun, only Raydium's 0.25%.",
     platformFeeBps: 0,
     creatorFeeBps: 0,
     totalTradeFeeBps: RAYDIUM_TRADE_FEE_BPS,
     platformTokenSharePct: 1,
     liquidityAtGraduation: { burnedPct: 100, lockedPct: 0 },
-    creatorEarnsAfterGraduation: false,
+    creatorEarnsAfterGraduation: true,
     platformConfig: MAINNET.classicPlatform,
   },
   rewards: {
@@ -69,6 +99,40 @@ export const FEE_MODES = {
     platformConfig: MAINNET.rewardsPlatform,
   },
 } as const;
+
+/**
+ * After graduation every coin trades in a Raydium CPMM pool on higher.fun's fee tier: 0.25% to LPs and Raydium, plus a
+ * 0.05% pool creator fee on the SOL side that the coin's creator claims (Raydium keeps 5% of it). Read from the CPMM
+ * config account on-chain; see docs/higher-reference.md.
+ */
+export const GRADUATED_POOL = {
+  tradeFeeBps: 25,
+  creatorFeeBps: 5,
+  creatorKeepsPct: 95,
+} as const;
+
+// Limits higher.fun's own web app applies when it builds transactions (its "Rally" module). We use the same ones.
+/** The most the launch fee may be. The API quotes 0.02 SOL today. */
+export const LAUNCH_FEE_CAP_LAMPORTS = 50_000_000n;
+/** Priority fee: the 75th percentile of recent fees on the accounts touched, clamped to this range. */
+export const PRIORITY_FEE_MICRO_LAMPORTS = { min: 50_000, max: 2_000_000 } as const;
+export const COMPUTE_UNITS = { create: 600_000, curveTrade: 300_000, poolSwap: 300_000, claim: 200_000 } as const;
+export const DEFAULT_SLIPPAGE_BPS = 200;
+/** A creator lock on a New school coin: 1-10% of supply, a 7-day cliff after graduation, then 30 days linear. */
+export const CREATOR_LOCK = { minPct: 1, maxPct: 10, cliffSeconds: 604_800, unlockSeconds: 2_592_000 } as const;
+/** An Old school coin locks 1% of supply for higher.fun: a 1-day cliff after graduation, then 30 days linear. */
+export const CLASSIC_RESERVE = { pct: 1, cliffSeconds: 86_400, unlockSeconds: 2_592_000 } as const;
+
+export function platformFor(cluster: Cluster, mode: FeeMode): string {
+  return mode === "classic" ? ADDRESSES[cluster].classicPlatform : ADDRESSES[cluster].rewardsPlatform;
+}
+
+/** The fee mode a LaunchLab platform config belongs to, or null when it isn't one of higher.fun's. */
+export function feeModeOfPlatform(cluster: Cluster, platformId: string): FeeMode | null {
+  if (platformId === ADDRESSES[cluster].classicPlatform) return "classic";
+  if (platformId === ADDRESSES[cluster].rewardsPlatform) return "rewards";
+  return null;
+}
 
 export const COIN_SORTS = ["new", "trending", "mcap", "graduating"] as const;
 export const CANDLE_INTERVALS = ["1m", "5m", "1h", "1d"] as const;

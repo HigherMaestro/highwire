@@ -46,6 +46,8 @@ await call("get_chat", {}, (o) => `${o.messages.length} messages, ${o.messages.f
 await call("get_wallet_profile", { wallet: "9qfu1eHi6aWrPGKYTbDcKcFbYBPj2VexzfWJYVvJ48E1" }, (o) => `${o.coinsCreated.length} coins, ${o.locks.length} locks`);
 await call("check_ticker", { ticker: "HIGH" }, (o) => `HIGH available: ${o.available}`);
 await call("rug_check", { mint: HIGH }, (o) => `${o.verdict}; mint auth ${o.onchain.mintAuthority ?? "revoked"}, freeze ${o.onchain.freezeAuthority ?? "revoked"}; ${o.flags.length} flags`);
+await call("quote_trade", { mint: HIGH, side: "buy", sol: 0.1 }, (o) => `0.1 SOL buys ${o.tokensOut} $HIGH in the ${o.venue}, impact ${o.priceImpactPct}%`);
+await call("get_wallet_positions", { wallet: "DFZYHaTZiRFWo23q5NQZCBTxXGZi36ZwVNP62iyB2Vmj" }, (o) => `${o.solBalance} SOL, ${o.positions.length} higher.fun coins`);
 
 const coin = await client.readResource({ uri: `higher://coins/${HIGH}` });
 console.log(`ok   resource higher://coins/{mint}: ${(coin.contents[0] as { text: string }).text.length} chars`);

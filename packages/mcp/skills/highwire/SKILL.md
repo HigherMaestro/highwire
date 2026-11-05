@@ -8,9 +8,12 @@ description: Research coins on higher.fun, the open-source Solana launchpad, wit
 higher.fun ("Lower Fees, Higher Together") is a Solana launchpad. Coins start on a Raydium LaunchLab bonding curve
 and graduate to a Raydium pool at 85 SOL raised. Each coin has a fee mode, fixed at launch:
 
-- **Old school** (`classic`): 0.25% per trade, all to Raydium. The creator earns nothing. All liquidity is burned at graduation.
+- **Old school** (`classic`): 0.25% per trade on the curve, all to Raydium. All liquidity is burned at graduation.
 - **New school** (`rewards`): 1% per trade, split 0.25% creator, 0.5% higher.fun, 0.25% Raydium. 70% of liquidity
-  is burned and 30% locked. The creator keeps earning pool fees after graduation.
+  is burned and 30% locked; higher.fun pays the creator a third of the locked LP's fees.
+
+After graduation every coin trades in a Raydium CPMM pool at 0.25%, plus a 0.05% pool creator fee that the coin's
+creator can claim, whatever the mode.
 
 ## Tools
 
@@ -22,6 +25,7 @@ and graduate to a Raydium pool at 85 SOL raised. Each coin has a fee mode, fixed
 | Is it safe | `rug_check` |
 | A wallet or creator | `get_wallet_profile`, `get_creator_coins`, `get_leaderboard` |
 | The platform | `get_platform_info`, `check_ticker`, `get_chat` |
+| Trade or launch (local server) | `quote_trade`, `get_wallet_positions`, `build_trade`, `build_launch`, `build_claim_creator_fees` |
 
 Prompts: `scan_launches`, `coin_due_diligence`, `creator_report`, `plan_launch`.
 
@@ -34,8 +38,10 @@ Prompts: `scan_launches`, `coin_due_diligence`, `creator_report`, `plan_launch`.
    point those out.
 3. **Read the holders list right.** The bonding curve, the Raydium pool vault and the LP lock are labelled. They are
    not whales.
-4. **The server can't trade or launch yet.** For a trade or a launch, send the user to the coin page or to
-   https://higher.fun/create. Never ask for a private key or seed phrase.
+4. **Highwire builds, the user signs.** The build tools return unsigned transactions; never ask for a private key or
+   seed phrase. Quote first and show the quote. Set `confirm_trade` or `confirm_launch` only after the user approves
+   that exact transaction, show them each transaction's summary lines, and don't offer one whose simulation failed.
+   On the hosted server, which has no build tools, send the user to the coin page or https://higher.fun/create.
 5. **Not financial advice.** Say so when you rank or recommend coins.
 
 ## Risk sizing
