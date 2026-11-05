@@ -93,11 +93,13 @@ Decision D1: local signer only. Highwire never creates, holds or manages a walle
   transaction is simulated again right before it's signed, and a later one gets a fresh blockhash when only the wallet
   signs it.
 
-Not verified, and left to the maintainer:
-- The exit criterion, a policy-limited agent trading on devnet. `npm run rehearse` gets as close as simulation can:
-  it runs the execute tools live against mainnet and devnet for a public wallet, through the policy, the audit log,
-  the re-simulation and signing, and simulates the signed bytes in place of sending them. Every rule refused what it
-  should. What it can't show is a real signature landing: nothing was sent to a real cluster.
+Exit criterion met on 2026-11-05: the `highwire` CLI, with the maintainer's devnet keypair and a live devnet policy
+(trade only, 0.05 SOL a trade, 0.2 a day), bought 0.01 SOL of a higher.fun devnet coin and sold half of it through
+`execute_trade`. Both landed with the `highwire` memo
+([buy](https://solscan.io/tx/3kyoHCwJZp3grPhvnhwVnZe46USa1oDrFBifjRijRA7A7tF6mJq1WBAEPkzkzrm7rGpyBSnxPRBjiZFjiHYYpxAZ?cluster=devnet),
+[sell](https://solscan.io/tx/5obmLiLmG9jobtuy32cJyLTnCDCqnj4vtcwaUL8SG8e26pntTm1gn1BqnycutvbcsTHGe3hr291BsmB1Xn4qTNDg?cluster=devnet)),
+and a 0.08 SOL buy was refused by the policy with nothing sent. `npm run rehearse` covers the rest of the rules
+against mainnet and devnet, short of sending.
 
 ## Later
 
