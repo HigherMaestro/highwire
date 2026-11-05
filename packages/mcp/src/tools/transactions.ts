@@ -29,7 +29,7 @@ import { BUILD, READ_ONLY, mint, solUsd, wallet, type Deps } from "./shared.ts";
 // Quotes, positions and unsigned transactions. The build tools never sign and
 // never see a key: they return transactions for the user's own wallet to sign
 // (docs/unsigned-transactions.md). quote_trade and get_wallet_positions are
-// reads; the build tools are only registered where the server allows them.
+// reads. The whole group stays off the public hosted endpoint for now.
 
 const side = z.enum(["buy", "sell"]).describe("buy spends SOL for tokens; sell spends tokens for SOL.");
 const sol = z.number().positive().max(1_000_000).optional().describe("For a buy: SOL to spend.");
@@ -64,7 +64,7 @@ function envelopeResult(env: Envelope, extra: Record<string, unknown>) {
   return jsonResult({ ...extra, unsigned: env });
 }
 
-export function registerTransactionTools(server: McpServer, deps: Deps, opts: { buildTools: boolean }) {
+export function registerTransactionTools(server: McpServer, deps: Deps) {
   const { api, chain } = deps;
   const onMainnet = chain.cluster === "mainnet";
 
@@ -112,7 +112,6 @@ export function registerTransactionTools(server: McpServer, deps: Deps, opts: { 
       }),
   );
 
-  if (!opts.buildTools) return;
   const maxSol = deps.maxSolPerTx;
 
   server.registerTool(

@@ -73,7 +73,7 @@ function withCors(res: Response): Response {
 }
 
 /**
- * A stateless Streamable HTTP endpoint for the read-only server (the build tools are never registered on it), as a
+ * A stateless Streamable HTTP endpoint for the read-only server (the transaction tools are never registered on it), as a
  * fetch-style handler: `(Request) => Promise<Response>`. Mount it on one path
  * for every method (Next.js route handlers, Hono, Bun, Deno, workers).
  */
@@ -99,8 +99,8 @@ export function createHttpHandler(opts: HttpHandlerOptions = {}): (req: Request)
       }
     }
 
-    // Public and unauthenticated: reads and quotes only, never transaction builds.
-    const server = createServer({ ...opts.server, buildTools: false });
+    // Public and unauthenticated: the read tools only, never the transaction tools.
+    const server = createServer({ ...opts.server, transactionTools: false });
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,

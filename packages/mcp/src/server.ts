@@ -43,8 +43,11 @@ export interface ServerOptions {
   rpcUrl?: string;
   /** Where transactions are quoted and built. higher.fun's API, and so the read tools, are mainnet only. */
   cluster?: Cluster;
-  /** Register build_trade, build_launch and build_claim_creator_fees. Default true; the hosted endpoint turns them off. */
-  buildTools?: boolean;
+  /**
+   * Register the v0.2 tools: quote_trade, get_wallet_positions and the unsigned-transaction builders. Default true;
+   * the hosted endpoint turns them off.
+   */
+  transactionTools?: boolean;
   /** The most SOL one built transaction may move. Default 10. */
   maxSolPerTx?: number;
   timeoutMs?: number;
@@ -85,7 +88,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
   registerProfileTools(server, deps);
   registerPlatformTools(server, deps);
   registerSafetyTools(server, deps);
-  registerTransactionTools(server, deps, { buildTools: opts.buildTools ?? true });
+  if (opts.transactionTools !== false) registerTransactionTools(server, deps);
   registerPrompts(server);
 
   server.registerResource(
