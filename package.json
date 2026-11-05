@@ -5,7 +5,8 @@
   "license": "MIT",
   "workspaces": [
     "packages/core",
-    "packages/mcp"
+    "packages/mcp",
+    "apps/web"
   ],
   "engines": {
     "node": ">=20"
@@ -15,7 +16,8 @@
     "typecheck": "npm run typecheck --workspaces",
     "test": "npm run test --workspaces --if-present",
     "smoke": "npm run smoke --workspaces --if-present",
-    "dev": "npm run dev -w highwire-mcp"
+    "dev": "npm run dev -w highwire-mcp",
+    "dev:web": "npm run dev -w highwire-web"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
