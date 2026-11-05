@@ -11,7 +11,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/higher/api.ts` | typed client for api.higher.fun |
 | `packages/core/src/higher/constants.ts` | addresses and fee modes |
 | `packages/core/src/higher/format.ts` | unit conversion and the untrusted-content flags |
-| `packages/core/src/lib/` | HTTP client and errors |
+| `packages/core/src/lib/` | HTTP client with retries, and the error classes |
 | `packages/core/src/solana/rpc.ts` | the few RPC reads we need, over fetch |
 | `packages/core/src/risk.ts` | `evaluateRisk`, the rug-check verdict |
 | `packages/mcp/src/server.ts` | `createServer()`: instructions, tool groups, resources |
@@ -47,6 +47,9 @@ Streamable HTTP. An npm workspaces monorepo. Read
 - **Next.js** is 16 (App Router, Turbopack). Its docs ship in `node_modules/next/dist/docs/`; check them rather than
   memory before using a Next API.
 - **Dependencies:** pin exact versions, at least two weeks old.
+- **Original code only:** write it yourself rather than porting another project's code, and don't name or credit
+  other agent-tooling projects as inspiration, in the repo or on the site. Naming the platforms Highwire works with
+  (higher.fun, Raydium, Solana) is fine.
 
 ## Before you say it's done
 

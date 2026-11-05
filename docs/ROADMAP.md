@@ -4,7 +4,8 @@
 
 - npm workspaces: `highwire-core` (API client, constants, formatting, rug check), `highwire-mcp` (server, tools,
   prompts, the `highwire` stdio bin, a stateless HTTP handler) and `apps/web` (Next.js).
-- The hosted read-only MCP at `https://highwire.fun/mcp`: stateless Streamable HTTP (fresh server per request, JSON responses), CORS, a per-IP rate limit, and `GET /api/health`.
+- The hosted read-only MCP at `https://highwire.fun/mcp`: stateless Streamable HTTP (fresh server per request, JSON
+  responses), CORS, a per-IP rate limit, and `GET /api/health`.
 - A placeholder home page with the install snippets. The brand and the real site design come next.
 - Deployed to Vercel on `highwire.fun`, from the CLI (see the README's Deploying section).
 - Left to the maintainer: publish `highwire-core` and `highwire-mcp` to npm.
@@ -48,7 +49,8 @@ Off unless the user configures it. Never accept a key through a tool argument.
 
 ## Later
 
-- **OAuth on the hosted endpoint**, before it serves anything beyond public reads. Until then, transaction tools stay off the hosted server.
+- **OAuth on the hosted endpoint**, before it serves anything beyond public reads. Until then, transaction tools stay
+  off the hosted server.
 - **Live feed:** subscribe to `wss://api.higher.fun/ws` for launches, trades and graduations.
 - **Sign-in tools:** posting comments and chat through `/auth/nonce` and `/auth/verify`, if higher.fun wants agents posting.
 - **Publishing:** to the MCP registry, once `highwire-mcp` is on npm.

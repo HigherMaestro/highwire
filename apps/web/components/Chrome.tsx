@@ -54,8 +54,8 @@ export function SiteFooter() {
         <div className="footer-row">
           <Lockup id="ftr" />
           <p className="muted small">
-            MIT licensed. <a href={REPO_URL}>Source on GitHub</a>. Follow <a href={X_URL}>{X_HANDLE}</a> on X. Not affiliated with higher.fun. Nothing here is
-            financial advice.
+            MIT licensed. <a href={REPO_URL}>Source on GitHub</a>. Follow <a href={X_URL}>{X_HANDLE}</a> on X. Not
+            affiliated with higher.fun. Nothing here is financial advice.
           </p>
         </div>
       </div>
