@@ -1,0 +1,44 @@
+{
+  "name": "highwire-mcp",
+  "version": "0.1.0",
+  "description": "Highwire: the MCP server that lets AI agents use higher.fun, the open-source Solana launchpad",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HigherMaestro/highwire.git",
+    "directory": "packages/mcp"
+  },
+  "bin": {
+    "highwire": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "highwire-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx --conditions=highwire-source src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --conditions=highwire-source --test test/*.test.ts",
+    "smoke": "tsx --conditions=highwire-source scripts/smoke.ts",
+    "prepack": "npm run build && cp ../../LICENSE ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "highwire-core": "0.1.0",
+    "zod": "4.6.7"
+  }
+}
