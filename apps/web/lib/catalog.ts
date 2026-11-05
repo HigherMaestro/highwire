@@ -19,6 +19,8 @@ export interface ToolInfo {
   summary: string;
   description: string;
   readOnly: boolean;
+  /** Served by the hosted endpoint at /mcp. The rest run only on the local server. */
+  hosted: boolean;
   params: Param[];
 }
 
@@ -92,18 +94,26 @@ export function getCatalog(): Promise<Catalog> {
   return cached;
 }
 
-async function load(): Promise<Catalog> {
-  const server = createServer();
+async function connect(opts: Parameters<typeof createServer>[0]) {
+  const server = createServer(opts);
   const client = new Client({ name: "highwire-site", version: "0" });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(a), client.connect(b)]);
+  return client;
+}
+
+async function load(): Promise<Catalog> {
+  // The full local server, and the hosted one, which leaves the transaction tools off.
+  const [client, hostedClient] = await Promise.all([connect({}), connect({ transactionTools: false })]);
   try {
-    const [{ tools }, { prompts }, { resources }, { resourceTemplates }] = await Promise.all([
+    const [{ tools }, { prompts }, { resources }, { resourceTemplates }, hostedTools] = await Promise.all([
       client.listTools(),
       client.listPrompts(),
       client.listResources(),
       client.listResourceTemplates(),
+      hostedClient.listTools(),
     ]);
+    const hosted = new Set(hostedTools.tools.map((t) => t.name));
     return {
       tools: tools.map((t) => ({
         name: t.name,
@@ -111,6 +121,7 @@ async function load(): Promise<Catalog> {
         summary: firstSentence(t.description ?? ""),
         description: t.description ?? "",
         readOnly: t.annotations?.readOnlyHint === true,
+        hosted: hosted.has(t.name),
         params: paramsOf(t.inputSchema as Parameters<typeof paramsOf>[0]),
       })),
       prompts: prompts.map((p) => ({
@@ -125,7 +136,7 @@ async function load(): Promise<Catalog> {
       ],
     };
   } finally {
-    await client.close();
+    await Promise.all([client.close(), hostedClient.close()]);
   }
 }
 
@@ -153,6 +164,12 @@ export const TOOL_GROUPS: { id: string; title: string; blurb: string; tools: str
     title: "Safety and platform",
     blurb: "Rug checks, fee modes, tickers and site chat.",
     tools: ["rug_check", "get_platform_info", "check_ticker", "get_chat"],
+  },
+  {
+    id: "trade",
+    title: "Trade and launch",
+    blurb: "Quotes, positions, and transactions you sign in your own wallet. Local server only for now.",
+    tools: ["quote_trade", "get_wallet_positions", "build_trade", "build_launch", "build_claim_creator_fees"],
   },
 ];
 

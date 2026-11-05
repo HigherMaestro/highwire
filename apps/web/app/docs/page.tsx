@@ -60,7 +60,10 @@ function ToolDoc({ tool }: { tool: ToolInfo }) {
             <code>{tool.name}</code>
           </a>
         </h4>
-        {tool.readOnly ? <span className="badge">read-only</span> : <span className="badge badge-warn">builds transactions</span>}
+        <span className="badges">
+          {tool.hosted ? <span className="badge">hosted</span> : <span className="badge">local only</span>}
+          {tool.readOnly ? <span className="badge">read-only</span> : <span className="badge badge-warn">builds a transaction you sign</span>}
+        </span>
       </div>
       <p className="muted">{tool.description}</p>
       {tool.params.length ? (
@@ -136,8 +139,10 @@ export default async function Docs() {
               <h1>Highwire docs</h1>
               <p className="lead">
                 Highwire is an MCP server for <a href="https://higher.fun">higher.fun</a>. It gives agents{" "}
-                {catalog.tools.length} read-only tools, {catalog.prompts.length} prompts and {catalog.resources.length}{" "}
-                resources. Everything below is generated from the running server.
+                {catalog.tools.filter((t) => t.hosted).length} hosted read-only tools,{" "}
+                {catalog.tools.filter((t) => !t.hosted).length} local tools that quote and build transactions you sign,{" "}
+                {catalog.prompts.length} prompts and {catalog.resources.length} resources. Everything below is generated
+                from the running server.
               </p>
             </header>
 

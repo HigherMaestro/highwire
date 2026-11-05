@@ -69,7 +69,10 @@ export function Connect() {
 
         <div className="card">
           <h3>Run it locally</h3>
-          <p className="muted small">The npm package is on its way. Until then, build from source:</p>
+          <p className="muted small">
+            The local server adds the trading tools: quotes, positions, and trades, launches and fee claims to sign. The
+            npm package is on its way; until then, build from source:
+          </p>
           <CopyCommand label="Build and add the local server" code={LOCAL_BUILD(REPO_URL)} multiline />
         </div>
       </div>

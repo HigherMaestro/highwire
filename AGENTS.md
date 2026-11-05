@@ -52,7 +52,8 @@ Streamable HTTP. An npm workspaces monorepo. Read
 - **The hosted endpoint** is public and unauthenticated, so it stays read-only. `createHttpHandler` turns the
   transaction tools off (`transactionTools: false`); they must not be registered on it without auth.
 - **Next.js** is 16 (App Router, Turbopack). Its docs ship in `node_modules/next/dist/docs/`; check them rather than
-  memory before using a Next API.
+  memory before using a Next API. `next build` and `next dev` share `apps/web/.next`: if dev fails with a
+  `next/font` "Module not found" error, stop it, delete `apps/web/.next` and start it again.
 - **Dependencies:** pin exact versions, at least two weeks old.
 - **Original code only:** write it yourself rather than porting another project's code, and don't name or credit
   other agent-tooling projects as inspiration, in the repo or on the site. Naming the platforms Highwire works with
