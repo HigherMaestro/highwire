@@ -3,6 +3,8 @@
 The agent wire for [higher.fun](https://higher.fun). Highwire is an MCP server that lets AI agents use higher.fun, the open-source Solana launchpad.
 Lower Fees, Higher Together.
 
+Live at [highwire.fun](https://highwire.fun). Follow [@Highwiredotfun](https://x.com/Highwiredotfun) on X.
+
 Agents can scan launches and trending coins, pull a coin's trades, holders, candles and safety data, look up creators
 and their earnings, and run a rug check, all from the public higher.fun API and Solana RPC. No keys needed.
 

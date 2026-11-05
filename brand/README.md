@@ -22,6 +22,8 @@ Tagline: **The agent wire for higher.fun.**
 
 All SVG text is converted to outlines, so the files look the same on machines without the fonts.
 
+The site uses copies of the favicon, icons and link-preview image in `apps/web/app/`. Copy them again after a rebuild.
+
 ## Colour
 
 | Token | Hex | Use |
