@@ -1,6 +1,6 @@
 {
   "name": "highwire-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Highwire's higher.fun client: the typed API, constants, unit formatting and the rug check",
   "type": "module",
   "license": "MIT",
