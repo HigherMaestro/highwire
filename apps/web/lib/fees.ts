@@ -1,5 +1,6 @@
 import { cache } from "react";
-import { Chain, DEFAULT_API_URL, HigherApi, createHttpConfig, ecosystemFees, type EcosystemFees, type Recipient } from "highwire-core";
+import { Chain, DEFAULT_API_URL, HigherApi, createHttpConfig, ecosystemFees, type EcosystemFees, type FeeMode, type Recipient } from "highwire-core";
+import type { Flow, FlowScenario, Scenario } from "../components/fees/FeeFlow.tsx";
 import { serverOptionsFromEnv } from "highwire-mcp";
 
 // The fee pages' data: read from mainnet and higher.fun's API on the server. The
@@ -84,4 +85,58 @@ const hidden = (s: string | null) => s != null && SLURS.some((re) => re.test(s.r
 /** The ticker and name to show for a coin; both null when either would repeat a slur. */
 export function coinLabel(c: { ticker: string | null; name: string | null }): { ticker: string | null; name: string | null } {
   return hidden(c.ticker) || hidden(c.name) ? { ticker: null, name: null } : { ticker: c.ticker, name: c.name };
+}
+
+/**
+ * The fee-flow diagram's four views (curve or pool, New or Old school): each recipient's cut of one trade, from the rates
+ * read on-chain, and what it has been paid so far. A New school pool's locked share is the average across its pools.
+ */
+export function flowScenarios(data: EcosystemFees): Record<Scenario, FlowScenario> {
+  const r = data.rates;
+  const locks = data.coins.map((c) => c.pool?.lockedLp?.sharePct).filter((v): v is number => v != null);
+  const locked = locks.length ? locks.reduce((a, b) => a + b, 0) / locks.length / 100 : 0.3;
+  const lp = r.pool.trade * (1 - r.pool.raydiumShareOfTrade / 100);
+  const raydiumPool = r.pool.trade - lp + (r.pool.creator * r.pool.raydiumShareOfCreator) / 100;
+  const creatorPool = r.pool.creator * (1 - r.pool.raydiumShareOfCreator / 100);
+  const soFar = (phase: "curve" | "pool", mode: FeeMode, to: Recipient) =>
+    data.coins.filter((c) => c.feeMode === mode).reduce((n, c) => n + c.lines.filter((l) => l.phase === phase && l.to === to).reduce((m, l) => m + l.sol, 0), 0);
+  const label = Object.fromEntries(RECIPIENTS.map((x) => [x.key, x])) as Record<Recipient, (typeof RECIPIENTS)[number]>;
+  const flow = (key: Recipient, ratePct: number, phase: "curve" | "pool", mode: FeeMode, detail: string): Flow => ({
+    key,
+    label: key === "creator" ? "Creator" : label[key].label,
+    color: label[key].color,
+    ratePct: Math.round(ratePct * 1e6) / 1e6,
+    soFarSol: soFar(phase, mode, key),
+    detail,
+  });
+  const curve = (mode: FeeMode): FlowScenario => {
+    const c = r.curve[mode];
+    return {
+      totalPct: c.raydium + c.platform + c.creator,
+      hopPct: null,
+      lockedPct: null,
+      flows: [
+        flow("creator", c.creator, "curve", mode, c.creator ? "The creator fee, collected in the creator's LaunchLab vault." : "Old school creators earn nothing on the curve."),
+        flow("higher.fun", c.platform, "curve", mode, c.platform ? "higher.fun's platform fee, into its platform vault." : "Old school charges no platform fee."),
+        flow("Raydium", c.raydium, "curve", mode, "LaunchLab's own fee."),
+        flow("liquidity", 0, "curve", mode, "The curve has no liquidity providers."),
+      ],
+    };
+  };
+  const pool = (mode: FeeMode): FlowScenario => {
+    const share = mode === "rewards" ? locked : 0;
+    const pct = Math.round(share * 100);
+    return {
+      totalPct: r.pool.trade + r.pool.creator,
+      hopPct: mode === "rewards" ? (lp * share) / 3 : null,
+      lockedPct: mode === "rewards" ? pct : null,
+      flows: [
+        flow("creator", creatorPool + (lp * share) / 3, "pool", mode, mode === "rewards" ? `The pool creator fee, plus a third of the locked ${pct}%'s LP fees, paid by higher.fun.` : "The pool creator fee, on the SOL side."),
+        flow("higher.fun", (lp * share * 2) / 3, "pool", mode, mode === "rewards" ? `Two thirds of the LP fees earned by the locked ${pct}% of the liquidity.` : "Nothing in the pool; Old school pays higher.fun in supply."),
+        flow("Raydium", raydiumPool, "pool", mode, `${r.pool.raydiumShareOfTrade}% of the trade fee, and ${r.pool.raydiumShareOfCreator}% of the creator fee.`),
+        flow("liquidity", lp * (1 - share), "pool", mode, mode === "rewards" ? `LP fees earned by the burned ${100 - pct}%: no one can withdraw them.` : "LP fees on burned liquidity: no one can withdraw them."),
+      ],
+    };
+  };
+  return { "curve-rewards": curve("rewards"), "curve-classic": curve("classic"), "pool-rewards": pool("rewards"), "pool-classic": pool("classic") };
 }

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { FeeTable, type FeeRow } from "../../components/fees/FeeTable.tsx";
+import { FeeFlow } from "../../components/fees/FeeFlow.tsx";
 import { SplitBar } from "../../components/fees/SplitBar.tsx";
-import { MODE_LABEL, allFees, coinLabel, pctOf, sol, updatedAt, usd } from "../../lib/fees.ts";
+import { MODE_LABEL, allFees, coinLabel, flowScenarios, pctOf, sol, updatedAt, usd } from "../../lib/fees.ts";
 
 export const revalidate = 600;
 
@@ -76,6 +77,11 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
           <span className="stat-label">to creators</span>
         </li>
       </ul>
+
+      <section className="fee-section" aria-labelledby="flow">
+        <h2 id="flow">How a trade's fee splits</h2>
+        <FeeFlow scenarios={flowScenarios(data)} />
+      </section>
 
       <section className="fee-section" aria-labelledby="split">
         <h2 id="split">Where the fees went</h2>

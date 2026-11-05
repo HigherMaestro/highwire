@@ -25,6 +25,10 @@ creates, holds or manages a wallet, and the hosted endpoint still never signs.
   coin, each with its own page at `/fees/<mint>`. Curve fees are measured from each pool's on-chain fee counter; pool
   fees are computed from volume at rates read on-chain, and each line says which. Refreshed every 10 minutes; a failed
   refresh keeps the last good numbers. Coin names that are slurs show as the mint.
+- **How a trade's fee splits:** a 3D diagram on /fees (three.js, with our own shaders) of one trade's fee flowing to
+  each recipient, on the curve or in the pool, for New school or Old school. Wire thickness and particle density follow
+  each share, from the on-chain rates. It loads only when scrolled into view, pauses offscreen, holds still for reduced
+  motion, and the list under it says the same in text.
 - **`npm run rehearse`** runs the execute tools live against mainnet and devnet for a public wallet, with every rule of
   a small policy, and simulates the signed bytes instead of sending them.
 - **Page views.** highwire.fun counts page views with Vercel Web Analytics (no cookies; queries and fragments are

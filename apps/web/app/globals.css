@@ -1693,3 +1693,185 @@ summary:focus-visible,
     min-width: 0;
   }
 }
+
+/* The fee-flow diagram on /fees. The stage stays dark in both themes: the glow is additive light. */
+.flow {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.flow-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.flow-toggle {
+  display: inline-flex;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.flow-toggle button {
+  font: inherit;
+  font-size: 15px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.flow-toggle button[aria-pressed="true"] {
+  color: var(--bg);
+  background: var(--fg);
+  font-weight: 600;
+}
+
+.flow-toggle button:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 1px;
+}
+
+.flow-stage {
+  position: relative;
+  aspect-ratio: 16 / 8.5;
+  min-height: 380px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 30% 40%, #121821 0%, #07090c 70%);
+  border: 1px solid #1c222b;
+  isolation: isolate;
+}
+
+.flow-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.flow-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.flow-stage[data-state="idle"] .flow-labels,
+.flow-stage[data-state="unsupported"] .flow-labels {
+  display: none;
+}
+
+.flow-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  color: #e8eaed;
+  font-size: 13.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.9);
+  transition: opacity 0.4s ease;
+  will-change: transform;
+}
+
+.flow-label[data-zero] {
+  opacity: 0.45;
+}
+
+.flow-label-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.flow-label-rate,
+.flow-label-sol {
+  font-family: var(--font-code);
+  font-size: 12.5px;
+}
+
+.flow-label-sol {
+  color: #a9afb8;
+}
+
+.flow-label-in .flow-label-name {
+  color: #ffffff;
+}
+
+.flow-label-hop {
+  font-family: var(--font-code);
+  color: #c9ced6;
+  font-size: 11.5px;
+}
+
+.flow-fallback {
+  position: absolute;
+  inset: auto 0 0;
+  margin: 0;
+  padding: 16px 20px;
+  color: #a9afb8;
+}
+
+.flow-caption {
+  margin: 0;
+  max-width: 75ch;
+}
+
+.flow-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px 24px;
+}
+
+.flow-list li {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  column-gap: 10px;
+  align-items: start;
+}
+
+.flow-list li .split-swatch {
+  margin-top: 5px;
+}
+
+.flow-list-rate {
+  font-family: var(--font-code);
+  font-size: 14px;
+}
+
+.flow-list-detail {
+  display: block;
+  margin-top: 2px;
+}
+
+/* On phones the labels would crowd the scene; the list under it carries the numbers. */
+@media (max-width: 640px) {
+  .flow-stage {
+    aspect-ratio: 7 / 5;
+    min-height: 0;
+  }
+  .flow-labels {
+    display: none;
+  }
+  .flow-toggle button {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+}
