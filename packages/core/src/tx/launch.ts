@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { createVestingAccount, getPdaVestId, LaunchpadConfig, TxVersion } from "@raydium-io/raydium-sdk-v2";
 import BN from "bn.js";
 import { Keypair, PublicKey, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
@@ -306,12 +307,33 @@ export function launchFingerprint(cluster: string, input: Pick<LaunchInput, "wal
   return [cluster, input.wallet.toBase58(), input.name.normalize("NFKC").trim(), input.ticker.toUpperCase(), input.mode].join("|");
 }
 
+/** Hands out a launch's mint keypair for an idempotency key and the launch's fingerprint. */
+export interface MintSource {
+  get(key: string, fingerprint: string): Keypair;
+}
+
+/**
+ * Mint keypairs derived from a server secret, the idempotency key and the launch's fingerprint (cluster, wallet, name,
+ * ticker, fee mode), with HMAC-SHA256 as the ed25519 seed. Nothing is stored, so every instance of a serverless
+ * deployment hands a retry the same mint, and a retry after the coin landed finds it on-chain ("already_launched").
+ * A key reused for a different coin simply gets a different mint. With an empty secret the mint is still unguessable as
+ * long as the idempotency key is.
+ */
+export class DerivedLaunchKeys implements MintSource {
+  constructor(private readonly secret: string) {}
+
+  get(key: string, fingerprint: string): Keypair {
+    const seed = createHmac("sha256", `highwire-launch-mint/v1\n${this.secret}`).update(`${fingerprint}\n${key}`).digest();
+    return Keypair.fromSeed(seed);
+  }
+}
+
 /**
  * Mint keypairs by idempotency key, so a retried build_launch reuses the same
  * mint: the coin can only be created once, and the launch fee rides in the same
  * transaction, so a retry never pays twice. Held in memory only.
  */
-export class LaunchKeys {
+export class LaunchKeys implements MintSource {
   private readonly entries = new Map<string, { fingerprint: string; mint: Keypair; at: number }>();
   constructor(private readonly ttlMs = 24 * 60 * 60 * 1000, private readonly max = 1000) {}
 
