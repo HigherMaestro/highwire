@@ -1,9 +1,15 @@
 import { z } from "zod";
-import type { HigherApi, SolanaRpc } from "highwire-core";
+import type { Chain, HigherApi, LaunchKeys, SolanaRpc } from "highwire-core";
 
 export interface Deps {
   api: HigherApi;
   rpc: SolanaRpc;
+  /** Solana and Raydium access for quotes and transaction builds, on the configured cluster. */
+  chain: Chain;
+  /** Mint keypairs for build_launch, by idempotency key. */
+  launchKeys: LaunchKeys;
+  /** The most SOL one built transaction may move. */
+  maxSolPerTx: number;
 }
 
 export const address = (what: string) =>
@@ -20,6 +26,17 @@ export const READ_ONLY = {
   readOnlyHint: true,
   destructiveHint: false,
   idempotentHint: true,
+  openWorldHint: true,
+} as const;
+
+/**
+ * Build tools return unsigned transactions: not read-only (they prepare a change), but not destructive either, since
+ * nothing happens until the user signs.
+ */
+export const BUILD = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
   openWorldHint: true,
 } as const;
 
