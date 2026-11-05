@@ -15,6 +15,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/solana/rpc.ts` | the few RPC reads we need, over fetch |
 | `packages/core/src/risk.ts` | `evaluateRisk`, the rug-check verdict |
 | `packages/core/src/tx/` | quotes and unsigned transactions: `chain.ts` (web3.js and Raydium's SDK behind one fetch), `quote.ts`, `trade.ts`, `launch.ts` (also `DerivedLaunchKeys`), `claim.ts`, `positions.ts`, `decode.ts` (plain-language decoding and the safety checks), `envelope.ts` (the memo, simulation, `finish()`), `format.ts` (the envelope types), `sign-link.ts` (sign URLs), `review.ts` (the sign page's checks), `refresh.ts` (blockhash refresh for wallet-only transactions) |
+| `packages/core/src/tx/fees.ts` | `ecosystemFees`: every higher.fun coin's fees by recipient and phase, for /fees. Curve lines are measured, pool lines computed from volume at on-chain rates |
 | `packages/core/src/tx/transfer.ts` | `buildTransfer`: SOL or a higher.fun coin to another wallet. Transfers never get a sign link |
 | `packages/agent/src/` | `highwire-agent`, the opt-in local signer: `policy.ts` (the schema and `checkPolicy`), `keypair.ts`, `audit.ts` (the JSONL log and the daily count), `signer.ts` (`LocalSigner`: check, re-simulate, sign, send, confirm), `paths.ts` (`~/.highwire`) |
 | `packages/mcp/src/tools/execute.ts` | `build_transfer`, `get_signer_status` and the execute tools; `signer-env.ts` turns the signer on from `HIGHWIRE_KEYPAIR_PATH` (the CLI only) |
@@ -26,7 +27,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/mcp/src/http.ts` | `createHttpHandler()`: stateless Streamable HTTP, CORS, the weighted per-IP rate limit, `HOSTED_TRANSACTION_TOOLS` |
 | `packages/mcp/src/cli.ts` | the `highwire` stdio bin; `env.ts` parses the environment |
 | `packages/mcp/skills/` | the operator skill, shipped in the npm package |
-| `apps/web/app/` | the Next.js site: `/`, `/docs`, `/sign`, `/changelog` (renders the root `CHANGELOG.md`), `/terms`, `/privacy`, `/mcp` (mounts `createHttpHandler`), `/api/health` |
+| `apps/web/app/` | the Next.js site: `/`, `/docs`, `/fees` and `/fees/[mint]` (ecosystem fees, regenerated every 10 minutes; `lib/fees.ts` loads them), `/sign`, `/changelog` (renders the root `CHANGELOG.md`), `/terms`, `/privacy`, `/mcp` (mounts `createHttpHandler`), `/api/health` |
 | `apps/web/components/sign/`, `apps/web/lib/sign/` | the sign page: `SignApp.tsx`, `rpc.ts` (JSON-RPC from the browser), `wallets.ts` (Wallet Standard) |
 | `apps/web/next.config.ts` | Turbopack aliases and `/sign`'s security headers (its CSP allows connections to the RPC origins only) |
 | `CHANGELOG.md` | every release; add to the top section with each change |

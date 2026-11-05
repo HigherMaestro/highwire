@@ -2,6 +2,7 @@ export * from "./chain.ts";
 export * from "./claim.ts";
 export * from "./decode.ts";
 export * from "./envelope.ts";
+export * from "./fees.ts";
 export * from "./launch.ts";
 export * from "./positions.ts";
 export * from "./quote.ts";

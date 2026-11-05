@@ -64,6 +64,15 @@ to the platform's `platformLockNftWallet`, which is higher.fun's wallet, not the
 higher.fun harvests the fees and pays the creator their 10/30 share off-chain; the payouts show in
 `GET /users/:wallet/earnings` (`paidOut`, `pendingPayout`). There is nothing for the creator to sign.
 
+**Measuring fees** (what /fees does). A LaunchLab pool's `protocolFee` is Raydium's curve fee, accumulated and not reset,
+so `protocolFee / tradeFeeRate` is the coin's exact curve volume (it matched higher.fun's candles to within 0.4% on
+2026-11-05); `platformFee` reads 0 because platform fees go to the platform's vault as they're charged. A CPMM pool's
+`protocolFees*`, `fundFees*` and `creatorFees*` reset when collected, so pool fees are computed from volume. The pool's
+`lpAmount` doesn't drop when LP is burned, so the LP lock's share is `(locked_lp + claimed_lp) / lpAmount` (about 31%
+for a New school coin). A Raydium LP lock account (program `LockrWmn…`, 256 bytes) is the discriminator, then
+`locked_lp`, `claimed_lp`, `unclaimed_lp`, `last_lp` (u64s), `last_k` (u128), `recent_epoch`, then the pool id at
+byte 64, the Fee Key mint, the locked owner and the LP mint. Fees are harvested as LP tokens (`claimed_lp`).
+
 ## Mainnet addresses (from the web bundle)
 
 | Name | Address |

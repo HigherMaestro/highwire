@@ -20,6 +20,11 @@ creates, holds or manages a wallet, and the hosted endpoint still never signs.
   each transaction is sent. The daily limit is counted from it. Creating `~/.highwire/STOP` refuses everything.
 - **Transfers.** `build_transfer` sends SOL or a higher.fun coin to another wallet, checked to the lamport and the
   recipient. It's local only and has no sign link: the sign page refuses transfers, since a link can come from anyone.
+- **Ecosystem fees** at highwire.fun/fees: every fee all of higher.fun's coins have paid and who got it (creators,
+  higher.fun, Raydium, the pools), by phase and fee mode, what's waiting to be claimed, and a searchable table of every
+  coin, each with its own page at `/fees/<mint>`. Curve fees are measured from each pool's on-chain fee counter; pool
+  fees are computed from volume at rates read on-chain, and each line says which. Refreshed every 10 minutes; a failed
+  refresh keeps the last good numbers. Coin names that are slurs show as the mint.
 - **`npm run rehearse`** runs the execute tools live against mainnet and devnet for a public wallet, with every rule of
   a small policy, and simulates the signed bytes instead of sending them.
 - **Page views.** highwire.fun counts page views with Vercel Web Analytics (no cookies; queries and fragments are

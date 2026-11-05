@@ -2,12 +2,13 @@ import { createHttpConfig } from "../src/lib/http.ts";
 import { HigherApi } from "../src/higher/api.ts";
 import { Chain } from "../src/tx/chain.ts";
 import { buildClaimCreatorFees, graduatedCoinsOf } from "../src/tx/claim.ts";
+import { ecosystemFees } from "../src/tx/fees.ts";
 import { buildLaunch } from "../src/tx/launch.ts";
 import { walletPositions } from "../src/tx/positions.ts";
 import { buildTrade } from "../src/tx/trade.ts";
 import { buildTransfer } from "../src/tx/transfer.ts";
 import { solToLamports, tokensToBase } from "../src/tx/units.ts";
-import { CREATOR, CURVE_COIN, GRADUATED_COIN, GRADUATED_HOLDER, LAUNCH_MINT, LAUNCH_URI, TRADER, type Scenario } from "./scenarios.ts";
+import { CLAIM_COIN, CREATOR, CURVE_COIN, GRADUATED_COIN, GRADUATED_HOLDER, LAUNCH_MINT, LAUNCH_URI, NEW_SCHOOL_GRADUATED, TRADER, type Scenario } from "./scenarios.ts";
 
 /** Runs one scenario against whatever fetch it's given: the real network when recording, a recording in tests. */
 export async function runScenario(name: Scenario, fetch: typeof globalThis.fetch) {
@@ -47,5 +48,7 @@ export async function runScenario(name: Scenario, fetch: typeof globalThis.fetch
       return { transfer: await buildTransfer(chain, { wallet: TRADER, to: CREATOR, lamports: solToLamports(0.01) }) };
     case "transfer-coin":
       return { transfer: await buildTransfer(chain, { wallet: GRADUATED_HOLDER, to: TRADER, mint: GRADUATED_COIN, amount: tokensToBase(1_000) }) };
+    case "fees":
+      return { fees: await ecosystemFees(chain, api, { only: [NEW_SCHOOL_GRADUATED, CLAIM_COIN, CURVE_COIN].map((m) => m.toBase58()) }) };
   }
 }
