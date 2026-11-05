@@ -81,7 +81,7 @@ export function registerPrompts(server: McpServer) {
           "2. Suggest 3 tickers and check each with check_ticker.",
           "3. Recommend Old school or New school for this coin, using the exact fee splits, and say why. The mode can't change after launch.",
           "4. Give a checklist: name (≤32 chars), ticker (≤10), description, image, links, optional creator lock (New school only), and the SOL needed.",
-          "This server can't send transactions yet, so finish by pointing me to https://higher.fun/create to launch.",
+          "If I want to launch, build_launch can prepare the unsigned transactions for my wallet once the metadata is hosted; otherwise point me to https://higher.fun/create.",
         ].join("\n"),
       ),
   );

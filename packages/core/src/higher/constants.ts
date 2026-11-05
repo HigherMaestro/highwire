@@ -75,7 +75,7 @@ export const RAYDIUM_TRADE_FEE_BPS = 25;
 export const FEE_MODES = {
   classic: {
     label: "Old school",
-    summary: "Cheapest. No trading fee to the creator or higher.fun, only Raydium's 0.25%.",
+    summary: "Cheapest. On the curve, no trading fee to the creator or higher.fun, only Raydium's 0.25%.",
     platformFeeBps: 0,
     creatorFeeBps: 0,
     totalTradeFeeBps: RAYDIUM_TRADE_FEE_BPS,

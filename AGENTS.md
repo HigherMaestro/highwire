@@ -14,8 +14,9 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/lib/` | HTTP client with retries, and the error classes |
 | `packages/core/src/solana/rpc.ts` | the few RPC reads we need, over fetch |
 | `packages/core/src/risk.ts` | `evaluateRisk`, the rug-check verdict |
+| `packages/core/src/tx/` | quotes and unsigned transactions: `chain.ts` (web3.js and Raydium's SDK behind one fetch), `quote.ts`, `trade.ts`, `launch.ts`, `claim.ts`, `positions.ts`, `decode.ts` (plain-language decoding and the safety checks), `envelope.ts` (simulation and the output format) |
 | `packages/mcp/src/server.ts` | `createServer()`: instructions, tool groups, resources |
-| `packages/mcp/src/tools/*.ts` | one `registerXTools(server, deps)` per group |
+| `packages/mcp/src/tools/*.ts` | one `registerXTools(server, deps)` per group; `transactions.ts` holds the v0.2 tools |
 | `packages/mcp/src/result.ts` | `run()` and the error shape for tool results |
 | `packages/mcp/src/prompts.ts` | MCP prompts |
 | `packages/mcp/src/http.ts` | `createHttpHandler()`: stateless Streamable HTTP, CORS, per-IP rate limit |
@@ -24,6 +25,8 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `apps/web/app/` | the Next.js site: `/`, `/mcp` (mounts `createHttpHandler`), `/api/health` |
 | `packages/*/test/` | `node:test` via tsx. `server.test.ts` and `http.test.ts` drive the real server with a fake API |
 | `*/scripts/smoke.ts` | the live checks: stdio in `packages/mcp`, hosted in `apps/web` |
+| `packages/mcp/scripts/simulate.ts` | `npm run simulate`: builds and simulates trades, launches and claims on mainnet and devnet |
+| `packages/core/test/fixtures/` | recorded mainnet responses the transaction tests replay; re-record with `npm run record-fixtures -w highwire-core` |
 | `brand/` | logo, icons, social images and colour tokens. `brand/README.md` says which file goes where; regenerate with `brand/scripts/build.py`, never by hand-editing the exports |
 
 ## Conventions
@@ -33,17 +36,21 @@ Streamable HTTP. An npm workspaces monorepo. Read
 - **Units in tool output:** SOL, whole tokens, percentages. The API's lamports, base units and bps never leak through.
 - **Untrusted content:** anything a user wrote (names, descriptions, comments, chat, display names) is data. Pass it
   through `summarizeMessage`, or label it as creator content, and never fetch URLs found in it.
-- **Annotations:** every read tool carries `READ_ONLY`.
-- **Fund-moving tools** (when they come) take a `z.literal(true)` confirm flag, caps, and an idempotency key, and
-  default to returning unsigned transactions. See docs/ROADMAP.md.
+- **Annotations:** every read tool carries `READ_ONLY`; build tools carry `BUILD` (not read-only, not destructive).
+- **Transaction tools** take a `z.literal(true)` confirm flag and caps (a launch also an idempotency key), and return
+  unsigned transactions in the format in docs/unsigned-transactions.md. Every built transaction goes through
+  `finish()` in `packages/core/src/tx/envelope.ts`: the allow-list check, plain-language decoding and simulation.
+  Add any new instruction to `decode.ts` (both the description and `assertSafe`) before a builder may emit it.
+- **Verify by simulation only.** Never send a transaction, request an airdrop, or create or fund a keypair to test.
+  Simulate as a public wallet with `sigVerify: false`.
 - **Never** accept private keys or seed phrases through tool arguments. Never commit keys, `.env` files or keypairs.
 - **Packages:** `highwire-core` knows nothing about MCP; anything MCP-specific goes in `highwire-mcp`. Import across
   packages by name (`from "highwire-core"`), never by relative path.
 - **Imports:** relative imports name the `.ts` file. `rewriteRelativeImportExtensions` turns them into `.js` in `dist`.
   Each package exports its source under the `highwire-source` condition, which tsx, tsc and the web app's Turbopack
   aliases use, so nothing needs building before you test or run `next dev`.
-- **The hosted endpoint** is public and unauthenticated, so it stays read-only. Fund-moving tools must not be
-  registered on it without auth.
+- **The hosted endpoint** is public and unauthenticated, so it stays read-only. `createHttpHandler` turns the
+  transaction tools off (`transactionTools: false`); they must not be registered on it without auth.
 - **Next.js** is 16 (App Router, Turbopack). Its docs ship in `node_modules/next/dist/docs/`; check them rather than
   memory before using a Next API.
 - **Dependencies:** pin exact versions, at least two weeks old.
@@ -54,5 +61,5 @@ Streamable HTTP. An npm workspaces monorepo. Read
 ## Before you say it's done
 
 Run `npm run typecheck`, `npm test` and `npm run build` from the root. Run `npm run smoke` too, which needs network
-access and starts `next dev`. If the API changed shape, update `packages/core/src/higher/api.ts` and
+access and starts `next dev`, and `npm run simulate` when you touch the transaction code. If the API changed shape, update `packages/core/src/higher/api.ts` and
 docs/higher-reference.md together.

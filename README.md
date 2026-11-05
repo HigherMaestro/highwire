@@ -8,7 +8,9 @@ Live at [highwire.fun](https://highwire.fun). Follow [@Highwiredotfun](https://x
 Agents can scan launches and trending coins, pull a coin's trades, holders, candles and safety data, look up creators
 and their earnings, and run a rug check, all from the public higher.fun API and Solana RPC. No keys needed.
 
-**v0.1 is read-only.** It can't sign, trade or launch. Use it hosted, or run it locally with `npx highwire-mcp`. Transactions are next: see [docs/ROADMAP.md](docs/ROADMAP.md).
+**v0.2 builds transactions, unsigned.** Run locally, Highwire quotes trades and builds buys, sells, coin launches and
+creator fee claims as unsigned transactions for the user's own wallet to sign. It never signs, never holds a key and
+never sends anything. The hosted endpoint stays read-only. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Tools
 
@@ -32,6 +34,31 @@ and their earnings, and run a rug check, all from the public higher.fun API and 
 | `check_ticker` | Whether a ticker is free |
 | `rug_check` | On-chain authorities plus higher.fun's safety data, rolled into a verdict |
 
+**Transactions (local server only):**
+
+| Tool | What it does |
+|---|---|
+| `quote_trade` | Quote a buy (SOL in) or sell (tokens in) on the curve or, after graduation, the CPMM pool: output, minimum out, price impact, fees split by fee mode |
+| `get_wallet_positions` | A wallet's SOL and its higher.fun coins (recognised on-chain), valued at the last price |
+| `build_trade` | The trade as an unsigned transaction. Needs `confirm_trade: true`, `max_slippage_bps` (at most 1500) and `max_sol` |
+| `build_launch` | Create a coin (Old or New school), pay the launch fee after checking its treasury, optional first buy and creator lock. Needs `confirm_launch: true` and an `idempotency_key` |
+| `build_claim_creator_fees` | Claim curve creator fees and graduated pools' creator fees; reports the off-chain locked-LP payouts |
+
+Every build tool decodes its own transactions into plain-language lines, checks them the way higher.fun's site does,
+and simulates them. The output format is in [docs/unsigned-transactions.md](docs/unsigned-transactions.md).
+
+**Safety:**
+- Highwire never asks for, accepts or stores a private key or seed phrase. The user signs in their own wallet.
+- Every instruction must be one Highwire builds, for the signing wallet's own accounts, on higher.fun's platform
+  configs and fee tier. The launch fee must go to the fee wallet recorded on-chain and be at most 0.05 SOL. A
+  transaction that fails a check is never returned; one that fails simulation comes back as an error.
+- Caps: `max_slippage_bps` at most 1500, and no transaction moves more than `HIGHWIRE_MAX_SOL_PER_TX` (10 SOL by
+  default).
+- A launch's new mint is generated per `idempotency_key` and kept in memory, so a retry reuses it and the coin (and
+  its fee) can only happen once. Restarting the server forgets the keys.
+- higher.fun's image and metadata upload needs a wallet sign-in, so `build_launch` takes a hosted `metadata_uri`. Without
+  one it returns the metadata JSON to host.
+
 **Prompts:**
 - `scan_launches`
 - `coin_due_diligence`
@@ -48,7 +75,7 @@ and their earnings, and run a rug check, all from the public higher.fun API and 
 
 ### Hosted
 
-Nothing to install. The hosted server is read-only and needs no key.
+Nothing to install. The hosted server is read-only (the 17 research tools) and needs no key.
 
 **Claude Code**
 
@@ -97,7 +124,9 @@ claude mcp add highwire -- npx -y highwire-mcp
 | Variable | Default |
 |---|---|
 | `HIGHER_API_URL` | `https://api.higher.fun` |
-| `SOLANA_RPC_URL` | `https://api.mainnet-beta.solana.com` |
+| `HIGHWIRE_CLUSTER` | `mainnet`; `devnet` quotes and builds on higher.fun's devnet deployment (the API, and so the research tools, stay on mainnet) |
+| `SOLANA_RPC_URL` | the cluster's public RPC, `https://api.mainnet-beta.solana.com` on mainnet |
+| `HIGHWIRE_MAX_SOL_PER_TX` | `10`: the most SOL one built transaction may spend or return |
 | `HIGHER_TIMEOUT_MS` | `15000` |
 | `HIGHER_RETRIES` | `2` |
 | `HIGHWIRE_RATE_LIMIT` | `60` requests a minute per IP (hosted endpoint only) |
@@ -110,7 +139,7 @@ An npm workspaces monorepo.
 
 | Path | What it is |
 |---|---|
-| [packages/core](packages/core) | `highwire-core`: the higher.fun API client, constants, unit formatting and the rug check |
+| [packages/core](packages/core) | `highwire-core`: the higher.fun API client, constants, unit formatting, the rug check, and the quote and transaction builders |
 | [packages/mcp](packages/mcp) | `highwire-mcp`: the MCP server, the `highwire` stdio bin and a stateless HTTP handler |
 | [apps/web](apps/web) | The Next.js site, which also serves the hosted MCP at `/mcp` and `GET /api/health` |
 
@@ -131,6 +160,7 @@ Every command runs from the root and covers all workspaces.
 | `npm run dev` | Run the MCP server from source over stdio |
 | `npm run dev:web` | Run the site at http://localhost:3000, with the MCP at http://localhost:3000/mcp |
 | `npm test` | Unit, in-memory MCP and HTTP handler tests, offline |
+| `npm run simulate` | Build and simulate buys, sells, launches and claims on mainnet and devnet as public wallets; nothing is signed or sent |
 | `npm run smoke` | Call every tool over stdio, then start `next dev` and check `/`, `/api/health` and `/mcp` against the live API |
 | `npm run typecheck` | Type-check every workspace |
 | `npm run build` | Compile the packages to `dist/` and build the site |

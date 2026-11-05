@@ -14,29 +14,38 @@
 
 17 tools over the public API and Solana RPC, 4 prompts, 2 resources, an operator skill. No keys and no signing.
 
-## v0.2: transactions, unsigned by default
+## v0.2: transactions, unsigned (built)
 
-Build transactions with Raydium's SDK (`@raydium-io/raydium-sdk-v2`, LaunchLab and CPMM modules) and higher.fun's
-platform configs (docs/higher-reference.md). By default, return them **unsigned** (base64) for the user's own wallet
-to sign.
+Built on Raydium's SDK (`@raydium-io/raydium-sdk-v2` 0.2.74-alpha, LaunchLab and CPMM modules) the way higher.fun's
+own site uses it (docs/higher-reference.md). The build tools return **unsigned** v0 transactions for the user's own
+wallet to sign, in the format in [unsigned-transactions.md](unsigned-transactions.md). Verified by simulation only
+(`npm run simulate`), on mainnet and devnet.
 
 | Tool | What it does |
 |---|---|
-| `quote_trade` | Buy or sell quote on the curve (LaunchLab) or the pool (CPMM): output, fees by mode, price impact |
-| `build_trade` | The same, as an unsigned transaction. Needs `confirm_trade: true` and `max_slippage_bps` |
-| `build_launch` | Reserve a `…high` mint, upload the image and metadata, create the coin on the chosen fee mode, pay the 0.02 SOL launch fee, optional dev buy. Needs `confirm_launch: true` |
-| `build_claim_creator_fees` | Curve creator fees (LaunchLab) and locked-LP fees after graduation (Raydium LP lock) |
-| `get_wallet_positions` | Token balances on higher.fun coins, valued from the API |
+| `quote_trade` | Buy (SOL in) or sell (tokens in) quote on the curve or the CPMM pool: output, min out, fees by mode, price impact |
+| `get_wallet_positions` | Balances in higher.fun coins, recognised on-chain and valued from the API |
+| `build_trade` | The trade as an unsigned transaction. Needs `confirm_trade: true`, `max_slippage_bps` ≤ 1500 and `max_sol` |
+| `build_launch` | Create the coin on the chosen fee mode, pay the launch fee after the treasury and cap checks, optional first buy and creator lock. Needs `confirm_launch: true` and an idempotency key |
+| `build_claim_creator_fees` | Curve creator fees and graduated pools' creator fees; reports higher.fun's off-chain locked-LP payouts |
 
-Rules:
-- `z.literal(true)` confirm flags on every tool that moves funds. The tool description says to set the flag only after
-  the user has approved that exact trade.
-- Quote before build. Hard caps on SOL in and on slippage. Idempotency keys for launches, so a retry never pays twice.
+What's in place:
+- `z.literal(true)` confirm flags, a per-transaction SOL cap (`HIGHWIRE_MAX_SOL_PER_TX`), a slippage cap, and
+  idempotency keys that pin a launch's mint so a retry can't create (or pay for) the coin twice.
+- The checks higher.fun's site runs: the launch-fee treasury against the on-chain fee wallet, the fee cap, a program
+  allow-list, and each decoded instruction against the intended trade or launch.
+- `HIGHWIRE_CLUSTER=mainnet|devnet`.
+- Offline tests replaying recorded mainnet responses (`npm run record-fixtures -w highwire-core` re-records them).
 
-Checks to copy from higher.fun's own web app before signing anything:
-- the launch-fee treasury equals the platform config's `platformClaimFeeWallet`
-- the fee is at or under higher.fun's cap
-- each decoded instruction matches the intended trade
+Not done, and why:
+- **Image and metadata upload, and `…high` vanity mints.** higher.fun uploads only for a wallet signed in with a
+  Sign-In With Solana message, which Highwire can't sign. `build_launch` takes a hosted `metadata_uri`, or returns the
+  metadata JSON to host. A future option: return the sign-in message for the user to sign, then upload with the
+  session.
+- **Locked-LP fees.** The Fee Key NFT belongs to higher.fun, which pays creators off-chain; nothing to claim.
+- **The hosted endpoint** has none of these tools, quotes included. `quote_trade` and `get_wallet_positions` are
+  read-only and could go on it once the site's tool catalog and hosted smoke test expect them.
+- **The signing page** on highwire.fun, which will consume the envelope.
 
 ## v0.3: optional local signer
 
