@@ -66,7 +66,7 @@ export async function buildTrade(chain: Chain, req: TradeRequest): Promise<Built
     throw new ValidationError("The sell returns more SOL than max_sol allows. Raise max_sol if that's intended.", { code: "over_cap" });
   }
 
-  const raydium = await chain.raydium(req.wallet);
+  const raydium = await chain.raydium(req.wallet, [req.mint, WSOL]);
   const slippage = new BN(req.slippageBps);
   let tx: VersionedTransaction;
   if (market.stage === "curve") {

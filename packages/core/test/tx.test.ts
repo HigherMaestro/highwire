@@ -242,3 +242,17 @@ test("a recorded trade fails the checks for another platform", async () => {
   assert.throws(() => assertSafe(tx, "mainnet", { wallet: TRADER, platformId: new PublicKey(MAINNET.classicPlatform) }), /platform other than/);
   assert.equal(describeTransaction(tx, "mainnet").trades.length, 1);
 });
+
+test("no build lists every token account a wallet owns (a busy wallet's list runs to hundreds of megabytes)", async () => {
+  for (const name of ["buy-curve", "sell-curve", "buy-graduated", "sell-graduated", "launch-rewards", "claim"] as const) {
+    const methods: string[] = [];
+    const inner = replayFetch(fixture(name));
+    const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (typeof init?.body === "string" && init.body.startsWith("{")) methods.push(JSON.parse(init.body).method);
+      return inner(input, init);
+    }) as typeof globalThis.fetch;
+    await runScenario(name, fetch);
+    assert.ok(methods.length > 0, name);
+    for (const m of ["getTokenAccountsByOwner", "getParsedTokenAccountsByOwner", "getProgramAccounts"]) assert.ok(!methods.includes(m), `${name} called ${m}`);
+  }
+});

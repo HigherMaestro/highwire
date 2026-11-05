@@ -5,10 +5,11 @@ import {
   getPdaLaunchpadPoolId,
   LaunchpadConfig,
   LaunchpadPool,
+  parseTokenAccountResp,
   PlatformConfig,
   Raydium,
 } from "@raydium-io/raydium-sdk-v2";
-import { NATIVE_MINT } from "@solana/spl-token";
+import { getAssociatedTokenAddressSync, NATIVE_MINT, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Connection, PublicKey, type AddressLookupTableAccount, type VersionedTransaction } from "@solana/web3.js";
 import {
   ADDRESSES,
@@ -101,8 +102,13 @@ export class Chain {
    * Raydium's SDK, bound to a wallet that only ever appears as a public key.
    * The SDK's own HTTP client is replaced, so it can't reach Raydium's API
    * behind our back: the calls we allow are answered here.
+   *
+   * The SDK would list every token account the wallet owns to find the ones a
+   * build touches, which for a busy trading wallet is hundreds of megabytes.
+   * It's handed only the wallet's associated accounts for `mints` instead, read
+   * in one call, so it never lists them itself.
    */
-  async raydium(owner?: PublicKey): Promise<Raydium> {
+  async raydium(owner?: PublicKey, mints: PublicKey[] = []): Promise<Raydium> {
     const raydium = await Raydium.load({
       connection: this.connection,
       owner,
@@ -119,7 +125,25 @@ export class Chain {
       {},
       { get: (_t, prop) => () => Promise.reject(new Error(`unexpected Raydium API call (${String(prop)})`)) },
     );
+    if (owner) raydium.account.updateTokenAccount(await this.walletTokenAccounts(owner, mints));
     return raydium;
+  }
+
+  /** The wallet's SOL account and its associated token accounts for `mints` (under either token program), as the SDK keeps them. */
+  async walletTokenAccounts(owner: PublicKey, mints: PublicKey[]): Promise<ReturnType<typeof parseTokenAccountResp>> {
+    if (mints.length === 0) return { tokenAccounts: [], tokenAccountRawInfos: [] };
+    const atas = mints.flatMap((mint) =>
+      (mint.equals(WSOL) ? [TOKEN_PROGRAM_ID] : [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]).map((program) =>
+        getAssociatedTokenAddressSync(mint, owner, true, program),
+      ),
+    );
+    const res = await this.connection.getMultipleAccountsInfoAndContext([owner, ...atas]);
+    const [sol, ...infos] = res.value;
+    const value = atas.flatMap((pubkey, i) => {
+      const account = infos[i];
+      return account && (account.owner.equals(TOKEN_PROGRAM_ID) || account.owner.equals(TOKEN_2022_PROGRAM_ID)) ? [{ pubkey, account }] : [];
+    });
+    return parseTokenAccountResp({ owner, solAccountResp: sol, tokenAccountResp: { context: res.context, value } });
   }
 
   /** LaunchLab's default curve parameters (supply, amount sold on the curve, graduation target). */
