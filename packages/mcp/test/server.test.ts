@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { decodeSignPayload } from "highwire-core";
-import { serverOptionsFromEnv } from "../src/env.ts";
+import { rpcUrlEnv, serverOptionsFromEnv } from "../src/env.ts";
 import { createServer, type ServerOptions } from "../src/server.ts";
 import { ALL_TOOLS, BUILD_TOOLS, FAKE_OPTIONS } from "./fake.ts";
 import { fixtureFetch } from "./replay.ts";
@@ -142,6 +142,19 @@ test("the environment sets the sign site and the launch secret", () => {
   assert.equal(o.launchKeySecret, "s");
   assert.throws(() => serverOptionsFromEnv({ HIGHWIRE_SITE_URL: "ftp://x" }), /http/);
   assert.equal(serverOptionsFromEnv({}).siteUrl, undefined);
+});
+
+test("a malformed SOLANA_RPC_URL falls back to the public RPC instead of failing, and is never logged", () => {
+  const warnings: string[] = [];
+  const warn = (m: string) => warnings.push(m);
+  assert.equal(rpcUrlEnv({ SOLANA_RPC_URL: "  https://rpc.example/?api-key=abc \n" }, "SOLANA_RPC_URL", warn), "https://rpc.example/?api-key=abc");
+  assert.equal(rpcUrlEnv({ SOLANA_RPC_URL: '"https://rpc.example/x"' }, "SOLANA_RPC_URL", warn), "https://rpc.example/x");
+  assert.equal(warnings.length, 0);
+  assert.equal(rpcUrlEnv({ SOLANA_RPC_URL: "rpc.example/?api-key=secret123" }, "SOLANA_RPC_URL", warn), undefined);
+  assert.equal(rpcUrlEnv({ SOLANA_RPC_URL: "secret123" }, "SOLANA_RPC_URL", warn), undefined);
+  assert.equal(warnings.length, 2);
+  assert.ok(warnings.every((w) => !w.includes("secret123")));
+  assert.equal(rpcUrlEnv({}, "SOLANA_RPC_URL", warn), undefined);
 });
 
 test("the instructions tell agents to hand over the sign link and never ask for keys", async () => {
