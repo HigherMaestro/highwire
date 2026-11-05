@@ -2,11 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createServer } from "../src/server.ts";
+import { decodeSignPayload } from "highwire-core";
+import { serverOptionsFromEnv } from "../src/env.ts";
+import { createServer, type ServerOptions } from "../src/server.ts";
 import { ALL_TOOLS, BUILD_TOOLS, FAKE_OPTIONS } from "./fake.ts";
+import { fixtureFetch } from "./replay.ts";
 
-async function connect() {
-  const server = createServer(FAKE_OPTIONS);
+async function connect(opts: ServerOptions = FAKE_OPTIONS) {
+  const server = createServer(opts);
   const client = new Client({ name: "test", version: "0" });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(a), client.connect(b)]);
@@ -109,4 +112,41 @@ test("prompts and resources are registered", async () => {
   assert.deepEqual(prompts.map((p) => p.name).sort(), ["coin_due_diligence", "creator_report", "plan_launch", "scan_launches"]);
   const { resourceTemplates } = await client.listResourceTemplates();
   assert.equal(resourceTemplates[0]?.uriTemplate, "higher://coins/{mint}");
+});
+
+test("a build result's sign_url carries the envelope, on the configured site", async () => {
+  const client = await connect({ fetch: fixtureFetch("buy-curve"), retries: 0, siteUrl: "http://localhost:3000" });
+  const out = parse(
+    await client.callTool({
+      name: "build_trade",
+      arguments: {
+        wallet: "H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5",
+        mint: "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix",
+        side: "buy",
+        sol: 0.01,
+        max_slippage_bps: 200,
+        max_sol: 5,
+        confirm_trade: true,
+      },
+    }),
+  );
+  const url = new URL(out.sign_url);
+  assert.equal(url.origin + url.pathname, "http://localhost:3000/sign");
+  assert.deepEqual(await decodeSignPayload(url.hash), out.unsigned);
+  assert.ok(out.unsigned.transactions[0].summary.some((l: string) => l.includes("built by Highwire")));
+});
+
+test("the environment sets the sign site and the launch secret", () => {
+  const o = serverOptionsFromEnv({ HIGHWIRE_SITE_URL: "http://localhost:3000/", HIGHWIRE_LAUNCH_SECRET: "s" });
+  assert.equal(o.siteUrl, "http://localhost:3000");
+  assert.equal(o.launchKeySecret, "s");
+  assert.throws(() => serverOptionsFromEnv({ HIGHWIRE_SITE_URL: "ftp://x" }), /http/);
+  assert.equal(serverOptionsFromEnv({}).siteUrl, undefined);
+});
+
+test("the instructions tell agents to hand over the sign link and never ask for keys", async () => {
+  const client = await connect();
+  const text = client.getInstructions() ?? "";
+  assert.match(text, /sign_url/);
+  assert.match(text, /never needs a private key or seed phrase: never ask for one/);
 });

@@ -18,9 +18,22 @@ function clusterEnv(env: Env): Cluster | undefined {
   return v as Cluster;
 }
 
+function urlEnv(env: Env, name: string): string | undefined {
+  const v = env[name];
+  if (v === undefined || v === "") return undefined;
+  let u: URL;
+  try {
+    u = new URL(v);
+  } catch {
+    throw new Error(`${name} must be a URL, got "${v}"`);
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error(`${name} must be an http(s) URL`);
+  return u.origin;
+}
+
 /**
- * Server options from HIGHER_API_URL, SOLANA_RPC_URL, HIGHWIRE_CLUSTER, HIGHWIRE_MAX_SOL_PER_TX, HIGHER_TIMEOUT_MS
- * and HIGHER_RETRIES.
+ * Server options from HIGHER_API_URL, SOLANA_RPC_URL, HIGHWIRE_CLUSTER, HIGHWIRE_MAX_SOL_PER_TX, HIGHER_TIMEOUT_MS,
+ * HIGHER_RETRIES, HIGHWIRE_SITE_URL and HIGHWIRE_LAUNCH_SECRET.
  */
 export function serverOptionsFromEnv(env: Env = process.env): ServerOptions {
   const maxSol = numberEnv(env, "HIGHWIRE_MAX_SOL_PER_TX");
@@ -32,5 +45,7 @@ export function serverOptionsFromEnv(env: Env = process.env): ServerOptions {
     maxSolPerTx: maxSol,
     timeoutMs: numberEnv(env, "HIGHER_TIMEOUT_MS"),
     retries: numberEnv(env, "HIGHER_RETRIES"),
+    siteUrl: urlEnv(env, "HIGHWIRE_SITE_URL"),
+    launchKeySecret: env.HIGHWIRE_LAUNCH_SECRET || undefined,
   };
 }

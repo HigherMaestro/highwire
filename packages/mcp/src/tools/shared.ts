@@ -1,15 +1,17 @@
 import { z } from "zod";
-import type { Chain, HigherApi, LaunchKeys, SolanaRpc } from "highwire-core";
+import type { Chain, HigherApi, MintSource, SolanaRpc } from "highwire-core";
 
 export interface Deps {
   api: HigherApi;
   rpc: SolanaRpc;
   /** Solana and Raydium access for quotes and transaction builds, on the configured cluster. */
   chain: Chain;
-  /** Mint keypairs for build_launch, by idempotency key. */
-  launchKeys: LaunchKeys;
+  /** Mint keypairs for build_launch, by idempotency key: kept in memory, or derived from a secret. */
+  launchKeys: MintSource;
   /** The most SOL one built transaction may move. */
   maxSolPerTx: number;
+  /** The site sign links point at. */
+  siteUrl: string;
 }
 
 export const address = (what: string) =>

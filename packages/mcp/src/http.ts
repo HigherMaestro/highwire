@@ -1,9 +1,18 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createServer, type ServerOptions } from "./server.ts";
+import { BUILD_TOOL_NAMES } from "./tools/transactions.ts";
 
 // Stateless by design: a fresh server and transport per POST, no session IDs,
 // JSON responses instead of SSE, and 405 for GET and DELETE. Nothing is shared
-// between requests, so it scales out on serverless.
+// between requests, so it scales out on serverless. build_launch derives its
+// mint from the idempotency key (DerivedLaunchKeys), so a retry that lands on
+// another instance still gets the same coin.
+
+/**
+ * Whether the public hosted endpoint serves the transaction tools. They only ever return unsigned transactions and a
+ * sign link; the user's own wallet signs on highwire.fun/sign. This is the one switch for the hosted endpoint.
+ */
+export const HOSTED_TRANSACTION_TOOLS = true;
 
 export const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +23,7 @@ export const CORS_HEADERS: Record<string, string> = {
 };
 
 export interface RateLimit {
-  /** Requests allowed per client IP in each window. */
+  /** Units each client IP may spend in each window. A build tool call costs BUILD_COST, anything else 1. */
   limit: number;
   windowMs: number;
 }
@@ -22,7 +31,7 @@ export interface RateLimit {
 export interface HttpHandlerOptions {
   /** Passed to createServer() for every request. */
   server?: ServerOptions;
-  /** Per-IP limit on POSTs. Defaults to 60 a minute; false turns it off. */
+  /** Per-IP budget on POSTs. Defaults to 60 units a minute; false turns it off. */
   rateLimit?: RateLimit | false;
   /** Picks the client's IP. Defaults to the first X-Forwarded-For entry, then X-Real-IP. */
   clientIp?: (req: Request) => string | undefined;
@@ -31,6 +40,8 @@ export interface HttpHandlerOptions {
 }
 
 export const DEFAULT_RATE_LIMIT: RateLimit = { limit: 60, windowMs: 60_000 };
+/** What one build tool call costs against the rate limit. Every other request costs 1. */
+export const BUILD_COST = 5;
 
 function defaultClientIp(req: Request): string | undefined {
   const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
@@ -38,25 +49,44 @@ function defaultClientIp(req: Request): string | undefined {
 }
 
 /**
- * A fixed-window counter per IP, held in memory. On serverless hosts each
+ * A fixed-window budget per IP, held in memory. On serverless hosts each
  * instance keeps its own counts, so treat it as a brake, not a guarantee.
  */
 export function createRateLimiter({ limit, windowMs }: RateLimit, now: () => number = Date.now) {
-  const windows = new Map<string, { count: number; resetAt: number }>();
-  return (key: string): { ok: true } | { ok: false; retryAfterSec: number } => {
+  const windows = new Map<string, { spent: number; resetAt: number }>();
+  return (key: string, cost = 1): { ok: true } | { ok: false; retryAfterSec: number } => {
     const t = now();
     if (windows.size > 10_000) {
       for (const [k, w] of windows) if (w.resetAt <= t) windows.delete(k);
     }
     let w = windows.get(key);
     if (!w || w.resetAt <= t) {
-      w = { count: 0, resetAt: t + windowMs };
+      w = { spent: 0, resetAt: t + windowMs };
       windows.set(key, w);
     }
-    w.count++;
-    if (w.count > limit) return { ok: false, retryAfterSec: Math.ceil((w.resetAt - t) / 1000) };
+    if (w.spent + cost > limit) return { ok: false, retryAfterSec: Math.ceil((w.resetAt - t) / 1000) };
+    w.spent += cost;
     return { ok: true };
   };
+}
+
+const BUILD_TOOLS = new Set<string>(BUILD_TOOL_NAMES);
+
+/** What a JSON-RPC body costs: BUILD_COST per build tool call in it, 1 for anything else (and at least 1). */
+export function requestCost(body: string): number {
+  let msg: unknown;
+  try {
+    msg = JSON.parse(body);
+  } catch {
+    return 1;
+  }
+  const msgs = Array.isArray(msg) ? msg : [msg];
+  let cost = 0;
+  for (const m of msgs) {
+    const r = m as { method?: unknown; params?: { name?: unknown } } | null;
+    cost += r?.method === "tools/call" && typeof r.params?.name === "string" && BUILD_TOOLS.has(r.params.name) ? BUILD_COST : 1;
+  }
+  return Math.max(1, cost);
 }
 
 function rpcError(status: number, code: number, message: string, headers: Record<string, string> = {}): Response {
@@ -73,9 +103,10 @@ function withCors(res: Response): Response {
 }
 
 /**
- * A stateless Streamable HTTP endpoint for the read-only server (the transaction tools are never registered on it), as a
- * fetch-style handler: `(Request) => Promise<Response>`. Mount it on one path
- * for every method (Next.js route handlers, Hono, Bun, Deno, workers).
+ * A stateless Streamable HTTP endpoint for the public hosted server, as a fetch-style handler:
+ * `(Request) => Promise<Response>`. It serves the read tools and, per HOSTED_TRANSACTION_TOOLS, the transaction tools,
+ * which only return unsigned transactions. Mount it on one path for every method (Next.js route handlers, Hono, Bun,
+ * Deno, workers).
  */
 export function createHttpHandler(opts: HttpHandlerOptions = {}): (req: Request) => Promise<Response> {
   const limiter = opts.rateLimit === false ? undefined : createRateLimiter(opts.rateLimit ?? DEFAULT_RATE_LIMIT);
@@ -90,8 +121,14 @@ export function createHttpHandler(opts: HttpHandlerOptions = {}): (req: Request)
       });
     }
 
+    // Read the body once, to weigh it for the rate limit, then hand the transport a copy.
+    const declared = Number(req.headers.get("content-length") ?? 0);
+    if (declared > maxBodyBytes) return rpcError(413, -32000, "Request body too large.");
+    const body = await req.text();
+    if (new TextEncoder().encode(body).length > maxBodyBytes) return rpcError(413, -32000, "Request body too large.");
+
     if (limiter) {
-      const verdict = limiter(clientIp(req) ?? "unknown");
+      const verdict = limiter(clientIp(req) ?? "unknown", requestCost(body));
       if (!verdict.ok) {
         return rpcError(429, -32000, `Rate limited. Retry in ${verdict.retryAfterSec}s.`, {
           "Retry-After": String(verdict.retryAfterSec),
@@ -99,8 +136,14 @@ export function createHttpHandler(opts: HttpHandlerOptions = {}): (req: Request)
       }
     }
 
-    // Public and unauthenticated: the read tools only, never the transaction tools.
-    const server = createServer({ ...opts.server, transactionTools: false });
+    // Public and unauthenticated: build tools return unsigned transactions only, and launch mints are derived, not
+    // stored, so nothing depends on this instance surviving until the retry.
+    const server = createServer({
+      ...opts.server,
+      transactionTools: HOSTED_TRANSACTION_TOOLS,
+      hosted: true,
+      launchKeySecret: opts.server?.launchKeySecret ?? "",
+    });
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -108,7 +151,8 @@ export function createHttpHandler(opts: HttpHandlerOptions = {}): (req: Request)
     });
     try {
       await server.connect(transport);
-      return withCors(await transport.handleRequest(req));
+      const copy = new Request(req.url, { method: "POST", headers: req.headers, body });
+      return withCors(await transport.handleRequest(copy));
     } catch (err) {
       console.error("[highwire] MCP request failed:", err);
       return rpcError(500, -32603, "Internal error");

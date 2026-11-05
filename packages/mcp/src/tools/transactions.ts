@@ -13,6 +13,7 @@ import {
   lamportsToSol,
   MAX_SLIPPAGE_BPS,
   quoteTrade,
+  signUrl,
   solToLamports,
   summarizePositions,
   summarizeQuote,
@@ -28,8 +29,16 @@ import { BUILD, READ_ONLY, mint, solUsd, wallet, type Deps } from "./shared.ts";
 
 // Quotes, positions and unsigned transactions. The build tools never sign and
 // never see a key: they return transactions for the user's own wallet to sign
-// (docs/unsigned-transactions.md). quote_trade and get_wallet_positions are
-// reads. The whole group stays off the public hosted endpoint for now.
+// (docs/unsigned-transactions.md), plus a sign_url to the signing page on
+// highwire.fun. quote_trade and get_wallet_positions are reads. The hosted
+// endpoint serves the whole group (HOSTED_TRANSACTION_TOOLS in http.ts).
+
+/** The tools that build transactions. The hosted endpoint charges them more of the rate limit. */
+export const BUILD_TOOL_NAMES = ["build_trade", "build_launch", "build_claim_creator_fees"] as const;
+
+const SIGN_NOTE =
+  "Give the user sign_url: highwire.fun/sign shows what this does, re-checks and simulates it in their browser, and has " +
+  "their wallet sign it. It expires with the blockhash, in about a minute; if it has expired, build again.";
 
 const side = z.enum(["buy", "sell"]).describe("buy spends SOL for tokens; sell spends tokens for SOL.");
 const sol = z.number().positive().max(1_000_000).optional().describe("For a buy: SOL to spend.");
@@ -44,8 +53,8 @@ function tradeAmount(args: { side: "buy" | "sell"; sol?: number; tokens?: number
   return tokensToBase(args.tokens);
 }
 
-/** Wraps an envelope result; a failed simulation becomes an error that still shows what was built. */
-function envelopeResult(env: Envelope, extra: Record<string, unknown>) {
+/** Wraps an envelope result with its sign link; a failed simulation becomes an error that still shows what was built. */
+async function envelopeResult(env: Envelope, siteUrl: string, extra: Record<string, unknown>) {
   const failed = failedSimulation(env);
   if (failed) {
     return jsonResult(
@@ -61,11 +70,11 @@ function envelopeResult(env: Envelope, extra: Record<string, unknown>) {
       true,
     );
   }
-  return jsonResult({ ...extra, unsigned: env });
+  return jsonResult({ sign_url: await signUrl(env, siteUrl), sign_note: SIGN_NOTE, ...extra, unsigned: env });
 }
 
 export function registerTransactionTools(server: McpServer, deps: Deps) {
-  const { api, chain } = deps;
+  const { api, chain, siteUrl } = deps;
   const onMainnet = chain.cluster === "mainnet";
 
   server.registerTool(
@@ -122,7 +131,8 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
         "Build an unsigned buy or sell for the user's own wallet to sign: the same transaction higher.fun's site builds. " +
         "Quote first with quote_trade and show the user the quote. Set confirm_trade to true only after the user has " +
         "approved this exact trade (coin, side, amount, slippage). The transaction is checked instruction by instruction, " +
-        "simulated, and returned as base64 with a plain-language summary. Highwire never signs and never needs a private key.",
+        "simulated, and returned as base64 with a plain-language summary and a sign_url for the user to review and sign in " +
+        "their own wallet. Highwire never signs and never needs a private key.",
       inputSchema: {
         wallet: wallet.describe("The wallet that will sign and pay (public key only)."),
         mint,
@@ -149,7 +159,7 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
           slippageBps: args.max_slippage_bps,
           maxLamports: solToLamports(args.max_sol),
         });
-        return envelopeResult(built.envelope, { quote: summarizeQuote(built.quote) });
+        return envelopeResult(built.envelope, siteUrl, { quote: summarizeQuote(built.quote) });
       }),
   );
 
@@ -163,7 +173,8 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
         "wallet and cap), an optional first buy, and for New school an optional creator lock. Needs metadata_uri: higher.fun's " +
         "image and metadata upload needs a wallet sign-in Highwire can't do, so without it the tool returns the metadata JSON " +
         "to host first. Reuse the same idempotency_key on retries: it keeps the same mint, so the coin (and its fee) can only " +
-        "happen once. Set confirm_launch to true only after the user approved the launch, its cost and its fee mode.",
+        "happen once, on any server instance. Set confirm_launch to true only after the user approved the launch, its cost " +
+        "and its fee mode. Returns the transactions and a sign_url for the user's wallet.",
       inputSchema: {
         wallet: wallet.describe("The creator's wallet, which signs and pays (public key only)."),
         name: z.string().min(1).max(32).describe("Coin name, up to 32 characters."),
@@ -184,7 +195,11 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
           .describe("rewards only: lock this % of supply for the creator (7-day cliff after graduation, then 30 days linear)."),
         dev_buy_sol: z.number().min(0).max(maxSol).optional().describe(`SOL for the creator's first buy, in the same transaction. At most ${maxSol}.`),
         max_slippage_bps: z.number().int().min(0).max(MAX_SLIPPAGE_BPS).default(500).describe("Slippage for the first buy, in bps."),
-        idempotency_key: z.string().min(8).max(128).describe("A unique key for this coin. Reuse it on retries."),
+        idempotency_key: z
+          .string()
+          .min(8)
+          .max(128)
+          .describe("A unique, unguessable key for this coin (a random UUID). Reuse it on retries: it fixes the coin's mint address."),
         confirm_launch: z.literal(true).describe("Set to true only after the user approved this launch."),
       },
       annotations: { title: "Build a coin launch (unsigned)", ...BUILD },
@@ -214,7 +229,7 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
           return jsonResult({ status: r.status, mint: r.mint, url: r.url, note: "This idempotency key's coin already exists. Nothing to sign." });
         }
         const costs = r.envelope.transactions.length;
-        return envelopeResult(r.envelope, {
+        return envelopeResult(r.envelope, siteUrl, {
           status: r.status,
           mint: r.mint,
           poolId: r.poolId,
@@ -235,7 +250,8 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
       description:
         "Show what a creator can claim and build the unsigned claim transactions: curve creator fees (New school coins, one " +
         "vault across all the creator's coins) and, after graduation, each coin's Raydium CPMM pool creator fee. A New " +
-        "school creator's third of the locked-LP fees is paid by higher.fun off-chain; that is reported, not claimed.",
+        "school creator's third of the locked-LP fees is paid by higher.fun off-chain; that is reported, not claimed. " +
+        "Returns a sign_url for the user's wallet when there is something to claim.",
       inputSchema: { wallet: wallet.describe("The creator's wallet, which signs (public key only).") },
       annotations: { title: "Build creator fee claims (unsigned)", ...BUILD },
     },
@@ -254,7 +270,7 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
             }
           : null;
         if (!r.envelope) return jsonResult({ claimable: r.claimable, offChainPayouts: offChain, note: "Nothing to claim on-chain right now." });
-        return envelopeResult(r.envelope, { claimable: r.claimable, offChainPayouts: offChain });
+        return envelopeResult(r.envelope, siteUrl, { claimable: r.claimable, offChainPayouts: offChain });
       }),
   );
 }
