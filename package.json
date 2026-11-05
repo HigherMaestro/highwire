@@ -1,12 +1,12 @@
 {
-  "name": "higher-mcp",
+  "name": "highwire-mcp",
   "version": "0.1.0",
-  "description": "MCP server that lets AI agents use higher.fun, the open-source Solana launchpad",
+  "description": "Highwire: the MCP server that lets AI agents use higher.fun, the open-source Solana launchpad",
   "type": "module",
   "private": true,
   "license": "MIT",
   "bin": {
-    "higher-mcp": "dist/index.js"
+    "highwire": "dist/index.js"
   },
   "files": [
     "LICENSE",

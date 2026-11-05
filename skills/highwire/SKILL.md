@@ -1,9 +1,9 @@
 ---
-name: higher
-description: Research coins on higher.fun, the open-source Solana launchpad, with the higher MCP server. Covers scanning launches, due diligence, rug checks, creator lookups and launch planning. Use when the user mentions higher.fun, $HIGH, Old school or New school coins, or wants to find, vet or plan a coin on higher.fun.
+name: highwire
+description: Research coins on higher.fun, the open-source Solana launchpad, with the Highwire MCP server. Covers scanning launches, due diligence, rug checks, creator lookups and launch planning. Use when the user mentions higher.fun, $HIGH, Old school or New school coins, or wants to find, vet or plan a coin on higher.fun.
 ---
 
-# higher.fun with the higher MCP server
+# higher.fun with Highwire
 
 higher.fun ("Lower Fees, Higher Together") is a Solana launchpad. Coins start on a Raydium LaunchLab bonding curve
 and graduate to a Raydium pool at 85 SOL raised. Each coin has a fee mode, fixed at launch:

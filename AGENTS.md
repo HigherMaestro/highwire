@@ -1,4 +1,4 @@
-# Working on higher-mcp
+# Working on Highwire
 
 A TypeScript MCP server for higher.fun (stdio, `@modelcontextprotocol/sdk` 1.x, zod 4). Read
 [docs/higher-reference.md](docs/higher-reference.md) before touching anything that depends on how higher.fun works.

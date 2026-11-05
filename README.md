@@ -1,6 +1,6 @@
-# higher-mcp
+# Highwire
 
-An MCP server that lets AI agents use [higher.fun](https://higher.fun), the open-source Solana launchpad.
+The agent wire for [higher.fun](https://higher.fun). Highwire is an MCP server that lets AI agents use higher.fun, the open-source Solana launchpad.
 Lower Fees, Higher Together.
 
 Agents can scan launches and trending coins, pull a coin's trades, holders, candles and safety data, look up creators
@@ -40,18 +40,18 @@ and their earnings, and run a rug check, all from the public higher.fun API and 
 - `higher://platform`
 - `higher://coins/{mint}`
 
-**Skill:** an operator guide for agents is in [skills/higher/SKILL.md](skills/higher/SKILL.md).
+**Skill:** an operator guide for agents is in [skills/highwire/SKILL.md](skills/highwire/SKILL.md).
 
 ## Setup
 
 Needs Node 20 or later.
 
 ```bash
-git clone https://github.com/HigherMaestro/higher-mcp.git
+git clone https://github.com/HigherMaestro/highwire.git
 ```
 
 ```bash
-cd higher-mcp && npm install
+cd highwire && npm install
 ```
 
 ```bash
@@ -61,7 +61,7 @@ npm run build
 **Claude Code**
 
 ```bash
-claude mcp add higher -- node /path/to/higher-mcp/dist/index.js
+claude mcp add highwire -- node /path/to/highwire/dist/index.js
 ```
 
 **Claude Desktop, Cursor, or any stdio client**
@@ -69,9 +69,9 @@ claude mcp add higher -- node /path/to/higher-mcp/dist/index.js
 ```json
 {
   "mcpServers": {
-    "higher": {
+    "highwire": {
       "command": "node",
-      "args": ["/path/to/higher-mcp/dist/index.js"],
+      "args": ["/path/to/highwire/dist/index.js"],
       "env": { "SOLANA_RPC_URL": "https://api.mainnet-beta.solana.com" }
     }
   }

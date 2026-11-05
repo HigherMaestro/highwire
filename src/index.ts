@@ -16,7 +16,7 @@ if (args.includes("--version")) {
   process.exit(0);
 }
 if (args.includes("--help")) {
-  console.log(`higher-mcp ${VERSION}: MCP server for higher.fun (stdio)
+  console.log(`highwire ${VERSION}: the MCP server for higher.fun (stdio)
 
 Environment (all optional):
   HIGHER_API_URL     default https://api.higher.fun
@@ -35,4 +35,4 @@ const server = createServer({
 
 await server.connect(new StdioServerTransport());
 // stdout carries the protocol, so logs go to stderr.
-console.error(`higher-mcp ${VERSION} running on stdio`);
+console.error(`highwire ${VERSION} running on stdio`);

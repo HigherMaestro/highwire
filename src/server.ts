@@ -38,7 +38,7 @@ export function createDeps(opts: ServerOptions = {}): Deps {
     baseUrl: opts.apiUrl ?? DEFAULT_API_URL,
     timeoutMs: opts.timeoutMs,
     retries: opts.retries,
-    userAgent: `higher-mcp/${VERSION}`,
+    userAgent: `highwire/${VERSION}`,
     fetch: opts.fetch,
   });
   return {
@@ -49,7 +49,7 @@ export function createDeps(opts: ServerOptions = {}): Deps {
 
 export function createServer(opts: ServerOptions = {}): McpServer {
   const deps = createDeps(opts);
-  const server = new McpServer({ name: "higher", version: VERSION }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "highwire", version: VERSION }, { instructions: INSTRUCTIONS });
 
   registerMarketTools(server, deps);
   registerProfileTools(server, deps);

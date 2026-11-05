@@ -42,5 +42,5 @@ Off unless the user configures it. Never accept a key through a tool argument.
 - **Streamable HTTP transport** with OAuth.
 - **Live feed:** subscribe to `wss://api.higher.fun/ws` for launches, trades and graduations.
 - **Sign-in tools:** posting comments and chat through `/auth/nonce` and `/auth/verify`, if higher.fun wants agents posting.
-- **Publishing:** to npm (`npx higher-mcp`) and to the MCP registry.
+- **Publishing:** to npm (`npx highwire-mcp`) and to the MCP registry.
 - **Partnering:** ask the higher.fun team for a stable API contract and an agent rate-limit tier.
