@@ -4,10 +4,10 @@
 
 - npm workspaces: `highwire-core` (API client, constants, formatting, rug check), `highwire-mcp` (server, tools,
   prompts, the `highwire` stdio bin, a stateless HTTP handler) and `apps/web` (Next.js).
-- The hosted read-only MCP at `https://<domain>/mcp`: stateless Streamable HTTP (fresh server per request, JSON responses), CORS, a per-IP rate limit, and `GET /api/health`.
+- The hosted read-only MCP at `https://highwire.fun/mcp`: stateless Streamable HTTP (fresh server per request, JSON responses), CORS, a per-IP rate limit, and `GET /api/health`.
 - A placeholder home page with the install snippets. The brand and the real site design come next.
-- Left to the maintainer: publish `highwire-core` and `highwire-mcp` to npm, and deploy `apps/web` to Vercel on the
-  domain.
+- Deployed to Vercel on `highwire.fun`, from the CLI (see the README's Deploying section).
+- Left to the maintainer: publish `highwire-core` and `highwire-mcp` to npm.
 
 ## v0.1: read-only (done)
 

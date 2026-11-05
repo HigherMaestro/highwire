@@ -1,0 +1,10 @@
+# `vercel deploy` uploads from the repo root and doesn't read .gitignore.
+# Keep local-only and build output out of the upload.
+.claude
+.env*
+!.env.example
+keys
+**/dist
+**/.next
+**/node_modules
+brand/scripts

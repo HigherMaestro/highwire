@@ -51,7 +51,7 @@ Nothing to install. The hosted server is read-only and needs no key.
 **Claude Code**
 
 ```bash
-claude mcp add --transport http highwire https://<domain>/mcp
+claude mcp add --transport http highwire https://highwire.fun/mcp
 ```
 
 **Cursor, or any client that takes a remote MCP URL**
@@ -59,7 +59,7 @@ claude mcp add --transport http highwire https://<domain>/mcp
 ```json
 {
   "mcpServers": {
-    "highwire": { "url": "https://<domain>/mcp" }
+    "highwire": { "url": "https://highwire.fun/mcp" }
   }
 }
 ```
@@ -136,8 +136,20 @@ Every command runs from the root and covers all workspaces.
 To point the hosted check at a deployed site instead of `next dev`:
 
 ```bash
-SMOKE_URL=https://<domain> npm run smoke -w highwire-web
+SMOKE_URL=https://highwire.fun npm run smoke -w highwire-web
 ```
+
+### Deploying
+
+The site runs on Vercel (project `highwire`, root directory `apps/web`, Node 22), and is deployed from the CLI. The
+project has no Git connection, so pushing to GitHub doesn't deploy. From the repo root:
+
+```bash
+vercel deploy --prod --scope groovys-projects
+```
+
+`.vercelignore` keeps local-only files out of the upload. `www.highwire.fun` redirects to `highwire.fun`. After a
+deploy, run the hosted smoke check above.
 
 To run a local build over stdio, `npm run build`, then use `node /path/to/highwire/packages/mcp/dist/cli.js` as the
 command.
