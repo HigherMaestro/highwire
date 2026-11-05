@@ -1,5 +1,6 @@
 import { CopyCommand } from "../components/CopyCommand.tsx";
 import { Lockup, Mark } from "../components/Mark.tsx";
+import { ThemeToggle } from "../components/ThemeToggle.tsx";
 import { graduatingCoins, type CoinSummary } from "../lib/coins.ts";
 import { MCP_URL, REPO_URL, X_HANDLE, X_URL } from "../lib/site.ts";
 import { listTools, type ToolInfo } from "../lib/tools.ts";
@@ -94,24 +95,27 @@ export default async function Home() {
           <a href="/" className="home-link" aria-label="Highwire home">
             <Lockup id="hdr" />
           </a>
-          <nav aria-label="Main">
-            <ul className="nav">
-              <li>
-                <a href="#connect">Connect</a>
-              </li>
-              <li>
-                <a href="#tools">Tools</a>
-              </li>
-              <li>
-                <a href={REPO_URL}>GitHub</a>
-              </li>
-              <li>
-                <a href={X_URL} aria-label={`Highwire on X (${X_HANDLE})`}>
-                  X
-                </a>
-              </li>
-            </ul>
-          </nav>
+          <div className="header-right">
+            <nav aria-label="Main">
+              <ul className="nav">
+                <li>
+                  <a href="#connect">Connect</a>
+                </li>
+                <li>
+                  <a href="#tools">Tools</a>
+                </li>
+                <li>
+                  <a href={REPO_URL}>GitHub</a>
+                </li>
+                <li>
+                  <a href={X_URL} aria-label={`Highwire on X (${X_HANDLE})`}>
+                    X
+                  </a>
+                </li>
+              </ul>
+            </nav>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 

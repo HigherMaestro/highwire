@@ -21,8 +21,9 @@
   color-scheme: light;
 }
 
+/* Dark follows the system unless the visitor picked a theme (data-theme on <html>). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0E1116;
     --fg: #F1F0EC;
     --muted: #A9AFB8;
@@ -34,6 +35,19 @@
     --link: #93E2FB;
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0E1116;
+  --fg: #F1F0EC;
+  --muted: #A9AFB8;
+  --line: #2A2F37;
+  --surface: #161A20;
+  --surface-alt: #12151A;
+  --node-fill: #0E1116;
+  --code-bg: #05070A;
+  --link: #93E2FB;
+  color-scheme: dark;
 }
 
 *,
@@ -195,6 +209,36 @@ h3 {
 
 .nav a:hover {
   background: var(--surface-alt);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg);
+  font: 500 15px var(--font-display);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  background: var(--surface-alt);
+}
+
+.theme-toggle:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 2px;
 }
 
 /* Hero */

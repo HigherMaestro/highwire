@@ -183,19 +183,21 @@ def build_svgs() -> dict[str, str]:
         )
         out[name] = svg(round(lw, 2), round(lh, 2), body, label)
 
-    # X banner 1500x500. Keep the bottom-left clear: the profile picture covers it.
+    # X banner 1500x500. The profile picture covers the bottom-left (about x 40-390, y 330-500 on
+    # phones) and some views trim the top and bottom edges, so the text sits high and the H's posts
+    # stop short of the edges. Nothing here should change as the tool list grows.
     banner = (
         f'<defs>{wire_gradient("bw", 980, 1360)}</defs>'
         f'<rect width="1500" height="500" fill="{PAPER}"/>'
-        f'<path d="M640 40 Q820 170 980 150" fill="none" stroke="{INK}" stroke-opacity=".18" stroke-width="2"/>'
-        f'<path d="M1360 150 Q1440 170 1520 160" fill="none" stroke="{INK}" stroke-opacity=".18" stroke-width="2"/>'
-        f'<line x1="980" y1="40" x2="980" y2="460" stroke="{INK}" stroke-width="26" stroke-linecap="round"/>'
-        f'<line x1="1360" y1="40" x2="1360" y2="460" stroke="{INK}" stroke-width="26" stroke-linecap="round"/>'
-        f'<path d="M980 150 Q1170 330 1360 150" fill="none" stroke="url(#bw)" stroke-width="11" stroke-linecap="round"/>'
-        f'<circle cx="1170" cy="240" r="17" fill="#FFFFFF" stroke="{INK}" stroke-width="5"/>'
-        + text_el("highwire", "grotesk", 700, 128, 104, 188, INK, -0.05)
-        + text_el("The agent wire for higher.fun", "grotesk", 500, 32, 110, 250, MUTED)
-        + text_el("list_coins · get_coin · rug_check · get_wallet_profile", "mono", 500, 17, 111, 300, MUTED)
+        f'<path d="M660 70 Q830 185 980 160" fill="none" stroke="{INK}" stroke-opacity=".18" stroke-width="2"/>'
+        f'<path d="M1360 160 Q1440 176 1520 168" fill="none" stroke="{INK}" stroke-opacity=".18" stroke-width="2"/>'
+        f'<line x1="980" y1="72" x2="980" y2="428" stroke="{INK}" stroke-width="26" stroke-linecap="round"/>'
+        f'<line x1="1360" y1="72" x2="1360" y2="428" stroke="{INK}" stroke-width="26" stroke-linecap="round"/>'
+        f'<path d="M980 160 Q1170 340 1360 160" fill="none" stroke="url(#bw)" stroke-width="11" stroke-linecap="round"/>'
+        f'<circle cx="1170" cy="250" r="17" fill="#FFFFFF" stroke="{INK}" stroke-width="5"/>'
+        + text_el("highwire", "grotesk", 700, 132, 104, 192, INK, -0.05)
+        + text_el("The agent wire for higher.fun", "grotesk", 500, 34, 110, 254, MUTED)
+        + text_el("highwire.fun", "mono", 500, 22, 111, 300, MUTED)
     )
     out["x-banner.svg"] = svg(1500, 500, banner, "Highwire, the agent wire for higher.fun")
 
