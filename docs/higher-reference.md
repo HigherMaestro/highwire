@@ -55,7 +55,7 @@ config for both modes, and so does Highwire.
 
 **After graduation** every coin trades in a CPMM pool on config `D4FPEru…`: `tradeFeeRate` 2500 (0.25%, of which
 `protocolFeeRate` 12% and `fundFeeRate` 4% go to Raydium, the rest to LPs), plus a pool creator fee
-`creatorFeeRate` 500 (0.05%) charged on the SOL side (`feeOn` 2). The pool's `poolCreator` is the coin's creator, who
+`creatorFeeRate` 500 (0.05%) charged on the SOL side (`feeOn` names that side: 1 when SOL is token0, as in $HIGH's pool, 2 when it's token1). The pool's `poolCreator` is the coin's creator, who
 claims it with CPMM `collect_creator_fee`; Raydium keeps `creatorFeeShareRate` 50000 (5%) of it. This applies to Old
 school coins too: a graduated Old school coin pays its creator.
 
@@ -147,7 +147,7 @@ Trades on the coin API include third-party routers (Axiom's `FLASHX…`, Jupiter
 ## Public API (`https://api.higher.fun`)
 
 No auth on the GET routes below. Amounts are strings: lamports for SOL, base units (6 decimals) for tokens, SOL per
-token for prices. Lists return `{items, nextCursor}`. Errors look like `{"error":"bad_request","message":"…"}`.
+token for prices. Lists return `{items, nextCursor}`. On 2026-11-05 `/coins/:mint/trades` rejected its own `nextCursor` (`cursor: Too big: expected string to have <=128 characters`): the cursor is base64 of `[slot, signature, n]`, about 144 characters with an 88-character signature, so the trades list can't be paged past the first 50. Errors look like `{"error":"bad_request","message":"…"}`.
 
 | Route | Notes |
 |---|---|
