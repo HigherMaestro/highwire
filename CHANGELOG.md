@@ -31,7 +31,9 @@ Sign from any chat: the hosted server builds transactions, and highwire.fun/sign
   `get_featured_coin` answers `featured: null` instead of failing when higher.fun features nothing.
   `build_trade` no longer times out for wallets that hold thousands of tokens: it reads only the wallet's token
   accounts for the coin and wrapped SOL, where Raydium's SDK would list all of them (hundreds of megabytes for a busy
-  trading wallet).
+  trading wallet). `get_wallet_positions` takes `mints` to check only those coins, which reads just their accounts;
+  the full listing reads only each account's mint and amount, and past about 60,000 token accounts it says to pass
+  `mints` instead of running out of time.
 - **Pages.** /terms and /privacy (drafts, pending legal review) and this changelog.
 
 ## 0.2.0 (2026-11-05)

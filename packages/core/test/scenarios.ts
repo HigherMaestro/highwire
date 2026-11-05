@@ -21,5 +21,5 @@ export const CLAIM_COIN = new PublicKey("Ea5dBrJZN58yV1nm1Q4DybJNYKeTvwpb2GEkXyW
 export const LAUNCH_MINT = Keypair.fromSeed(createHash("sha256").update("highwire simulation launch mint").digest());
 export const LAUNCH_URI = "https://highwire.fun/sim/metadata.json";
 
-export const SCENARIOS = ["buy-curve", "sell-curve", "buy-graduated", "sell-graduated", "launch-rewards", "claim", "positions"] as const;
+export const SCENARIOS = ["buy-curve", "sell-curve", "buy-graduated", "sell-graduated", "launch-rewards", "claim", "positions", "positions-mints"] as const;
 export type Scenario = (typeof SCENARIOS)[number];

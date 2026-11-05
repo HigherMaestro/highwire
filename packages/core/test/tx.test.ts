@@ -9,6 +9,7 @@ import { Chain } from "../src/tx/chain.ts";
 import { assertSafe, describeTransaction, UnsafeTransactionError } from "../src/tx/decode.ts";
 import { ENVELOPE_FORMAT, type Envelope } from "../src/tx/envelope.ts";
 import { buildLaunch, LaunchKeys, launchFingerprint, validateLaunch, type LaunchInput } from "../src/tx/launch.ts";
+import { MAX_LISTING_BYTES, walletPositions } from "../src/tx/positions.ts";
 import { formatLamports, formatTokens, solToLamports, tokensToBase } from "../src/tx/units.ts";
 import { replayFetch, type Recording } from "./replay.ts";
 import { runScenario } from "./run-scenario.ts";
@@ -201,6 +202,28 @@ test("positions keep only higher.fun coins, recognised on-chain", async () => {
   assert.ok(fischer.priceSol && fischer.priceSol > 0);
 });
 
+test("positions for named coins read only those coins' accounts", async () => {
+  const r = await replay("positions-mints");
+  assert.ok(r && "positions" in r);
+  const fischer = r.positions.find((p) => p.mint === GRADUATED_COIN.toBase58());
+  assert.ok(fischer, "holds $Fischer");
+  assert.equal(fischer.stage, "graduated");
+  assert.ok(fischer.priceSol && fischer.priceSol > 0);
+  assert.ok(r.solBalance > 0);
+  await assert.rejects(walletPositions(new Chain({ fetch: replayFetch({}) }), null, TRADER, { mints: Array(51).fill(CURVE_COIN) }), /at most 50/);
+});
+
+test("a wallet with too many token accounts to list gets a clear error, not a hang", async () => {
+  const huge = Buffer.alloc(MAX_LISTING_BYTES + 1024, " ");
+  const fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    const { method, id } = JSON.parse(String(init?.body));
+    if (method === "getTokenAccountsByOwner") return new Response(huge, { headers: { "content-type": "application/json" } });
+    if (method === "getBalance") return Response.json({ jsonrpc: "2.0", id, result: { context: { slot: 1 }, value: 1 } });
+    throw new Error(`unexpected ${method}`);
+  }) as typeof globalThis.fetch;
+  await assert.rejects(walletPositions(new Chain({ fetch }), null, TRADER), (e: { code?: string }) => e.code === "too_many_tokens");
+});
+
 // Safety checks on hand-built transactions.
 
 const wallet = Keypair.generate().publicKey;
@@ -243,8 +266,8 @@ test("a recorded trade fails the checks for another platform", async () => {
   assert.equal(describeTransaction(tx, "mainnet").trades.length, 1);
 });
 
-test("no build lists every token account a wallet owns (a busy wallet's list runs to hundreds of megabytes)", async () => {
-  for (const name of ["buy-curve", "sell-curve", "buy-graduated", "sell-graduated", "launch-rewards", "claim"] as const) {
+test("no build, and no positions read for named coins, lists every token account a wallet owns (a busy wallet's list runs to hundreds of megabytes)", async () => {
+  for (const name of ["buy-curve", "sell-curve", "buy-graduated", "sell-graduated", "launch-rewards", "claim", "positions-mints"] as const) {
     const methods: string[] = [];
     const inner = replayFetch(fixture(name));
     const fetch = (async (input: string | URL | Request, init?: RequestInit) => {

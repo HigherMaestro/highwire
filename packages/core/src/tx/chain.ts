@@ -146,6 +146,41 @@ export class Chain {
     return parseTokenAccountResp({ owner, solAccountResp: sol, tokenAccountResp: { context: res.context, value } });
   }
 
+  /**
+   * One JSON-RPC call whose answer may be huge, read only up to `maxBytes`: past that the download is cancelled and
+   * the result is null. web3.js would buffer the whole body first.
+   */
+  async rpcCapped<T>(method: string, params: unknown[], maxBytes: number): Promise<T | null> {
+    let res: Response;
+    try {
+      res = await this.fetchImpl(this.connection.rpcEndpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      });
+    } catch (err) {
+      if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) throw new TimeoutError(`the Solana RPC timed out on ${method}`);
+      throw new NetworkError(err instanceof Error ? err.message : "the Solana RPC is unreachable");
+    }
+    if (!res.ok || !res.body) throw new HigherError(`the Solana RPC answered HTTP ${res.status} to ${method}`, { status: res.status });
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { result?: T; error?: { code: number; message: string } };
+    if (body.error) throw new HigherError(`the Solana RPC refused ${method}: ${body.error.message}`, { code: String(body.error.code) });
+    return body.result as T;
+  }
+
   /** LaunchLab's default curve parameters (supply, amount sold on the curve, graduation target). */
   launchConfigs(): Promise<LaunchConfig[]> {
     this.launchConfigsCache ??= (async () => {

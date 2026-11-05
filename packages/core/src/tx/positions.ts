@@ -1,5 +1,6 @@
 import { LaunchpadPool } from "@raydium-io/raydium-sdk-v2";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { ValidationError } from "../lib/errors.ts";
 import { PublicKey } from "@solana/web3.js";
 import type { CoinDetail, HigherApi } from "../higher/api.ts";
 import { coinUrl, feeModeOfPlatform, TOKEN_DECIMALS, type FeeMode } from "../higher/constants.ts";
@@ -10,7 +11,9 @@ import { lamportsNumber, tokensNumber } from "./units.ts";
 // get_wallet_positions: the wallet's token accounts, kept when the mint has a
 // LaunchLab pool on one of higher.fun's platform configs (checked on-chain, so
 // look-alike tokens can't pose as higher.fun coins), valued at the API's
-// last price.
+// last price. Given `mints`, only those coins' accounts are read, which stays
+// fast for a wallet with thousands of token accounts; the full listing reads
+// just each account's mint and amount, and gives up past a size limit.
 
 export interface Position {
   mint: string;
@@ -35,19 +38,62 @@ export interface Positions {
 
 const STAGES = { 0: "bonding curve", 1: "migrating", 2: "graduated" } as const;
 
-export async function walletPositions(chain: Chain, api: HigherApi | null, wallet: PublicKey, opts: { maxPriced?: number } = {}): Promise<Positions> {
-  const maxPriced = opts.maxPriced ?? 40;
-  const [lamports, accounts] = await Promise.all([
+/** The most a full listing downloads: about 60,000 token accounts. */
+export const MAX_LISTING_BYTES = 16_000_000;
+/** The most distinct coins a full listing checks on-chain. */
+export const MAX_LISTED_MINTS = 2_000;
+/** The most coins `mints` may name. */
+export const MAX_POSITION_MINTS = 50;
+
+const tooMany = () =>
+  new ValidationError("This wallet holds too many tokens to list them all.", { code: "too_many_tokens" });
+
+/** The SOL balance and every token account's mint and amount, from 72-byte slices of the accounts. */
+async function listBalances(chain: Chain, wallet: PublicKey): Promise<{ lamports: number; balances: Map<string, bigint> }> {
+  type Slices = { value: { account: { data: [string, string] } }[] };
+  const [lamports, listing] = await Promise.all([
     chain.connection.getBalance(wallet),
-    chain.connection.getParsedTokenAccountsByOwner(wallet, { programId: TOKEN_PROGRAM_ID }),
+    chain.rpcCapped<Slices>(
+      "getTokenAccountsByOwner",
+      [wallet.toBase58(), { programId: TOKEN_PROGRAM_ID.toBase58() }, { encoding: "base64", dataSlice: { offset: 0, length: 72 }, commitment: "confirmed" }],
+      MAX_LISTING_BYTES,
+    ),
   ]);
+  if (!listing) throw tooMany();
   const balances = new Map<string, bigint>();
-  for (const { account } of accounts.value) {
-    const info = (account.data as { parsed?: { info?: { mint?: string; tokenAmount?: { amount: string; decimals: number } } } }).parsed?.info;
-    if (!info?.mint || !info.tokenAmount || info.tokenAmount.decimals !== TOKEN_DECIMALS) continue;
-    const amount = BigInt(info.tokenAmount.amount);
-    if (amount > 0n) balances.set(info.mint, (balances.get(info.mint) ?? 0n) + amount);
+  for (const { account } of listing.value) {
+    const data = Buffer.from(account.data[0], "base64");
+    if (data.length < 72) continue;
+    const amount = data.readBigUInt64LE(64);
+    if (amount === 0n) continue;
+    const mint = new PublicKey(data.subarray(0, 32)).toBase58();
+    balances.set(mint, (balances.get(mint) ?? 0n) + amount);
   }
+  if (balances.size > MAX_LISTED_MINTS) throw tooMany();
+  return { lamports, balances };
+}
+
+/** The SOL balance and the wallet's associated-account balances in `mints` only. */
+async function balancesIn(chain: Chain, wallet: PublicKey, mints: PublicKey[]): Promise<{ lamports: number; balances: Map<string, bigint> }> {
+  const { tokenAccounts } = await chain.walletTokenAccounts(wallet, mints);
+  const balances = new Map<string, bigint>();
+  let lamports = 0;
+  for (const t of tokenAccounts) {
+    if (t.isNative) lamports = t.amount.toNumber();
+    else if (t.mint && !t.amount.isZero()) balances.set(t.mint.toBase58(), (balances.get(t.mint.toBase58()) ?? 0n) + BigInt(t.amount.toString()));
+  }
+  return { lamports, balances };
+}
+
+export async function walletPositions(
+  chain: Chain,
+  api: HigherApi | null,
+  wallet: PublicKey,
+  opts: { maxPriced?: number; mints?: PublicKey[] } = {},
+): Promise<Positions> {
+  const maxPriced = opts.maxPriced ?? 40;
+  if (opts.mints && opts.mints.length > MAX_POSITION_MINTS) throw new ValidationError(`Name at most ${MAX_POSITION_MINTS} coins.`);
+  const { lamports, balances } = opts.mints?.length ? await balancesIn(chain, wallet, opts.mints) : await listBalances(chain, wallet);
 
   const mints = [...balances.keys()];
   const found: { mint: string; mode: FeeMode; status: number }[] = [];

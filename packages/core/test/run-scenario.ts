@@ -39,5 +39,7 @@ export async function runScenario(name: Scenario, fetch: typeof globalThis.fetch
       return buildClaimCreatorFees(chain, CREATOR, await graduatedCoinsOf(api, CREATOR));
     case "positions":
       return walletPositions(chain, api, GRADUATED_HOLDER);
+    case "positions-mints":
+      return walletPositions(chain, api, GRADUATED_HOLDER, { mints: [GRADUATED_COIN, CURVE_COIN] });
   }
 }

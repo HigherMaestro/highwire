@@ -11,6 +11,7 @@ import {
   graduatedCoinsOf,
   launchFingerprint,
   lamportsToSol,
+  MAX_POSITION_MINTS,
   MAX_SLIPPAGE_BPS,
   quoteTrade,
   signUrl,
@@ -109,14 +110,18 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
       title: "Get wallet positions",
       description:
         "A wallet's SOL balance and its balances in higher.fun coins, each valued at the coin's last price. Coins are " +
-        "recognised on-chain (a LaunchLab pool on higher.fun's platform), so look-alike tokens don't show up.",
-      inputSchema: { wallet },
+        "recognised on-chain (a LaunchLab pool on higher.fun's platform), so look-alike tokens don't show up. Pass " +
+        "mints to check only those coins, which is faster and works for wallets holding thousands of tokens.",
+      inputSchema: {
+        wallet,
+        mints: z.array(mint).min(1).max(MAX_POSITION_MINTS).optional().describe(`Only these coins, at most ${MAX_POSITION_MINTS}. Omit to list every higher.fun coin the wallet holds.`),
+      },
       annotations: { title: "Get wallet positions", ...READ_ONLY },
     },
     (args) =>
       run(async () => {
         const [p, usd] = await Promise.all([
-          walletPositions(chain, onMainnet ? api : null, new PublicKey(args.wallet)),
+          walletPositions(chain, onMainnet ? api : null, new PublicKey(args.wallet), { mints: args.mints?.map((m) => new PublicKey(m)) }),
           onMainnet ? solUsd(api) : Promise.resolve(undefined),
         ]);
         return { cluster: chain.cluster, ...summarizePositions(p, usd) };
