@@ -193,9 +193,12 @@ export default async function Docs() {
                 </li>
               </ol>
               <p className="muted">
-                A link expires with its blockhash, about a minute after it was built. If it has expired, ask your agent to build
-                it again; for a launch, the same <code>idempotency_key</code> keeps the same coin, so it can&apos;t be created or
-                paid for twice. Every transaction Highwire builds also carries a memo, <code>highwire</code>, so its use can be
+                Trade and claim links work for up to 10 minutes. Only your wallet signs them, so the page fetches a fresh
+                blockhash when it opens and again right before your wallet signs, changes nothing else, and checks and
+                simulates again. Past 5 minutes it tells you how old the quote is; your minimum out is still enforced. Past 10
+                minutes it asks you to have your agent rebuild it, since prices move. Launch links last about a minute,
+                because the new coin&apos;s address is already signed into the transaction. For a launch, rebuild with the
+                same <code>idempotency_key</code>: it keeps the same coin, so it can&apos;t be created or paid for twice. Every transaction Highwire builds also carries a memo, <code>highwire</code>, so its use can be
                 counted on-chain.
               </p>
             </section>
@@ -332,8 +335,8 @@ export default async function Docs() {
                 <dd>You used the minute&apos;s 60 units (a build costs 5). Wait a moment, or run the server locally.</dd>
                 <dt>The sign page says the link has expired.</dt>
                 <dd>
-                  Links last about a minute. Ask your agent to build the transaction again and open the new link straight
-                  away.
+                  Trade and claim links last up to 10 minutes, launch links about a minute. Ask your agent to build the
+                  transaction again and open the new link.
                 </dd>
                 <dt>The sign page doesn&apos;t list my wallet.</dt>
                 <dd>

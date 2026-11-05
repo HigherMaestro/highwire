@@ -53,7 +53,8 @@ sign page are in [docs/unsigned-transactions.md](docs/unsigned-transactions.md).
 which never reaches a server, decodes every instruction from the bytes, shows what you spend and receive, the fees, the
 fee payer and the expiry, simulates against a Solana RPC straight from the browser, and signs with Phantom, Solflare,
 Backpack or any Wallet Standard wallet. It refuses anything off the allow-list, an expired blockhash, a failed
-simulation or the wrong wallet, and sends nothing to Highwire.
+simulation or the wrong wallet, and sends nothing to Highwire. Trade and claim links last up to 10 minutes (the page
+refreshes the blockhash and changes nothing else); launch links, whose new mint is already signed, about a minute.
 
 **Safety:**
 - Highwire never asks for, accepts or stores a private key or seed phrase. The user signs in their own wallet.

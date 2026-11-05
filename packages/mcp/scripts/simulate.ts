@@ -6,7 +6,7 @@
 // Run with `npm run simulate` (needs network access). Set SOLANA_RPC_URL or
 // SOLANA_DEVNET_RPC_URL to use your own RPCs; SIM_CLUSTERS=mainnet skips devnet.
 // Each build's sign_url is checked to decode back to its envelope, and the one
-// for each cluster's first buy is printed: open it within a minute to try the
+// for each cluster's first buy is printed: open it within 10 minutes to try the
 // sign page. HIGHWIRE_SITE_URL=http://localhost:3000 points it at `next dev`.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -251,7 +251,7 @@ for (const cluster of clusters) {
 
 console.log("\nSign links");
 for (const l of linkSizes) console.log(`  [${l.cluster}] ${l.what}: ${l.chars} chars${l.gzipped ? " (gzipped)" : ""}`);
-for (const [cluster, url] of Object.entries(buyLinks)) console.log(`\nsign_url for a ${cluster} buy (open within a minute):\n${url}`);
+for (const [cluster, url] of Object.entries(buyLinks)) console.log(`\nsign_url for a ${cluster} buy (open within 10 minutes):\n${url}`);
 
 console.log("\nResults");
 for (const r of rows) console.log(`${r.ok ? "ok  " : "FAIL"} [${r.cluster}] ${r.what}: ${r.result}`);

@@ -70,6 +70,10 @@ export async function getAccountInfo(url: string, address: string): Promise<Acco
 
 export const getBlockHeight = (url: string) => rpc<number>(url, "getBlockHeight", [{ commitment: "confirmed" }]);
 
+export async function getLatestBlockhash(url: string): Promise<{ blockhash: string; lastValidBlockHeight: number }> {
+  return (await rpc<{ value: { blockhash: string; lastValidBlockHeight: number } }>(url, "getLatestBlockhash", [{ commitment: "confirmed" }])).value;
+}
+
 export async function getBalance(url: string, address: string): Promise<number> {
   return (await rpc<{ value: number }>(url, "getBalance", [address, { commitment: "confirmed" }])).value;
 }

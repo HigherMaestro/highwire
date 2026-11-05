@@ -4,19 +4,36 @@ import { AddressLookupTableAccount, PublicKey, VersionedTransaction } from "@sol
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import {
   ADDRESSES,
+  assertSameExceptBlockhash,
+  canRefresh,
   coinUrl,
   decodeSignPayload,
   formatLamports,
+  linkAgeSeconds,
   lookupTableAddresses,
   platformClaimFeeWallet,
   profileUrl,
+  REFRESH_MAX_AGE_SECONDS,
+  refreshableIndexes,
+  refreshEnvelope,
   reviewEnvelope,
+  STALE_WARNING_SECONDS,
   type Envelope,
   type EnvelopeReview,
+  type ReviewContext,
   type ReviewedTransaction,
 } from "highwire-core/browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { confirm, getAccountInfo, getBlockHeight, rpcUrlFor, sendRaw, simulate, type SimulationResult } from "../../lib/sign/rpc.ts";
+import {
+  confirm,
+  getAccountInfo,
+  getBlockHeight,
+  getLatestBlockhash,
+  rpcUrlFor,
+  sendRaw,
+  simulate,
+  type SimulationResult,
+} from "../../lib/sign/rpc.ts";
 import {
   base58,
   canSign,
@@ -33,12 +50,27 @@ import {
 // the URL fragment (never sent to any server), the checks run here, simulation
 // and sending go straight to a Solana RPC, and the wallet signs. Nothing is
 // sent to Highwire.
+//
+// Blockhashes last about a minute. A transaction that only the user's wallet
+// signs (a trade, a claim) takes a fresh blockhash on load and again right
+// before the wallet sees it, for up to 10 minutes after the link was built;
+// nothing else in it may change (highwire-core's refresh.ts checks). One that
+// carries another signature (a launch's mint) keeps its original expiry.
 
-type Loaded =
-  | { state: "loading" }
-  | { state: "empty" }
-  | { state: "error"; message: string }
-  | { state: "ready"; env: Envelope; review: EnvelopeReview; rpcUrl: string; feeWallet: string | null };
+type Ready = {
+  state: "ready";
+  /** The envelope exactly as the link carried it. Every refresh starts from these bytes. */
+  link: Envelope;
+  /** What the page shows and signs: the link with fresh blockhashes on its refreshable transactions. */
+  env: Envelope;
+  review: EnvelopeReview;
+  ctx: ReviewContext;
+  rpcUrl: string;
+  /** Transactions that may take a fresh blockhash (only the wallet signs, and the link says when it was built). */
+  refreshable: number[];
+};
+
+type Loaded = { state: "loading" } | { state: "empty" } | { state: "error"; message: string } | Ready;
 
 type Step = "idle" | "checking" | "signing" | "sending" | "confirming" | "confirmed" | "failed" | "expired";
 
@@ -52,11 +84,17 @@ interface TxState {
 
 const SLOT_SECONDS = 0.4;
 const SIM_FRESH_MS = 20_000;
+/** Refresh a refreshable transaction's blockhash this many blocks (about 12 seconds) before it would expire. */
+const REFRESH_MARGIN_BLOCKS = 30;
+const REBUILD = "Ask your agent to rebuild it.";
+const TOO_OLD = `This quote is more than ${REFRESH_MAX_AGE_SECONDS / 60} minutes old. ${REBUILD}`;
 
+const nowSeconds = () => Math.floor(Date.now() / 1000);
 const sol = (lamports: bigint | number) => `${formatLamports(BigInt(lamports))} SOL`;
 const signedSol = (lamports: number) => (lamports > 0 ? `+${sol(lamports)}` : lamports < 0 ? `−${sol(-lamports)}` : "0 SOL");
 const solscanTx = (sig: string, cluster: Envelope["cluster"]) => `https://solscan.io/tx/${sig}${cluster === "devnet" ? "?cluster=devnet" : ""}`;
 const solscanAccount = (a: string, cluster: Envelope["cluster"]) => `https://solscan.io/account/${a}${cluster === "devnet" ? "?cluster=devnet" : ""}`;
+const clock = (unixSeconds: number) => new Date(unixSeconds * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 const KIND_TITLE: Record<Envelope["kind"], string> = {
   trade: "Review a trade",
@@ -64,31 +102,42 @@ const KIND_TITLE: Record<Envelope["kind"], string> = {
   claim: "Review a creator fee claim",
 };
 
+/** `env` with the given transactions taken from `fresh`. */
+function merge(env: Envelope, fresh: Envelope, indexes: number[]): Envelope {
+  return { ...env, transactions: env.transactions.map((t, i) => (indexes.includes(i) ? fresh.transactions[i]! : t)) };
+}
+
 async function load(hash: string): Promise<Loaded> {
   if (!hash.replace(/^#/, "")) return { state: "empty" };
-  let env: Envelope;
+  let link: Envelope;
   try {
-    env = await decodeSignPayload(hash);
+    link = await decodeSignPayload(hash);
   } catch (err) {
     return { state: "error", message: err instanceof Error ? err.message : String(err) };
   }
-  const rpcUrl = rpcUrlFor(env.cluster);
-  const a = ADDRESSES[env.cluster];
+  const rpcUrl = rpcUrlFor(link.cluster);
+  const a = ADDRESSES[link.cluster];
   try {
     // A launch pays its fee to the wallet recorded in higher.fun's New school platform config: read it on-chain.
     let feeWallet: string | null = null;
-    if (env.kind === "launch") {
+    if (link.kind === "launch") {
       const info = await getAccountInfo(rpcUrl, a.rewardsPlatform);
       if (info && info.owner === a.launchLabProgram) feeWallet = platformClaimFeeWallet(Uint8Array.from(atob(info.data[0]), (c) => c.charCodeAt(0)));
     }
     const lookupTables: AddressLookupTableAccount[] = [];
-    for (const key of lookupTableAddresses(env)) {
+    for (const key of lookupTableAddresses(link)) {
       const info = await getAccountInfo(rpcUrl, key);
       if (!info) continue;
       const data = Uint8Array.from(atob(info.data[0]), (c) => c.charCodeAt(0));
       lookupTables.push(new AddressLookupTableAccount({ key: new PublicKey(key), state: AddressLookupTableAccount.deserialize(data) }));
     }
-    return { state: "ready", env, review: reviewEnvelope(env, { launchFeeWallet: feeWallet, lookupTables }), rpcUrl, feeWallet };
+    const ctx: ReviewContext = { launchFeeWallet: feeWallet, lookupTables };
+    const refreshable = link.builtAt === undefined ? [] : refreshableIndexes(link);
+    let env = link;
+    if (refreshable.length && canRefresh(link, nowSeconds())) {
+      env = refreshEnvelope(link, await getLatestBlockhash(rpcUrl), nowSeconds()).env;
+    }
+    return { state: "ready", link, env, review: reviewEnvelope(env, ctx), ctx, rpcUrl, refreshable };
   } catch (err) {
     return { state: "error", message: `Couldn't read the chain to check this transaction: ${err instanceof Error ? err.message : String(err)}` };
   }
@@ -106,6 +155,7 @@ export function SignApp() {
   const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
   const [height, setHeight] = useState<number | null>(null);
   const [heightError, setHeightError] = useState<string | null>(null);
+  const [now, setNow] = useState(nowSeconds);
   const [txs, setTxs] = useState<TxState[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -114,6 +164,9 @@ export function SignApp() {
   const [walletError, setWalletError] = useState<string | null>(null);
   const [announce, setAnnounce] = useState("");
   const doneRef = useRef<HTMLHeadingElement>(null);
+  // The latest ready state, for async work that outlives a render.
+  const readyRef = useRef<Ready | null>(null);
+  const refreshing = useRef(new Set<number>());
 
   // Read the fragment, and again if it changes.
   useEffect(() => {
@@ -122,6 +175,7 @@ export function SignApp() {
       setLoaded({ state: "loading" });
       void load(window.location.hash).then((l) => {
         if (cancelled) return;
+        readyRef.current = l.state === "ready" ? l : null;
         setLoaded(l);
         if (l.state === "ready") setTxs(l.env.transactions.map(() => ({ step: "idle" })));
       });
@@ -145,13 +199,15 @@ export function SignApp() {
   const env = ready?.env;
   const allDone = txs.length > 0 && txs.every((t) => t.step === "confirmed");
 
-  // Follow the block height for the expiry, until everything has landed.
+  // Follow the block height and the clock for the expiry and the link's age, until everything has landed.
   useEffect(() => {
-    if (!ready || allDone) return;
+    if (!ready?.rpcUrl || allDone) return;
+    const rpcUrl = ready.rpcUrl;
     let stop = false;
     const tick = async () => {
+      setNow(nowSeconds());
       try {
-        const h = await getBlockHeight(ready.rpcUrl);
+        const h = await getBlockHeight(rpcUrl);
         if (!stop) {
           setHeight(h);
           setHeightError(null);
@@ -167,18 +223,38 @@ export function SignApp() {
       stop = true;
       clearInterval(id);
     };
-  }, [ready, allDone]);
+  }, [ready?.rpcUrl, allDone]);
 
   const update = useCallback((i: number, patch: Partial<TxState>) => {
     setTxs((prev) => prev.map((t, j) => (j === i ? { ...t, ...patch } : t)));
   }, []);
 
+  /**
+   * Gives transactions `indexes` a fresh blockhash, starting from the link's own bytes, and reviews the result again.
+   * Returns null when the link is too old to refresh.
+   */
+  const refreshNow = useCallback(async (indexes: number[]): Promise<{ env: Envelope; review: EnvelopeReview } | null> => {
+    const r = readyRef.current;
+    if (!r || !canRefresh(r.link, nowSeconds())) return null;
+    const want = indexes.filter((i) => r.refreshable.includes(i));
+    if (!want.length) return { env: r.env, review: r.review };
+    const fresh = refreshEnvelope(r.link, await getLatestBlockhash(r.rpcUrl), nowSeconds(), want).env;
+    const current = readyRef.current ?? r;
+    const env = merge(current.env, fresh, want);
+    const next: Ready = { ...current, env, review: reviewEnvelope(env, current.ctx) };
+    readyRef.current = next;
+    setLoaded(next);
+    return { env: next.env, review: next.review };
+  }, []);
+
   const runSimulation = useCallback(
-    async (i: number): Promise<SimulationResult | null> => {
-      if (!ready) return null;
+    async (i: number, on?: Envelope): Promise<SimulationResult | null> => {
+      const r = readyRef.current;
+      const target = on ?? r?.env;
+      if (!r || !target) return null;
       update(i, { simulating: true });
       try {
-        const sim = await simulate(ready.rpcUrl, ready.env.transactions[i]!.base64, ready.env.wallet);
+        const sim = await simulate(r.rpcUrl, target.transactions[i]!.base64, target.wallet);
         update(i, { sim, simulating: false });
         return sim;
       } catch (err) {
@@ -187,19 +263,57 @@ export function SignApp() {
         return sim;
       }
     },
-    [ready, update],
+    [update],
+  );
+
+  /** Refreshes the blockhash if the transaction may take one, then simulates. */
+  const prepare = useCallback(
+    async (i: number) => {
+      const r = readyRef.current;
+      if (!r || refreshing.current.has(i)) return;
+      refreshing.current.add(i);
+      try {
+        const fresh = r.refreshable.includes(i) ? await refreshNow([i]) : null;
+        if (fresh && fresh.review.transactions[i]!.problems.length) return;
+        await runSimulation(i, fresh?.env);
+      } catch (err) {
+        update(i, { sim: { ok: false, error: err instanceof Error ? err.message : String(err), logs: [], at: Date.now() } });
+      } finally {
+        refreshing.current.delete(i);
+      }
+    },
+    [refreshNow, runSimulation, update],
   );
 
   // Simulate every transaction that doesn't wait on another, once the review has passed.
+  const loadedLink = ready?.link;
   useEffect(() => {
-    if (!ready || ready.review.problems.length) return;
-    ready.env.transactions.forEach((t, i) => {
+    const r = readyRef.current;
+    if (!r || r.review.problems.length) return;
+    r.env.transactions.forEach((t, i) => {
       if (t.dependsOn.length === 0) void runSimulation(i);
     });
-  }, [ready, runSimulation]);
+  }, [loadedLink, runSimulation]);
 
-  const expired = env !== undefined && height !== null && height > env.expiresAfterBlockHeight;
-  const secondsLeft = env && height !== null ? Math.max(0, Math.round((env.expiresAfterBlockHeight - height) * SLOT_SECONDS)) : null;
+  // Keep refreshable transactions' blockhashes fresh while the link is young enough.
+  useEffect(() => {
+    const r = readyRef.current;
+    if (!r || height === null || r.review.problems.length || !canRefresh(r.link, nowSeconds())) return;
+    for (const i of r.refreshable) {
+      const t = r.env.transactions[i]!;
+      const s = txs[i];
+      if (s?.step !== "idle" || s.simulating || t.dependsOn.some((d) => txs[d]?.step !== "confirmed")) continue;
+      if (height > t.lastValidBlockHeight - REFRESH_MARGIN_BLOCKS || s.sim?.expired) void prepare(i);
+    }
+  }, [height, txs, prepare]);
+
+  const age = ready ? linkAgeSeconds(ready.link, now) : null;
+  const tooOld = age !== null && age > REFRESH_MAX_AGE_SECONDS;
+  const isRefreshing = (i: number) => !!ready && ready.refreshable.includes(i) && !tooOld;
+  const strictOpen = env ? env.transactions.map((_, i) => i).filter((i) => !isRefreshing(i) && txs[i]?.step !== "confirmed") : [];
+  const strictExpiry = strictOpen.length && env ? Math.min(...strictOpen.map((i) => env.transactions[i]!.lastValidBlockHeight)) : null;
+  const strictExpired = strictExpiry !== null && height !== null && height > strictExpiry;
+  const secondsLeft = strictExpiry !== null && height !== null ? Math.max(0, Math.round((strictExpiry - height) * SLOT_SECONDS)) : null;
   const account = accounts.find((a) => a.address === env?.wallet) ?? null;
   const wrongAccount = wallet && accounts.length > 0 && !account ? accounts[0]!.address : null;
 
@@ -230,37 +344,65 @@ export function SignApp() {
     if (!ready || !env) return "Loading.";
     const t = env.transactions[i]!;
     const s = txs[i];
+    const fresh = ready.refreshable.includes(i);
     if (ready.review.problems.length) return "This link failed Highwire's checks, so it can't be signed here.";
-    if (expired) return "The blockhash has expired. Ask your agent to rebuild it.";
+    if (fresh && tooOld) return TOO_OLD;
+    if (!fresh && height !== null && height > t.lastValidBlockHeight) return `The blockhash has expired. ${REBUILD}`;
     if (t.dependsOn.some((d) => txs[d]?.step !== "confirmed")) return `Send transaction ${t.dependsOn.map((d) => d + 1).join(", ")} first.`;
     if (!s?.sim) return s?.simulating ? "Simulating…" : "Not simulated yet.";
-    if (!s.sim.ok) return s.sim.expired ? "The blockhash has expired. Ask your agent to rebuild it." : "The simulation failed, so this won't be signed.";
+    // An expired blockhash on a refreshable transaction is replaced before signing, so only a real failure blocks.
+    if (!s.sim.ok && !(fresh && s.sim.expired)) {
+      return s.sim.expired ? `The blockhash has expired. ${REBUILD}` : "The simulation failed, so this won't be signed.";
+    }
     if (!wallet) return "Connect a wallet first.";
     if (!account) return `The connected wallet isn't the fee payer. Switch to ${env.wallet} in your wallet.`;
     return null;
   }
 
   async function signAndSendTx(i: number) {
-    if (!ready || !wallet || !account || !env) return;
-    const t = env.transactions[i]!;
-    const reviewed = ready.review.transactions[i]!;
-    const original = reviewed.tx!;
+    const r0 = readyRef.current;
+    if (!r0 || !wallet || !account) return;
     update(i, { step: "checking", error: undefined });
     try {
-      // Fresh checks right before the wallet sees it.
-      const h = await getBlockHeight(ready.rpcUrl);
-      setHeight(h);
-      if (h > t.lastValidBlockHeight) {
-        update(i, { step: "expired", error: "The blockhash has expired. Ask your agent to rebuild it." });
-        return;
+      let current = { env: r0.env, review: r0.review };
+      let sim: SimulationResult | null;
+      if (r0.refreshable.includes(i)) {
+        // A fresh blockhash right before the wallet sees it, from the link's own bytes, checked and simulated again.
+        if (!canRefresh(r0.link, nowSeconds())) {
+          update(i, { step: "expired", error: TOO_OLD });
+          return;
+        }
+        const fresh = await refreshNow([i]);
+        if (!fresh) {
+          update(i, { step: "expired", error: TOO_OLD });
+          return;
+        }
+        current = fresh;
+        const linkTx = VersionedTransaction.deserialize(Uint8Array.from(atob(r0.link.transactions[i]!.base64), (c) => c.charCodeAt(0)));
+        assertSameExceptBlockhash(linkTx, current.review.transactions[i]!.tx!);
+        if (current.review.transactions[i]!.problems.length) {
+          update(i, { step: "idle", error: "The refreshed transaction failed Highwire's checks, so it won't be signed." });
+          return;
+        }
+        sim = await runSimulation(i, current.env);
+      } else {
+        const t0 = r0.env.transactions[i]!;
+        const h = await getBlockHeight(r0.rpcUrl);
+        setHeight(h);
+        if (h > t0.lastValidBlockHeight) {
+          update(i, { step: "expired", error: `The blockhash has expired. ${REBUILD}` });
+          return;
+        }
+        const prior = txs[i]?.sim;
+        sim = prior?.ok && Date.now() - prior.at < SIM_FRESH_MS ? prior : await runSimulation(i);
       }
-      const prior = txs[i]?.sim;
-      const sim = prior?.ok && Date.now() - prior.at < SIM_FRESH_MS ? prior : await runSimulation(i);
       if (!sim?.ok) {
-        update(i, { step: "idle", error: sim?.expired ? "The blockhash has expired. Ask your agent to rebuild it." : "The simulation failed, so this won't be signed." });
+        update(i, { step: "idle", error: sim?.expired ? `The blockhash has expired. ${REBUILD}` : "The simulation failed, so this won't be signed." });
         return;
       }
 
+      const t = current.env.transactions[i]!;
+      const original = current.review.transactions[i]!.tx!;
       const bytes = original.serialize();
       let signature: string;
       update(i, { step: "signing" });
@@ -268,7 +410,7 @@ export function SignApp() {
       // A transaction with a presigned mint goes through signTransaction, which keeps that signature, and we send it.
       const useSignOnly = canSign(wallet) && (t.presigned.length > 0 || !canSignAndSend(wallet));
       if (useSignOnly) {
-        const signedBytes = await sign(wallet, account, env.cluster, bytes);
+        const signedBytes = await sign(wallet, account, current.env.cluster, bytes);
         const signed = VersionedTransaction.deserialize(signedBytes);
         const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, k) => x === b[k]);
         if (!same(signed.message.serialize(), original.message.serialize())) {
@@ -284,23 +426,23 @@ export function SignApp() {
           }
         }
         update(i, { step: "sending" });
-        signature = await sendRaw(ready.rpcUrl, signed.serialize());
+        signature = await sendRaw(r0.rpcUrl, signed.serialize());
       } else {
-        signature = base58(await signAndSend(wallet, account, env.cluster, bytes));
+        signature = base58(await signAndSend(wallet, account, current.env.cluster, bytes));
       }
 
       update(i, { step: "confirming", signature });
       setAnnounce(`Transaction ${i + 1} sent. Waiting for confirmation.`);
-      const result = await confirm(ready.rpcUrl, signature, t.lastValidBlockHeight);
+      const result = await confirm(r0.rpcUrl, signature, t.lastValidBlockHeight);
       if (result.status === "confirmed") {
         update(i, { step: "confirmed" });
         setAnnounce(`Transaction ${i + 1} confirmed.`);
-        // Anything that waited on this one can be simulated now.
-        env.transactions.forEach((next, j) => {
-          if (next.dependsOn.includes(i)) void runSimulation(j);
+        // Anything that waited on this one can be refreshed and simulated now.
+        current.env.transactions.forEach((next, j) => {
+          if (next.dependsOn.includes(i)) void prepare(j);
         });
       } else if (result.status === "expired") {
-        update(i, { step: "expired", error: "It didn't land before the blockhash expired. Ask your agent to rebuild it." });
+        update(i, { step: "expired", error: `It didn't land before the blockhash expired. ${REBUILD}` });
       } else {
         update(i, { step: "failed", error: `It failed on-chain: ${result.error}` });
       }
@@ -353,6 +495,9 @@ export function SignApp() {
   const cluster = loaded.env.cluster;
   const e = loaded.env;
   const refused = review.problems.length > 0;
+  const anyRefreshing = loaded.refreshable.some((i) => txs[i]?.step !== "confirmed");
+  const usableUntil = loaded.link.builtAt !== undefined ? loaded.link.builtAt + REFRESH_MAX_AGE_SECONDS : null;
+  const staleMinutes = age !== null && age > STALE_WARNING_SECONDS && !tooOld ? Math.floor(age / 60) : null;
 
   return (
     <>
@@ -365,6 +510,11 @@ export function SignApp() {
         <h1 id="sign-title">{KIND_TITLE[e.kind]}</h1>
         {cluster === "devnet" ? (
           <p className="sign-flag">Devnet: test SOL only. Make sure your wallet is set to devnet.</p>
+        ) : null}
+        {staleMinutes !== null ? (
+          <p className="sign-flag" role="status">
+            This quote is {staleMinutes} minutes old. Your minimum out is still enforced.
+          </p>
         ) : null}
         <dl className="sign-facts">
           <div>
@@ -380,16 +530,29 @@ export function SignApp() {
           <div>
             <dt>Expires</dt>
             <dd>
-              {expired ? (
-                <strong className="sign-bad">Expired. Ask your agent to rebuild it.</strong>
-              ) : secondsLeft === null ? (
-                <>
-                  after block {e.expiresAfterBlockHeight.toLocaleString("en-US")}
-                  {heightError ? <span className="sign-bad small"> (can&apos;t read the current block: {heightError})</span> : null}
-                </>
+              {tooOld && loaded.refreshable.length ? (
+                <strong className="sign-bad">{TOO_OLD}</strong>
+              ) : strictExpiry !== null ? (
+                strictExpired ? (
+                  <strong className="sign-bad">Expired. {REBUILD}</strong>
+                ) : secondsLeft === null ? (
+                  <>
+                    after block {strictExpiry.toLocaleString("en-US")}
+                    {heightError ? <span className="sign-bad small"> (can&apos;t read the current block: {heightError})</span> : null}
+                  </>
+                ) : (
+                  `in about ${secondsLeft} seconds (block ${strictExpiry.toLocaleString("en-US")})`
+                )
+              ) : tooOld ? (
+                <strong className="sign-bad">{TOO_OLD}</strong>
+              ) : anyRefreshing && usableUntil !== null ? (
+                `at ${clock(usableUntil)}, ${REFRESH_MAX_AGE_SECONDS / 60} minutes after it was built. The blockhash is refreshed automatically until then.`
               ) : (
-                `in about ${secondsLeft} seconds (block ${e.expiresAfterBlockHeight.toLocaleString("en-US")})`
+                "Nothing left to send."
               )}
+              {strictExpiry !== null && !strictExpired && anyRefreshing && !tooOld && usableUntil !== null ? (
+                <span className="muted small"> Later transactions refresh their blockhash until {clock(usableUntil)}.</span>
+              ) : null}
             </dd>
           </div>
           <div>
@@ -432,7 +595,8 @@ export function SignApp() {
             env={e}
             state={txs[i] ?? { step: "idle" }}
             blocker={blocker(i)}
-            onSimulate={() => void runSimulation(i)}
+            refreshes={isRefreshing(i)}
+            onSimulate={() => void prepare(i)}
             onSign={() => void signAndSendTx(i)}
           />
         ))}
@@ -578,6 +742,8 @@ function TxCard(props: {
   env: Envelope;
   state: TxState;
   blocker: string | null;
+  /** Takes a fresh blockhash before signing. */
+  refreshes: boolean;
   onSimulate: () => void;
   onSign: () => void;
 }) {
@@ -667,6 +833,12 @@ function TxCard(props: {
 
       <div className="sign-sim" aria-live="polite">
         <h3>Simulation</h3>
+        {props.refreshes && state.step !== "confirmed" ? (
+          <p className="muted small">
+            Only your wallet signs this one, so it takes a fresh blockhash now and again right before your wallet sees it.
+            Nothing else in it changes, and it is checked and simulated again each time.
+          </p>
+        ) : null}
         {waiting ? (
           <p className="muted">Runs once transaction {rt.dependsOn.map((d) => d + 1).join(", ")} has confirmed.</p>
         ) : state.simulating ? (
@@ -674,6 +846,8 @@ function TxCard(props: {
         ) : sim ? (
           sim.ok ? (
             <p className="sign-good">Passed{sim.unitsConsumed ? `, ${sim.unitsConsumed.toLocaleString("en-US")} compute units` : ""}.</p>
+          ) : sim.expired && props.refreshes ? (
+            <p className="muted">The blockhash ran out; fetching a fresh one…</p>
           ) : (
             <div className="sign-bad">
               <p>

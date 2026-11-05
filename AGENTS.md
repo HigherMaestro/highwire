@@ -14,7 +14,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/lib/` | HTTP client with retries, and the error classes |
 | `packages/core/src/solana/rpc.ts` | the few RPC reads we need, over fetch |
 | `packages/core/src/risk.ts` | `evaluateRisk`, the rug-check verdict |
-| `packages/core/src/tx/` | quotes and unsigned transactions: `chain.ts` (web3.js and Raydium's SDK behind one fetch), `quote.ts`, `trade.ts`, `launch.ts` (also `DerivedLaunchKeys`), `claim.ts`, `positions.ts`, `decode.ts` (plain-language decoding and the safety checks), `envelope.ts` (the memo, simulation, `finish()`), `format.ts` (the envelope types), `sign-link.ts` (sign URLs), `review.ts` (the sign page's checks) |
+| `packages/core/src/tx/` | quotes and unsigned transactions: `chain.ts` (web3.js and Raydium's SDK behind one fetch), `quote.ts`, `trade.ts`, `launch.ts` (also `DerivedLaunchKeys`), `claim.ts`, `positions.ts`, `decode.ts` (plain-language decoding and the safety checks), `envelope.ts` (the memo, simulation, `finish()`), `format.ts` (the envelope types), `sign-link.ts` (sign URLs), `review.ts` (the sign page's checks), `refresh.ts` (blockhash refresh for wallet-only transactions) |
 | `packages/core/src/browser.ts` | `highwire-core/browser`: the browser-safe exports for the sign page. `test/sign.test.ts` walks its imports |
 | `packages/mcp/src/server.ts` | `createServer()`: instructions, tool groups, resources |
 | `packages/mcp/src/tools/*.ts` | one `registerXTools(server, deps)` per group; `transactions.ts` holds the v0.2 tools |

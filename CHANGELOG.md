@@ -8,7 +8,12 @@ Sign from any chat: the hosted server builds transactions, and highwire.fun/sign
 
 - **Sign links.** Every build tool's result has a `sign_url`, `https://highwire.fun/sign#…`, carrying the
   unsigned-transaction envelope in the URL fragment (compact JSON, base64url; gzipped only past about 8 KB).
-  `HIGHWIRE_SITE_URL` points it at a local site.
+  `HIGHWIRE_SITE_URL` points it at a local site. The envelope format is now `highwire.unsigned-tx/v2`, which adds
+  `builtAt`; v1 links still decode.
+- **Links that last.** Trade and claim links work for up to 10 minutes: the sign page gives transactions only the
+  user's wallet signs a fresh blockhash on load and right before signing, refuses if anything else in the bytes
+  differs, and checks and simulates again. Past 5 minutes it says how old the quote is (the minimum out still holds);
+  past 10 it asks for a rebuild. Launch links, whose new mint is already signed, last about a minute.
 - **The sign page.** /sign decodes the envelope in the browser and re-checks every instruction from the bytes, shows
   what is spent and received, the fees, the fee payer and the expiry, simulates each transaction against a Solana RPC
   called directly from the browser, and signs with a Wallet Standard wallet (Phantom, Solflare, Backpack). It refuses

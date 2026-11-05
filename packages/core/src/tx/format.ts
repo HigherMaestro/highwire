@@ -5,7 +5,10 @@ import type { Cluster } from "../higher/constants.ts";
 // can import it without any Node-only code. docs/unsigned-transactions.md
 // describes the format for wallets and for the signing page.
 
-export const ENVELOPE_FORMAT = "highwire.unsigned-tx/v1";
+/** v2 added `builtAt`. v1 links still decode, and are treated as strict: no blockhash refresh. */
+export const ENVELOPE_FORMAT = "highwire.unsigned-tx/v2";
+export const ENVELOPE_FORMATS = ["highwire.unsigned-tx/v1", ENVELOPE_FORMAT] as const;
+export type EnvelopeFormat = (typeof ENVELOPE_FORMATS)[number];
 
 export interface Simulation {
   ok: boolean;
@@ -43,7 +46,7 @@ export interface UnsignedTransaction {
 export type EnvelopeKind = "trade" | "launch" | "claim";
 
 export interface Envelope {
-  format: typeof ENVELOPE_FORMAT;
+  format: EnvelopeFormat;
   cluster: Cluster;
   wallet: string;
   kind: EnvelopeKind;
@@ -51,6 +54,8 @@ export interface Envelope {
   transactions: UnsignedTransaction[];
   /** The block height after which the first transaction's blockhash expires; rebuild after it. */
   expiresAfterBlockHeight: number;
+  /** When it was built, in unix seconds. Missing on v1 envelopes. */
+  builtAt?: number;
   howToSign: string;
 }
 

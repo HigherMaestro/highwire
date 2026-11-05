@@ -1,6 +1,6 @@
 import { CLUSTERS } from "../higher/constants.ts";
 import { ValidationError } from "../lib/errors.ts";
-import { ENVELOPE_FORMAT, type Envelope, type UnsignedTransaction } from "./format.ts";
+import { ENVELOPE_FORMATS, type Envelope, type EnvelopeFormat, type UnsignedTransaction } from "./format.ts";
 
 // Sign links: https://highwire.fun/sign#<payload>, where the payload is the
 // unsigned-transaction envelope as compact JSON, then base64url. A payload
@@ -133,7 +133,8 @@ export function parseEnvelope(v: unknown): Envelope {
     Array.isArray(x) && x.length <= max ? x.map(each) : bad(what);
 
   const e = obj(v, "expected an object");
-  if (e.format !== ENVELOPE_FORMAT) bad(`format must be ${ENVELOPE_FORMAT}`);
+  if (!(ENVELOPE_FORMATS as readonly unknown[]).includes(e.format)) bad(`format must be one of ${ENVELOPE_FORMATS.join(", ")}`);
+  const v1 = e.format === ENVELOPE_FORMATS[0];
   if (!(CLUSTERS as readonly unknown[]).includes(e.cluster)) bad("unknown cluster");
   if (!["trade", "launch", "claim"].includes(e.kind as string)) bad("unknown kind");
   const wallet = addr(e.wallet, "wallet");
@@ -173,12 +174,14 @@ export function parseEnvelope(v: unknown): Envelope {
     };
   });
   return {
-    format: ENVELOPE_FORMAT,
+    format: e.format as EnvelopeFormat,
     cluster: e.cluster as Envelope["cluster"],
     wallet,
     kind: e.kind as Envelope["kind"],
     transactions,
     expiresAfterBlockHeight: int(e.expiresAfterBlockHeight, "expiresAfterBlockHeight"),
+    // v1 has no builtAt, which keeps its transactions strict.
+    ...(v1 ? {} : { builtAt: int(e.builtAt, "builtAt") }),
     howToSign: typeof e.howToSign === "string" ? e.howToSign.slice(0, 1000) : "",
   };
 }

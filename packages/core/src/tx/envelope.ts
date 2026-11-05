@@ -164,6 +164,7 @@ export async function finish(opts: FinishOptions): Promise<Finished> {
       kind: opts.kind,
       transactions: out,
       expiresAfterBlockHeight: lastValidBlockHeight,
+      builtAt: Math.floor(Date.now() / 1000),
       howToSign: HOW_TO_SIGN,
     },
     decoded,

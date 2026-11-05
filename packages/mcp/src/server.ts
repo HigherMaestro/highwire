@@ -35,8 +35,9 @@ Safety rules:
 - Highwire never signs and never needs a private key or seed phrase: never ask for one. The build tools return unsigned
   transactions that the user signs in their own wallet.
 - Every build result has a sign_url: a highwire.fun/sign link that shows the user what the transaction does, re-checks
-  and simulates it in their browser, and has their wallet sign it. Give the user that link right away: the blockhash
-  expires in about a minute, and an expired link asks them to have you build it again.
+  and simulates it in their browser, and has their wallet sign it. Give the user that link right away. Trade and claim
+  links last up to 10 minutes (the page refreshes the blockhash; the minimum out still holds). Launch links last about a
+  minute. An expired link asks them to have you build it again.
 - Before build_trade, run quote_trade and show the user the quote (amount out, minimum out, fees, price impact). Set
   confirm_trade or confirm_launch only after the user approves that exact transaction, and show them the summary lines.
 - Don't present a transaction whose simulation failed as ready to sign.
@@ -45,8 +46,9 @@ Safety rules:
 /** Added to the instructions on the public hosted endpoint, which only ever returns unsigned transactions. */
 export const HOSTED_INSTRUCTIONS = `This is the hosted Highwire server. It never signs, never sends and never holds a key: the build tools only return
 unsigned transactions and a sign_url. To trade, launch or claim, give the user the sign_url and let them review and sign
-in their own wallet on highwire.fun. Never ask the user for a private key, seed phrase or recovery phrase, and never ask
-them to paste a signed transaction back. Build tools cost more of the per-IP rate limit than reads: quote first, then
+in their own wallet on highwire.fun. Links last up to 10 minutes for trades and claims, and about a minute for launches.
+Never ask the user for a private key, seed phrase or recovery phrase, and never ask them to paste a signed transaction
+back. Build tools cost more of the per-IP rate limit than reads: quote first, then
 build once the user has approved.`;
 
 export interface ServerOptions {

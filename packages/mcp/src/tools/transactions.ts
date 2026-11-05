@@ -37,8 +37,10 @@ import { BUILD, READ_ONLY, mint, solUsd, wallet, type Deps } from "./shared.ts";
 export const BUILD_TOOL_NAMES = ["build_trade", "build_launch", "build_claim_creator_fees"] as const;
 
 const SIGN_NOTE =
-  "Give the user sign_url: highwire.fun/sign shows what this does, re-checks and simulates it in their browser, and has " +
-  "their wallet sign it. It expires with the blockhash, in about a minute; if it has expired, build again.";
+  "Give the user sign_url now: highwire.fun/sign shows what this does, re-checks and simulates it in their browser, and " +
+  "has their wallet sign it. Trade and claim links work for up to 10 minutes (the page fetches a fresh blockhash; the " +
+  "minimum out still holds). A launch link lasts about a minute, since its new mint is already signed. If it has " +
+  "expired, build again.";
 
 const side = z.enum(["buy", "sell"]).describe("buy spends SOL for tokens; sell spends tokens for SOL.");
 const sol = z.number().positive().max(1_000_000).optional().describe("For a buy: SOL to spend.");

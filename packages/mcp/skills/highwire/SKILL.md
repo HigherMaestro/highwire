@@ -42,8 +42,8 @@ Prompts: `scan_launches`, `coin_due_diligence`, `creator_report`, `plan_launch`.
    seed phrase. Quote first and show the quote. Set `confirm_trade` or `confirm_launch` only after the user approves
    that exact transaction, show them each transaction's summary lines, and don't offer one whose simulation failed.
    Then give the user the result's `sign_url` right away: highwire.fun/sign re-checks and simulates it in their
-   browser and their wallet signs. It expires in about a minute; if it has, build again (a launch with the same
-   `idempotency_key`, so the coin can't happen twice). Never ask the user to paste a signed transaction back.
+   browser and their wallet signs. Trade and claim links last up to 10 minutes; launch links about a minute. If one has
+   expired, build again (a launch with the same `idempotency_key`, so the coin can't happen twice). Never ask the user to paste a signed transaction back.
 5. **Not financial advice.** Say so when you rank or recommend coins.
 
 ## Risk sizing

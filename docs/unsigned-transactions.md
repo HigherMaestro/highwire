@@ -1,7 +1,7 @@
 # Unsigned transactions
 
 What `build_trade`, `build_launch` and `build_claim_creator_fees` return, for wallets, agents and the sign page at
-highwire.fun/sign. Format version: `highwire.unsigned-tx/v1`.
+highwire.fun/sign. Format version: `highwire.unsigned-tx/v2` (v2 added `builtAt`; v1 links still decode).
 
 Highwire never signs for the user and never holds the user's key. It builds Solana v0 transactions with the user's
 wallet as fee payer, checks and simulates them, and hands them over. The user's wallet signs and sends.
@@ -13,7 +13,7 @@ tool-specific fields (the quote, the launch's mint and fee, what can be claimed)
 
 ```json
 {
-  "format": "highwire.unsigned-tx/v1",
+  "format": "highwire.unsigned-tx/v2",
   "cluster": "mainnet",
   "wallet": "H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5",
   "kind": "trade",
@@ -47,13 +47,14 @@ tool-specific fields (the quote, the launch's mint and fee, what can be claimed)
     }
   ],
   "expiresAfterBlockHeight": 371234567,
+  "builtAt": 1793894400,
   "howToSign": "…"
 }
 ```
 
 | Field | Meaning |
 |---|---|
-| `format` | `highwire.unsigned-tx/v1`. A consumer should refuse any other value. |
+| `format` | `highwire.unsigned-tx/v2`. Consumers should accept v1 (the same without `builtAt`) and refuse anything else. |
 | `cluster` | `mainnet` or `devnet`. Send to an RPC on this cluster only. |
 | `wallet` | The wallet the transactions were built for. It pays every fee. |
 | `kind` | `trade`, `launch` or `claim`. |
@@ -62,12 +63,13 @@ tool-specific fields (the quote, the launch's mint and fee, what can be claimed)
 | `.signers` | Every signer the message requires, in order. The first is the fee payer. |
 | `.presigned` | Signers whose signature is already in place. Today only a launch's new mint, which Highwire generates and signs with so the coin can be created; the user never needs that key. |
 | `.walletSigner` | The one signature the user's wallet adds. Always equal to `wallet` and `feePayer`. |
-| `.recentBlockhash`, `.lastValidBlockHeight` | The blockhash in the message and when it expires (about a minute after the build). |
+| `.recentBlockhash`, `.lastValidBlockHeight` | The blockhash in the message and when it expires (about a minute after the build; the sign page may refresh it, below). |
 | `.dependsOn` | Indexes of transactions that must be confirmed first. A launch's creator-lock assignment depends on the create. |
 | `.summary` | One line for the fee payer, then one per instruction, in plain language. Show these to the user before they sign. |
 | `.fullyDecoded` | `true` when every instruction was recognised. Highwire never returns a transaction that isn't. |
 | `.simulation` | `{ok, unitsConsumed}`, or `{ok: false, skipped}` when it depends on an earlier transaction, or `{ok: false, error, logs}`. A build whose simulation failed comes back as a `simulation_failed` error instead of an envelope. |
-| `expiresAfterBlockHeight` | Rebuild after this height. |
+| `expiresAfterBlockHeight` | Rebuild after this height, unless the transaction can take a fresh blockhash (below). |
+| `builtAt` | When it was built, in unix seconds. Missing on v1 envelopes, whose transactions never refresh. |
 
 ## Sign links
 
@@ -112,6 +114,28 @@ highwire.fun/sign is a static page; all of this runs in the browser:
 
 It refuses to sign when any check fails, the blockhash has expired ("ask your agent to rebuild it"), the simulation
 fails, or the connected account isn't the fee payer.
+
+### Blockhash refresh
+
+A blockhash lasts about a minute, which is too short for someone reading a summary in a chat app. So the sign page
+gives a fresh one to any transaction that only the user's wallet signs: every required signature other than the
+envelope's `wallet` is empty. Trades and claims qualify. A launch's create transaction doesn't, because Highwire
+already signed it with the new mint and a new blockhash would void that signature. A launch's lock assignment does
+qualify, but it can't be sent until the create has landed.
+
+- The page fetches `getLatestBlockhash` (confirmed) on load, and again immediately before the wallet sees the
+  transaction. Each time it replaces only the message's `recentBlockhash`, starting from the link's own bytes. It
+  refuses unless the result is byte-identical to the link's transaction apart from the blockhash, then runs
+  `reviewEnvelope` and the simulation again on the new bytes.
+- It refreshes only while the link is at most 10 minutes old (`builtAt`). Past 5 minutes it shows "This quote is N
+  minutes old. Your minimum out is still enforced." Past 10 it refuses: "ask your agent to rebuild it". The minimum
+  out in the bytes never changes, so a moved price can only make the trade fail, never fill worse than approved.
+- A transaction that doesn't qualify, or any transaction from a v1 link (no `builtAt`), keeps its original
+  `lastValidBlockHeight` and the page's countdown.
+
+So trade and claim links work for up to 10 minutes, and launch links for about a minute. The pure parts
+(`isRefreshable`, `withBlockhash`, `sameExceptBlockhash`, `refreshEnvelope`, the age limits) are in
+`packages/core/src/tx/refresh.ts`, exported from `highwire-core/browser`.
 
 ## Signing it
 

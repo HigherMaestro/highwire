@@ -6,6 +6,7 @@ export * from "./higher/constants.ts";
 export * from "./lib/errors.ts";
 export * from "./tx/decode.ts";
 export * from "./tx/format.ts";
+export * from "./tx/refresh.ts";
 export * from "./tx/review.ts";
 export * from "./tx/sign-link.ts";
 export * from "./tx/units.ts";
