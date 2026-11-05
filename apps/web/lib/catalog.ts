@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { HOSTED_TRANSACTION_TOOLS, createServer } from "highwire-mcp";
+import { HOSTED_TRANSACTION_TOOLS, LIST_ONLY_SIGNER, createServer } from "highwire-mcp";
 
 // Everything the site says about the server comes from the server itself, so the
 // pages can't drift from what an agent actually sees. No network involved.
@@ -21,8 +21,12 @@ export interface ToolInfo {
   readOnly: boolean;
   /** Served by the hosted endpoint at /mcp. The rest run only on the local server. */
   hosted: boolean;
-  /** Builds an unsigned transaction for the user's wallet (and returns a sign link). */
+  /** Builds an unsigned transaction for the user's wallet. */
   builds: boolean;
+  /** Returns a highwire.fun/sign link (every hosted build tool does; transfers never get one). */
+  signLink: boolean;
+  /** Signs and sends with the opt-in local signer, inside the user's policy. */
+  executes: boolean;
   params: Param[];
 }
 
@@ -105,8 +109,12 @@ async function connect(opts: Parameters<typeof createServer>[0]) {
 }
 
 async function load(): Promise<Catalog> {
-  // The full local server, and the hosted one as the /mcp route configures it.
-  const [client, hostedClient] = await Promise.all([connect({}), connect({ transactionTools: HOSTED_TRANSACTION_TOOLS, hosted: true })]);
+  // The full local server (with the local signer's tools, listed from a signer that holds no key), and the hosted one
+  // as the /mcp route configures it.
+  const [client, hostedClient] = await Promise.all([
+    connect({ signer: LIST_ONLY_SIGNER }),
+    connect({ transactionTools: HOSTED_TRANSACTION_TOOLS, hosted: true }),
+  ]);
   try {
     const [{ tools }, { prompts }, { resources }, { resourceTemplates }, hostedTools] = await Promise.all([
       client.listTools(),
@@ -117,16 +125,23 @@ async function load(): Promise<Catalog> {
     ]);
     const hosted = new Set(hostedTools.tools.map((t) => t.name));
     return {
-      tools: tools.map((t) => ({
-        name: t.name,
-        title: t.title ?? t.annotations?.title ?? t.name,
-        summary: firstSentence(t.description ?? ""),
-        description: t.description ?? "",
-        readOnly: t.annotations?.readOnlyHint === true,
-        hosted: hosted.has(t.name),
-        builds: t.annotations?.readOnlyHint !== true,
-        params: paramsOf(t.inputSchema as Parameters<typeof paramsOf>[0]),
-      })),
+      tools: tools.map((t) => {
+        const readOnly = t.annotations?.readOnlyHint === true;
+        const executes = t.annotations?.destructiveHint === true;
+        const builds = !readOnly && !executes;
+        return {
+          name: t.name,
+          title: t.title ?? t.annotations?.title ?? t.name,
+          summary: firstSentence(t.description ?? ""),
+          description: t.description ?? "",
+          readOnly,
+          hosted: hosted.has(t.name),
+          builds,
+          signLink: builds && hosted.has(t.name),
+          executes,
+          params: paramsOf(t.inputSchema as Parameters<typeof paramsOf>[0]),
+        };
+      }),
       prompts: prompts.map((p) => ({
         name: p.name,
         title: p.title ?? p.name,
@@ -173,6 +188,12 @@ export const TOOL_GROUPS: { id: string; title: string; blurb: string; tools: str
     title: "Trade and launch",
     blurb: "Quotes, positions, and transactions you review and sign in your own wallet on highwire.fun/sign.",
     tools: ["quote_trade", "get_wallet_positions", "build_trade", "build_launch", "build_claim_creator_fees"],
+  },
+  {
+    id: "signer",
+    title: "Local signer",
+    blurb: "Opt-in, on your own machine: signs and sends only inside the policy file you write, and dry-runs by default.",
+    tools: ["get_signer_status", "execute_trade", "execute_launch", "execute_claim", "execute_transfer", "build_transfer"],
   },
 ];
 

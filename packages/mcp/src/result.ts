@@ -34,6 +34,14 @@ const NEXT_STEPS: Record<string, string> = {
   over_cap: "Show the user the quote, and raise max_sol only if they want the bigger trade.",
   idempotency_conflict: "Use a new idempotency_key for a different coin, or the same parameters to retry this one.",
   ticker_taken: "Pick another ticker; check_ticker tells you whether one is free.",
+  no_policy:
+    "Nothing executes without a policy. Tell the user: `highwire policy init` writes a starting one (devnet, dry run) at the path in the error. Or use the build tool and the sign_url instead.",
+  policy_invalid: "Tell the user their policy file has the problem in the error. Only they can fix it. Meanwhile, use the build tool and the sign_url.",
+  policy_refused:
+    "Tell the user what the policy refused and why. Only the user can change the policy, by editing the file; don't look for a way around it. The build tool's sign_url still lets them sign it themselves.",
+  signer_stopped: "The user switched the local signer off (the STOP file). Don't retry. Use the build tools and sign links, or ask them to remove the file.",
+  simulation_failed: "Nothing was signed. Check the wallet's balances with get_wallet_positions, quote again, and only retry with the user's approval.",
+  send_failed: "Nothing confirmed. Check the signature on an explorer before retrying, so the same action doesn't run twice.",
   too_many_tokens:
     "Pass mints with the higher.fun coins to check (search_coins finds them by name or ticker); that reads only those coins.",
   too_large: "The transaction doesn't fit in Solana's size limit. For a launch, try a shorter metadata_uri or drop the first buy.",

@@ -4,7 +4,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { BUILD_COST, createHttpHandler, createRateLimiter, requestCost, type HttpHandlerOptions } from "../src/http.ts";
 import { HOSTED_INSTRUCTIONS } from "../src/server.ts";
-import { ALL_TOOLS, FAKE_OPTIONS } from "./fake.ts";
+import { HOSTED_TOOLS, FAKE_OPTIONS } from "./fake.ts";
 import { fixtureFetch } from "./replay.ts";
 
 const URL_ = "https://highwire.test/mcp";
@@ -36,7 +36,7 @@ test("an MCP client lists every tool and calls one over HTTP", async () => {
   const client = await connect();
   const { tools } = await client.listTools();
   // The hosted endpoint serves the build tools too: they only return unsigned transactions and a sign link.
-  assert.deepEqual(tools.map((t) => t.name).sort(), ALL_TOOLS);
+  assert.deepEqual(tools.map((t) => t.name).sort(), HOSTED_TOOLS);
   assert.ok(client.getInstructions()?.includes(HOSTED_INSTRUCTIONS));
   const res = await client.callTool({ name: "list_coins", arguments: { sort: "new", limit: 1 } });
   const out = JSON.parse((res.content as Array<{ text: string }>)[0]!.text);

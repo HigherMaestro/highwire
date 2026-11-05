@@ -73,14 +73,29 @@ Not verified, and left to the maintainer:
   `HIGHWIRE_LAUNCH_SECRET` too.
 - Legal review of /terms and /privacy.
 
-## Next: optional local signer
+## M2 (v0.4.0): local signer and execution (built, unreleased)
 
-An opt-in mode that signs with a local keypair (`HIGHER_KEYPAIR_PATH`), with:
-- a per-trade and a per-day SOL limit
-- a mint allowlist or denylist
-- a dry-run default
+Decision D1: local signer only. Highwire never creates, holds or manages a wallet; the hosted endpoint never signs.
 
-Off unless the user configures it. Never accept a key through a tool argument.
+- **`highwire-agent`**, a new package: the policy schema and `checkPolicy`, the keypair loader, the JSONL audit log and
+  `LocalSigner`. Turned on by `HIGHWIRE_KEYPAIR_PATH` (a Solana CLI keypair file) on the stdio server only;
+  `createServer` refuses a signer on the hosted endpoint.
+- **The policy** (`~/.highwire/policy.json`, FR-K6): cluster, `live`, actions, SOL per transaction and per 24 hours,
+  slippage, coin allow and deny lists, a creator allow list, and the transfer allowlist. Strict: unknown keys are
+  refused. Read on every execute. Without one, nothing executes; `highwire policy init` writes a dry-run devnet start.
+- **Dry run by default** (FR-K7): every execute checks and simulates but signs nothing until `"live": true`.
+- **Audit log** (FR-K8): refusals, dry runs and each signature, logged as it's sent, before it confirms. The daily
+  limit counts from it, and executes run one at a time so two can't both squeeze under it.
+- **Kill switch:** `~/.highwire/STOP` refuses every execute.
+- **Tools:** `get_signer_status`, `execute_trade`, `execute_launch`, `execute_claim`, `execute_transfer`, all
+  local only; and `build_transfer` (FR-T7), local only, with no sign link. The sign page refuses transfers.
+- **Before signing:** the envelope must be for the signer's wallet and cluster and have passed simulation; each
+  transaction is simulated again right before it's signed, and a later one gets a fresh blockhash when only the wallet
+  signs it.
+
+Not verified, and left to the maintainer:
+- The exit criterion, a policy-limited agent trading on devnet: the tests use a fake RPC and a throwaway in-memory
+  key, and nothing was sent to a real cluster.
 
 ## Later
 

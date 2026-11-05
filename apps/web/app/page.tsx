@@ -50,7 +50,7 @@ export default async function Home() {
   const groups = groupTools(catalog.tools);
   const hostedCount = catalog.tools.filter((t) => t.hosted).length;
   const localOnly = catalog.tools.length - hostedCount;
-  const buildCount = catalog.tools.filter((t) => t.builds).length;
+  const buildCount = catalog.tools.filter((t) => t.builds && t.hosted).length;
   const stats = [
     { n: hostedCount, label: "hosted tools" },
     { n: buildCount, label: "build tools you sign" },
@@ -153,6 +153,7 @@ export default async function Home() {
                           </a>
                           {t.hosted ? null : <span className="badge">local</span>}
                           {t.builds ? <span className="badge badge-warn">you sign</span> : null}
+                          {t.executes ? <span className="badge badge-warn">your policy</span> : null}
                         </span>
                         <span className="tool-desc">{t.summary}</span>
                       </li>

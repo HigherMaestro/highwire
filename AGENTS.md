@@ -15,6 +15,9 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/solana/rpc.ts` | the few RPC reads we need, over fetch |
 | `packages/core/src/risk.ts` | `evaluateRisk`, the rug-check verdict |
 | `packages/core/src/tx/` | quotes and unsigned transactions: `chain.ts` (web3.js and Raydium's SDK behind one fetch), `quote.ts`, `trade.ts`, `launch.ts` (also `DerivedLaunchKeys`), `claim.ts`, `positions.ts`, `decode.ts` (plain-language decoding and the safety checks), `envelope.ts` (the memo, simulation, `finish()`), `format.ts` (the envelope types), `sign-link.ts` (sign URLs), `review.ts` (the sign page's checks), `refresh.ts` (blockhash refresh for wallet-only transactions) |
+| `packages/core/src/tx/transfer.ts` | `buildTransfer`: SOL or a higher.fun coin to another wallet. Transfers never get a sign link |
+| `packages/agent/src/` | `highwire-agent`, the opt-in local signer: `policy.ts` (the schema and `checkPolicy`), `keypair.ts`, `audit.ts` (the JSONL log and the daily count), `signer.ts` (`LocalSigner`: check, re-simulate, sign, send, confirm), `paths.ts` (`~/.highwire`) |
+| `packages/mcp/src/tools/execute.ts` | `build_transfer`, `get_signer_status` and the execute tools; `signer-env.ts` turns the signer on from `HIGHWIRE_KEYPAIR_PATH` (the CLI only) |
 | `packages/core/src/browser.ts` | `highwire-core/browser`: the browser-safe exports for the sign page. `test/sign.test.ts` walks its imports |
 | `packages/mcp/src/server.ts` | `createServer()`: instructions, tool groups, resources |
 | `packages/mcp/src/tools/*.ts` | one `registerXTools(server, deps)` per group; `transactions.ts` holds the v0.2 tools |
@@ -53,6 +56,14 @@ Streamable HTTP. An npm workspaces monorepo. Read
   built-ins). Keep `browser.ts`'s import graph clean; the test fails otherwise.
 - **Verify by simulation only.** Never send a transaction, request an airdrop, or create or fund a keypair to test.
   Simulate as a public wallet with `sigVerify: false`.
+- **The local signer** reads its key only from the file `HIGHWIRE_KEYPAIR_PATH` names, and signs only inside the
+  user's policy file, which no tool may write. Execute tools build through the same functions as the build tools, then
+  `LocalSigner.execute()` checks the policy, simulates again, signs and sends. It's registered only on the stdio server:
+  `createServer` refuses a signer with `hosted`, and `http.ts` never imports `signer-env.ts`. Refusals, dry runs and
+  sends all go in the audit log; a send is logged before it confirms. Test it with a fake connection, never a real
+  cluster.
+- **Transfers** go only through the local signer, to the policy's allowlist. The sign page refuses them: a sign link
+  can come from anyone.
 - **Never** accept private keys or seed phrases through tool arguments. Never commit keys, `.env` files or keypairs.
 - **Packages:** `highwire-core` knows nothing about MCP; anything MCP-specific goes in `highwire-mcp`. Import across
   packages by name (`from "highwire-core"`), never by relative path.

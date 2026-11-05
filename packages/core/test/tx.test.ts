@@ -10,10 +10,13 @@ import { assertSafe, describeTransaction, UnsafeTransactionError } from "../src/
 import { ENVELOPE_FORMAT, type Envelope } from "../src/tx/envelope.ts";
 import { buildLaunch, LaunchKeys, launchFingerprint, validateLaunch, type LaunchInput } from "../src/tx/launch.ts";
 import { MAX_LISTING_BYTES, walletPositions } from "../src/tx/positions.ts";
+import { reviewEnvelope } from "../src/tx/review.ts";
+import { signUrl } from "../src/tx/sign-link.ts";
+import type { Finished } from "../src/tx/envelope.ts";
 import { formatLamports, formatTokens, solToLamports, tokensToBase } from "../src/tx/units.ts";
 import { replayFetch, type Recording } from "./replay.ts";
 import { runScenario } from "./run-scenario.ts";
-import { CLAIM_COIN, CREATOR, CURVE_COIN, GRADUATED_COIN, LAUNCH_MINT, LAUNCH_URI, TRADER, type Scenario } from "./scenarios.ts";
+import { CLAIM_COIN, CREATOR, CURVE_COIN, GRADUATED_COIN, GRADUATED_HOLDER, LAUNCH_MINT, LAUNCH_URI, TRADER, type Scenario } from "./scenarios.ts";
 
 const fixture = (name: Scenario): Recording => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), "utf8"));
 const replay = (name: Scenario) => runScenario(name, replayFetch(fixture(name)));
@@ -222,6 +225,45 @@ test("a wallet with too many token accounts to list gets a clear error, not a ha
     throw new Error(`unexpected ${method}`);
   }) as typeof globalThis.fetch;
   await assert.rejects(walletPositions(new Chain({ fetch }), null, TRADER), (e: { code?: string }) => e.code === "too_many_tokens");
+});
+
+test("a SOL transfer sends exactly the amount to exactly the recipient, and gets no sign link", async () => {
+  const { transfer: r } = (await replay("transfer-sol")) as { transfer: Finished };
+  const env = envelopeOf(r);
+  checkEnvelope(env, TRADER);
+  assert.equal(env.kind, "transfer");
+  const t = env.transactions[0]!;
+  assert.ok(t.simulation.ok);
+  assert.ok(t.summary.some((l) => l.includes(`Send 0.01 SOL from ${TRADER.toBase58()} to ${CREATOR.toBase58()}`)), t.summary.join("\n"));
+  await assert.rejects(signUrl(env), /no sign link/);
+  // The sign page's review refuses it: its expectations never allow SOL to leave for another wallet.
+  assert.ok(reviewEnvelope(env).problems.some((p) => p.includes("not the wallet's own")), "the sign page refuses transfers");
+
+  const tx = VersionedTransaction.deserialize(Buffer.from(t.base64, "base64"));
+  const ok = { wallet: TRADER, allowLaunchLab: false, allowCpmm: false, transfer: { to: CREATOR, lamports: solToLamports(0.01) } };
+  assert.doesNotThrow(() => assertSafe(tx, "mainnet", ok));
+  assert.throws(() => assertSafe(tx, "mainnet", { ...ok, transfer: { to: CREATOR, lamports: solToLamports(0.02) } }), /different amount/);
+  assert.throws(() => assertSafe(tx, "mainnet", { ...ok, transfer: { to: GRADUATED_HOLDER, lamports: solToLamports(0.01) } }), UnsafeTransactionError);
+});
+
+test("a coin transfer goes from the wallet's account to the recipient's, which it may open", async () => {
+  const { transfer: r } = (await replay("transfer-coin")) as { transfer: Finished };
+  const env = envelopeOf(r);
+  checkEnvelope(env, GRADUATED_HOLDER);
+  const t = env.transactions[0]!;
+  assert.ok(t.simulation.ok);
+  assert.ok(t.summary.some((l) => l.includes(`Send 1,000 tokens of ${GRADUATED_COIN.toBase58()}`)), t.summary.join("\n"));
+  assert.ok(t.summary.some((l) => l.includes(`owned by ${TRADER.toBase58()}`)), "opens the recipient's account");
+  assert.equal(r.decoded[0]!.tokenTransfers[0]!.amount, tokensToBase(1_000));
+  assert.ok(reviewEnvelope(env).problems.length > 0, "the sign page refuses transfers");
+
+  const tx = VersionedTransaction.deserialize(Buffer.from(t.base64, "base64"));
+  const ok = { wallet: GRADUATED_HOLDER, allowLaunchLab: false, allowCpmm: false, transfer: { to: TRADER, mint: GRADUATED_COIN, amount: tokensToBase(1_000) } };
+  assert.doesNotThrow(() => assertSafe(tx, "mainnet", ok));
+  assert.throws(() => assertSafe(tx, "mainnet", { ...ok, transfer: { ...ok.transfer, amount: tokensToBase(999) } }), /different amount/);
+  assert.throws(() => assertSafe(tx, "mainnet", { ...ok, transfer: { ...ok.transfer, mint: CURVE_COIN } }), UnsafeTransactionError);
+  assert.throws(() => assertSafe(tx, "mainnet", { ...ok, transfer: { ...ok.transfer, to: CREATOR } }), UnsafeTransactionError);
+  assert.throws(() => assertSafe(tx, "mainnet", { wallet: GRADUATED_HOLDER }), /never makes|someone else/);
 });
 
 // Safety checks on hand-built transactions.

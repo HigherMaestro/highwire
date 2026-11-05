@@ -43,7 +43,8 @@ export interface UnsignedTransaction {
   simulation: Simulation;
 }
 
-export type EnvelopeKind = "trade" | "launch" | "claim";
+/** A transfer is signed only by the local signer: the sign page refuses transfers to other wallets. */
+export type EnvelopeKind = "trade" | "launch" | "claim" | "transfer";
 
 export interface Envelope {
   format: EnvelopeFormat;

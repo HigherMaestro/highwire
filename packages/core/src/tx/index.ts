@@ -9,4 +9,5 @@ export * from "./refresh.ts";
 export * from "./review.ts";
 export * from "./sign-link.ts";
 export * from "./trade.ts";
+export * from "./transfer.ts";
 export * from "./units.ts";

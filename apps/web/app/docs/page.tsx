@@ -49,6 +49,18 @@ const RECIPES: { title: string; ask: string; prompt: string; steps: string[] }[]
   },
 ];
 
+const POLICY_KEYS: [string, string][] = [
+  ["cluster", "mainnet or devnet. Required, so mainnet is always a deliberate choice."],
+  ["live", "false (the default) makes every execute a dry run. true lets it sign and send."],
+  ["actions", "Which of trade, launch, claim and transfer it may do."],
+  ["max_sol_per_tx", "The most SOL one execute may spend: a buy, a launch fee plus first buy, or SOL sent."],
+  ["max_sol_per_day", "The most SOL in any 24 hours, counted from the audit log."],
+  ["max_slippage_bps", "The most slippage a trade or first buy may allow."],
+  ["coins", "allow: only these coins; deny: never these. For trades and coin transfers."],
+  ["creators", "allow: only trade coins launched by these wallets."],
+  ["transfer_allowlist", "The only wallets transfers may go to. Empty by default."],
+];
+
 const ERRORS: [string, string][] = [
   ["not_found", "Unknown mint, wallet or coin. Check the address, or use search_coins."],
   ["bad_request", "A parameter was out of range or the wrong shape. The message says which."],
@@ -56,6 +68,9 @@ const ERRORS: [string, string][] = [
   ["simulation_failed", "The built transaction would fail on-chain: usually too little SOL or tokens, or the price moved. Quote again."],
   ["unsafe_transaction", "A safety check on the built transaction failed. Nothing to sign; please report it."],
   ["unavailable", "higher.fun or the Solana RPC didn't answer. Retry later."],
+  ["no_policy", "The local signer has no policy file, so nothing executes. Run npx highwire-mcp policy init."],
+  ["policy_refused", "The local signer's policy doesn't allow this. Only you can change the policy file."],
+  ["signer_stopped", "~/.highwire/STOP exists, so the local signer refuses everything until you delete it."],
   ["internal_error", "Something unexpected. Please open an issue on GitHub."],
 ];
 
@@ -70,8 +85,14 @@ function ToolDoc({ tool }: { tool: ToolInfo }) {
         </h4>
         <span className="badges">
           {tool.hosted ? <span className="badge">hosted</span> : <span className="badge">local only</span>}
-          {tool.readOnly ? <span className="badge">read-only</span> : <span className="badge badge-warn">builds a transaction you sign</span>}
-          {tool.builds ? <span className="badge">returns a sign link</span> : null}
+          {tool.readOnly ? (
+            <span className="badge">read-only</span>
+          ) : tool.executes ? (
+            <span className="badge badge-warn">signs and sends inside your policy</span>
+          ) : (
+            <span className="badge badge-warn">builds a transaction you sign</span>
+          )}
+          {tool.signLink ? <span className="badge">returns a sign link</span> : null}
         </span>
       </div>
       <p className="muted">{tool.description}</p>
@@ -119,6 +140,7 @@ export default async function Docs() {
   const toc = [
     ["connect", "Connect"],
     ["signing", "Signing"],
+    ["local-signer", "Local signer"],
     ["tools", `Tools (${catalog.tools.length})`],
     ["prompts", `Prompts (${catalog.prompts.length})`],
     ["resources", `Resources (${catalog.resources.length})`],
@@ -150,7 +172,7 @@ export default async function Docs() {
               <p className="lead">
                 Highwire is an MCP server for <a href="https://higher.fun">higher.fun</a>. It gives agents{" "}
                 {catalog.tools.filter((t) => t.hosted).length} hosted tools, of which{" "}
-                {catalog.tools.filter((t) => t.builds).length} build transactions you sign in your own wallet,{" "}
+                {catalog.tools.filter((t) => t.builds && t.hosted).length} build transactions you sign in your own wallet,{" "}
                 {catalog.prompts.length} prompts and {catalog.resources.length} resources. Everything below is generated
                 from the running server.
               </p>
@@ -200,6 +222,65 @@ export default async function Docs() {
                 because the new coin&apos;s address is already signed into the transaction. For a launch, rebuild with the
                 same <code>idempotency_key</code>: it keeps the same coin, so it can&apos;t be created or paid for twice. Every transaction Highwire builds also carries a memo, <code>highwire</code>, so its use can be
                 counted on-chain.
+              </p>
+            </section>
+
+            <section id="local-signer" aria-labelledby="local-signer-h">
+              <h2 id="local-signer-h">Local signer</h2>
+              <p className="muted">
+                For agents that act on their own, the local server can sign with a keypair on your machine. It&apos;s off
+                unless you turn it on, it never runs on the hosted endpoint, and it signs only inside a policy file you
+                write. No tool can change that file.
+              </p>
+              <ol className="plain">
+                <li>
+                  <strong>Write a policy.</strong> <code>npx highwire-mcp policy init</code> writes a starting one to{" "}
+                  <code>~/.highwire/policy.json</code>: devnet, dry run, trades and claims, 0.1 SOL a transaction, 0.5 SOL a
+                  day. Without a policy, nothing executes.
+                </li>
+                <li>
+                  <strong>Point it at a keypair.</strong> Set <code>HIGHWIRE_KEYPAIR_PATH</code> to a Solana CLI keypair file
+                  in your MCP client&apos;s config for the local server. The key is read from that file only, never from a
+                  tool argument, and never leaves your machine. Use a wallet that holds only what you&apos;re willing to let
+                  an agent spend.
+                </li>
+                <li>
+                  <strong>Dry runs first.</strong> <code>execute_trade</code>, <code>execute_launch</code>,{" "}
+                  <code>execute_claim</code> and <code>execute_transfer</code> build exactly what the build tools build,
+                  simulate it, and check your policy, but sign nothing until the policy says <code>&quot;live&quot;: true</code>.
+                </li>
+                <li>
+                  <strong>Every execute is logged</strong> to <code>~/.highwire/audit.jsonl</code>: refusals, dry runs, and
+                  each signature, written as it&apos;s sent. The daily limit counts from it.
+                </li>
+                <li>
+                  <strong>Stop it any time</strong> by creating <code>~/.highwire/STOP</code>. Every execute is refused until
+                  you delete it.
+                </li>
+              </ol>
+              <div className="table-wrap">
+                <table className="params">
+                  <thead>
+                    <tr>
+                      <th>Policy key</th>
+                      <th>What it limits</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {POLICY_KEYS.map(([k, v]) => (
+                      <tr key={k}>
+                        <td>
+                          <code>{k}</code>
+                        </td>
+                        <td>{v}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="muted">
+                Transfers go only to wallets on <code>transfer_allowlist</code>, and the sign page never signs them, since a
+                sign link can come from anyone.
               </p>
             </section>
 

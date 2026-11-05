@@ -57,7 +57,7 @@ tool-specific fields (the quote, the launch's mint and fee, what can be claimed)
 | `format` | `highwire.unsigned-tx/v2`. Consumers should accept v1 (the same without `builtAt`) and refuse anything else. |
 | `cluster` | `mainnet` or `devnet`. Send to an RPC on this cluster only. |
 | `wallet` | The wallet the transactions were built for. It pays every fee. |
-| `kind` | `trade`, `launch` or `claim`. |
+| `kind` | `trade`, `launch` or `claim`; `transfer` for `build_transfer`, which has no sign link (decoding refuses a transfer envelope, so the sign page never signs one). |
 | `transactions[]` | In the order they must land. |
 | `.base64` | A serialized `VersionedTransaction` (message v0) in standard base64. Its signature slots are 64 zero bytes, except those in `presigned`. |
 | `.signers` | Every signer the message requires, in order. The first is the fee payer. |

@@ -95,6 +95,8 @@ export interface DecodedTransaction {
   trades: DecodedTrade[];
   /** SOL transfers, by recipient. */
   transfers: { to: string; lamports: bigint }[];
+  /** Token transfers (TransferChecked): the mint, the accounts, and the amount in base units. */
+  tokenTransfers: { mint: string; from: string; to: string; owner: string; amount: bigint }[];
   /** Coins created by initialize_v2: the mint and the creator recorded on-chain. */
   launches: { mint: string; creator: string; platform: string; pool: string; name: string; symbol: string; uri: string }[];
   /** Creator fee claims: the curve vault, or a CPMM pool. */
@@ -140,6 +142,7 @@ export function describeTransaction(
     instructions: [],
     trades: [],
     transfers: [],
+    tokenTransfers: [],
     launches: [],
     claims: [],
     locks: [],
@@ -179,7 +182,11 @@ export function describeTransaction(
       if (d[0] === 17) known(`Sync wrapped SOL in ${k(0)}`);
       else if (d[0] === 9) known(`Close token account ${k(0)}, returning its SOL to ${k(1)}`);
       else if (d[0] === 1 || d[0] === 16 || d[0] === 18) known(`Initialise token account ${k(0)} for mint ${k(1)}`);
-      else unknown("token instruction");
+      else if (d[0] === 12 && d.length === 10) {
+        const amount = d.readBigUInt64LE(1);
+        out.tokenTransfers.push({ mint: k(1), from: k(0), to: k(2), owner: k(3), amount });
+        known(`Send ${formatTokens(amount)} tokens of ${k(1)} from token account ${k(0)} to token account ${k(2)}`);
+      } else unknown("token instruction");
     } else if (program === a.launchLabProgram) {
       const L = DISCRIMINATORS.launchLab;
       if (disc === L.buyExactIn) {
@@ -258,6 +265,11 @@ export interface Expectations {
   /** Whether a LaunchLab or CPMM instruction may appear at all. */
   allowCpmm?: boolean;
   allowLaunchLab?: boolean;
+  /**
+   * A transfer to another wallet: exactly `lamports` of SOL, or exactly `amount` base units of `mint` into the
+   * recipient's associated token account (which the transaction may open). Without it, nothing may leave the wallet.
+   */
+  transfer?: { to: PublicKey; lamports?: bigint; mint?: PublicKey; amount?: bigint };
 }
 
 /**
@@ -294,6 +306,8 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
 
   let feeTransfers = 0;
   let memos = 0;
+  let transfers = 0;
+  const send = exp.transfer;
   ixs.forEach((ix, i) => {
     const p = ix.programId.toBase58();
     const d = ix.data;
@@ -313,13 +327,20 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
         if (exp.launchFee && to.equals(exp.launchFee.to)) {
           if (lamports > exp.launchFee.maxLamports) fail(`instruction ${i + 1}: launch fee above the quoted amount`);
           if (++feeTransfers > 1) fail(`instruction ${i + 1}: more than one launch fee transfer`);
+        } else if (send?.lamports !== undefined && to.equals(send.to)) {
+          if (lamports !== send.lamports) fail(`instruction ${i + 1}: sends a different amount of SOL than asked`);
+          if (++transfers > 1) fail(`instruction ${i + 1}: more than one transfer`);
         } else if (!own.has(to.toBase58())) fail(`instruction ${i + 1}: SOL transfer to ${to.toBase58()}, which is not the wallet's own token account`);
       } else if (type === 0 || type === 3) {
         if (!own.has(key(1).toBase58())) fail(`instruction ${i + 1}: creates an account the wallet doesn't own`);
       } else fail(`instruction ${i + 1}: System instruction ${type} is not allowed`);
     } else if (p === PROGRAMS.associatedToken) {
       if (!(d.length === 0 || (d.length === 1 && (d[0] === 0 || d[0] === 1)))) fail(`instruction ${i + 1}: associated-token instruction not allowed`);
-      if (!key(0).equals(wallet) || !key(2).equals(wallet)) fail(`instruction ${i + 1}: opens a token account for someone else`);
+      if (!key(0).equals(wallet)) fail(`instruction ${i + 1}: opens a token account paid for by someone else`);
+      // A token transfer may open the recipient's own associated account for the coin it sends.
+      const forRecipient =
+        send?.mint !== undefined && key(2).equals(send.to) && key(3).equals(send.mint) && key(1).equals(associatedTokenAddress(send.mint, send.to, key(5)));
+      if (!key(2).equals(wallet) && !forRecipient) fail(`instruction ${i + 1}: opens a token account for someone else`);
     } else if (p === PROGRAMS.token || p === PROGRAMS.token2022) {
       const t = d[0];
       if (t === 17) return;
@@ -329,6 +350,18 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
       }
       if (t === 9) {
         if (!key(1).equals(wallet) || !key(2).equals(wallet)) fail(`instruction ${i + 1}: closes a token account to someone other than the wallet`);
+        return;
+      }
+      if (t === 12 && d.length === 10) {
+        const sendMint = send?.mint;
+        if (!send || !sendMint || send.amount === undefined) return fail(`instruction ${i + 1}: a token transfer, which this flow never makes`);
+        if (!key(1).equals(sendMint)) fail(`instruction ${i + 1}: sends a different coin than asked`);
+        if (!key(0).equals(associatedTokenAddress(sendMint, wallet, ix.programId)) || !key(3).equals(wallet)) {
+          fail(`instruction ${i + 1}: sends from an account that isn't the wallet's`);
+        }
+        if (!key(2).equals(associatedTokenAddress(sendMint, send.to, ix.programId))) fail(`instruction ${i + 1}: sends to an account that isn't the recipient's`);
+        if (d.readBigUInt64LE(1) !== send.amount) fail(`instruction ${i + 1}: sends a different amount than asked`);
+        if (++transfers > 1) fail(`instruction ${i + 1}: more than one transfer`);
         return;
       }
       fail(`instruction ${i + 1}: token instruction ${t} is not allowed`);
@@ -372,6 +405,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
     } else fail(`instruction ${i + 1} calls a program outside the allow-list: ${p}`);
   });
   if (exp.launchFee && feeTransfers !== 1) fail("the launch fee must be paid exactly once");
+  if (send && transfers !== 1) fail("the transfer must happen exactly once");
 }
 
 /** Default compute limits, re-exported for the builders. */

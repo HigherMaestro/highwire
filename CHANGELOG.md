@@ -1,6 +1,25 @@
 # Changelog
 
-Every release of `highwire-core`, `highwire-mcp` and the site at highwire.fun.
+Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
+
+## 0.4.0 (unreleased)
+
+Let an agent act on its own, inside rules you write: an opt-in local signer. Custody stays with you: Highwire never
+creates, holds or manages a wallet, and the hosted endpoint still never signs.
+
+- **The local signer** (`highwire-agent`, new). Set `HIGHWIRE_KEYPAIR_PATH` to a Solana CLI keypair file and the local
+  server signs for that wallet, only inside `~/.highwire/policy.json`: allowed actions, coins (allow or deny),
+  creators, slippage, SOL per transaction and per 24 hours, and transfer recipients. No tool can write the policy.
+  Every execute is a dry run until it says `"live": true`. `highwire policy init` writes a starting one (devnet, dry
+  run, small limits).
+- **Execute tools.** `execute_trade`, `execute_launch`, `execute_claim` and `execute_transfer` build exactly what the
+  build tools build, check the policy, simulate again right before signing, then sign, send and confirm, and report the
+  wallet's actual balance changes. `get_signer_status` shows the wallet, the policy and what's left of today's limit.
+  Local only, and marked destructive.
+- **Audit log and kill switch.** `~/.highwire/audit.jsonl` gets one line per refusal, dry run and signature, written as
+  each transaction is sent. The daily limit is counted from it. Creating `~/.highwire/STOP` refuses everything.
+- **Transfers.** `build_transfer` sends SOL or a higher.fun coin to another wallet, checked to the lamport and the
+  recipient. It's local only and has no sign link: the sign page refuses transfers, since a link can come from anyone.
 
 ## 0.3.0 (unreleased)
 

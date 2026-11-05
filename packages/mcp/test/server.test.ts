@@ -4,8 +4,13 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { decodeSignPayload } from "highwire-core";
 import { rpcUrlEnv, serverOptionsFromEnv } from "../src/env.ts";
-import { createServer, type ServerOptions } from "../src/server.ts";
-import { ALL_TOOLS, BUILD_TOOLS, FAKE_OPTIONS } from "./fake.ts";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Keypair, PublicKey } from "@solana/web3.js";
+import { agentPaths, LocalSigner, POLICY_TEMPLATE } from "highwire-agent";
+import { createServer, SIGNER_INSTRUCTIONS, type ServerOptions } from "../src/server.ts";
+import { ALL_TOOLS, BUILD_TOOLS, EXECUTE_TOOLS, FAKE_OPTIONS } from "./fake.ts";
 import { fixtureFetch } from "./replay.ts";
 
 async function connect(opts: ServerOptions = FAKE_OPTIONS) {
@@ -169,4 +174,71 @@ test("get_featured_coin says so when higher.fun features nothing", async () => {
   const res = await client.callTool({ name: "get_featured_coin", arguments: {} });
   assert.ok(!res.isError);
   assert.equal(parse(res).featured, null);
+});
+
+// ---------------------------------------------------------------- the local signer's tools
+
+const TRADER = "H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5";
+
+/** A signer whose wallet is the fixtures' trader, so builds replay. It never signs here: these are dry runs. */
+class FixtureSigner extends LocalSigner {
+  override get wallet() {
+    return TRADER;
+  }
+  override get publicKey() {
+    return new PublicKey(TRADER);
+  }
+}
+
+function signerHome(policy?: object) {
+  const paths = agentPaths({ HIGHWIRE_HOME: mkdtempSync(join(tmpdir(), "highwire-mcp-")) });
+  if (policy) writeFileSync(paths.policy, JSON.stringify(policy));
+  return paths;
+}
+
+test("the execute tools exist only with a local signer, are marked destructive, and the hosted endpoint can't have them", async () => {
+  const signer = new LocalSigner(Keypair.generate(), signerHome());
+  const client = await connect({ ...FAKE_OPTIONS, signer });
+  const { tools } = await client.listTools();
+  assert.deepEqual(tools.map((t) => t.name).sort(), [...ALL_TOOLS, ...EXECUTE_TOOLS].sort());
+  for (const t of tools.filter((t) => t.name.startsWith("execute_"))) assert.equal(t.annotations?.destructiveHint, true, t.name);
+  assert.equal(tools.find((t) => t.name === "get_signer_status")?.annotations?.readOnlyHint, true);
+  assert.ok(client.getInstructions()?.includes(SIGNER_INSTRUCTIONS));
+  assert.throws(() => createServer({ hosted: true, signer }), /never signs/);
+
+  const status = parse(await client.callTool({ name: "get_signer_status", arguments: {} }));
+  assert.equal(status.policy, null);
+  assert.match(status.policyProblem, /No policy/);
+});
+
+test("execute_trade without a policy refuses before building anything", async () => {
+  const client = await connect({ ...FAKE_OPTIONS, signer: new LocalSigner(Keypair.generate(), signerHome()) });
+  const res = await client.callTool({
+    name: "execute_trade",
+    arguments: { mint: "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix", side: "buy", sol: 0.01, max_slippage_bps: 200, max_sol: 5, confirm_trade: true },
+  });
+  assert.equal(res.isError, true);
+  const out = parse(res);
+  assert.equal(out.code, "no_policy");
+  assert.match(out.next_step, /policy init/);
+});
+
+test("execute_trade builds what build_trade builds and, without live, only dry-runs it", async () => {
+  const args = { mint: "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix", side: "buy", sol: 0.01, max_slippage_bps: 200, max_sol: 5, confirm_trade: true };
+  const paths = signerHome({ ...POLICY_TEMPLATE, cluster: "mainnet", actions: ["trade"], max_slippage_bps: 300 });
+  const signer = new FixtureSigner(Keypair.generate(), paths);
+  const client = await connect({ fetch: fixtureFetch("buy-curve"), retries: 0, signer });
+  const out = parse(await client.callTool({ name: "execute_trade", arguments: args }));
+  assert.equal(out.status, "dry_run", JSON.stringify(out).slice(0, 400));
+  assert.match(out.note, /nothing was signed/);
+  assert.deepEqual(out.transactions, []);
+  assert.ok(out.summary[0].some((l: string) => l.includes("Buy coin EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix")));
+  assert.equal(signer.audit.entries().at(-1)?.outcome, "dry_run");
+
+  // Tighter slippage in the policy refuses the same trade, and the refusal is logged.
+  writeFileSync(paths.policy, JSON.stringify({ ...POLICY_TEMPLATE, cluster: "mainnet", actions: ["trade"], max_slippage_bps: 100 }));
+  const refused = await client.callTool({ name: "execute_trade", arguments: args });
+  assert.equal(refused.isError, true);
+  assert.equal(parse(refused).code, "policy_refused");
+  assert.equal(signer.audit.entries().at(-1)?.outcome, "refused");
 });

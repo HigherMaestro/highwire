@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Chain, HigherApi, MintSource, SolanaRpc } from "highwire-core";
+import type { LocalSigner } from "highwire-agent";
 
 export interface Deps {
   api: HigherApi;
@@ -12,7 +13,12 @@ export interface Deps {
   maxSolPerTx: number;
   /** The site sign links point at. */
   siteUrl: string;
+  /** The opt-in local signer (HIGHWIRE_KEYPAIR_PATH). Never set on the hosted endpoint. */
+  signer?: ExecutionSigner;
 }
+
+/** What the execute tools use of the local signer. */
+export type ExecutionSigner = Pick<LocalSigner, "wallet" | "publicKey" | "status" | "precheck" | "execute">;
 
 export const address = (what: string) =>
   z
@@ -38,6 +44,14 @@ export const READ_ONLY = {
 export const BUILD = {
   readOnlyHint: false,
   destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: true,
+} as const;
+
+/** Execute tools sign and send with the local signer: what they do can't be undone. */
+export const EXECUTE = {
+  readOnlyHint: false,
+  destructiveHint: true,
   idempotentHint: false,
   openWorldHint: true,
 } as const;

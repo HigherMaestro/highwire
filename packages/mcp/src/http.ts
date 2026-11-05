@@ -142,6 +142,7 @@ export function createHttpHandler(opts: HttpHandlerOptions = {}): (req: Request)
       ...opts.server,
       transactionTools: HOSTED_TRANSACTION_TOOLS,
       hosted: true,
+      signer: undefined,
       launchKeySecret: opts.server?.launchKeySecret ?? "",
     });
     const transport = new WebStandardStreamableHTTPServerTransport({

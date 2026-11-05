@@ -87,6 +87,7 @@ export function siteOrigin(siteUrl: string = DEFAULT_SITE_URL): string {
  * URL longer than SIGN_URL_GZIP_THRESHOLD.
  */
 export async function signUrl(env: Envelope, siteUrl: string = DEFAULT_SITE_URL): Promise<string> {
+  if (env.kind === "transfer") throw new Error("transfers to other wallets get no sign link");
   const base = `${siteOrigin(siteUrl)}${SIGN_PATH}#`;
   const plain = await encodeSignPayload(env);
   if (base.length + plain.length <= SIGN_URL_GZIP_THRESHOLD) return base + plain;
@@ -136,6 +137,9 @@ export function parseEnvelope(v: unknown): Envelope {
   if (!(ENVELOPE_FORMATS as readonly unknown[]).includes(e.format)) bad(`format must be one of ${ENVELOPE_FORMATS.join(", ")}`);
   const v1 = e.format === ENVELOPE_FORMATS[0];
   if (!(CLUSTERS as readonly unknown[]).includes(e.cluster)) bad("unknown cluster");
+  // Transfers to other wallets are only ever signed by the user's local signer, inside their allowlist: a sign link
+  // anyone can send is no place for one.
+  if (e.kind === "transfer") bad("this page never signs transfers to other wallets");
   if (!["trade", "launch", "claim"].includes(e.kind as string)) bad("unknown kind");
   const wallet = addr(e.wallet, "wallet");
   const txs = list(e.transactions, "transactions", (t) => t, MAX_ENVELOPE_TRANSACTIONS);

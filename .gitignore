@@ -12,3 +12,7 @@ next-env.d.ts
 # copied in by prepack
 packages/*/LICENSE
 .vercel
+
+# never commit keypairs
+*keypair*.json
+id.json

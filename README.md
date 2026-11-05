@@ -13,6 +13,11 @@ unsigned transactions, hosted or local. Each comes with a `sign_url`: open it, a
 re-checks and simulates the transaction in your browser, then your own wallet signs. Highwire never signs, never holds
 a key and never sends anything. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
+**Or let your agent act, inside your rules.** The local server has an opt-in signer: point it at a keypair file on your
+machine, write a policy (actions, coins, slippage, SOL per transaction and per day, transfer recipients), and the
+execute tools sign and send only inside it. Dry run until the policy says `"live": true`. See
+[Local signer](#local-signer).
+
 ## Tools
 
 | Tool | What it returns |
@@ -48,6 +53,14 @@ a key and never sends anything. See [docs/ROADMAP.md](docs/ROADMAP.md).
 Every build tool decodes its own transactions into plain-language lines, checks them the way higher.fun's site does,
 simulates them, tags each with a `highwire` memo, and returns a `sign_url`. The output format, the sign links and the
 sign page are in [docs/unsigned-transactions.md](docs/unsigned-transactions.md).
+
+**Local only:**
+
+| Tool | What it does |
+|---|---|
+| `build_transfer` | SOL or a higher.fun coin to another wallet, unsigned. No `sign_url`: the sign page never signs transfers |
+| `get_signer_status` | With the local signer: its wallet, live or dry run, the policy, and what's left of today's limit |
+| `execute_trade`, `execute_launch`, `execute_claim`, `execute_transfer` | With the local signer: build exactly what the build tool builds, check the policy, simulate again, then sign and send (or dry-run) |
 
 **The sign page** ([highwire.fun/sign](https://highwire.fun/sign)) reads the transaction from the link's fragment,
 which never reaches a server, decodes every instruction from the bytes, shows what you spend and receive, the fees, the
@@ -152,6 +165,33 @@ page calls from the browser, and allows only their origins in its CSP. The publi
 mainnet endpoint refuses requests from web pages (HTTP 403), so the deployed site needs its own mainnet RPC there.
 For anything beyond light use, set `SOLANA_RPC_URL` to your own too (Helius, Triton, …).
 
+### Local signer
+
+Off unless you turn it on, and never on the hosted endpoint. It signs only inside a policy you write in
+`~/.highwire/policy.json`, which no tool can change.
+
+```bash
+npx -y highwire-mcp policy init
+```
+
+writes a starting policy: devnet, dry run, trades and claims, 0.1 SOL a transaction, 0.5 SOL a day. Then set
+`HIGHWIRE_KEYPAIR_PATH` in the local server's `env` to a Solana CLI keypair file. Use a wallet that holds only what
+you'd let an agent spend.
+
+| Policy key | What it limits |
+|---|---|
+| `cluster` | `mainnet` or `devnet`, required |
+| `live` | `false` by default: every execute is a dry run that signs nothing |
+| `actions` | any of `trade`, `launch`, `claim`, `transfer` |
+| `max_sol_per_tx`, `max_sol_per_day` | SOL spent on trades, launch fees and first buys, and SOL sent; the day is the last 24 hours, counted from the audit log |
+| `max_slippage_bps` | for trades and first buys |
+| `coins` | `allow` or `deny` lists of mints |
+| `creators` | `allow`: only coins launched by these wallets |
+| `transfer_allowlist` | the only recipients for `execute_transfer` |
+
+Every execute is written to `~/.highwire/audit.jsonl`: refusals, dry runs, and each signature as it's sent. Creating
+`~/.highwire/STOP` refuses everything until you delete it. `HIGHWIRE_HOME` and `HIGHWIRE_POLICY_PATH` move the files.
+
 ## Repository
 
 An npm workspaces monorepo.
@@ -159,6 +199,7 @@ An npm workspaces monorepo.
 | Path | What it is |
 |---|---|
 | [packages/core](packages/core) | `highwire-core`: the higher.fun API client, constants, unit formatting, the rug check, and the quote and transaction builders |
+| [packages/agent](packages/agent) | `highwire-agent`: the opt-in local signer: the policy, the keypair loader, the audit log and the executor |
 | [packages/mcp](packages/mcp) | `highwire-mcp`: the MCP server, the `highwire` stdio bin and a stateless HTTP handler |
 | [apps/web](apps/web) | The Next.js site: the sign page at `/sign`, `/docs`, `/changelog`, `/terms`, `/privacy`, the hosted MCP at `/mcp` and `GET /api/health` |
 

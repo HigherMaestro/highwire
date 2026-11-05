@@ -5,6 +5,7 @@ import { buildClaimCreatorFees, graduatedCoinsOf } from "../src/tx/claim.ts";
 import { buildLaunch } from "../src/tx/launch.ts";
 import { walletPositions } from "../src/tx/positions.ts";
 import { buildTrade } from "../src/tx/trade.ts";
+import { buildTransfer } from "../src/tx/transfer.ts";
 import { solToLamports, tokensToBase } from "../src/tx/units.ts";
 import { CREATOR, CURVE_COIN, GRADUATED_COIN, GRADUATED_HOLDER, LAUNCH_MINT, LAUNCH_URI, TRADER, type Scenario } from "./scenarios.ts";
 
@@ -41,5 +42,10 @@ export async function runScenario(name: Scenario, fetch: typeof globalThis.fetch
       return walletPositions(chain, api, GRADUATED_HOLDER);
     case "positions-mints":
       return walletPositions(chain, api, GRADUATED_HOLDER, { mints: [GRADUATED_COIN, CURVE_COIN] });
+    // Wrapped, so the other scenarios' results still narrow by their own fields.
+    case "transfer-sol":
+      return { transfer: await buildTransfer(chain, { wallet: TRADER, to: CREATOR, lamports: solToLamports(0.01) }) };
+    case "transfer-coin":
+      return { transfer: await buildTransfer(chain, { wallet: GRADUATED_HOLDER, to: TRADER, mint: GRADUATED_COIN, amount: tokensToBase(1_000) }) };
   }
 }

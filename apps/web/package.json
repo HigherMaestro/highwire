@@ -1,6 +1,6 @@
 {
   "name": "highwire-web",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -16,8 +16,8 @@
     "@solana/web3.js": "1.99.0",
     "@wallet-standard/app": "1.1.1",
     "@wallet-standard/base": "1.1.1",
-    "highwire-core": "0.3.0",
-    "highwire-mcp": "0.3.0",
+    "highwire-core": "0.4.0",
+    "highwire-mcp": "0.4.0",
     "next": "16.4.2",
     "react": "19.2.9",
     "react-dom": "19.2.9"

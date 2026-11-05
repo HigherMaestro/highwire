@@ -76,6 +76,139 @@ async function envelopeResult(env: Envelope, siteUrl: string, extra: Record<stri
   return jsonResult({ sign_url: await signUrl(env, siteUrl), sign_note: SIGN_NOTE, ...extra, unsigned: env });
 }
 
+/** build_trade's and execute_trade's arguments, less the wallet. */
+export const tradeShape = (maxSol: number) => ({
+  mint,
+  side,
+  sol,
+  tokens,
+  max_slippage_bps: z.number().int().min(0).max(MAX_SLIPPAGE_BPS).describe("Slippage tolerance in bps, at most 1500 (15%)."),
+  max_sol: z
+    .number()
+    .positive()
+    .max(maxSol)
+    .describe(`Cap: a buy may spend at most this much SOL; a sell may return at most this much. At most ${maxSol}.`),
+  confirm_trade: z.literal(true).describe("Set to true only after the user approved this exact trade."),
+});
+
+export interface TradeArgs {
+  mint: string;
+  side: "buy" | "sell";
+  sol?: number;
+  tokens?: number;
+  max_slippage_bps: number;
+  max_sol: number;
+}
+
+export function buildTradeFor(deps: Deps, w: PublicKey, args: TradeArgs) {
+  return buildTrade(deps.chain, {
+    wallet: w,
+    mint: new PublicKey(args.mint),
+    side: args.side,
+    amountIn: tradeAmount(args),
+    slippageBps: args.max_slippage_bps,
+    maxLamports: solToLamports(args.max_sol),
+  });
+}
+
+/** build_launch's and execute_launch's arguments, less the wallet. */
+export const launchShape = (maxSol: number) => ({
+  name: z.string().min(1).max(32).describe("Coin name, up to 32 characters."),
+  ticker: z.string().regex(/^[A-Za-z0-9]{1,10}$/).describe("Ticker, 1-10 letters or digits, without the $."),
+  description: z.string().max(500).optional(),
+  image_url: z.string().url().max(200).optional().describe("https URL of the coin's image, put in the prepared metadata."),
+  metadata_uri: z.string().url().max(200).optional().describe("https URL of the coin's hosted metadata JSON."),
+  website: z.string().url().max(200).optional(),
+  x: z.string().url().max(200).optional().describe("https://x.com/... link"),
+  telegram: z.string().url().max(200).optional().describe("https://t.me/... link"),
+  fee_mode: z.enum(["classic", "rewards"]).describe(`classic: ${FEE_MODES.classic.summary} rewards: ${FEE_MODES.rewards.summary}`),
+  creator_lock_pct: z
+    .number()
+    .int()
+    .min(CREATOR_LOCK.minPct)
+    .max(CREATOR_LOCK.maxPct)
+    .optional()
+    .describe("rewards only: lock this % of supply for the creator (7-day cliff after graduation, then 30 days linear)."),
+  dev_buy_sol: z.number().min(0).max(maxSol).optional().describe(`SOL for the creator's first buy, in the same transaction. At most ${maxSol}.`),
+  max_slippage_bps: z.number().int().min(0).max(MAX_SLIPPAGE_BPS).default(500).describe("Slippage for the first buy, in bps."),
+  idempotency_key: z
+    .string()
+    .min(8)
+    .max(128)
+    .describe("A unique, unguessable key for this coin (a random UUID). Reuse it on retries: it fixes the coin's mint address."),
+  confirm_launch: z.literal(true).describe("Set to true only after the user approved this launch."),
+});
+
+export interface LaunchArgs {
+  name: string;
+  ticker: string;
+  description?: string;
+  image_url?: string;
+  metadata_uri?: string;
+  website?: string;
+  x?: string;
+  telegram?: string;
+  fee_mode: "classic" | "rewards";
+  creator_lock_pct?: number;
+  dev_buy_sol?: number;
+  max_slippage_bps: number;
+  idempotency_key: string;
+}
+
+export async function buildLaunchFor(deps: Deps, w: PublicKey, args: LaunchArgs) {
+  const { chain, api } = deps;
+  const input = { wallet: w, name: args.name, ticker: args.ticker, mode: args.fee_mode };
+  const mintKey = deps.launchKeys.get(args.idempotency_key, launchFingerprint(chain.cluster, input));
+  const result = await buildLaunch(chain, chain.cluster === "mainnet" ? api : null, {
+    ...input,
+    description: args.description,
+    imageUrl: args.image_url,
+    metadataUri: args.metadata_uri,
+    website: args.website,
+    x: args.x,
+    telegram: args.telegram,
+    creatorLockPct: args.creator_lock_pct,
+    devBuyLamports: args.dev_buy_sol ? solToLamports(args.dev_buy_sol) : undefined,
+    slippageBps: args.max_slippage_bps,
+    mint: mintKey,
+  });
+  return { result, mint: mintKey.publicKey.toBase58() };
+}
+
+type LaunchResult = Awaited<ReturnType<typeof buildLaunch>>;
+
+/** What a launch result says besides its envelope, for build_launch and execute_launch. */
+export function launchDetails(deps: Deps, r: Extract<LaunchResult, { envelope: Envelope }>) {
+  const costs = r.envelope.transactions.length;
+  return {
+    status: r.status,
+    mint: r.mint,
+    poolId: r.poolId,
+    feeMode: { mode: r.mode, label: FEE_MODES[r.mode].label, platformConfig: r.platformId },
+    launchFee: r.launchFee,
+    devBuySol: r.devBuySol,
+    creatorLock: r.creatorLock ? { pct: r.creatorLock.pct, tokens: tokensNumber(r.creatorLock.tokens) } : null,
+    ...(deps.chain.cluster === "devnet" ? { note: "Devnet: higher.fun's API serves mainnet only, so no launch fee is charged." } : {}),
+    ...(costs > 1 ? { order: "Send the transactions in order; the lock assignment needs the coin to exist first." } : {}),
+  };
+}
+
+/** The claimable fees and, when there's something on-chain, the claim transactions. */
+export async function buildClaimFor(deps: Deps, w: PublicKey) {
+  const { api, chain } = deps;
+  const onMainnet = chain.cluster === "mainnet";
+  const [graduated, earnings] = onMainnet ? await Promise.all([graduatedCoinsOf(api, w), api.earnings(w.toBase58()).catch(() => null)]) : [[], null];
+  const result = await buildClaimCreatorFees(chain, w, graduated);
+  const offChainPayouts = earnings
+    ? {
+        paidOutSol: lamportsToSol(earnings.paidOut, 6),
+        pendingSol: lamportsToSol(earnings.pendingPayout, 6),
+        note: "Locked-LP fee share, paid by higher.fun to the creator's wallet. Nothing to sign.",
+      }
+    : null;
+  return { result, offChainPayouts };
+}
+
 export function registerTransactionTools(server: McpServer, deps: Deps) {
   const { api, chain, siteUrl } = deps;
   const onMainnet = chain.cluster === "mainnet";
@@ -140,32 +273,12 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
         "approved this exact trade (coin, side, amount, slippage). The transaction is checked instruction by instruction, " +
         "simulated, and returned as base64 with a plain-language summary and a sign_url for the user to review and sign in " +
         "their own wallet. Highwire never signs and never needs a private key.",
-      inputSchema: {
-        wallet: wallet.describe("The wallet that will sign and pay (public key only)."),
-        mint,
-        side,
-        sol,
-        tokens,
-        max_slippage_bps: z.number().int().min(0).max(MAX_SLIPPAGE_BPS).describe("Slippage tolerance in bps, at most 1500 (15%)."),
-        max_sol: z
-          .number()
-          .positive()
-          .max(maxSol)
-          .describe(`Cap: a buy may spend at most this much SOL; a sell may return at most this much. At most ${maxSol}.`),
-        confirm_trade: z.literal(true).describe("Set to true only after the user approved this exact trade."),
-      },
+      inputSchema: { wallet: wallet.describe("The wallet that will sign and pay (public key only)."), ...tradeShape(maxSol) },
       annotations: { title: "Build a trade (unsigned)", ...BUILD },
     },
     (args) =>
       runResult(async () => {
-        const built = await buildTrade(chain, {
-          wallet: new PublicKey(args.wallet),
-          mint: new PublicKey(args.mint),
-          side: args.side,
-          amountIn: tradeAmount(args),
-          slippageBps: args.max_slippage_bps,
-          maxLamports: solToLamports(args.max_sol),
-        });
+        const built = await buildTradeFor(deps, new PublicKey(args.wallet), args);
         return envelopeResult(built.envelope, siteUrl, { quote: summarizeQuote(built.quote) });
       }),
   );
@@ -182,71 +295,19 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
         "to host first. Reuse the same idempotency_key on retries: it keeps the same mint, so the coin (and its fee) can only " +
         "happen once, on any server instance. Set confirm_launch to true only after the user approved the launch, its cost " +
         "and its fee mode. Returns the transactions and a sign_url for the user's wallet.",
-      inputSchema: {
-        wallet: wallet.describe("The creator's wallet, which signs and pays (public key only)."),
-        name: z.string().min(1).max(32).describe("Coin name, up to 32 characters."),
-        ticker: z.string().regex(/^[A-Za-z0-9]{1,10}$/).describe("Ticker, 1-10 letters or digits, without the $."),
-        description: z.string().max(500).optional(),
-        image_url: z.string().url().max(200).optional().describe("https URL of the coin's image, put in the prepared metadata."),
-        metadata_uri: z.string().url().max(200).optional().describe("https URL of the coin's hosted metadata JSON."),
-        website: z.string().url().max(200).optional(),
-        x: z.string().url().max(200).optional().describe("https://x.com/... link"),
-        telegram: z.string().url().max(200).optional().describe("https://t.me/... link"),
-        fee_mode: z.enum(["classic", "rewards"]).describe(`classic: ${FEE_MODES.classic.summary} rewards: ${FEE_MODES.rewards.summary}`),
-        creator_lock_pct: z
-          .number()
-          .int()
-          .min(CREATOR_LOCK.minPct)
-          .max(CREATOR_LOCK.maxPct)
-          .optional()
-          .describe("rewards only: lock this % of supply for the creator (7-day cliff after graduation, then 30 days linear)."),
-        dev_buy_sol: z.number().min(0).max(maxSol).optional().describe(`SOL for the creator's first buy, in the same transaction. At most ${maxSol}.`),
-        max_slippage_bps: z.number().int().min(0).max(MAX_SLIPPAGE_BPS).default(500).describe("Slippage for the first buy, in bps."),
-        idempotency_key: z
-          .string()
-          .min(8)
-          .max(128)
-          .describe("A unique, unguessable key for this coin (a random UUID). Reuse it on retries: it fixes the coin's mint address."),
-        confirm_launch: z.literal(true).describe("Set to true only after the user approved this launch."),
-      },
+      inputSchema: { wallet: wallet.describe("The creator's wallet, which signs and pays (public key only)."), ...launchShape(maxSol) },
       annotations: { title: "Build a coin launch (unsigned)", ...BUILD },
     },
     (args) =>
       runResult(async () => {
-        const w = new PublicKey(args.wallet);
-        const input = { wallet: w, name: args.name, ticker: args.ticker, mode: args.fee_mode };
-        const mintKey = deps.launchKeys.get(args.idempotency_key, launchFingerprint(chain.cluster, input));
-        const r = await buildLaunch(chain, onMainnet ? api : null, {
-          ...input,
-          description: args.description,
-          imageUrl: args.image_url,
-          metadataUri: args.metadata_uri,
-          website: args.website,
-          x: args.x,
-          telegram: args.telegram,
-          creatorLockPct: args.creator_lock_pct,
-          devBuyLamports: args.dev_buy_sol ? solToLamports(args.dev_buy_sol) : undefined,
-          slippageBps: args.max_slippage_bps,
-          mint: mintKey,
-        });
+        const { result: r, mint: mintAddress } = await buildLaunchFor(deps, new PublicKey(args.wallet), args);
         if (r.status === "needs_metadata") {
-          return jsonResult({ status: r.status, mint: mintKey.publicKey.toBase58(), metadata: r.metadata, next_step: r.nextStep });
+          return jsonResult({ status: r.status, mint: mintAddress, metadata: r.metadata, next_step: r.nextStep });
         }
         if (r.status === "already_launched") {
           return jsonResult({ status: r.status, mint: r.mint, url: r.url, note: "This idempotency key's coin already exists. Nothing to sign." });
         }
-        const costs = r.envelope.transactions.length;
-        return envelopeResult(r.envelope, siteUrl, {
-          status: r.status,
-          mint: r.mint,
-          poolId: r.poolId,
-          feeMode: { mode: r.mode, label: FEE_MODES[r.mode].label, platformConfig: r.platformId },
-          launchFee: r.launchFee,
-          devBuySol: r.devBuySol,
-          creatorLock: r.creatorLock ? { pct: r.creatorLock.pct, tokens: tokensNumber(r.creatorLock.tokens) } : null,
-          ...(chain.cluster === "devnet" ? { note: "Devnet: higher.fun's API serves mainnet only, so no launch fee is charged." } : {}),
-          ...(costs > 1 ? { order: "Send the transactions in order; the lock assignment needs the coin to exist first." } : {}),
-        });
+        return envelopeResult(r.envelope, siteUrl, launchDetails(deps, r));
       }),
   );
 
@@ -264,18 +325,7 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
     },
     (args) =>
       runResult(async () => {
-        const w = new PublicKey(args.wallet);
-        const [graduated, earnings] = onMainnet
-          ? await Promise.all([graduatedCoinsOf(api, w), api.earnings(args.wallet).catch(() => null)])
-          : [[], null];
-        const r = await buildClaimCreatorFees(chain, w, graduated);
-        const offChain = earnings
-          ? {
-              paidOutSol: lamportsToSol(earnings.paidOut, 6),
-              pendingSol: lamportsToSol(earnings.pendingPayout, 6),
-              note: "Locked-LP fee share, paid by higher.fun to the creator's wallet. Nothing to sign.",
-            }
-          : null;
+        const { result: r, offChainPayouts: offChain } = await buildClaimFor(deps, new PublicKey(args.wallet));
         if (!r.envelope) return jsonResult({ claimable: r.claimable, offChainPayouts: offChain, note: "Nothing to claim on-chain right now." });
         return envelopeResult(r.envelope, siteUrl, { claimable: r.claimable, offChainPayouts: offChain });
       }),
