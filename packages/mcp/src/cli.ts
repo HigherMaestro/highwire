@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { serverOptionsFromEnv } from "./env.js";
-import { createServer, VERSION } from "./server.js";
+import { serverOptionsFromEnv } from "./env.ts";
+import { createServer, VERSION } from "./server.ts";
 
 const args = process.argv.slice(2);
 if (args.includes("--version")) {

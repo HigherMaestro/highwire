@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { coinUrl, FEE_MODES, HIGH_MINT, type HigherApi, lamportsToSol, MAINNET, SITE_URL } from "highwire-core";
-import { run } from "../result.js";
-import { READ_ONLY, type Deps } from "./shared.js";
+import { run } from "../result.ts";
+import { READ_ONLY, type Deps } from "./shared.ts";
 
 export async function platformInfo(api: HigherApi) {
   const [fee, price] = await Promise.allSettled([api.launchFee(), api.solPrice()]);

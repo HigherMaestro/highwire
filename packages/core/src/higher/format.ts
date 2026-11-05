@@ -1,5 +1,5 @@
-import type { Candle, ChatMessage, Coin, CoinDetail, CoinSafety, Comment, Holder, Trade } from "./api.js";
-import { FEE_MODES, KNOWN_ACCOUNTS, LAMPORTS_PER_SOL, TOKEN_DECIMALS, coinUrl } from "./constants.js";
+import type { Candle, ChatMessage, Coin, CoinDetail, CoinSafety, Comment, Holder, Trade } from "./api.ts";
+import { FEE_MODES, KNOWN_ACCOUNTS, LAMPORTS_PER_SOL, TOKEN_DECIMALS, coinUrl } from "./constants.ts";
 
 // Turns raw API rows into what an agent can read at a glance: SOL instead of
 // lamports, whole tokens instead of base units, percentages instead of bps.

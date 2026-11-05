@@ -1,5 +1,5 @@
-import { request, type HttpConfig, type Query } from "../lib/http.js";
-import type { FeeMode } from "./constants.js";
+import { request, type HttpConfig, type Query } from "../lib/http.ts";
+import type { FeeMode } from "./constants.ts";
 
 // Typed client for the public, read-only routes of https://api.higher.fun.
 // Amounts are strings: SOL amounts in lamports, token amounts in base units

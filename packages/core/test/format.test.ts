@@ -7,8 +7,8 @@ import {
   lamportsToSol,
   looksLikeImpersonation,
   summarizeHolder,
-} from "../src/higher/format.js";
-import { MAINNET } from "../src/higher/constants.js";
+} from "../src/higher/format.ts";
+import { MAINNET } from "../src/higher/constants.ts";
 
 test("lamportsToSol and baseToTokens convert units", () => {
   assert.equal(lamportsToSol("85000000000"), 85);

@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { bpsToPct, coinUrl, evaluateRisk, summarizeSafety } from "highwire-core";
-import { run } from "../result.js";
-import { READ_ONLY, mint, type Deps } from "./shared.js";
+import { run } from "../result.ts";
+import { READ_ONLY, mint, type Deps } from "./shared.ts";
 
 export function registerSafetyTools(server: McpServer, { api, rpc }: Deps) {
   server.registerTool(

@@ -1,11 +1,11 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createHttpConfig, DEFAULT_API_URL, DEFAULT_RPC_URL, HigherApi, SolanaRpc, summarizeCoinDetail } from "highwire-core";
-import { registerPrompts } from "./prompts.js";
-import { registerMarketTools } from "./tools/market.js";
-import { platformInfo, registerPlatformTools } from "./tools/platform.js";
-import { registerProfileTools } from "./tools/profiles.js";
-import { registerSafetyTools } from "./tools/safety.js";
-import type { Deps } from "./tools/shared.js";
+import { registerPrompts } from "./prompts.ts";
+import { registerMarketTools } from "./tools/market.ts";
+import { platformInfo, registerPlatformTools } from "./tools/platform.ts";
+import { registerProfileTools } from "./tools/profiles.ts";
+import { registerSafetyTools } from "./tools/safety.ts";
+import type { Deps } from "./tools/shared.ts";
 
 export const VERSION = "0.1.0";
 

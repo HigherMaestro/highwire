@@ -1,4 +1,4 @@
-export { serverOptionsFromEnv } from "./env.js";
+export { serverOptionsFromEnv } from "./env.ts";
 export {
   CORS_HEADERS,
   DEFAULT_RATE_LIMIT,
@@ -6,5 +6,5 @@ export {
   createRateLimiter,
   type HttpHandlerOptions,
   type RateLimit,
-} from "./http.js";
-export { INSTRUCTIONS, VERSION, createDeps, createServer, type ServerOptions } from "./server.js";
+} from "./http.ts";
+export { INSTRUCTIONS, VERSION, createDeps, createServer, type ServerOptions } from "./server.ts";

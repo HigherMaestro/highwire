@@ -15,8 +15,8 @@ import {
   UNTRUSTED_NOTE,
   WINDOWS,
 } from "highwire-core";
-import { run } from "../result.js";
-import { READ_ONLY, cursor, mint, solUsd, type Deps } from "./shared.js";
+import { run } from "../result.ts";
+import { READ_ONLY, cursor, mint, solUsd, type Deps } from "./shared.ts";
 
 export function registerMarketTools(server: McpServer, { api }: Deps) {
   server.registerTool(

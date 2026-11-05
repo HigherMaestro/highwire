@@ -1,4 +1,4 @@
-import type { ServerOptions } from "./server.js";
+import type { ServerOptions } from "./server.ts";
 
 type Env = Record<string, string | undefined>;
 

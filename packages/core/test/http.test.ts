@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createHttpConfig, request } from "../src/lib/http.js";
-import { NotFoundError, ServerError, ValidationError } from "../src/lib/errors.js";
+import { createHttpConfig, request } from "../src/lib/http.ts";
+import { NotFoundError, ServerError, ValidationError } from "../src/lib/errors.ts";
 
 function fakeFetch(responses: Array<{ status: number; body: unknown; headers?: Record<string, string> }>) {
   const calls: string[] = [];

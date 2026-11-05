@@ -1,6 +1,6 @@
-import type { CoinDetail } from "./higher/api.js";
-import { bpsToPct } from "./higher/format.js";
-import type { MintInfo } from "./solana/rpc.js";
+import type { CoinDetail } from "./higher/api.ts";
+import { bpsToPct } from "./higher/format.ts";
+import type { MintInfo } from "./solana/rpc.ts";
 
 // The verdict combines on-chain mint and freeze authority, top-10 holder
 // concentration (caution at 30%, danger at 60%) and higher.fun's own safety data.

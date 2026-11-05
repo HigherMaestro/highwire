@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { CoinDetail } from "../src/higher/api.js";
-import { evaluateRisk } from "../src/risk.js";
+import type { CoinDetail } from "../src/higher/api.ts";
+import { evaluateRisk } from "../src/risk.ts";
 
 const coin = (over: Partial<CoinDetail> = {}): CoinDetail => ({
   mint: "M",

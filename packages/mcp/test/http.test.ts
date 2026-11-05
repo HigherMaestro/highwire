@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { createHttpHandler, createRateLimiter, type HttpHandlerOptions } from "../src/http.js";
-import { ALL_TOOLS, FAKE_OPTIONS } from "./fake.js";
+import { createHttpHandler, createRateLimiter, type HttpHandlerOptions } from "../src/http.ts";
+import { ALL_TOOLS, FAKE_OPTIONS } from "./fake.ts";
 
 const URL_ = "https://highwire.test/mcp";
 

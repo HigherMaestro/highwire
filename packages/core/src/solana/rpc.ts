@@ -1,4 +1,4 @@
-import { HigherError, NetworkError, TimeoutError } from "../lib/errors.js";
+import { HigherError, NetworkError, TimeoutError } from "../lib/errors.ts";
 
 // The few Solana JSON-RPC reads the server needs, over plain fetch so the
 // read-only server carries no Solana SDK.

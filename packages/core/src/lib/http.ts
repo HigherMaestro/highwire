@@ -9,7 +9,7 @@ import {
   TimeoutError,
   ValidationError,
   type ErrorDetails,
-} from "./errors.js";
+} from "./errors.ts";
 
 /** Never wait longer than this between attempts, whatever Retry-After says. */
 const MAX_WAIT_MS = 10_000;

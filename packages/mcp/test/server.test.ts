@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createServer } from "../src/server.js";
-import { ALL_TOOLS, FAKE_OPTIONS } from "./fake.js";
+import { createServer } from "../src/server.ts";
+import { ALL_TOOLS, FAKE_OPTIONS } from "./fake.ts";
 
 async function connect() {
   const server = createServer(FAKE_OPTIONS);

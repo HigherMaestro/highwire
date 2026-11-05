@@ -1,5 +1,5 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { createServer, type ServerOptions } from "./server.js";
+import { createServer, type ServerOptions } from "./server.ts";
 
 // Stateless by design: a fresh server and transport per POST, no session IDs,
 // JSON responses instead of SSE, and 405 for GET and DELETE. Nothing is shared
