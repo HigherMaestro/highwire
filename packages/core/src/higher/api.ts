@@ -202,8 +202,9 @@ export class HigherApi {
   comments(mint: string, cursor?: string) {
     return this.get<Page<Comment>>(`/coins/${enc(mint)}/comments`, { cursor });
   }
+  /** The home page's featured coin, or null when higher.fun features none (the route answers `null`). */
   highest() {
-    return this.get<Coin & { highest?: boolean }>("/coins/highest");
+    return this.get<(Coin & { highest?: boolean }) | null>("/coins/highest");
   }
   tape() {
     return this.get<Page<TapeEntry>>("/tape");

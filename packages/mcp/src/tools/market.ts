@@ -219,6 +219,7 @@ export function registerMarketTools(server: McpServer, { api }: Deps) {
     () =>
       run(async () => {
         const [coin, usd] = await Promise.all([api.highest(), solUsd(api)]);
+        if (!coin) return { featured: null, note: "higher.fun isn't featuring a coin right now. Try get_top_coins or list_coins." };
         return summarizeCoin(coin, usd);
       }),
   );

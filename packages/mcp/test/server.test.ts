@@ -150,3 +150,10 @@ test("the instructions tell agents to hand over the sign link and never ask for 
   assert.match(text, /sign_url/);
   assert.match(text, /never needs a private key or seed phrase: never ask for one/);
 });
+
+test("get_featured_coin says so when higher.fun features nothing", async () => {
+  const client = await connect();
+  const res = await client.callTool({ name: "get_featured_coin", arguments: {} });
+  assert.ok(!res.isError);
+  assert.equal(parse(res).featured, null);
+});

@@ -41,7 +41,7 @@ await call("get_coin_comments", { mint: HIGH }, (o) => `${o.comments.length} com
 await call("get_trade_tape", {}, (o) => `${o.events.length} events`);
 await call("get_top_coins", { window: "24h" }, (o) => o.coins.slice(0, 3).map((c: any) => `#${c.rank} $${c.ticker}`).join(", "));
 await call("get_leaderboard", { kind: "creators", window: "7d" }, (o) => `${o.rows.length} creators`);
-await call("get_featured_coin", {}, (o) => `$${o.ticker}`);
+await call("get_featured_coin", {}, (o) => (o.featured === null ? "none featured right now" : `$${o.ticker}`));
 await call("get_chat", {}, (o) => `${o.messages.length} messages, ${o.messages.filter((m: any) => m.flags).length} flagged`);
 await call("get_wallet_profile", { wallet: "9qfu1eHi6aWrPGKYTbDcKcFbYBPj2VexzfWJYVvJ48E1" }, (o) => `${o.coinsCreated.length} coins, ${o.locks.length} locks`);
 await call("check_ticker", { ticker: "HIGH" }, (o) => `HIGH available: ${o.available}`);

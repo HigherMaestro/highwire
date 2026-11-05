@@ -6,6 +6,9 @@ export const fakeFetch = (async (input: string | URL | Request) => {
     return json({ jsonrpc: "2.0", id: 1, result: { value: null } });
   }
   switch (url.pathname) {
+    case "/coins/highest":
+      // higher.fun answers null when nothing is featured.
+      return json(null);
     case "/sol-price":
       return json({ usd: 100 });
     case "/launch-fee":

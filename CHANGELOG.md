@@ -22,7 +22,8 @@ Sign from any chat: the hosted server builds transactions, and highwire.fun/sign
 - **Attribution memo.** Every built transaction carries one SPL Memo instruction, `highwire`.
 - **Browser-safe core.** `highwire-core/browser` exports the envelope format, sign links, the decoder and the review,
   without Node built-ins or Raydium's SDK.
-- **Fixes.** The decoder now names the right pool and accounts for a CPMM `collect_creator_fee`.
+- **Fixes.** The decoder now names the right pool and accounts for a CPMM `collect_creator_fee`, and
+  `get_featured_coin` answers `featured: null` instead of failing when higher.fun features nothing.
 - **Pages.** /terms and /privacy (drafts, pending legal review) and this changelog.
 
 ## 0.2.0 (2026-11-05)
