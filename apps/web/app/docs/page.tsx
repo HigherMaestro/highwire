@@ -39,7 +39,13 @@ const RECIPES: { title: string; ask: string; prompt: string; steps: string[] }[]
     title: "Plan a launch",
     ask: "Help me plan a higher.fun launch for a cat coin. Old school or New school?",
     prompt: "plan_launch",
-    steps: ["get_platform_info for the fee modes and launch fee", "check_ticker for each idea"],
+    steps: ["get_platform_info for the fee modes and launch fee", "check_ticker for each idea", "build_launch once you approve"],
+  },
+  {
+    title: "Buy a coin",
+    ask: "Buy 0.1 SOL of $TICKER on higher.fun for my wallet <address>, with 2% slippage.",
+    prompt: "coin_due_diligence",
+    steps: ["rug_check and quote_trade, shown to you", "build_trade after you approve", "you open sign_url and sign in your wallet"],
   },
 ];
 
@@ -47,6 +53,8 @@ const ERRORS: [string, string][] = [
   ["not_found", "Unknown mint, wallet or coin. Check the address, or use search_coins."],
   ["bad_request", "A parameter was out of range or the wrong shape. The message says which."],
   ["rate_limited", "Too many requests. Wait a few seconds, then retry once."],
+  ["simulation_failed", "The built transaction would fail on-chain: usually too little SOL or tokens, or the price moved. Quote again."],
+  ["unsafe_transaction", "A safety check on the built transaction failed. Nothing to sign; please report it."],
   ["unavailable", "higher.fun or the Solana RPC didn't answer. Retry later."],
   ["internal_error", "Something unexpected. Please open an issue on GitHub."],
 ];
@@ -63,6 +71,7 @@ function ToolDoc({ tool }: { tool: ToolInfo }) {
         <span className="badges">
           {tool.hosted ? <span className="badge">hosted</span> : <span className="badge">local only</span>}
           {tool.readOnly ? <span className="badge">read-only</span> : <span className="badge badge-warn">builds a transaction you sign</span>}
+          {tool.builds ? <span className="badge">returns a sign link</span> : null}
         </span>
       </div>
       <p className="muted">{tool.description}</p>
@@ -109,6 +118,7 @@ export default async function Docs() {
   const groups = groupTools(catalog.tools);
   const toc = [
     ["connect", "Connect"],
+    ["signing", "Signing"],
     ["tools", `Tools (${catalog.tools.length})`],
     ["prompts", `Prompts (${catalog.prompts.length})`],
     ["resources", `Resources (${catalog.resources.length})`],
@@ -139,8 +149,8 @@ export default async function Docs() {
               <h1>Highwire docs</h1>
               <p className="lead">
                 Highwire is an MCP server for <a href="https://higher.fun">higher.fun</a>. It gives agents{" "}
-                {catalog.tools.filter((t) => t.hosted).length} hosted read-only tools,{" "}
-                {catalog.tools.filter((t) => !t.hosted).length} local tools that quote and build transactions you sign,{" "}
+                {catalog.tools.filter((t) => t.hosted).length} hosted tools, of which{" "}
+                {catalog.tools.filter((t) => t.builds).length} build transactions you sign in your own wallet,{" "}
                 {catalog.prompts.length} prompts and {catalog.resources.length} resources. Everything below is generated
                 from the running server.
               </p>
@@ -149,6 +159,45 @@ export default async function Docs() {
             <section id="connect" aria-labelledby="connect-h">
               <h2 id="connect-h">Connect</h2>
               <Connect />
+            </section>
+
+            <section id="signing" aria-labelledby="signing-h">
+              <h2 id="signing-h">Signing</h2>
+              <p className="muted">
+                Highwire never signs and never holds a key. A build tool returns an unsigned transaction and a{" "}
+                <code>sign_url</code>, a link to <a href="/sign">highwire.fun/sign</a>. Your agent gives you the link; you open
+                it and sign in your own wallet.
+              </p>
+              <ol className="plain">
+                <li>
+                  <strong>The link carries the transaction.</strong> It rides in the part after <code>#</code>, which browsers
+                  never send to a server, so Highwire never sees it. The page sends nothing to Highwire.
+                </li>
+                <li>
+                  <strong>The page checks it again.</strong> It decodes every instruction from the transaction itself, not from
+                  the link&apos;s description, and refuses anything Highwire doesn&apos;t build: a program off the allow-list,
+                  SOL sent to someone else, another platform, another fee payer.
+                </li>
+                <li>
+                  <strong>You see what it does.</strong> What you spend and receive, the fees, the fee payer, when it expires,
+                  and each transaction in order (a launch with a creator lock has two).
+                </li>
+                <li>
+                  <strong>It simulates in your browser,</strong> against a Solana RPC called directly, and shows the change to
+                  your SOL balance.
+                </li>
+                <li>
+                  <strong>Your wallet signs.</strong> Connect Phantom, Solflare, Backpack or any Wallet Standard wallet. The page
+                  only signs with the fee payer&apos;s account, then sends, confirms, and links to Solscan and the coin on
+                  higher.fun.
+                </li>
+              </ol>
+              <p className="muted">
+                A link expires with its blockhash, about a minute after it was built. If it has expired, ask your agent to build
+                it again; for a launch, the same <code>idempotency_key</code> keeps the same coin, so it can&apos;t be created or
+                paid for twice. Every transaction Highwire builds also carries a memo, <code>highwire</code>, so its use can be
+                counted on-chain.
+              </p>
             </section>
 
             <section id="tools" aria-labelledby="tools-h">
@@ -238,8 +287,8 @@ export default async function Docs() {
                   GET returns 405.
                 </li>
                 <li>
-                  It allows 60 requests a minute per IP. For heavy use, run it locally and point{" "}
-                  <code>SOLANA_RPC_URL</code> at your own RPC.
+                  Each IP gets 60 units a minute: a build tool call costs 5, anything else 1. For heavy use, run it locally
+                  and point <code>SOLANA_RPC_URL</code> at your own RPC.
                 </li>
                 <li>
                   A failed call comes back with <code>isError</code> set and a JSON body of <code>error</code>,{" "}
@@ -280,7 +329,16 @@ export default async function Docs() {
                 <dt>Opening the URL in a browser shows an error.</dt>
                 <dd>That&apos;s expected. The endpoint only answers MCP clients, which POST to it.</dd>
                 <dt>I get rate_limited.</dt>
-                <dd>You hit 60 requests a minute. Wait a moment, or run the server locally.</dd>
+                <dd>You used the minute&apos;s 60 units (a build costs 5). Wait a moment, or run the server locally.</dd>
+                <dt>The sign page says the link has expired.</dt>
+                <dd>
+                  Links last about a minute. Ask your agent to build the transaction again and open the new link straight
+                  away.
+                </dd>
+                <dt>The sign page doesn&apos;t list my wallet.</dt>
+                <dd>
+                  Unlock the wallet extension and reload. On a phone, open the link in your wallet app&apos;s own browser.
+                </dd>
                 <dt>rug_check reports an RPC timeout.</dt>
                 <dd>
                   The on-chain check uses a public Solana RPC, which is sometimes busy. The rest of the check still runs.

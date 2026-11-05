@@ -14,7 +14,8 @@ export function Connect() {
     <div className="connect">
       <CopyCommand label="Highwire MCP URL" code={MCP_URL} />
       <p className="muted small connect-note">
-        No sign-in and no key. The server is read-only, stateless, and allows 60 requests a minute per IP.
+        No sign-in and no key. The server is stateless, never signs, and allows 60 units a minute per IP (a build costs
+        5). Build tools hand back a link to sign in your own wallet.
       </p>
       <div className="cards">
         <div className="card">
@@ -70,8 +71,8 @@ export function Connect() {
         <div className="card">
           <h3>Run it locally</h3>
           <p className="muted small">
-            The local server adds the trading tools: quotes, positions, and trades, launches and fee claims to sign. The
-            npm package is on its way; until then, build from source:
+            The same tools on your own computer, with your own RPC and no shared rate limit. The npm package is on its
+            way; until then, build from source:
           </p>
           <CopyCommand label="Build and add the local server" code={LOCAL_BUILD(REPO_URL)} multiline />
         </div>

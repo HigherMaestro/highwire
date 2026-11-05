@@ -1,7 +1,9 @@
 # highwire-mcp
 
-The MCP server that lets AI agents use [higher.fun](https://higher.fun), the open-source Solana launchpad. 17 read-only
-tools for launches, coins, trades, holders, creators and rug checks, plus 4 prompts and 2 resources. No keys needed.
+The MCP server that lets AI agents use [higher.fun](https://higher.fun), the open-source Solana launchpad. 22 tools: 17
+for launches, coins, trades, holders, creators and rug checks, and 5 that quote and build unsigned trades, launches and
+creator fee claims, each with a link to sign in your own wallet on highwire.fun. Plus 4 prompts and 2 resources. No
+keys needed, and it never signs.
 
 ```bash
 claude mcp add highwire -- npx -y highwire-mcp

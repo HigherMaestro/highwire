@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createServer } from "highwire-mcp";
+import { HOSTED_TRANSACTION_TOOLS, createServer } from "highwire-mcp";
 
 // Everything the site says about the server comes from the server itself, so the
 // pages can't drift from what an agent actually sees. No network involved.
@@ -21,6 +21,8 @@ export interface ToolInfo {
   readOnly: boolean;
   /** Served by the hosted endpoint at /mcp. The rest run only on the local server. */
   hosted: boolean;
+  /** Builds an unsigned transaction for the user's wallet (and returns a sign link). */
+  builds: boolean;
   params: Param[];
 }
 
@@ -103,8 +105,8 @@ async function connect(opts: Parameters<typeof createServer>[0]) {
 }
 
 async function load(): Promise<Catalog> {
-  // The full local server, and the hosted one, which leaves the transaction tools off.
-  const [client, hostedClient] = await Promise.all([connect({}), connect({ transactionTools: false })]);
+  // The full local server, and the hosted one as the /mcp route configures it.
+  const [client, hostedClient] = await Promise.all([connect({}), connect({ transactionTools: HOSTED_TRANSACTION_TOOLS, hosted: true })]);
   try {
     const [{ tools }, { prompts }, { resources }, { resourceTemplates }, hostedTools] = await Promise.all([
       client.listTools(),
@@ -122,6 +124,7 @@ async function load(): Promise<Catalog> {
         description: t.description ?? "",
         readOnly: t.annotations?.readOnlyHint === true,
         hosted: hosted.has(t.name),
+        builds: t.annotations?.readOnlyHint !== true,
         params: paramsOf(t.inputSchema as Parameters<typeof paramsOf>[0]),
       })),
       prompts: prompts.map((p) => ({
@@ -168,7 +171,7 @@ export const TOOL_GROUPS: { id: string; title: string; blurb: string; tools: str
   {
     id: "trade",
     title: "Trade and launch",
-    blurb: "Quotes, positions, and transactions you sign in your own wallet. Local server only for now.",
+    blurb: "Quotes, positions, and transactions you review and sign in your own wallet on highwire.fun/sign.",
     tools: ["quote_trade", "get_wallet_positions", "build_trade", "build_launch", "build_claim_creator_fees"],
   },
 ];

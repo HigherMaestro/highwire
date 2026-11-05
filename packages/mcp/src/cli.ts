@@ -18,8 +18,10 @@ Environment (all optional):
   HIGHER_API_URL           default https://api.higher.fun
   HIGHER_TIMEOUT_MS        default 15000
   HIGHER_RETRIES           default 2
+  HIGHWIRE_SITE_URL        default https://highwire.fun (where sign_url points)
+  HIGHWIRE_LAUNCH_SECRET   derive launch mints from this secret instead of keeping them in memory
 
-Highwire never signs: build tools return unsigned transactions for your own wallet.`);
+Highwire never signs: build tools return unsigned transactions and a sign_url for your own wallet.`);
   process.exit(0);
 }
 

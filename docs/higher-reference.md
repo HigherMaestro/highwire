@@ -42,6 +42,9 @@ calls them Old school and New school. The coin API returns `feeMode`.
 
 The bundle also enforces caps: platform fee ≤ 100 bps and creator fee ≤ 50 bps.
 
+A PlatformConfig account starts with an 8-byte discriminator and the u64 `epoch`, so `platformClaimFeeWallet` is the
+32 bytes at offset 16. The sign page reads it there, from the browser, to check a launch fee's destination.
+
 On-chain (decoded 2026-11-05) the two platform configs say the same: New school `feeRate` 5000 and `creatorFeeRate`
 2500 (per million), LP split `platformScale` 300000 / `creatorScale` 0 / `burnScale` 700000; Old school fees 0, LP
 burn 1000000, `platformVestingScale` 1000000 (its 1% reserve vests to higher.fun) and `restrictCurveParam` 1 (a curve

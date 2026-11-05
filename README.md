@@ -8,9 +8,10 @@ Live at [highwire.fun](https://highwire.fun). Follow [@Highwiredotfun](https://x
 Agents can scan launches and trending coins, pull a coin's trades, holders, candles and safety data, look up creators
 and their earnings, and run a rug check, all from the public higher.fun API and Solana RPC. No keys needed.
 
-**v0.2 builds transactions, unsigned.** Run locally, Highwire quotes trades and builds buys, sells, coin launches and
-creator fee claims as unsigned transactions for the user's own wallet to sign. It never signs, never holds a key and
-never sends anything. The hosted endpoint stays read-only. See [docs/ROADMAP.md](docs/ROADMAP.md).
+**Sign from any chat.** Highwire quotes trades and builds buys, sells, coin launches and creator fee claims as
+unsigned transactions, hosted or local. Each comes with a `sign_url`: open it, and [highwire.fun/sign](https://highwire.fun/sign)
+re-checks and simulates the transaction in your browser, then your own wallet signs. Highwire never signs, never holds
+a key and never sends anything. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Tools
 
@@ -34,7 +35,7 @@ never sends anything. The hosted endpoint stays read-only. See [docs/ROADMAP.md]
 | `check_ticker` | Whether a ticker is free |
 | `rug_check` | On-chain authorities plus higher.fun's safety data, rolled into a verdict |
 
-**Transactions (local server only):**
+**Transactions (hosted and local):**
 
 | Tool | What it does |
 |---|---|
@@ -45,7 +46,14 @@ never sends anything. The hosted endpoint stays read-only. See [docs/ROADMAP.md]
 | `build_claim_creator_fees` | Claim curve creator fees and graduated pools' creator fees; reports the off-chain locked-LP payouts |
 
 Every build tool decodes its own transactions into plain-language lines, checks them the way higher.fun's site does,
-and simulates them. The output format is in [docs/unsigned-transactions.md](docs/unsigned-transactions.md).
+simulates them, tags each with a `highwire` memo, and returns a `sign_url`. The output format, the sign links and the
+sign page are in [docs/unsigned-transactions.md](docs/unsigned-transactions.md).
+
+**The sign page** ([highwire.fun/sign](https://highwire.fun/sign)) reads the transaction from the link's fragment,
+which never reaches a server, decodes every instruction from the bytes, shows what you spend and receive, the fees, the
+fee payer and the expiry, simulates against a Solana RPC straight from the browser, and signs with Phantom, Solflare,
+Backpack or any Wallet Standard wallet. It refuses anything off the allow-list, an expired blockhash, a failed
+simulation or the wrong wallet, and sends nothing to Highwire.
 
 **Safety:**
 - Highwire never asks for, accepts or stores a private key or seed phrase. The user signs in their own wallet.
@@ -54,8 +62,11 @@ and simulates them. The output format is in [docs/unsigned-transactions.md](docs
   transaction that fails a check is never returned; one that fails simulation comes back as an error.
 - Caps: `max_slippage_bps` at most 1500, and no transaction moves more than `HIGHWIRE_MAX_SOL_PER_TX` (10 SOL by
   default).
-- A launch's new mint is generated per `idempotency_key` and kept in memory, so a retry reuses it and the coin (and
-  its fee) can only happen once. Restarting the server forgets the keys.
+- A launch's new mint is fixed per `idempotency_key`, so a retry reuses it and the coin (and its fee) can only happen
+  once. The local server keeps it in memory (a restart forgets it). The hosted endpoint keeps nothing: it derives the
+  mint with HMAC-SHA256 from `HIGHWIRE_LAUNCH_SECRET`, the key and the launch (cluster, wallet, name, ticker, fee mode),
+  so any serverless instance gives a retry the same mint, and once the coin exists a retry returns `already_launched`.
+  Reusing a key for a different coin gets a different mint.
 - higher.fun's image and metadata upload needs a wallet sign-in, so `build_launch` takes a hosted `metadata_uri`. Without
   one it returns the metadata JSON to host.
 
@@ -75,7 +86,8 @@ and simulates them. The output format is in [docs/unsigned-transactions.md](docs
 
 ### Hosted
 
-Nothing to install. The hosted server is read-only (the 17 research tools) and needs no key.
+Nothing to install, no key. The hosted server has all 22 tools; the build tools only return unsigned transactions and a
+sign link.
 
 **Claude Code**
 
@@ -93,7 +105,8 @@ claude mcp add --transport http highwire https://highwire.fun/mcp
 }
 ```
 
-The endpoint speaks stateless Streamable HTTP: POST JSON-RPC, get JSON back. It allows 60 requests a minute per IP.
+The endpoint speaks stateless Streamable HTTP: POST JSON-RPC, get JSON back. Each IP gets 60 units a minute: a build
+tool call costs 5, anything else 1.
 
 ### Local (stdio)
 
@@ -129,9 +142,14 @@ claude mcp add highwire -- npx -y highwire-mcp
 | `HIGHWIRE_MAX_SOL_PER_TX` | `10`: the most SOL one built transaction may spend or return |
 | `HIGHER_TIMEOUT_MS` | `15000` |
 | `HIGHER_RETRIES` | `2` |
-| `HIGHWIRE_RATE_LIMIT` | `60` requests a minute per IP (hosted endpoint only) |
+| `HIGHWIRE_SITE_URL` | `https://highwire.fun`: where `sign_url` points; `http://localhost:3000` for a local site |
+| `HIGHWIRE_LAUNCH_SECRET` | unset: launch mints are kept in memory. Set, they are derived from it (the hosted endpoint always derives) |
+| `HIGHWIRE_RATE_LIMIT` | `60` units a minute per IP; a build costs 5 (hosted endpoint only) |
 
-The public RPC is rate-limited. For anything beyond light use, set `SOLANA_RPC_URL` to your own (Helius, Triton, …).
+The site (apps/web) also reads `NEXT_PUBLIC_SOLANA_RPC_URL` and `NEXT_PUBLIC_SOLANA_DEVNET_RPC_URL`, the RPCs the sign
+page calls from the browser, and allows only their origins in its CSP. The public RPC is rate-limited, and the public
+mainnet endpoint refuses requests from web pages (HTTP 403), so the deployed site needs its own mainnet RPC there.
+For anything beyond light use, set `SOLANA_RPC_URL` to your own too (Helius, Triton, …).
 
 ## Repository
 
@@ -141,7 +159,7 @@ An npm workspaces monorepo.
 |---|---|
 | [packages/core](packages/core) | `highwire-core`: the higher.fun API client, constants, unit formatting, the rug check, and the quote and transaction builders |
 | [packages/mcp](packages/mcp) | `highwire-mcp`: the MCP server, the `highwire` stdio bin and a stateless HTTP handler |
-| [apps/web](apps/web) | The Next.js site, which also serves the hosted MCP at `/mcp` and `GET /api/health` |
+| [apps/web](apps/web) | The Next.js site: the sign page at `/sign`, `/docs`, `/changelog`, `/terms`, `/privacy`, the hosted MCP at `/mcp` and `GET /api/health` |
 
 ## Development
 
@@ -160,8 +178,8 @@ Every command runs from the root and covers all workspaces.
 | `npm run dev` | Run the MCP server from source over stdio |
 | `npm run dev:web` | Run the site at http://localhost:3000, with the MCP at http://localhost:3000/mcp |
 | `npm test` | Unit, in-memory MCP and HTTP handler tests, offline |
-| `npm run simulate` | Build and simulate buys, sells, launches and claims on mainnet and devnet as public wallets; nothing is signed or sent |
-| `npm run smoke` | Call every tool over stdio, then start `next dev` and check `/`, `/api/health` and `/mcp` against the live API |
+| `npm run simulate` | Build and simulate buys, sells, launches and claims on mainnet and devnet as public wallets, check each `sign_url` decodes, and print one for a buy; nothing is signed or sent |
+| `npm run smoke` | Call every tool over stdio, then start `next dev` and check the pages, `/sign`'s headers, `/api/health` and `/mcp` against the live API |
 | `npm run typecheck` | Type-check every workspace |
 | `npm run build` | Compile the packages to `dist/` and build the site |
 
@@ -174,7 +192,10 @@ SMOKE_URL=https://highwire.fun npm run smoke -w highwire-web
 ### Deploying
 
 The site runs on Vercel (project `highwire`, root directory `apps/web`, Node 22), and is deployed from the CLI. The
-project has no Git connection, so pushing to GitHub doesn't deploy. From the repo root:
+project has no Git connection, so pushing to GitHub doesn't deploy. Before deploying 0.3, set these in the project:
+`NEXT_PUBLIC_SOLANA_RPC_URL` (a mainnet RPC that accepts browser requests from highwire.fun; it is public, so use a key
+restricted to that origin), `SOLANA_RPC_URL` (the server-side RPC the build tools use), and `HIGHWIRE_LAUNCH_SECRET` (a
+long random string; changing it changes the mint of any launch still being retried). From the repo root:
 
 ```bash
 vercel deploy --prod --scope groovys-projects

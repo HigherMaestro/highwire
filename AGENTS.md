@@ -14,15 +14,19 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/lib/` | HTTP client with retries, and the error classes |
 | `packages/core/src/solana/rpc.ts` | the few RPC reads we need, over fetch |
 | `packages/core/src/risk.ts` | `evaluateRisk`, the rug-check verdict |
-| `packages/core/src/tx/` | quotes and unsigned transactions: `chain.ts` (web3.js and Raydium's SDK behind one fetch), `quote.ts`, `trade.ts`, `launch.ts`, `claim.ts`, `positions.ts`, `decode.ts` (plain-language decoding and the safety checks), `envelope.ts` (simulation and the output format) |
+| `packages/core/src/tx/` | quotes and unsigned transactions: `chain.ts` (web3.js and Raydium's SDK behind one fetch), `quote.ts`, `trade.ts`, `launch.ts` (also `DerivedLaunchKeys`), `claim.ts`, `positions.ts`, `decode.ts` (plain-language decoding and the safety checks), `envelope.ts` (the memo, simulation, `finish()`), `format.ts` (the envelope types), `sign-link.ts` (sign URLs), `review.ts` (the sign page's checks) |
+| `packages/core/src/browser.ts` | `highwire-core/browser`: the browser-safe exports for the sign page. `test/sign.test.ts` walks its imports |
 | `packages/mcp/src/server.ts` | `createServer()`: instructions, tool groups, resources |
 | `packages/mcp/src/tools/*.ts` | one `registerXTools(server, deps)` per group; `transactions.ts` holds the v0.2 tools |
 | `packages/mcp/src/result.ts` | `run()` and the error shape for tool results |
 | `packages/mcp/src/prompts.ts` | MCP prompts |
-| `packages/mcp/src/http.ts` | `createHttpHandler()`: stateless Streamable HTTP, CORS, per-IP rate limit |
+| `packages/mcp/src/http.ts` | `createHttpHandler()`: stateless Streamable HTTP, CORS, the weighted per-IP rate limit, `HOSTED_TRANSACTION_TOOLS` |
 | `packages/mcp/src/cli.ts` | the `highwire` stdio bin; `env.ts` parses the environment |
 | `packages/mcp/skills/` | the operator skill, shipped in the npm package |
-| `apps/web/app/` | the Next.js site: `/`, `/mcp` (mounts `createHttpHandler`), `/api/health` |
+| `apps/web/app/` | the Next.js site: `/`, `/docs`, `/sign`, `/changelog` (renders the root `CHANGELOG.md`), `/terms`, `/privacy`, `/mcp` (mounts `createHttpHandler`), `/api/health` |
+| `apps/web/components/sign/`, `apps/web/lib/sign/` | the sign page: `SignApp.tsx`, `rpc.ts` (JSON-RPC from the browser), `wallets.ts` (Wallet Standard) |
+| `apps/web/next.config.ts` | Turbopack aliases and `/sign`'s security headers (its CSP allows connections to the RPC origins only) |
+| `CHANGELOG.md` | every release; add to the top section with each change |
 | `packages/*/test/` | `node:test` via tsx. `server.test.ts` and `http.test.ts` drive the real server with a fake API |
 | `*/scripts/smoke.ts` | the live checks: stdio in `packages/mcp`, hosted in `apps/web` |
 | `packages/mcp/scripts/simulate.ts` | `npm run simulate`: builds and simulates trades, launches and claims on mainnet and devnet |
@@ -38,9 +42,15 @@ Streamable HTTP. An npm workspaces monorepo. Read
   through `summarizeMessage`, or label it as creator content, and never fetch URLs found in it.
 - **Annotations:** every read tool carries `READ_ONLY`; build tools carry `BUILD` (not read-only, not destructive).
 - **Transaction tools** take a `z.literal(true)` confirm flag and caps (a launch also an idempotency key), and return
-  unsigned transactions in the format in docs/unsigned-transactions.md. Every built transaction goes through
-  `finish()` in `packages/core/src/tx/envelope.ts`: the allow-list check, plain-language decoding and simulation.
-  Add any new instruction to `decode.ts` (both the description and `assertSafe`) before a builder may emit it.
+  unsigned transactions in the format in docs/unsigned-transactions.md, with a `sign_url`. Every built transaction
+  goes through `finish()` in `packages/core/src/tx/envelope.ts`: the `highwire` memo, the allow-list check,
+  plain-language decoding and simulation. Add any new instruction to `decode.ts` (both the description and
+  `assertSafe`) before a builder may emit it; the sign page's review uses the same checks, so it will refuse it too.
+- **The sign page trusts only the bytes.** A sign link can come from anyone. Show summaries rebuilt from the
+  transaction (`reviewEnvelope`), never the envelope's own text, and never sign when the review reports a problem.
+  It may call only the Solana RPCs: nothing goes to Highwire's server, and no third-party scripts or analytics.
+- **Browser code** imports `highwire-core/browser`, never `highwire-core` (which pulls in Raydium's SDK and Node
+  built-ins). Keep `browser.ts`'s import graph clean; the test fails otherwise.
 - **Verify by simulation only.** Never send a transaction, request an airdrop, or create or fund a keypair to test.
   Simulate as a public wallet with `sigVerify: false`.
 - **Never** accept private keys or seed phrases through tool arguments. Never commit keys, `.env` files or keypairs.
@@ -49,8 +59,10 @@ Streamable HTTP. An npm workspaces monorepo. Read
 - **Imports:** relative imports name the `.ts` file. `rewriteRelativeImportExtensions` turns them into `.js` in `dist`.
   Each package exports its source under the `highwire-source` condition, which tsx, tsc and the web app's Turbopack
   aliases use, so nothing needs building before you test or run `next dev`.
-- **The hosted endpoint** is public and unauthenticated, so it stays read-only. `createHttpHandler` turns the
-  transaction tools off (`transactionTools: false`); they must not be registered on it without auth.
+- **The hosted endpoint** is public and unauthenticated. It serves the build tools because they only return unsigned
+  transactions; it must never sign, hold a key or send. `HOSTED_TRANSACTION_TOOLS` in `http.ts` is the one switch.
+  It is stateless: nothing may depend on memory surviving between requests (launch mints are derived, the rate limit
+  is a per-instance brake). Build calls cost `BUILD_COST` units of the rate limit.
 - **Next.js** is 16 (App Router, Turbopack). Its docs ship in `node_modules/next/dist/docs/`; check them rather than
   memory before using a Next API. `next build` and `next dev` share `apps/web/.next`: if dev fails with a
   `next/font` "Module not found" error, stop it, delete `apps/web/.next` and start it again.

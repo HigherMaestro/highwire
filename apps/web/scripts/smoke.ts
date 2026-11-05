@@ -1,6 +1,7 @@
 // Live smoke test for the site and the hosted MCP endpoint. Starts `next dev`
-// on a free port, then checks /, /api/health and /mcp with the real MCP
-// client against api.higher.fun. Needs network access.
+// on a free port, then checks the pages (and /sign's security headers),
+// /api/health and /mcp with the real MCP client against api.higher.fun.
+// Needs network access.
 //
 //   npm run smoke -w highwire-web
 //   SMOKE_URL=https://<domain> npm run smoke -w highwire-web   (a deployed site; starts nothing)
@@ -10,7 +11,8 @@ import { createRequire } from "node:module";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const EXPECTED_TOOLS = 17;
+// The hosted endpoint serves every tool, the build tools included (HOSTED_TRANSACTION_TOOLS).
+const EXPECTED_TOOLS = 22;
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -73,6 +75,24 @@ try {
   const home = await (await fetch(base)).text();
   check("GET /", home.includes("Highwire, the agent wire for higher.fun"), `${home.length} bytes`);
 
+  for (const [path, text] of [
+    ["/docs", "Highwire docs"],
+    ["/terms", "Draft, pending legal review"],
+    ["/privacy", "Draft, pending legal review"],
+    ["/changelog", "0.3.0"],
+  ] as const) {
+    const page = await (await fetch(`${base}${path}`)).text();
+    check(`GET ${path}`, page.includes(text), `${page.length} bytes`);
+  }
+
+  const sign = await fetch(`${base}/sign`);
+  const csp = sign.headers.get("content-security-policy") ?? "";
+  check(
+    "GET /sign",
+    sign.ok && /connect-src [^;]*solana\.com/.test(csp) && csp.includes("frame-ancestors 'none'") && sign.headers.get("referrer-policy") === "no-referrer",
+    csp ? `CSP connect-src: ${/connect-src ([^;]*)/.exec(csp)?.[1]}` : "no CSP header",
+  );
+
   const pre = await fetch(`${base}/mcp`, { method: "OPTIONS", headers: { Origin: "https://example.com" } });
   check("OPTIONS /mcp", pre.status === 204 && pre.headers.get("access-control-allow-origin") === "*", `${pre.status}`);
 
@@ -91,6 +111,10 @@ try {
     const out = JSON.parse(text) as { launchFee: { sol: number }; solUsd?: number };
     check("tools/call get_platform_info", true, `launch fee ${out.launchFee.sol} SOL, SOL $${out.solUsd}`);
   }
+
+  const quote = await client.callTool({ name: "quote_trade", arguments: { mint: "7ymF66Z6VhgNiwadtVhjTtT6U7iQRpSxeiRrhfufhigh", side: "buy", sol: 0.1 } });
+  const quoteText = (quote.content as Array<{ text: string }>)[0]?.text ?? "";
+  check("tools/call quote_trade", !quote.isError, quote.isError ? quoteText : `0.1 SOL buys ${JSON.parse(quoteText).tokensOut} $HIGH`);
   await client.close();
 } catch (err) {
   failed++;

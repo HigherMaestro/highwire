@@ -49,10 +49,11 @@ export default async function Home() {
   const [catalog, coins] = await Promise.all([getCatalog(), graduatingCoins(6)]);
   const groups = groupTools(catalog.tools);
   const hostedCount = catalog.tools.filter((t) => t.hosted).length;
-  const localCount = catalog.tools.length - hostedCount;
+  const localOnly = catalog.tools.length - hostedCount;
+  const buildCount = catalog.tools.filter((t) => t.builds).length;
   const stats = [
     { n: hostedCount, label: "hosted tools" },
-    { n: localCount, label: "trading tools" },
+    { n: buildCount, label: "build tools you sign" },
     { n: catalog.prompts.length, label: "prompts" },
     { n: catalog.resources.length, label: "resources" },
     { n: 0, label: "keys needed" },
@@ -70,8 +71,8 @@ export default async function Home() {
               <h1>The agent wire for higher.fun</h1>
               <p className="lead">
                 Highwire connects AI agents to <a href="https://higher.fun">higher.fun</a>, the open-source Solana launchpad.
-                Scan launches, research coins and creators, run rug checks, and prepare trades and launches for you to sign,
-                from Claude, Cursor or any MCP client.
+                Scan launches, research coins and creators, run rug checks, and prepare trades and launches that you sign in
+                your own wallet on highwire.fun, from Claude, Cursor or any MCP client.
               </p>
               <CopyCommand label="Add Highwire to Claude Code" code={CLAUDE_CODE_COMMAND} />
               <div className="hero-actions">
@@ -131,9 +132,11 @@ export default async function Home() {
             <div className="section-head">
               <h2 id="tools-title">{catalog.tools.length} tools</h2>
               <p className="muted">
-                {hostedCount} run on the hosted server and only read. {localCount} more run on your own computer and quote or
-                build transactions that you sign in your own wallet. Listed straight from the server; parameters and examples
-                are in the <a href="/docs">docs</a>.
+                {hostedCount === catalog.tools.length ? "All of them run" : `${hostedCount} run`} on the hosted server.{" "}
+                {buildCount} build transactions: they hand back a sign link, and you review and sign in your own wallet on{" "}
+                <a href="/docs#signing">the sign page</a>. The rest only read.{" "}
+                {localOnly ? `${localOnly} more run only on your own computer. ` : ""}Listed straight from the server;
+                parameters and examples are in the <a href="/docs">docs</a>.
               </p>
             </div>
             <div className="groups">
@@ -149,6 +152,7 @@ export default async function Home() {
                             <code>{t.name}</code>
                           </a>
                           {t.hosted ? null : <span className="badge">local</span>}
+                          {t.builds ? <span className="badge badge-warn">you sign</span> : null}
                         </span>
                         <span className="tool-desc">{t.summary}</span>
                       </li>
@@ -183,8 +187,8 @@ export default async function Home() {
               <li>
                 <h3>No keys, ever</h3>
                 <p className="muted">
-                  The trading tools only build transactions, decoded and simulated first. You sign them in your own wallet.
-                  Highwire never asks for a private key or seed phrase.
+                  The build tools only make unsigned transactions, decoded and simulated first. The sign page checks them
+                  again in your browser and your own wallet signs. Highwire never asks for a private key or seed phrase.
                 </p>
               </li>
               <li>
@@ -203,24 +207,21 @@ export default async function Home() {
             <ol className="road">
               <li className="road-now">
                 <span className="road-tag">Now</span>
-                <h3>Read everything, build trades</h3>
+                <h3>Sign from any chat</h3>
                 <p className="muted">
-                  {hostedCount} hosted tools for discovery, research and safety, plus {localCount} local tools that quote and
-                  build trades, launches and fee claims for you to sign.
+                  {hostedCount} hosted tools. Ask Claude or ChatGPT to buy, sell, launch or claim, open the sign link it gives
+                  you, and sign in your own wallet. The agent never holds keys.
                 </p>
               </li>
               <li>
                 <span className="road-tag">Next</span>
-                <h3>Sign from any chat</h3>
-                <p className="muted">
-                  A signing page on highwire.fun, so anyone in Claude or ChatGPT can buy, sell and launch, and sign in their
-                  own wallet. The agent never holds keys.
-                </p>
+                <h3>Agents with limits</h3>
+                <p className="muted">An opt-in local signer with per-trade and daily caps, and allowlists.</p>
               </li>
               <li>
                 <span className="road-tag">Later</span>
-                <h3>Agents with limits</h3>
-                <p className="muted">An opt-in local signer with daily caps and allowlists, plus live alerts.</p>
+                <h3>Live alerts</h3>
+                <p className="muted">Launches, trades and graduations as they happen, and sign-in for posting.</p>
               </li>
             </ol>
             <p className="muted small road-foot">

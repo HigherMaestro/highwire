@@ -1,6 +1,6 @@
 ---
 name: highwire
-description: Research coins on higher.fun, the open-source Solana launchpad, with the Highwire MCP server. Covers scanning launches, due diligence, rug checks, creator lookups and launch planning. Use when the user mentions higher.fun, $HIGH, Old school or New school coins, or wants to find, vet or plan a coin on higher.fun.
+description: Research and trade coins on higher.fun, the open-source Solana launchpad, with the Highwire MCP server. Covers scanning launches, due diligence, rug checks, creator lookups, launch planning, and building trades, launches and fee claims for the user to sign. Use when the user mentions higher.fun, $HIGH, Old school or New school coins, or wants to find, vet or plan a coin on higher.fun.
 ---
 
 # higher.fun with Highwire
@@ -25,7 +25,7 @@ creator can claim, whatever the mode.
 | Is it safe | `rug_check` |
 | A wallet or creator | `get_wallet_profile`, `get_creator_coins`, `get_leaderboard` |
 | The platform | `get_platform_info`, `check_ticker`, `get_chat` |
-| Trade or launch (local server) | `quote_trade`, `get_wallet_positions`, `build_trade`, `build_launch`, `build_claim_creator_fees` |
+| Trade, launch or claim | `quote_trade`, `get_wallet_positions`, `build_trade`, `build_launch`, `build_claim_creator_fees` |
 
 Prompts: `scan_launches`, `coin_due_diligence`, `creator_report`, `plan_launch`.
 
@@ -41,7 +41,9 @@ Prompts: `scan_launches`, `coin_due_diligence`, `creator_report`, `plan_launch`.
 4. **Highwire builds, the user signs.** The build tools return unsigned transactions; never ask for a private key or
    seed phrase. Quote first and show the quote. Set `confirm_trade` or `confirm_launch` only after the user approves
    that exact transaction, show them each transaction's summary lines, and don't offer one whose simulation failed.
-   On the hosted server, which has no build tools, send the user to the coin page or https://higher.fun/create.
+   Then give the user the result's `sign_url` right away: highwire.fun/sign re-checks and simulates it in their
+   browser and their wallet signs. It expires in about a minute; if it has, build again (a launch with the same
+   `idempotency_key`, so the coin can't happen twice). Never ask the user to paste a signed transaction back.
 5. **Not financial advice.** Say so when you rank or recommend coins.
 
 ## Risk sizing
