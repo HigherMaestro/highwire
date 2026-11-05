@@ -51,6 +51,25 @@ export function SiteFooter() {
     <footer className="site-footer">
       <div className="wrap footer-stack">
         <OfficialNotice />
+        <nav aria-label="Footer">
+          <ul className="footer-links">
+            <li>
+              <a href="/docs">Docs</a>
+            </li>
+            <li>
+              <a href="/docs#signing">Signing</a>
+            </li>
+            <li>
+              <a href="/changelog">Changelog</a>
+            </li>
+            <li>
+              <a href="/terms">Terms</a>
+            </li>
+            <li>
+              <a href="/privacy">Privacy</a>
+            </li>
+          </ul>
+        </nav>
         <div className="footer-row">
           <Lockup id="ftr" />
           <p className="muted small">

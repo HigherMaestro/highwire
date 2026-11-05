@@ -5,10 +5,13 @@
 // sent, no airdrop is requested, and no keypair is funded.
 // Run with `npm run simulate` (needs network access). Set SOLANA_RPC_URL or
 // SOLANA_DEVNET_RPC_URL to use your own RPCs; SIM_CLUSTERS=mainnet skips devnet.
+// Each build's sign_url is checked to decode back to its envelope, and the one
+// for each cluster's first buy is printed: open it within a minute to try the
+// sign page. HIGHWIRE_SITE_URL=http://localhost:3000 points it at `next dev`.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { LaunchpadPool } from "@raydium-io/raydium-sdk-v2";
-import { Chain, DEFAULT_RPC_URLS, type Cluster } from "highwire-core";
+import { Chain, decodeSignPayload, DEFAULT_RPC_URLS, type Cluster } from "highwire-core";
 import { PublicKey } from "@solana/web3.js";
 
 const clusters = (process.env.SIM_CLUSTERS ?? "mainnet,devnet").split(",") as Cluster[];
@@ -22,6 +25,9 @@ interface Row {
   ok: boolean;
 }
 const rows: Row[] = [];
+/** The first buy's sign link per cluster, and every link's length by what was built. */
+const buyLinks: Partial<Record<Cluster, string>> = {};
+const linkSizes: { cluster: Cluster; what: string; chars: number; gzipped: boolean }[] = [];
 
 async function connect(cluster: Cluster) {
   const transport = new StdioClientTransport({
@@ -49,8 +55,16 @@ async function call(client: Client, name: string, args: Record<string, unknown>)
   }
 }
 
-/** Records every transaction's simulation from a build tool's result. */
-function report(cluster: Cluster, what: string, r: { isError: boolean; out: any }) {
+/** Records every transaction's simulation from a build tool's result, and checks its sign link. */
+async function report(cluster: Cluster, what: string, r: { isError: boolean; out: any }) {
+  if (!r.isError && r.out.sign_url) {
+    const url = new URL(r.out.sign_url);
+    const back = await decodeSignPayload(url.hash);
+    const same = JSON.stringify(back) === JSON.stringify(r.out.unsigned);
+    rows.push({ cluster, what: `${what}: sign_url`, ok: same, result: same ? `${r.out.sign_url.length} chars, decodes to the envelope` : "DOES NOT decode to the envelope" });
+    linkSizes.push({ cluster, what, chars: r.out.sign_url.length, gzipped: url.hash.startsWith("#gz.") });
+    if (/^buy/.test(what) && !buyLinks[cluster]) buyLinks[cluster] = r.out.sign_url;
+  }
   if (r.isError) {
     rows.push({ cluster, what, ok: false, result: `${r.out.code}: ${r.out.error}` });
     if (r.out.summary) console.log(`  ${r.out.summary.join("\n  ")}\n  ${(r.out.logs ?? []).join("\n  ")}`);
@@ -147,7 +161,7 @@ for (const cluster of clusters) {
   const trade = async (what: string, args: Record<string, unknown>) => {
     await pause();
     console.log(`- ${what}`);
-    report(cluster, what, await call(client, "build_trade", { ...args, max_slippage_bps: slippage, max_sol: maxSol, confirm_trade: true }));
+    await report(cluster, what, await call(client, "build_trade", { ...args, max_slippage_bps: slippage, max_sol: maxSol, confirm_trade: true }));
   };
 
   if (cluster === "mainnet") {
@@ -177,7 +191,7 @@ for (const cluster of clusters) {
     ] as const) {
       await pause();
       console.log(`- ${what}`);
-      report(
+      await report(
         cluster,
         what,
         await call(client, "build_launch", {
@@ -193,7 +207,7 @@ for (const cluster of clusters) {
     }
     await pause();
     console.log("- claim creator fees");
-    report(cluster, `claim creator fees (${plan.creator})`, await call(client, "build_claim_creator_fees", { wallet: plan.creator }));
+    await report(cluster, `claim creator fees (${plan.creator})`, await call(client, "build_claim_creator_fees", { wallet: plan.creator }));
   } else {
     const plan = await devnetPlan(chain);
     console.log(`${plan.pools} higher.fun pools on devnet`);
@@ -214,7 +228,7 @@ for (const cluster of clusters) {
     if (wallet) {
       await pause();
       console.log("- launch");
-      report(
+      await report(
         cluster,
         "launch, New school, 0.01 SOL first buy",
         await call(client, "build_launch", {
@@ -229,11 +243,15 @@ for (const cluster of clusters) {
         }),
       );
       await pause();
-      report(cluster, `claim creator fees (${wallet})`, await call(client, "build_claim_creator_fees", { wallet }));
+      await report(cluster, `claim creator fees (${wallet})`, await call(client, "build_claim_creator_fees", { wallet }));
     }
   }
   await client.close();
 }
+
+console.log("\nSign links");
+for (const l of linkSizes) console.log(`  [${l.cluster}] ${l.what}: ${l.chars} chars${l.gzipped ? " (gzipped)" : ""}`);
+for (const [cluster, url] of Object.entries(buyLinks)) console.log(`\nsign_url for a ${cluster} buy (open within a minute):\n${url}`);
 
 console.log("\nResults");
 for (const r of rows) console.log(`${r.ok ? "ok  " : "FAIL"} [${r.cluster}] ${r.what}: ${r.result}`);

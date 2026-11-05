@@ -1122,3 +1122,364 @@ table.params {
     min-width: 0;
   }
 }
+
+/* Sign page and legal pages */
+:root {
+  --good: #1E6B3A;
+  --bad: #A12A1E;
+  --bad-bg: #FBEDEA;
+}
+
+:root[data-theme="dark"] {
+  --good: #7EE2A8;
+  --bad: #FF9B8F;
+  --bad-bg: #2A1714;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --good: #7EE2A8;
+    --bad: #FF9B8F;
+    --bad-bg: #2A1714;
+  }
+}
+
+button.button {
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button.button-quiet {
+  border: 1px solid var(--line);
+}
+
+button.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.button-small {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 15px;
+}
+
+button:focus-visible,
+summary:focus-visible,
+[tabindex="-1"]:focus-visible {
+  outline: 3px solid var(--fg);
+  outline-offset: 2px;
+}
+
+.sign,
+.prose-page {
+  padding: 32px 0 64px;
+}
+
+.sign-wrap {
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sign-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sign-panel h1 {
+  font-size: clamp(28px, 6vw, 40px);
+}
+
+.sign-panel h2 {
+  font-size: 22px;
+}
+
+.sign-panel h3 {
+  font-size: 14px;
+  margin: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sign-panel p,
+.sign-panel ul,
+.sign-panel ol {
+  margin: 0;
+}
+
+.sign-facts {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.sign-facts div {
+  display: grid;
+  gap: 2px;
+}
+
+.sign-facts dt {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.sign-facts dd {
+  margin: 0;
+}
+
+.mono-wrap {
+  font-family: var(--font-code);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.sign-flag {
+  border-left: 4px solid #B7791F;
+  padding: 6px 12px;
+  background: var(--surface-alt);
+  border-radius: 6px;
+}
+
+.sign-refuse {
+  border-color: var(--bad);
+  background: var(--bad-bg);
+}
+
+.sign-refuse ul {
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sign-good {
+  color: var(--good);
+  font-weight: 500;
+}
+
+.sign-bad {
+  color: var(--bad);
+  font-weight: 500;
+}
+
+.sign-txs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sign-effects {
+  display: grid;
+  gap: 12px;
+}
+
+.sign-effects ul,
+.sign-fees,
+.sign-lines {
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sign-details summary {
+  cursor: pointer;
+  font-weight: 500;
+  display: block;
+  padding: 10px 0 10px 1.4em;
+  text-indent: -1.4em;
+}
+
+.sign-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.sign-details summary::before {
+  content: "+";
+  display: inline-block;
+  width: 1.4em;
+  text-indent: 0;
+  font-family: var(--font-code);
+}
+
+.sign-details[open] > summary::before {
+  content: "−";
+}
+
+.sign-lines {
+  margin-top: 8px;
+  list-style: none;
+  padding-left: 0;
+  gap: 8px;
+}
+
+.sign-logs {
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.sign-sim,
+.sign-action {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.sign-action .button {
+  width: 100%;
+  justify-content: center;
+}
+
+.sign-wallets {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+}
+
+.sign-wallet {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sign-wallet:hover {
+  background: var(--surface-alt);
+}
+
+.sign-wallet:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.sign-wallet img {
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.sign-wallet-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sign-privacy ul {
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (min-width: 640px) {
+  .sign-panel {
+    padding: 28px;
+  }
+  .sign-facts {
+    grid-template-columns: 1fr 1fr;
+  }
+  .sign-facts div:first-child {
+    grid-column: 1 / -1;
+  }
+  .sign-effects {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+  .sign-action .button {
+    width: auto;
+  }
+}
+
+/* Terms, privacy, changelog */
+.prose {
+  max-width: 72ch;
+}
+
+.prose h1 {
+  font-size: clamp(30px, 6vw, 44px);
+  margin-bottom: 12px;
+}
+
+.prose h2 {
+  font-size: 24px;
+  margin: 36px 0 10px;
+}
+
+.prose h3 {
+  font-size: 19px;
+  margin: 24px 0 8px;
+}
+
+.prose p,
+.prose ul,
+.prose ol {
+  margin: 0 0 14px;
+}
+
+.prose li {
+  margin-bottom: 6px;
+}
+
+.draft-flag {
+  display: inline-block;
+  border: 1px solid #B7791F;
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #8A5A12;
+  margin: 0 0 12px;
+}
+
+:root[data-theme="dark"] .draft-flag {
+  color: #F0B95A;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .draft-flag {
+    color: #F0B95A;
+  }
+}
+
+.footer-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 15px;
+}
