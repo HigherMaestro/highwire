@@ -9,6 +9,9 @@ import { CLUSTERS, HigherError, MAX_SLIPPAGE_BPS, solToLamports, type Cluster } 
 export const ACTIONS = ["trade", "launch", "claim", "transfer"] as const;
 export type Action = (typeof ACTIONS)[number];
 
+/** "launches", "trades": for refusals. */
+export const plural = (action: Action) => (action === "launch" ? "launches" : `${action}s`);
+
 const address = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, "must be a base58 Solana address");
 
 export const PolicySchema = z
@@ -94,7 +97,7 @@ export interface Refusal {
 export function checkPolicy(policy: Policy, intent: Intent, spentToday: bigint): Refusal | null {
   const no = (rule: string, reason: string): Refusal => ({ rule, reason });
   if (intent.cluster !== policy.cluster) return no("cluster", `the policy is for ${policy.cluster}, and this server builds on ${intent.cluster}`);
-  if (!policy.actions.includes(intent.action)) return no("actions", `the policy doesn't allow ${intent.action}s`);
+  if (!policy.actions.includes(intent.action)) return no("actions", `the policy doesn't allow ${plural(intent.action)}`);
   if (intent.slippageBps !== undefined && intent.slippageBps > policy.max_slippage_bps) {
     return no("max_slippage_bps", `${intent.slippageBps} bps of slippage is over the policy's ${policy.max_slippage_bps}`);
   }

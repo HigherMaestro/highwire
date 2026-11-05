@@ -12,7 +12,7 @@ import {
 } from "highwire-core";
 import { AuditLog } from "./audit.ts";
 import type { AgentPaths } from "./paths.ts";
-import { checkPolicy, loadPolicy, type Action, type Intent, type Policy } from "./policy.ts";
+import { checkPolicy, loadPolicy, plural, type Action, type Intent, type Policy } from "./policy.ts";
 
 // The local signer: signs and sends what Highwire built, for the one wallet whose
 // keypair the user pointed it at, and only inside the user's policy. Dry run
@@ -119,7 +119,7 @@ export class LocalSigner {
     }
     const policy = loadPolicy(this.paths.policy);
     if (policy.cluster !== cluster) throw refused("cluster", `the policy is for ${policy.cluster}, and this server builds on ${cluster}`);
-    if (!policy.actions.includes(action)) throw refused("actions", `the policy doesn't allow ${action}s`);
+    if (!policy.actions.includes(action)) throw refused("actions", `the policy doesn't allow ${plural(action)}`);
     return policy;
   }
 

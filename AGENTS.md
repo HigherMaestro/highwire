@@ -33,6 +33,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/*/test/` | `node:test` via tsx. `server.test.ts` and `http.test.ts` drive the real server with a fake API |
 | `*/scripts/smoke.ts` | the live checks: stdio in `packages/mcp`, hosted in `apps/web` |
 | `packages/mcp/scripts/simulate.ts` | `npm run simulate`: builds and simulates trades, launches and claims on mainnet and devnet |
+| `packages/mcp/scripts/rehearse.ts` | `npm run rehearse`: the execute tools, live, for a public wallet on mainnet and devnet, with the send replaced by a simulation of the signed bytes |
 | `packages/core/test/fixtures/` | recorded mainnet responses the transaction tests replay; re-record with `npm run record-fixtures -w highwire-core` |
 | `brand/` | logo, icons, social images and colour tokens. `brand/README.md` says which file goes where; regenerate with `brand/scripts/build.py`, never by hand-editing the exports |
 
@@ -85,5 +86,5 @@ Streamable HTTP. An npm workspaces monorepo. Read
 ## Before you say it's done
 
 Run `npm run typecheck`, `npm test` and `npm run build` from the root. Run `npm run smoke` too, which needs network
-access and starts `next dev`, and `npm run simulate` when you touch the transaction code. If the API changed shape, update `packages/core/src/higher/api.ts` and
+access and starts `next dev`, and `npm run simulate` when you touch the transaction code (`npm run rehearse -w highwire-mcp` when you touch the signer). If the API changed shape, update `packages/core/src/higher/api.ts` and
 docs/higher-reference.md together.

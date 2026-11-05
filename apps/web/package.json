@@ -14,6 +14,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
     "@solana/web3.js": "1.99.0",
+    "@vercel/analytics": "2.0.1",
     "@wallet-standard/app": "1.1.1",
     "@wallet-standard/base": "1.1.1",
     "highwire-core": "0.4.0",

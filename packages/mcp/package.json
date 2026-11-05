@@ -35,7 +35,8 @@
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "smoke": "tsx --conditions=highwire-source scripts/smoke.ts",
     "simulate": "tsx --conditions=highwire-source scripts/simulate.ts",
-    "prepack": "npm run build && cp ../../LICENSE ."
+    "prepack": "npm run build && cp ../../LICENSE .",
+    "rehearse": "tsx --conditions=highwire-source scripts/rehearse.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

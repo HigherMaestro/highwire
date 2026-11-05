@@ -94,8 +94,10 @@ Decision D1: local signer only. Highwire never creates, holds or manages a walle
   signs it.
 
 Not verified, and left to the maintainer:
-- The exit criterion, a policy-limited agent trading on devnet: the tests use a fake RPC and a throwaway in-memory
-  key, and nothing was sent to a real cluster.
+- The exit criterion, a policy-limited agent trading on devnet. `npm run rehearse` gets as close as simulation can:
+  it runs the execute tools live against mainnet and devnet for a public wallet, through the policy, the audit log,
+  the re-simulation and signing, and simulates the signed bytes in place of sending them. Every rule refused what it
+  should. What it can't show is a real signature landing: nothing was sent to a real cluster.
 
 ## Later
 

@@ -20,6 +20,10 @@ creates, holds or manages a wallet, and the hosted endpoint still never signs.
   each transaction is sent. The daily limit is counted from it. Creating `~/.highwire/STOP` refuses everything.
 - **Transfers.** `build_transfer` sends SOL or a higher.fun coin to another wallet, checked to the lamport and the
   recipient. It's local only and has no sign link: the sign page refuses transfers, since a link can come from anyone.
+- **`npm run rehearse`** runs the execute tools live against mainnet and devnet for a public wallet, with every rule of
+  a small policy, and simulates the signed bytes instead of sending them.
+- **Page views.** highwire.fun counts page views with Vercel Web Analytics (no cookies; queries and fragments are
+  stripped). The sign page has none: it doesn't load the script, and any event about it is dropped.
 
 ## 0.3.0 (unreleased)
 

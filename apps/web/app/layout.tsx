@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
+import { SiteAnalytics } from "../components/SiteAnalytics.tsx";
 import { SITE_URL, X_HANDLE } from "../lib/site.ts";
 import { THEME_SCRIPT } from "../lib/theme.ts";
 import "./globals.css";
@@ -39,7 +40,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <SiteAnalytics />
+      </body>
     </html>
   );
 }
