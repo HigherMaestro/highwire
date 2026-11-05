@@ -1,0 +1,77 @@
+import type { ReactNode } from "react";
+
+// Just enough Markdown for CHANGELOG.md: ## and ### headings, paragraphs,
+// "- " lists (with indented continuation lines), `code`, **bold** and
+// [links](url). Builds React nodes, never raw HTML.
+
+function inline(text: string, key: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  const re = /`([^`]+)`|\*\*([^*]+)\*\*|\[([^\]]+)\]\(([^)\s]+)\)/g;
+  let last = 0;
+  let i = 0;
+  for (const m of text.matchAll(re)) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const k = `${key}-${i++}`;
+    if (m[1] !== undefined) out.push(<code key={k}>{m[1]}</code>);
+    else if (m[2] !== undefined) out.push(<strong key={k}>{inline(m[2], k)}</strong>);
+    else out.push(<a key={k} href={m[4]}>{m[3]}</a>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/** Renders the subset above. A leading "# " title is skipped: the page has its own h1. */
+export function Markdown({ source }: { source: string }) {
+  const blocks: ReactNode[] = [];
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  let para: string[] = [];
+  let list: string[] = [];
+  const flush = () => {
+    const k = `b${blocks.length}`;
+    if (para.length) blocks.push(<p key={k}>{inline(para.join(" "), k)}</p>);
+    if (list.length) {
+      blocks.push(
+        <ul key={`${k}l`}>
+          {list.map((item, j) => (
+            <li key={j}>{inline(item, `${k}-${j}`)}</li>
+          ))}
+        </ul>,
+      );
+    }
+    para = [];
+    list = [];
+  };
+  for (const line of lines) {
+    if (/^# /.test(line)) continue;
+    const h = /^(#{2,3}) (.*)$/.exec(line);
+    if (h) {
+      flush();
+      const text = h[2]!;
+      const k = `h${blocks.length}`;
+      blocks.push(
+        h[1] === "##" ? (
+          <h2 key={k} id={slug(text)}>
+            {inline(text, k)}
+          </h2>
+        ) : (
+          <h3 key={k}>{inline(text, k)}</h3>
+        ),
+      );
+    } else if (/^- /.test(line)) {
+      if (para.length) flush();
+      list.push(line.slice(2));
+    } else if (/^\s+\S/.test(line) && list.length) {
+      list[list.length - 1] += ` ${line.trim()}`;
+    } else if (line.trim() === "") {
+      flush();
+    } else {
+      if (list.length) flush();
+      para.push(line.trim());
+    }
+  }
+  flush();
+  return <>{blocks}</>;
+}
