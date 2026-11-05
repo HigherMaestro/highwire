@@ -6,7 +6,7 @@ Lower Fees, Higher Together.
 Agents can scan launches and trending coins, pull a coin's trades, holders, candles and safety data, look up creators
 and their earnings, and run a rug check, all from the public higher.fun API and Solana RPC. No keys needed.
 
-**v0.1 is read-only.** It can't sign, trade or launch. Transactions are next: see [docs/ROADMAP.md](docs/ROADMAP.md).
+**v0.1 is read-only.** It can't sign, trade or launch. Use it hosted, or run it locally with `npx highwire-mcp`. Transactions are next: see [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Tools
 
@@ -40,28 +40,40 @@ and their earnings, and run a rug check, all from the public higher.fun API and 
 - `higher://platform`
 - `higher://coins/{mint}`
 
-**Skill:** an operator guide for agents is in [skills/highwire/SKILL.md](skills/highwire/SKILL.md).
+**Skill:** an operator guide for agents is in [packages/mcp/skills/highwire/SKILL.md](packages/mcp/skills/highwire/SKILL.md).
 
-## Setup
+## Connect
 
-Needs Node 20 or later.
+### Hosted
 
-```bash
-git clone https://github.com/HigherMaestro/highwire.git
-```
-
-```bash
-cd highwire && npm install
-```
-
-```bash
-npm run build
-```
+Nothing to install. The hosted server is read-only and needs no key.
 
 **Claude Code**
 
 ```bash
-claude mcp add highwire -- node /path/to/highwire/dist/index.js
+claude mcp add --transport http highwire https://<domain>/mcp
+```
+
+**Cursor, or any client that takes a remote MCP URL**
+
+```json
+{
+  "mcpServers": {
+    "highwire": { "url": "https://<domain>/mcp" }
+  }
+}
+```
+
+The endpoint speaks stateless Streamable HTTP: POST JSON-RPC, get JSON back. It allows 60 requests a minute per IP.
+
+### Local (stdio)
+
+Needs Node 20 or later.
+
+**Claude Code**
+
+```bash
+claude mcp add highwire -- npx -y highwire-mcp
 ```
 
 **Claude Desktop, Cursor, or any stdio client**
@@ -70,8 +82,8 @@ claude mcp add highwire -- node /path/to/highwire/dist/index.js
 {
   "mcpServers": {
     "highwire": {
-      "command": "node",
-      "args": ["/path/to/highwire/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "highwire-mcp"],
       "env": { "SOLANA_RPC_URL": "https://api.mainnet-beta.solana.com" }
     }
   }
@@ -86,18 +98,49 @@ claude mcp add highwire -- node /path/to/highwire/dist/index.js
 | `SOLANA_RPC_URL` | `https://api.mainnet-beta.solana.com` |
 | `HIGHER_TIMEOUT_MS` | `15000` |
 | `HIGHER_RETRIES` | `2` |
+| `HIGHWIRE_RATE_LIMIT` | `60` requests a minute per IP (hosted endpoint only) |
 
 The public RPC is rate-limited. For anything beyond light use, set `SOLANA_RPC_URL` to your own (Helius, Triton, …).
 
+## Repository
+
+An npm workspaces monorepo.
+
+| Path | What it is |
+|---|---|
+| [packages/core](packages/core) | `highwire-core`: the higher.fun API client, constants, unit formatting and the rug check |
+| [packages/mcp](packages/mcp) | `highwire-mcp`: the MCP server, the `highwire` stdio bin and a stateless HTTP handler |
+| [apps/web](apps/web) | The Next.js site, which also serves the hosted MCP at `/mcp` and `GET /api/health` |
+
 ## Development
+
+```bash
+git clone https://github.com/HigherMaestro/highwire.git
+```
+
+```bash
+cd highwire && npm install
+```
+
+Every command runs from the root and covers all workspaces.
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Run from source over stdio |
-| `npm test` | Unit and in-memory MCP tests, offline |
-| `npm run smoke` | Start the server and call every tool against the live API |
-| `npm run typecheck` | Type-check without building |
-| `npm run build` | Compile to `dist/` |
+| `npm run dev` | Run the MCP server from source over stdio |
+| `npm run dev:web` | Run the site at http://localhost:3000, with the MCP at http://localhost:3000/mcp |
+| `npm test` | Unit, in-memory MCP and HTTP handler tests, offline |
+| `npm run smoke` | Call every tool over stdio, then start `next dev` and check `/`, `/api/health` and `/mcp` against the live API |
+| `npm run typecheck` | Type-check every workspace |
+| `npm run build` | Compile the packages to `dist/` and build the site |
+
+To point the hosted check at a deployed site instead of `next dev`:
+
+```bash
+SMOKE_URL=https://<domain> npm run smoke -w highwire-web
+```
+
+To run a local build over stdio, `npm run build`, then use `node /path/to/highwire/packages/mcp/dist/cli.js` as the
+command.
 
 [AGENTS.md](AGENTS.md) has the conventions. [docs/higher-reference.md](docs/higher-reference.md) has everything known
 about higher.fun's programs, fee modes and API, with sources.

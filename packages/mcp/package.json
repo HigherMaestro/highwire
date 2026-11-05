@@ -34,7 +34,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "smoke": "tsx --conditions=highwire-source scripts/smoke.ts",
-    "prepack": "cp ../../LICENSE ."
+    "prepack": "npm run build && cp ../../LICENSE ."
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
