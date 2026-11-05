@@ -8,7 +8,7 @@ const HIGH = "7ymF66Z6VhgNiwadtVhjTtT6U7iQRpSxeiRrhfufhigh";
 
 const transport = new StdioClientTransport({
   command: process.execPath,
-  args: ["--import", "tsx", "src/index.ts"],
+  args: ["--conditions=highwire-source", "--import", "tsx", "src/cli.ts"],
   stderr: "inherit",
 });
 const client = new Client({ name: "smoke", version: "0" });

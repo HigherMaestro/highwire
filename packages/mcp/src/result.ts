@@ -7,7 +7,7 @@ import {
   ServerError,
   TimeoutError,
   ValidationError,
-} from "./errors.js";
+} from "highwire-core";
 
 // Results are pretty JSON text. Failures come back as `{error, code, next_step}`
 // with isError set, so the model knows what to try next.

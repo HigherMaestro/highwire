@@ -6,3 +6,8 @@ dist/
 keys/
 *.log
 .DS_Store
+.next/
+next-env.d.ts
+*.tsbuildinfo
+# copied in by prepack
+packages/*/LICENSE

@@ -1,10 +1,6 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CoinDetail } from "../higher/api.js";
-import { coinUrl } from "../higher/constants.js";
-import { bpsToPct, summarizeSafety } from "../higher/format.js";
-import type { MintInfo } from "../solana/rpc.js";
-import { run } from "../lib/result.js";
-import { READ_ONLY, mint, type Deps } from "./shared.js";
+import type { CoinDetail } from "./higher/api.js";
+import { bpsToPct } from "./higher/format.js";
+import type { MintInfo } from "./solana/rpc.js";
 
 // The verdict combines on-chain mint and freeze authority, top-10 holder
 // concentration (caution at 30%, danger at 60%) and higher.fun's own safety data.
@@ -52,43 +48,4 @@ export function evaluateRisk(coin: CoinDetail, onchain: MintInfo | null | { erro
   const dangers = flags.filter((f) => f.level === "danger").length;
   const verdict: Verdict = dangers > 0 || flags.length >= 3 ? "HIGH_RISK" : flags.length > 0 ? "CAUTION" : "CLEAN_ON_CHECKS";
   return { verdict, flags };
-}
-
-export function registerSafetyTools(server: McpServer, { api, rpc }: Deps) {
-  server.registerTool(
-    "rug_check",
-    {
-      title: "Rug check",
-      description:
-        "Safety check before anyone trades a coin: on-chain mint and freeze authority, holder concentration, " +
-        "higher.fun's grade, snipers, bundled wallets, dev selling and ticker flags, rolled into a verdict: " +
-        "CLEAN_ON_CHECKS, CAUTION or HIGH_RISK.",
-      inputSchema: { mint },
-      annotations: { title: "Rug check", ...READ_ONLY },
-    },
-    ({ mint }) =>
-      run(async () => {
-        const [coin, onchain] = await Promise.all([
-          api.coin(mint),
-          rpc.mintInfo(mint).catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) })),
-        ]);
-        const { verdict, flags } = evaluateRisk(coin, onchain);
-        return {
-          mint,
-          ticker: coin.ticker,
-          url: coinUrl(mint),
-          verdict,
-          flags,
-          onchain:
-            onchain && !("error" in onchain)
-              ? { tokenProgram: onchain.tokenProgram, mintAuthority: onchain.mintAuthority, freezeAuthority: onchain.freezeAuthority }
-              : onchain ?? { error: "mint not found" },
-          higherSafety: summarizeSafety(coin.safety),
-          top10HoldPct: bpsToPct(coin.top10HoldingBps),
-          creatorHoldsPct: bpsToPct(coin.creatorHoldingBps),
-          disclaimer:
-            "Not financial advice. A clean result doesn't mean a coin is safe. Show the user these findings before any trade or launch.",
-        };
-      }),
-  );
 }

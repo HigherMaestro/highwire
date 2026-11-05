@@ -1,9 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { FEE_MODES, HIGH_MINT, MAINNET, SITE_URL, coinUrl } from "../higher/constants.js";
-import { lamportsToSol } from "../higher/format.js";
-import type { HigherApi } from "../higher/api.js";
-import { run } from "../lib/result.js";
+import { coinUrl, FEE_MODES, HIGH_MINT, type HigherApi, lamportsToSol, MAINNET, SITE_URL } from "highwire-core";
+import { run } from "../result.js";
 import { READ_ONLY, type Deps } from "./shared.js";
 
 export async function platformInfo(api: HigherApi) {

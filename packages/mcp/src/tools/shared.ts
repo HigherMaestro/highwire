@@ -1,6 +1,5 @@
 import { z } from "zod";
-import type { HigherApi } from "../higher/api.js";
-import type { SolanaRpc } from "../solana/rpc.js";
+import type { HigherApi, SolanaRpc } from "highwire-core";
 
 export interface Deps {
   api: HigherApi;

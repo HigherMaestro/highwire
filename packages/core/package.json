@@ -1,0 +1,23 @@
+{
+  "name": "highwire-core",
+  "version": "0.1.0",
+  "description": "Highwire's higher.fun client: the typed API, constants, unit formatting and the rug check",
+  "type": "module",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/HigherMaestro/highwire.git", "directory": "packages/core" },
+  "exports": {
+    ".": {
+      "highwire-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --conditions=highwire-source --test test/*.test.ts",
+    "prepack": "cp ../../LICENSE ."
+  }
+}

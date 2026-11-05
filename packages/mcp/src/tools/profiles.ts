@@ -1,7 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { profileUrl } from "../higher/constants.js";
-import { baseToTokens, lamportsToSol, looksLikeImpersonation, summarizeCoin } from "../higher/format.js";
-import { run } from "../lib/result.js";
+import { baseToTokens, lamportsToSol, looksLikeImpersonation, profileUrl, summarizeCoin } from "highwire-core";
+import { run } from "../result.js";
 import { READ_ONLY, cursor, solUsd, wallet, type Deps } from "./shared.js";
 
 export function registerProfileTools(server: McpServer, { api }: Deps) {

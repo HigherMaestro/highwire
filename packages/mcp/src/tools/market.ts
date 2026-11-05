@@ -1,17 +1,21 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CANDLE_INTERVALS, COIN_SORTS, LEADERBOARD_KINDS, WINDOWS, profileUrl } from "../higher/constants.js";
 import {
-  UNTRUSTED_NOTE,
+  CANDLE_INTERVALS,
+  COIN_SORTS,
   lamportsToSol,
+  LEADERBOARD_KINDS,
+  profileUrl,
   summarizeCandle,
   summarizeCoin,
   summarizeCoinDetail,
   summarizeHolder,
   summarizeMessage,
   summarizeTrade,
-} from "../higher/format.js";
-import { run } from "../lib/result.js";
+  UNTRUSTED_NOTE,
+  WINDOWS,
+} from "highwire-core";
+import { run } from "../result.js";
 import { READ_ONLY, cursor, mint, solUsd, type Deps } from "./shared.js";
 
 export function registerMarketTools(server: McpServer, { api }: Deps) {

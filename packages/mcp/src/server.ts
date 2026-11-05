@@ -1,10 +1,6 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { HigherApi } from "./higher/api.js";
-import { DEFAULT_API_URL, DEFAULT_RPC_URL } from "./higher/constants.js";
-import { summarizeCoinDetail } from "./higher/format.js";
-import { createHttpConfig } from "./lib/http.js";
+import { createHttpConfig, DEFAULT_API_URL, DEFAULT_RPC_URL, HigherApi, SolanaRpc, summarizeCoinDetail } from "highwire-core";
 import { registerPrompts } from "./prompts.js";
-import { SolanaRpc } from "./solana/rpc.js";
 import { registerMarketTools } from "./tools/market.js";
 import { platformInfo, registerPlatformTools } from "./tools/platform.js";
 import { registerProfileTools } from "./tools/profiles.js";
