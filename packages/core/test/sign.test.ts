@@ -58,7 +58,7 @@ test("base64url round-trips any bytes", () => {
   const bytes = new Uint8Array(70_000).map((_, i) => (i * 31) & 0xff);
   assert.deepEqual(fromBase64Url(toBase64Url(bytes)), bytes);
   assert.doesNotMatch(toBase64Url(bytes), /[+/=]/);
-  assert.throws(() => fromBase64Url("not base64!"), /base64url/);
+  assert.throws(() => fromBase64Url("not base64!"), /changed when it was copied/);
 });
 
 test("a buy's sign link round-trips, unzipped and under 8 KB", async () => {
@@ -85,7 +85,7 @@ test("gzipped payloads round-trip, and a long envelope switches to gzip", async 
 test("decoding refuses junk, other formats and bombs", async () => {
   const { env } = await envelope("buy-curve");
   await assert.rejects(decodeSignPayload(""), /no transaction/);
-  await assert.rejects(decodeSignPayload("#!!!"), /base64url/);
+  await assert.rejects(decodeSignPayload("#!!!"), /changed when it was copied/);
   await assert.rejects(decodeSignPayload(toBase64Url(new TextEncoder().encode("[1,2]"))), /not a Highwire envelope/);
   await assert.rejects(decodeSignPayload(toBase64Url(new TextEncoder().encode(JSON.stringify({ ...env, format: "other/v9" })))), /format/);
   await assert.rejects(decodeSignPayload(toBase64Url(new TextEncoder().encode(JSON.stringify({ ...env, cluster: "testnet" })))), /cluster/);
@@ -252,4 +252,18 @@ test("hosted links are signed: unchanged ones verify, edited ones are refused, o
   // apps/web/next.config.ts derives the page's key with the same steps; this is that derivation, written out.
   const fromConfig = bs58.encode(ed25519.getPublicKey(hmac(sha256, new TextEncoder().encode("test-secret"), new TextEncoder().encode("highwire sign-link attestation v1"))));
   assert.equal(fromConfig, key);
+});
+
+test("a sign link survives what chat apps do to long links: wrapping, zero-width spaces, percent-encoding", async () => {
+  const { env } = await envelope("buy-curve");
+  const hash = new URL(await signUrl(env, "https://highwire.fun")).hash.slice(1);
+  const mangled = [
+    hash.replace(/(.{70})/g, "$1\n"),
+    hash.replace(/(.{50})/g, "$1​"),
+    hash.replace(/-/g, "%2D").replace(/_/g, "%5F"),
+    `  ${hash}  `,
+  ];
+  for (const m of mangled) assert.deepEqual(await decodeSignPayload(`#${m}`), env);
+  await assert.rejects(decodeSignPayload(`#${hash.slice(0, hash.length - 40)}`), /cut short|incomplete/);
+  await assert.rejects(decodeSignPayload(`#${hash.slice(0, 100)}…`), /changed when it was copied/);
 });

@@ -32,7 +32,7 @@ export function toBase64Url(bytes: Uint8Array): string {
 }
 
 export function fromBase64Url(text: string): Uint8Array {
-  if (!/^[A-Za-z0-9_-]*$/.test(text)) throw new ValidationError("the sign link's payload isn't base64url");
+  if (!/^[A-Za-z0-9_-]*$/.test(text)) throw new ValidationError("the sign link was changed when it was copied (it holds characters a sign link never has)");
   const b64 = text.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(text.length / 4) * 4, "=");
   let bin: string;
   try {
@@ -94,9 +94,26 @@ export async function signUrl(env: Envelope, siteUrl: string = DEFAULT_SITE_URL)
   return base + (await encodeSignPayload(env, { compress: true }));
 }
 
+/**
+ * The payload as the link was meant to carry it. Chat apps and mail clients mangle long links: they percent-encode
+ * characters, wrap lines and slip in zero-width spaces. Base64url has none of those, so they're safe to remove; the
+ * envelope is then decoded and checked from its bytes as always.
+ */
+function cleanPayload(fragment: string): string {
+  let p = fragment.replace(/^#/, "");
+  if (p.includes("%")) {
+    try {
+      p = decodeURIComponent(p);
+    } catch {
+      /* not percent-encoded after all: the check below reports it */
+    }
+  }
+  return p.replace(/[\s\u200B-\u200D\u2060\uFEFF]+/g, "");
+}
+
 /** Reads an envelope back from a sign link's fragment (with or without the leading "#"), and checks its shape. */
 export async function decodeSignPayload(fragment: string): Promise<Envelope> {
-  const payload = fragment.replace(/^#/, "").trim();
+  const payload = cleanPayload(fragment);
   if (!payload) throw new ValidationError("the sign link has no transaction in it");
   if (payload.length > MAX_PAYLOAD_CHARS) throw new ValidationError("the sign link is too long");
   const compressed = payload.startsWith(GZIP_PREFIX);
@@ -113,7 +130,7 @@ export async function decodeSignPayload(fragment: string): Promise<Envelope> {
   try {
     json = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
-    throw new ValidationError("the sign link's payload isn't a JSON envelope");
+    throw new ValidationError("the sign link is incomplete: it was probably cut short when it was copied. Copy the whole link, or ask for a fresh one");
   }
   return parseEnvelope(json);
 }

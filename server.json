@@ -1,0 +1,48 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "fun.highwire/highwire",
+  "title": "Highwire",
+  "description": "Trade, launch and research higher.fun coins on Solana, from any AI agent. Unsigned or policy-signed.",
+  "version": "0.4.1",
+  "websiteUrl": "https://highwire.fun",
+  "repository": {
+    "url": "https://github.com/HigherMaestro/highwire",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "highwire-mcp",
+      "version": "0.4.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "HIGHWIRE_CLUSTER",
+          "description": "mainnet (default) or devnet",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "SOLANA_RPC_URL",
+          "description": "Your Solana RPC URL; defaults to the public one",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "HIGHWIRE_KEYPAIR_PATH",
+          "description": "A keypair file, to turn on the local signer (it signs only inside your policy)",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://highwire.fun/mcp"
+    }
+  ]
+}
