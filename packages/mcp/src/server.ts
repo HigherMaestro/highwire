@@ -15,6 +15,7 @@ import {
   type Cluster,
 } from "highwire-core";
 import { registerPrompts } from "./prompts.ts";
+import { registerFeeTools } from "./tools/fees.ts";
 import { registerMarketTools } from "./tools/market.ts";
 import { platformInfo, registerPlatformTools } from "./tools/platform.ts";
 import { registerProfileTools } from "./tools/profiles.ts";
@@ -135,6 +136,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
   registerProfileTools(server, deps);
   registerPlatformTools(server, deps);
   registerSafetyTools(server, deps);
+  registerFeeTools(server, deps);
   if (opts.transactionTools !== false) {
     registerTransactionTools(server, deps);
     if (!opts.hosted) registerLocalTools(server, deps);

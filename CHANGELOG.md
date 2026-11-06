@@ -73,6 +73,15 @@ creates, holds or manages a wallet, and the hosted endpoint still never signs.
   each transaction is sent. The daily limit is counted from it. Creating `~/.highwire/STOP` refuses everything.
 - **Transfers.** `build_transfer` sends SOL or a higher.fun coin to another wallet, checked to the lamport and the
   recipient. It's local only and has no sign link: the sign page refuses transfers, since a link can come from anyone.
+- **Fee tools.** `get_ecosystem_fees` (totals by recipient, phase and fee mode, what's waiting to be claimed, the top
+  coins) and `get_coin_fees` (one coin, line by line), on the hosted endpoint too: the numbers behind highwire.fun/fees.
+- **Launches with an image, and for someone else (local signer).**
+  - **`image_path`:** `execute_launch` takes an image file. The signer signs higher.fun's sign-in message, checked word
+    for word, then uploads the image and metadata. Only a real image of at most 4 MB is read, never anything from the
+    signer's folder.
+  - **`launch_for`:** an X or GitHub handle, New school. higher.fun resolves the handle to the wallet that holds that
+    account's fees. The coin is created for that wallet, which gets 0.005 SOL if it holds less.
+  - The sign page still never signs a launch for someone else.
 - **Donations:** Highwire's one donation wallet, `7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce`, is on the home page,
   linked from every page's footer.
 - **Ecosystem fees** at highwire.fun/fees: every fee all of higher.fun's coins have paid and who got it (creators,

@@ -158,7 +158,8 @@ export interface LaunchArgs {
   idempotency_key: string;
 }
 
-export async function buildLaunchFor(deps: Deps, w: PublicKey, args: LaunchArgs) {
+/** `creator`: launch for another account (execute_launch's launch_for), who gets the creator fees. */
+export async function buildLaunchFor(deps: Deps, w: PublicKey, args: LaunchArgs, creator?: PublicKey) {
   const { chain, api } = deps;
   const input = { wallet: w, name: args.name, ticker: args.ticker, mode: args.fee_mode };
   const mintKey = deps.launchKeys.get(args.idempotency_key, launchFingerprint(chain.cluster, input));
@@ -174,6 +175,7 @@ export async function buildLaunchFor(deps: Deps, w: PublicKey, args: LaunchArgs)
     devBuyLamports: args.dev_buy_sol ? solToLamports(args.dev_buy_sol) : undefined,
     slippageBps: args.max_slippage_bps,
     mint: mintKey,
+    ...(creator ? { creator } : {}),
   });
   return { result, mint: mintKey.publicKey.toBase58() };
 }

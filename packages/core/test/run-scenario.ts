@@ -8,7 +8,7 @@ import { walletPositions } from "../src/tx/positions.ts";
 import { buildTrade } from "../src/tx/trade.ts";
 import { buildTransfer } from "../src/tx/transfer.ts";
 import { solToLamports, tokensToBase } from "../src/tx/units.ts";
-import { CLAIM_COIN, CREATOR, CURVE_COIN, GRADUATED_COIN, GRADUATED_HOLDER, LAUNCH_MINT, LAUNCH_URI, NEW_SCHOOL_GRADUATED, TRADER, type Scenario } from "./scenarios.ts";
+import { CLAIM_COIN, CREATOR, CURVE_COIN, GRADUATED_COIN, GRADUATED_HOLDER, LAUNCH_FOR, LAUNCH_MINT, LAUNCH_URI, NEW_SCHOOL_GRADUATED, TRADER, type Scenario } from "./scenarios.ts";
 
 /** Runs one scenario against whatever fetch it's given: the real network when recording, a recording in tests. */
 export async function runScenario(name: Scenario, fetch: typeof globalThis.fetch) {
@@ -37,6 +37,19 @@ export async function runScenario(name: Scenario, fetch: typeof globalThis.fetch
         slippageBps: 500,
         mint: LAUNCH_MINT,
       });
+    case "launch-for":
+      return buildLaunch(chain, api, {
+        wallet: TRADER,
+        name: "Highwire Sim For",
+        ticker: "HWSIMF",
+        description: "Simulation only",
+        metadataUri: LAUNCH_URI,
+        mode: "rewards",
+        devBuyLamports: solToLamports(0.05),
+        slippageBps: 500,
+        mint: LAUNCH_MINT,
+        creator: LAUNCH_FOR,
+      });
     case "claim":
       return buildClaimCreatorFees(chain, CREATOR, await graduatedCoinsOf(api, CREATOR));
     case "positions":
@@ -50,5 +63,7 @@ export async function runScenario(name: Scenario, fetch: typeof globalThis.fetch
       return { transfer: await buildTransfer(chain, { wallet: GRADUATED_HOLDER, to: TRADER, mint: GRADUATED_COIN, amount: tokensToBase(1_000) }) };
     case "fees":
       return { fees: await ecosystemFees(chain, api, { only: [NEW_SCHOOL_GRADUATED, CLAIM_COIN, CURVE_COIN].map((m) => m.toBase58()) }) };
+    case "fees-coin":
+      return { fees: await ecosystemFees(chain, api, { only: [NEW_SCHOOL_GRADUATED.toBase58()] }) };
   }
 }

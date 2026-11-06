@@ -39,6 +39,8 @@ execute tools sign and send only inside it. Dry run until the policy says `"live
 | `get_platform_info` | Launch fee, SOL price, fee modes, program addresses |
 | `check_ticker` | Whether a ticker is free |
 | `rug_check` | On-chain authorities plus higher.fun's safety data, rolled into a verdict |
+| `get_ecosystem_fees` | Every fee higher.fun's coins have paid and who got it, by phase and fee mode, what's waiting to be claimed, and the top coins: the numbers behind highwire.fun/fees |
+| `get_coin_fees` | One coin's fees, line by line: who got each, measured on-chain or computed from volume, and what's waiting |
 
 **Transactions (hosted and local):**
 
@@ -82,7 +84,13 @@ refreshes the blockhash and changes nothing else); launch links, whose new mint 
   so any serverless instance gives a retry the same mint, and once the coin exists a retry returns `already_launched`.
   Reusing a key for a different coin gets a different mint.
 - higher.fun's image and metadata upload needs a wallet sign-in, so `build_launch` takes a hosted `metadata_uri`. Without
-  one it returns the metadata JSON to host.
+  one it returns the metadata JSON to host. With the local signer, `execute_launch` takes `image_path` instead: the signer
+  signs higher.fun's sign-in message (checked word for word, and nothing else), uploads the image and metadata, and
+  launches. Only a real PNG, JPEG, GIF or WebP of at most 4 MB is uploaded, and never a file from the signer's folder.
+- `execute_launch` also takes `launch_for` (New school): an X or GitHub handle. higher.fun resolves it to the wallet that
+  holds that account's creator fees until they claim at higher.fun/claim; the coin is created for that wallet, which
+  gets 0.005 SOL from you if it holds less, and your first buy is still yours. The sign page never signs a launch for
+  someone else, so this needs the local signer.
 
 **Prompts:**
 - `scan_launches`
@@ -100,7 +108,7 @@ refreshes the blockhash and changes nothing else); launch links, whose new mint 
 
 ### Hosted
 
-Nothing to install, no key. The hosted server has all 22 tools; the build tools only return unsigned transactions and a
+Nothing to install, no key. The hosted server has all 24 tools; the build tools only return unsigned transactions and a
 sign link.
 
 **Claude Code**

@@ -23,6 +23,8 @@ export const NEW_SCHOOL_GRADUATED = new PublicKey("7ymF66Z6VhgNiwadtVhjTtT6U7iQR
 /** A fixed mint for the launch scenario, so the replayed build is deterministic. Never funded. */
 export const LAUNCH_MINT = Keypair.fromSeed(createHash("sha256").update("highwire simulation launch mint").digest());
 export const LAUNCH_URI = "https://highwire.fun/sim/metadata.json";
+/** A fixed address to launch for (an X account's wallet, in real use). Empty, so the launch funds it. Never funded. */
+export const LAUNCH_FOR = Keypair.fromSeed(createHash("sha256").update("highwire simulation launch-for creator").digest()).publicKey;
 
-export const SCENARIOS = ["buy-curve", "sell-curve", "buy-graduated", "sell-graduated", "launch-rewards", "claim", "positions", "positions-mints", "transfer-sol", "transfer-coin", "fees"] as const;
+export const SCENARIOS = ["buy-curve", "sell-curve", "buy-graduated", "sell-graduated", "launch-rewards", "claim", "positions", "positions-mints", "transfer-sol", "transfer-coin", "fees", "fees-coin", "launch-for"] as const;
 export type Scenario = (typeof SCENARIOS)[number];

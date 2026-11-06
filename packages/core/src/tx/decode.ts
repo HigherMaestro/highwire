@@ -264,6 +264,10 @@ export interface Expectations {
   launchFee?: { to: PublicKey; maxLamports: bigint };
   /** Pool a vesting assignment must act on. */
   vestingPool?: PublicKey;
+  /** A coin created for someone else (launch for an X or GitHub account): initialize_v2's creator. Default: the wallet. */
+  launchCreator?: PublicKey;
+  /** A single SOL transfer of exactly `lamports` to the launch-for creator, so they can claim. */
+  creatorFunding?: { to: PublicKey; lamports: bigint };
   /** Whether a LaunchLab or CPMM instruction may appear at all. */
   allowCpmm?: boolean;
   allowLaunchLab?: boolean;
@@ -318,6 +322,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
   const isWsol = (k: PublicKey) => wsol.has(k.toBase58());
 
   let feeTransfers = 0;
+  let fundings = 0;
   let memos = 0;
   let transfers = 0;
   const send = exp.transfer;
@@ -340,6 +345,9 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
         if (exp.launchFee && to.equals(exp.launchFee.to)) {
           if (lamports > exp.launchFee.maxLamports) fail(`instruction ${i + 1}: launch fee above the quoted amount`);
           if (++feeTransfers > 1) fail(`instruction ${i + 1}: more than one launch fee transfer`);
+        } else if (exp.creatorFunding && to.equals(exp.creatorFunding.to)) {
+          if (lamports !== exp.creatorFunding.lamports) fail(`instruction ${i + 1}: sends the coin's creator a different amount than asked`);
+          if (++fundings > 1) fail(`instruction ${i + 1}: more than one transfer to the coin's creator`);
         } else if (send?.lamports !== undefined && to.equals(send.to)) {
           if (lamports !== send.lamports) fail(`instruction ${i + 1}: sends a different amount of SOL than asked`);
           if (++transfers > 1) fail(`instruction ${i + 1}: more than one transfer`);
@@ -410,7 +418,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
       if (platformIndex < 0) fail(`instruction ${i + 1}: a LaunchLab instruction Highwire does not build`);
       if (!exp.platformId || !key(platformIndex).equals(exp.platformId)) fail(`instruction ${i + 1}: LaunchLab instruction for a platform other than higher.fun's`);
       if (!key(0).equals(wallet)) fail(`instruction ${i + 1}: LaunchLab instruction for someone other than the wallet`);
-      if (disc === L.initializeV2 && !key(1).equals(wallet)) fail(`instruction ${i + 1}: the coin isn't being created for the wallet`);
+      if (disc === L.initializeV2 && !key(1).equals(exp.launchCreator ?? wallet)) fail(`instruction ${i + 1}: the coin isn't being created for the wallet`);
       if (disc === L.buyExactIn || disc === L.sellExactIn) {
         // Exactly the accounts Highwire builds: the wallet's own coin account and wrapped SOL, the pool's vaults under
         // LaunchLab's authority, the platform's fee vault, and no share-fee receiver.

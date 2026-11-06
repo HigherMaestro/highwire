@@ -11,6 +11,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/higher/api.ts` | typed client for api.higher.fun |
 | `packages/core/src/higher/constants.ts` | addresses and fee modes |
 | `packages/core/src/higher/format.ts` | unit conversion and the untrusted-content flags |
+| `packages/core/src/higher/session.ts` | `HigherSession`: higher.fun sign-in (its exact message, checked before signing), uploads and fee-recipient lookups. Local signer only |
 | `packages/core/src/lib/` | HTTP client with retries, and the error classes |
 | `packages/core/src/solana/rpc.ts` | the few RPC reads we need, over fetch |
 | `packages/core/src/risk.ts` | `evaluateRisk`, the rug-check verdict |
@@ -69,6 +70,8 @@ Streamable HTTP. An npm workspaces monorepo. Read
   a lock file so two processes take turns, and only after the RPC's genesis hash matches the policy's cluster. Test it
   with a fake connection, never a real
   cluster.
+- **Signing messages:** the local signer signs one kind of message, higher.fun's sign-in message, through
+  `signInMessage`, after `checkSignInMessage` matches it word for word. Never add a general sign-message path.
 - **Transfers** go only through the local signer, to the policy's allowlist. The sign page refuses them: a sign link
   can come from anyone.
 - **Never** accept private keys or seed phrases through tool arguments. Never commit keys, `.env` files or keypairs.

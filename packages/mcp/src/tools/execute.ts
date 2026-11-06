@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { basename, resolve, sep } from "node:path";
 import { PublicKey, VersionedTransaction } from "@solana/web3.js";
-import { buildTransfer, describeTransaction, solToLamports, summarizeQuote, tokensToBase, ValidationError, type Envelope } from "highwire-core";
+import { buildTransfer, describeTransaction, HigherSession, solToLamports, summarizeQuote, tokensToBase, ValidationError, type Envelope } from "highwire-core";
 import type { ExecuteResult, Intent } from "highwire-agent";
 import { jsonResult, run, runResult } from "../result.ts";
 import { BUILD, EXECUTE, READ_ONLY, address, mint, type Deps, type ExecutionSigner } from "./shared.ts";
@@ -75,7 +77,44 @@ export const LIST_ONLY_SIGNER: ExecutionSigner = {
     throw new ValidationError("This server has no local signer.", { code: "no_signer" });
   },
   execute: () => Promise.reject(new ValidationError("This server has no local signer.", { code: "no_signer" })),
+  signInMessage: () => {
+    throw new ValidationError("This server has no local signer.", { code: "no_signer" });
+  },
+  paths: { home: "", policy: "", audit: "", stop: "", lock: "" },
 };
+
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+/** The image file's type from its first bytes: PNG, JPEG, GIF or WebP, or null for anything else. */
+function imageType(b: Uint8Array): string | null {
+  const at = (i: number, ...v: number[]) => v.every((x, k) => b[i + k] === x);
+  if (at(0, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return "image/png";
+  if (at(0, 0xff, 0xd8, 0xff)) return "image/jpeg";
+  if (at(0, 0x47, 0x49, 0x46, 0x38)) return "image/gif";
+  if (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50)) return "image/webp";
+  return null;
+}
+
+/**
+ * Reads a coin image from the user's machine for upload. Anything uploaded is public, and an agent could be talked into
+ * naming any file, so only a real image of at most 4 MB is read, and never anything in the signer's folder.
+ */
+export function readCoinImage(path: string, signer: Pick<ExecutionSigner, "paths">, keypairPath: string | undefined): { bytes: Uint8Array; type: string; name: string } {
+  let full: string;
+  try {
+    full = realpathSync(resolve(path));
+  } catch {
+    throw new ValidationError("image_path doesn't name a file that can be read.", { code: "bad_image" });
+  }
+  const guarded = [signer.paths.home, keypairPath].filter((p): p is string => !!p).map((p) => (existsSync(p) ? realpathSync(p) : resolve(p)));
+  if (guarded.some((g) => full === g || full.startsWith(g + sep))) throw new ValidationError("That file is in the signer's folder; it's never uploaded.", { code: "bad_image" });
+  const st = statSync(full);
+  if (!st.isFile() || st.size > MAX_IMAGE_BYTES) throw new ValidationError("image_path must be an image file of at most 4 MB.", { code: "bad_image" });
+  const bytes = new Uint8Array(readFileSync(full));
+  const type = imageType(bytes);
+  if (!type) throw new ValidationError("image_path isn't a PNG, JPEG, GIF or WebP image, so it wasn't uploaded.", { code: "bad_image" });
+  return { bytes, type, name: basename(full) };
+}
 
 export function registerLocalTools(server: McpServer, deps: Deps) {
   const { chain } = deps;
@@ -160,20 +199,64 @@ function registerExecuteTools(server: McpServer, deps: Deps, signer: ExecutionSi
       description:
         "Launch a coin exactly as build_launch builds it, from the local signer's wallet, then sign and send it if the " +
         "user's policy allows launches, the launch fee plus first buy fits its SOL limits, and it's live; otherwise it's a " +
-        "dry run. Reuse the same idempotency_key on retries. Set confirm_launch only after the user approved the launch, " +
-        "its cost and its fee mode.",
-      inputSchema: launchShape(maxSol),
+        "dry run. Without metadata_uri, give image_path (a PNG, JPEG, GIF or WebP on this machine) and the signer signs in " +
+        "to higher.fun to upload the image and metadata. launch_for (New school) launches for an X or GitHub account: they " +
+        "get the creator fees, higher.fun holds them until they claim. Reuse the same idempotency_key on retries. Set " +
+        "confirm_launch only after the user approved the launch, its cost, its fee mode and who it's for.",
+      inputSchema: {
+        ...launchShape(maxSol),
+        image_path: z.string().min(1).max(1024).optional().describe("A coin image on this machine to upload: PNG, JPEG, GIF or WebP, at most 4 MB."),
+        launch_for: z
+          .object({
+            provider: z.enum(["x", "github"]),
+            handle: z.string().regex(/^@?[A-Za-z0-9_-]{1,39}$/).describe("Their handle, without the @."),
+          })
+          .optional()
+          .describe("New school only: launch for this X or GitHub account, who gets the coin's creator fees."),
+      },
       annotations: { title: "Execute a coin launch (local signer)", ...EXECUTE },
     },
     (args) =>
       runResult(async () => {
         signer.precheck("launch", cluster, "execute_launch");
-        const { result: r, mint: mintAddress } = await buildLaunchFor(deps, signer.publicKey, args);
+        let metadataUri = args.metadata_uri;
+        // A bad image fails here, before anything signs in or goes over the network.
+        const image = !metadataUri && args.image_path ? readCoinImage(args.image_path, signer, process.env.HIGHWIRE_KEYPAIR_PATH) : null;
+        let creator: PublicKey | undefined;
+        let launchFor: { provider: string; handle: string; wallet: string } | undefined;
+        if (image || args.launch_for) {
+          if (cluster !== "mainnet") throw new ValidationError("Uploads and launch_for use higher.fun's API, which is mainnet only.");
+          if (args.launch_for && args.fee_mode !== "rewards") throw new ValidationError("launch_for needs New school (fee_mode rewards).");
+          // Signing in only signs higher.fun's sign-in message (checked word for word); it moves no funds.
+          const session = new HigherSession();
+          await session.signIn(signer.wallet, (m) => signer.signInMessage(m, "execute_launch"));
+          if (args.launch_for) {
+            const handle = args.launch_for.handle.replace(/^@/, "").toLowerCase();
+            const r = await session.resolveFeeRecipient(args.launch_for.provider, handle);
+            launchFor = { provider: r.provider, handle: r.handle, wallet: r.wallet };
+            creator = new PublicKey(r.wallet);
+          }
+          if (!metadataUri) {
+            if (!image) throw new ValidationError("Give image_path (or metadata_uri) so the coin has an image.");
+            const imageUri = await session.uploadImage(image.bytes, image.name, image.type);
+            metadataUri = await session.uploadMetadata({
+              name: args.name,
+              ticker: args.ticker.toUpperCase(),
+              description: args.description ?? "",
+              ...(args.website ? { website: args.website } : {}),
+              ...(args.x ? { x: args.x } : {}),
+              ...(args.telegram ? { telegram: args.telegram } : {}),
+              ...(launchFor ? { feeRecipient: { provider: launchFor.provider as "x" | "github", handle: launchFor.handle } } : {}),
+              imageUri,
+            });
+          }
+        }
+        const { result: r, mint: mintAddress } = await buildLaunchFor(deps, signer.publicKey, { ...args, metadata_uri: metadataUri }, creator);
         if (r.status === "needs_metadata") return jsonResult({ status: r.status, mint: mintAddress, metadata: r.metadata, next_step: r.nextStep });
         if (r.status === "already_launched") return jsonResult({ status: r.status, mint: r.mint, url: r.url, note: "This idempotency key's coin already exists. Nothing was sent." });
         const solOut = (r.launchFee ? solToLamports(r.launchFee.sol) : 0n) + solToLamports(r.devBuySol);
         const done = await go("execute_launch", { action: "launch", cluster, solOut, slippageBps: args.dev_buy_sol ? args.max_slippage_bps : undefined, mint: r.mint }, r.envelope);
-        return jsonResult(executed(done, launchDetails(deps, r)));
+        return jsonResult(executed(done, { ...launchDetails(deps, r), ...(launchFor ? { launchFor: { ...launchFor, note: "They get the creator fees; higher.fun holds them until they claim at higher.fun/claim." } } : {}), metadataUri }));
       }),
   );
 

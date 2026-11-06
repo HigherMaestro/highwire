@@ -2,7 +2,9 @@ import { lstatSync } from "node:fs";
 import { Buffer } from "node:buffer";
 import { VersionedTransaction, type Connection, type Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
+import { ed25519 } from "@noble/curves/ed25519";
 import {
+  checkSignInMessage,
   HigherError,
   isRefreshable,
   lamportsNumber,
@@ -289,6 +291,19 @@ export class LocalSigner {
       }
     }
     return { status: "sent", wallet: this.wallet, cluster: intent.cluster, transactions: sent, summary, spentSol: lamportsNumber(charged), dayLeftSol: dayLeft(this.audit.spentSince(intent.cluster)) };
+  }
+
+  /**
+   * Signs higher.fun's sign-in message, and nothing else, so a launch can upload its image and metadata or look up an
+   * X or GitHub account. The message is checked to be exactly higher.fun's, for this wallet, from just now; it moves no
+   * funds. The tool must have passed precheck("launch") first. Logged like everything else.
+   */
+  signInMessage(message: Uint8Array, tool: string): Uint8Array {
+    if (stopped(this.paths.stop)) throw new HigherError(`Stopped: ${this.paths.stop} exists, so nothing is signed.`, { code: "signer_stopped" });
+    checkSignInMessage(new TextDecoder().decode(message), this.wallet);
+    const signature = ed25519.sign(message, this.keypair.secretKey.subarray(0, 32));
+    this.audit.append({ tool, action: "launch", cluster: "mainnet", wallet: this.wallet, outcome: "signed_in", sol: "0", lamports: "0", reason: "signed higher.fun's sign-in message" });
+    return signature;
   }
 
   /** Once per RPC: its genesis hash must be the policy's cluster's, whatever HIGHWIRE_CLUSTER says. */

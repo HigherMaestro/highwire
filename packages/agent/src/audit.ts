@@ -7,7 +7,8 @@ import type { Action } from "./policy.ts";
 // signed. Signed entries are written as each transaction is sent, before it
 // confirms, so a crash can't hide a spend. The daily limit is counted from here.
 
-export type Outcome = "refused" | "dry_run" | "sent" | "confirmed" | "failed";
+/** signed_in: the signer signed higher.fun's sign-in message for a launch's uploads; it moves no funds. */
+export type Outcome = "refused" | "dry_run" | "sent" | "confirmed" | "failed" | "signed_in";
 
 export interface AuditEntry {
   time: string;

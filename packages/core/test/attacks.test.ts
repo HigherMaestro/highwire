@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Keypair, PublicKey, SystemProgram, TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 import { ADDRESSES } from "../src/higher/constants.ts";
+import { Chain } from "../src/tx/chain.ts";
 import { assertSafe, associatedTokenAddress, NATIVE_MINT_ADDRESS, PROGRAMS } from "../src/tx/decode.ts";
 import { replayFetch, type Recording } from "./replay.ts";
 import { runScenario } from "./run-scenario.ts";
-import { TRADER } from "./scenarios.ts";
+import { LAUNCH_FOR, LAUNCH_MINT, TRADER } from "./scenarios.ts";
+import { reviewEnvelope } from "../src/tx/review.ts";
 
 // Hand-made transactions an attacker could put in a sign link, from the pre-launch audit. Each must be refused by the
 // same check the builders and the sign page run.
@@ -69,4 +71,22 @@ test("a curve trade that names someone else's accounts, pays a share fee or has 
   assert.throws(() => assertSafe(tamper((ix) => ix.data.writeBigUInt64LE(0n, 16)), "mainnet", exp), /no minimum-out guard/);
   assert.throws(() => assertSafe(tamper((ix) => ix.keys.push(meta(attacker))), "mainnet", exp), /unexpected layout/);
   assert.throws(() => assertSafe(tamper((ix) => (ix.keys[16]!.pubkey = attacker)), "mainnet", exp), /platform fee vault/);
+});
+
+test("a launch for another account names them as creator and funds them, and only the local signer may build one", async () => {
+  const recording: Recording = JSON.parse(readFileSync(new URL("./fixtures/launch-for.json", import.meta.url), "utf8"));
+  const built = await runScenario("launch-for", replayFetch(recording));
+  assert.ok(built && "status" in built && built.status === "built");
+  const d = built.envelope.transactions[0]!;
+  assert.equal(d.simulation.ok, true, d.simulation.error);
+  const tx = VersionedTransaction.deserialize(Buffer.from(d.base64, "base64"));
+  const tables = await new Chain({ cluster: "mainnet", fetch: replayFetch(recording) }).lookupTables([tx]);
+  // The creator is the other account, and they get exactly the top-up; the payer still signs and pays.
+  assert.ok(d.summary.some((l) => l.includes(`creator ${LAUNCH_FOR.toBase58()}`)), d.summary.join("\n"));
+  assert.ok(d.summary.some((l) => l.includes(`Send 0.005 SOL from ${TRADER.toBase58()} to ${LAUNCH_FOR.toBase58()}`)));
+  // Without the launch-for expectation, the same bytes are refused: nobody else gets to slip in a creator.
+  assert.throws(() => assertSafe(tx, "mainnet", { wallet, platformId: new PublicKey(ADDRESSES.mainnet.rewardsPlatform), extraSigners: [LAUNCH_MINT.publicKey] }, tables));
+  // And the sign page never signs one.
+  const problems = reviewEnvelope(built.envelope, { lookupTables: tables }).problems;
+  assert.ok(problems.some((p) => /creates a coin for someone else/.test(p)), problems.join("; "));
 });

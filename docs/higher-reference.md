@@ -148,6 +148,16 @@ Trades on the coin API include third-party routers (Axiom's `FLASHX…`, Jupiter
   `POST /uploads/metadata` returns `{metadataUri}`. Metadata is a Metaplex JSON on Pinata IPFS:
   `{name, symbol, description, image, extensions: {website?, twitter?, telegram?}}`. Highwire can't sign the message,
   so `build_launch` takes a hosted `metadata_uri` or returns this JSON to host.
+- **Checked on 2026-11-05:** `/auth/nonce` answers without a session and returns the full message to sign, which
+  higher.fun's site rebuilds and compares before signing (domain `higher.fun`). `/auth/verify {wallet, nonce,
+  signature}` takes a base58 signature and starts a cookie session. `/uploads/metadata` and `/fee-recipients/resolve`
+  answer 401 `sign in required` without one. Highwire's local signer signs in this way (`higher/session.ts`).
+- **Launching for an X or GitHub account (New school):** `POST /fee-recipients/resolve {provider, handle}` returns
+  `{provider, handle, wallet}`, or `recipient_unknown`; providers `x` (handle up to 15 of `a-z0-9_`) and `github`. The
+  site creates the coin with that wallet as `initialize_v2`'s creator (account 1, not a signer), points the first buy's
+  creator vault (account 17 of `buy_exact_in`) at the new creator's, sends the wallet 0.005 SOL if it holds less, allows
+  no creator lock, and passes `feeRecipient` in the uploaded metadata. A mainnet simulation of Highwire's build accepted
+  it (2026-11-05).
 - **`POST /mints/reserve`** returns `{mint, secretKey}`: a vanity `…high` keypair from the server. The site checks the
   secret matches the address and ends in `high`, and silently falls back to a random mint when the call fails. Coins
   with random mints are indexed like any other (many listed coins don't end in `high`). Highwire generates its own

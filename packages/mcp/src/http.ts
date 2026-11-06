@@ -50,6 +50,9 @@ export const TOOL_COSTS: Record<string, (args: Record<string, unknown>) => numbe
   get_wallet_positions: (args) => (Array.isArray(args.mints) && args.mints.length ? 3 : 10),
   quote_trade: () => 2,
   rug_check: () => 2,
+  // Every higher.fun coin's pools, read on-chain (cached for a few minutes per instance), or one coin's.
+  get_ecosystem_fees: () => 10,
+  get_coin_fees: () => 3,
 };
 /** Most JSON-RPC messages one POST may batch. An agent sends one at a time; a batch only multiplies the work. */
 export const MAX_BATCH = 10;

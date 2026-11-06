@@ -1,7 +1,8 @@
 import { createHmac } from "node:crypto";
-import { createVestingAccount, getPdaVestId, LaunchpadConfig, TxVersion } from "@raydium-io/raydium-sdk-v2";
+import { createVestingAccount, getPdaCreatorVault, getPdaVestId, LaunchpadConfig, TxVersion } from "@raydium-io/raydium-sdk-v2";
+import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
-import { Keypair, PublicKey, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type AddressLookupTableAccount } from "@solana/web3.js";
 import type { HigherApi } from "../higher/api.ts";
 import {
   CLASSIC_RESERVE,
@@ -41,10 +42,57 @@ export interface LaunchInput {
   creatorLockPct?: number;
   /** Lamports for the creator's first buy, in the same transaction. */
   devBuyLamports?: bigint;
+  /**
+   * New school only: launch for someone else (an X or GitHub account, through higher.fun's fee-recipient lookup). They
+   * become the coin's creator and get its creator fees; the wallet pays and signs, and any first buy is still its own.
+   */
+  creator?: PublicKey;
   slippageBps: number;
   /** The new coin's mint keypair. Highwire generates one per idempotency key; it only ever signs the coin's creation. */
   mint: Keypair;
   simulate?: boolean;
+}
+
+/** What a launch-for account is topped up to when it holds less, so it can pay to claim its fees. */
+export const CREATOR_FUNDING_LAMPORTS = 5_000_000n;
+
+const INITIALIZE_V2 = "4399af27da102620";
+const BUY_EXACT_IN = "faea0d7bd59c13ec";
+
+function hasLaunchCreate(tx: VersionedTransaction, chain: Chain): boolean {
+  const keys = tx.message.staticAccountKeys;
+  return tx.message.compiledInstructions.some(
+    (ix) => keys[ix.programIdIndex]?.equals(chain.key("launchLabProgram")) && Buffer.from(ix.data.subarray(0, 8)).toString("hex") === INITIALIZE_V2,
+  );
+}
+
+/**
+ * The create transaction with `creator` as the coin's creator (initialize_v2's second account, which doesn't sign) and,
+ * if asked, the payer funding them. Raydium's SDK always makes the payer the creator.
+ */
+function withCreator(
+  tx: VersionedTransaction,
+  tables: AddressLookupTableAccount[],
+  wallet: PublicKey,
+  creator: PublicKey,
+  funding: { to: PublicKey; lamports: bigint } | undefined,
+  chain: Chain,
+): VersionedTransaction {
+  const msg = TransactionMessage.decompile(tx.message, { addressLookupTableAccounts: tables });
+  const create = msg.instructions.find((ix) => ix.programId.equals(chain.key("launchLabProgram")) && ix.data.subarray(0, 8).toString("hex") === INITIALIZE_V2);
+  if (!create || !create.keys[1]?.pubkey.equals(wallet)) throw new UnsafeTransactionError("the coin creation doesn't have the expected creator account");
+  create.keys[1] = { pubkey: creator, isSigner: false, isWritable: create.keys[1].isWritable };
+  // A first buy in the same transaction pays its creator fee into the creator's vault, which follows the creator.
+  const vault = getPdaCreatorVault(chain.key("launchLabProgram"), creator, NATIVE_MINT).publicKey;
+  for (const ix of msg.instructions) {
+    if (!ix.programId.equals(chain.key("launchLabProgram")) || ix.data.subarray(0, 8).toString("hex") !== BUY_EXACT_IN) continue;
+    const old = getPdaCreatorVault(chain.key("launchLabProgram"), wallet, NATIVE_MINT).publicKey;
+    if (!ix.keys[17]?.pubkey.equals(old)) throw new UnsafeTransactionError("the first buy doesn't have the expected creator vault");
+    ix.keys[17] = { ...ix.keys[17], pubkey: vault };
+  }
+  if (funding) msg.instructions.push(SystemProgram.transfer({ fromPubkey: wallet, toPubkey: funding.to, lamports: funding.lamports }));
+  const used = tables.filter((t) => tx.message.addressTableLookups.some((l) => l.accountKey.equals(t.key)));
+  return new VersionedTransaction(msg.compileToV0Message(used));
 }
 
 export interface LaunchFee {
@@ -111,6 +159,11 @@ export function validateLaunch(input: LaunchInput): void {
     }
   }
   if (input.devBuyLamports !== undefined && input.devBuyLamports < 0n) bad("dev buy must not be negative");
+  if (input.creator) {
+    if (input.mode !== "rewards") bad("launching for another account needs New school (rewards)");
+    if (input.creatorLockPct !== undefined) bad("a coin launched for another account can't have a creator lock");
+    if (input.creator.equals(input.wallet)) bad("that account's wallet is your own; launch without it");
+  }
   checkSlippage(input.slippageBps);
 }
 
@@ -158,8 +211,9 @@ export async function buildLaunch(chain: Chain, api: HigherApi | null, input: La
       metadata,
       nextStep:
         "higher.fun only uploads images and metadata for a signed-in wallet (a Sign-In With Solana message), which " +
-        "Highwire can't sign. Host this metadata JSON (with the image) yourself, on IPFS or Arweave, or create the coin's " +
-        "metadata on higher.fun, then call build_launch again with metadata_uri set to its https URL and the same idempotency key.",
+        "the hosted server can't sign. Host this metadata JSON (with the image) yourself, on IPFS or Arweave, then call " +
+        "build_launch again with metadata_uri set to its https URL and the same idempotency key. With the local signer, " +
+        "execute_launch takes image_path and uploads both for you.",
     };
   }
 
@@ -240,6 +294,19 @@ export async function buildLaunch(chain: Chain, api: HigherApi | null, input: La
     };
   });
 
+  // Launching for someone else: they're the coin's creator, and a wallet with under 0.005 SOL gets that much from the
+  // payer so it can claim later, the way higher.fun's own create page does it.
+  let funding: { to: PublicKey; lamports: bigint } | undefined;
+  if (input.creator) {
+    const balance = BigInt(await chain.connection.getBalance(input.creator, "confirmed"));
+    funding = balance < CREATOR_FUNDING_LAMPORTS ? { to: input.creator, lamports: CREATOR_FUNDING_LAMPORTS } : undefined;
+    const i = txs.findIndex((b) => hasLaunchCreate(b.tx, chain));
+    if (i < 0) throw new UnsafeTransactionError("the SDK built no coin creation");
+    const b = txs[i]!;
+    b.tx = withCreator(b.tx, await chain.lookupTables([b.tx]), wallet, input.creator, funding, chain);
+    b.expect = { ...b.expect, launchCreator: input.creator, ...(funding ? { creatorFunding: funding } : {}) };
+  }
+
   if (input.mode === "rewards" && lock) {
     const vestingRecord = getPdaVestId(chain.key("launchLabProgram"), poolId, wallet).publicKey;
     const ix = createVestingAccount(chain.key("launchLabProgram"), wallet, wallet, poolId, vestingRecord, new BN(lock.amount.toString()));
@@ -255,7 +322,13 @@ export async function buildLaunch(chain: Chain, api: HigherApi | null, input: La
   if (launches.length !== 1) throw new UnsafeTransactionError("expected exactly one coin creation");
   const l = launches[0]!;
   if (l.mint !== mint.publicKey.toBase58()) throw new UnsafeTransactionError("the coin's address isn't the one generated for it");
-  if (l.creator !== wallet.toBase58()) throw new UnsafeTransactionError("the coin isn't being created for the wallet");
+  if (l.creator !== (input.creator ?? wallet).toBase58()) {
+    throw new UnsafeTransactionError(input.creator ? "the coin isn't being created for that account's wallet" : "the coin isn't being created for the wallet");
+  }
+  if (funding) {
+    const sent = done.decoded.flatMap((d) => d.transfers).filter((t) => t.to === funding.to.toBase58());
+    if (sent.length !== 1 || sent[0]!.lamports !== funding.lamports) throw new UnsafeTransactionError("the SOL sent to that account isn't what was shown");
+  }
   if (l.platform !== platformId.toBase58()) throw new UnsafeTransactionError("the coin isn't launching with the fee mode you picked");
   if (fee) {
     const paid = done.decoded.flatMap((d) => d.transfers).filter((t) => t.to === fee.treasury.toBase58());

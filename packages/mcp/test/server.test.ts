@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { agentPaths, LocalSigner, POLICY_TEMPLATE } from "highwire-agent";
 import { createServer, SIGNER_INSTRUCTIONS, type ServerOptions } from "../src/server.ts";
+import { readCoinImage } from "../src/tools/execute.ts";
 import { ALL_TOOLS, BUILD_TOOLS, EXECUTE_TOOLS, FAKE_OPTIONS } from "./fake.ts";
 import { fixtureFetch } from "./replay.ts";
 
@@ -259,4 +260,33 @@ test("with a launch secret, built envelopes carry an attestation the sign page c
   assert.equal(verifyAttestation(await decodeSignPayload(new URL(signed.sign_url).hash), key), "verified");
   const plain = parse(await (await connect({ fetch: fixtureFetch("buy-curve"), retries: 0 })).callTool({ name: "build_trade", arguments: args }));
   assert.equal(plain.unsigned.attestation, undefined);
+});
+
+test("get_coin_fees breaks one coin's fees down by recipient, measured and computed, with what's waiting", async () => {
+  const client = await connect({ fetch: fixtureFetch("fees-coin"), retries: 0 });
+  const out = parse(await client.callTool({ name: "get_coin_fees", arguments: { mint: "7ymF66Z6VhgNiwadtVhjTtT6U7iQRpSxeiRrhfufhigh" } }));
+  assert.equal(out.feeMode, "rewards");
+  assert.equal(out.status, "graduated");
+  assert.ok(out.totalFeesSol > 0);
+  assert.ok(out.lines.some((l: { basis: string; phase: string }) => l.basis === "measured" && l.phase === "curve"));
+  assert.ok(out.lines.some((l: { basis: string; phase: string }) => l.basis === "computed" && l.phase === "pool"));
+  assert.ok(out.pool.lockedLp.harvestedSol > 0);
+  assert.match(out.feesPage, /\/fees\/7ymF66Z6/);
+  assert.ok(out.namesNote);
+});
+
+test("execute_launch only uploads a real image, and never a file from the signer's folder", async () => {
+  const paths = signerHome({ ...POLICY_TEMPLATE, cluster: "mainnet", actions: ["launch"] });
+  const dir = mkdtempSync(join(tmpdir(), "highwire-img-"));
+  const png = join(dir, "coin.png");
+  writeFileSync(png, Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"));
+  const fake = join(dir, "id.png");
+  writeFileSync(fake, "[12,34,56]");
+  assert.equal(readCoinImage(png, { paths }, undefined).type, "image/png");
+  assert.throws(() => readCoinImage(fake, { paths }, undefined), /isn't a PNG, JPEG, GIF or WebP/);
+  assert.throws(() => readCoinImage(paths.policy, { paths }, undefined), /signer's folder/);
+  assert.throws(() => readCoinImage(join(dir, "missing.png"), { paths }, undefined), /can be read/);
+  const key = join(dir, "key.json");
+  writeFileSync(key, "[1,2,3]");
+  assert.throws(() => readCoinImage(key, { paths }, key), /signer's folder/);
 });

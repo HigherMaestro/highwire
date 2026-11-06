@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import bs58 from "bs58";
+import { ed25519 } from "@noble/curves/ed25519";
 import assert from "node:assert/strict";
 import { appendFileSync, chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type Connection } from "@solana/web3.js";
-import { ENVELOPE_FORMAT, HOW_TO_SIGN, solToLamports, type Envelope } from "highwire-core";
+import { ENVELOPE_FORMAT, HOW_TO_SIGN, signInMessage, solToLamports, type Envelope } from "highwire-core";
 import { agentPaths, checkPolicy, GENESIS_HASHES, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, PolicySchema, policyWarnings, type Intent, type Policy } from "../src/index.ts";
 
 // Unit tests only: a throwaway in-memory keypair and a fake RPC. Nothing here touches a real cluster.
@@ -271,4 +272,16 @@ test("a live policy with no coin or creator allow-list is flagged", () => {
   assert.equal(policyWarnings(policy({ live: true, actions: ["trade"] })).length, 1);
   assert.deepEqual(policyWarnings(policy({ live: true, actions: ["trade"], coins: { allow: [COIN] } })), []);
   assert.deepEqual(policyWarnings(policy({ live: false, actions: ["trade"] })), []);
+});
+
+test("the signer signs higher.fun's sign-in message and nothing else, and logs it", () => {
+  const { signer } = signerWith(policy({ actions: ["launch"] }));
+  const ok = signInMessage(signer.wallet, "3173c33f4db122bf328e5cee03592751", new Date().toISOString());
+  const sig = signer.signInMessage(new TextEncoder().encode(ok), "execute_launch");
+  assert.ok(ed25519.verify(sig, new TextEncoder().encode(ok), signer.publicKey.toBytes()));
+  assert.equal(signer.audit.entries().at(-1)?.outcome, "signed_in");
+  assert.throws(() => signer.signInMessage(new TextEncoder().encode(ok.replace("higher.fun wants", "evil.example wants")), "execute_launch"), /isn't higher.fun's/);
+  // A transaction's bytes are never accepted as a "message".
+  const tx = envelopeFor(signer.publicKey, solToLamports(0.1)).transactions[0]!.base64;
+  assert.throws(() => signer.signInMessage(Buffer.from(tx, "base64"), "execute_launch"), /isn't higher.fun's/);
 });

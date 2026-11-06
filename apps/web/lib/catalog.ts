@@ -184,6 +184,12 @@ export const TOOL_GROUPS: { id: string; title: string; blurb: string; tools: str
     tools: ["rug_check", "get_platform_info", "check_ticker", "get_chat"],
   },
   {
+    id: "fees",
+    title: "Fees",
+    blurb: "What higher.fun's coins have paid, and who got it: the numbers behind highwire.fun/fees.",
+    tools: ["get_ecosystem_fees", "get_coin_fees"],
+  },
+  {
     id: "trade",
     title: "Trade and launch",
     blurb: "Quotes, positions, and transactions you review and sign in your own wallet on highwire.fun/sign.",
