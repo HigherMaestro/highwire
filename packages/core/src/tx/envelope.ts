@@ -39,6 +39,8 @@ function lastLogLines(logs: string[] | null | undefined, n = 12): string[] {
 }
 
 function simulationError(err: unknown, logs: string[]): string {
+  // Solana's word for a fee payer that has never held SOL on this cluster.
+  if (err === "AccountNotFound") return "the wallet has no SOL on this cluster (AccountNotFound)";
   const rev = [...logs].reverse();
   const line = rev.find((l) => /^Program log: (AnchorError|Error)/.test(l)) ?? rev.find((l) => /Error|failed|insufficient/i.test(l));
   return (line?.replace(/^Program log: /, "") ?? JSON.stringify(err)).slice(0, 300);

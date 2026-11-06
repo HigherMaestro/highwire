@@ -151,7 +151,9 @@ Trades on the coin API include third-party routers (Axiom's `FLASHX…`, Jupiter
 - **Checked on 2026-11-05:** `/auth/nonce` answers without a session and returns the full message to sign, which
   higher.fun's site rebuilds and compares before signing (domain `higher.fun`). `/auth/verify {wallet, nonce,
   signature}` takes a base58 signature and starts a cookie session. `/uploads/metadata` and `/fee-recipients/resolve`
-  answer 401 `sign in required` without one. Highwire's local signer signs in this way (`higher/session.ts`).
+  answer 401 `sign in required` without one. Highwire's local signer signs in this way (`higher/session.ts`). On
+  2026-11-06 it signed in from Node with no Origin header, then uploaded an image and metadata: the metadata came back
+  as a Pinata URI with `{name, symbol, description, image, extensions}`.
 - **Launching for an X or GitHub account (New school):** `POST /fee-recipients/resolve {provider, handle}` returns
   `{provider, handle, wallet}`, or `recipient_unknown`; providers `x` (handle up to 15 of `a-z0-9_`) and `github`. The
   site creates the coin with that wallet as `initialize_v2`'s creator (account 1, not a signer), points the first buy's

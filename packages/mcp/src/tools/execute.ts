@@ -5,7 +5,7 @@ import { basename, resolve, sep } from "node:path";
 import { PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { buildTransfer, describeTransaction, HigherSession, solToLamports, summarizeQuote, tokensToBase, ValidationError, type Envelope } from "highwire-core";
 import type { ExecuteResult, Intent } from "highwire-agent";
-import { jsonResult, run, runResult } from "../result.ts";
+import { friendlyError, jsonResult, run, runResult } from "../result.ts";
 import { BUILD, EXECUTE, READ_ONLY, address, mint, type Deps, type ExecutionSigner } from "./shared.ts";
 import { buildClaimFor, buildLaunchFor, buildTradeFor, launchDetails, launchShape, tradeShape } from "./transactions.ts";
 
@@ -251,12 +251,21 @@ function registerExecuteTools(server: McpServer, deps: Deps, signer: ExecutionSi
             });
           }
         }
-        const { result: r, mint: mintAddress } = await buildLaunchFor(deps, signer.publicKey, { ...args, metadata_uri: metadataUri }, creator);
-        if (r.status === "needs_metadata") return jsonResult({ status: r.status, mint: mintAddress, metadata: r.metadata, next_step: r.nextStep });
-        if (r.status === "already_launched") return jsonResult({ status: r.status, mint: r.mint, url: r.url, note: "This idempotency key's coin already exists. Nothing was sent." });
-        const solOut = (r.launchFee ? solToLamports(r.launchFee.sol) : 0n) + solToLamports(r.devBuySol);
-        const done = await go("execute_launch", { action: "launch", cluster, solOut, slippageBps: args.dev_buy_sol ? args.max_slippage_bps : undefined, mint: r.mint }, r.envelope);
-        return jsonResult(executed(done, { ...launchDetails(deps, r), ...(launchFor ? { launchFor: { ...launchFor, note: "They get the creator fees; higher.fun holds them until they claim at higher.fun/claim." } } : {}), metadataUri }));
+        try {
+          const { result: r, mint: mintAddress } = await buildLaunchFor(deps, signer.publicKey, { ...args, metadata_uri: metadataUri }, creator);
+          if (r.status === "needs_metadata") return jsonResult({ status: r.status, mint: mintAddress, metadata: r.metadata, next_step: r.nextStep });
+          if (r.status === "already_launched") return jsonResult({ status: r.status, mint: r.mint, url: r.url, note: "This idempotency key's coin already exists. Nothing was sent." });
+          const solOut = (r.launchFee ? solToLamports(r.launchFee.sol) : 0n) + solToLamports(r.devBuySol);
+          const done = await go("execute_launch", { action: "launch", cluster, solOut, slippageBps: args.dev_buy_sol ? args.max_slippage_bps : undefined, mint: r.mint }, r.envelope);
+          return jsonResult(executed(done, { ...launchDetails(deps, r), ...(launchFor ? { launchFor: { ...launchFor, note: "They get the creator fees; higher.fun holds them until they claim at higher.fun/claim." } } : {}), metadataUri }));
+        } catch (err) {
+          // The upload happened; say where it is, so a retry passes metadata_uri instead of uploading again.
+          if (image && metadataUri) {
+            const f = friendlyError(err);
+            return jsonResult({ ...f, metadata_uri: metadataUri, next_step: `${f.next_step ?? "Fix the cause and retry."} The image and metadata are uploaded: retry with metadata_uri set to ${metadataUri} and the same idempotency_key.` }, true);
+          }
+          throw err;
+        }
       }),
   );
 
