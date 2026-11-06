@@ -9,7 +9,7 @@ counts and version with each release.
 |---|---|---|
 | Official MCP Registry | Listed: `fun.highwire/highwire`, 0.10.0 | Published with every release |
 | Glama connector | Listed, **ownership verified** (claim file at highwire.fun/.well-known/glama.json), scored A (3.5/5) | Keep the claim file published |
-| Glama server | Listed, **claimed** (glama.json), description current, Docker build passing (installs highwire-mcp from npm), first Glama release made | Bump the build step's version with each release |
+| Glama server | Listed, **claimed** (glama.json), description current, Docker build passing: Glama release 0.1.1 installs highwire-mcp 0.10.0 from npm and runs `mcp-proxy -- highwire` | With each release, set the build step to `["npm install -g highwire-mcp@X"]` (the admin form may show Glama's defaults again: retype both fields), then Build & Release |
 | awesome-remote-mcp-servers | PR open: punkpeye/awesome-remote-mcp-servers#4072, checks passing | Wait for review |
 | awesome-mcp-servers | PR open: punkpeye/awesome-mcp-servers#18795, checks passing | Wait for review |
 | mcp.so | Submitted: chatmcp/mcpso#6871 (the free route; the web form is now a $39 paid listing) | Wait for review |
