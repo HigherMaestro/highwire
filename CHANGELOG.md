@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.9.0 (2026-11-06)
 
 - **Highwire's trade fee: 0.3% on trades it builds, on mainnet.** One SOL transfer to Highwire's wallet
   (`7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce`, the same one donations go to) just before the memo: 0.3% of the SOL
