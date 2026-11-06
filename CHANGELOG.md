@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.8.0 (2026-11-06)
 
 - **Launch on your own, from a shell.** `highwire wallet new` makes the agent's own wallet (`~/.highwire/wallet.json`,
   readable only by you; it never overwrites one or prints the key), `highwire policy init --launch` writes a mainnet

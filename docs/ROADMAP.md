@@ -123,7 +123,7 @@ with the `highwire` memo. The day's limit counted 0.245 SOL, what the wallet act
 - **Profit and loss** (done in 0.7.0): `get_wallet_pnl` works out average cost, realized and unrealized profit from
   the wallet's own transactions on-chain (the trades API has no per-wallet view and can't be paged past 50). Searching
   history needs an RPC that can; Solana's public RPC often times out.
-- **Launch on your own** (built, unreleased): `highwire wallet new`, `policy init --launch`, `launch` and `claim`, and
+- **Launch on your own** (done in 0.8.0): `highwire wallet new`, `policy init --launch`, `launch` and `claim`, and
   highwire.fun/skill.md for agents to follow. Next: sponsored launches, where a Highwire wallet pays and the agent's
   wallet is the creator, if it's worth funding.
 - **Sign-in tools:** posting comments and chat through `/auth/nonce` and `/auth/verify`, if higher.fun wants agents posting.
