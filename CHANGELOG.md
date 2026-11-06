@@ -2,7 +2,10 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## 0.4.0 (unreleased)
+## 0.4.0 (2026-11-06)
+
+The first release on npm: `highwire-core`, `highwire-agent` and `highwire-mcp` 0.4.0. `npx highwire-mcp` runs the
+local server.
 
 **Security fixes from the pre-launch audit.**
 
@@ -100,7 +103,7 @@ creates, holds or manages a wallet, and the hosted endpoint still never signs.
 - **Page views.** highwire.fun counts page views with Vercel Web Analytics (no cookies; queries and fragments are
   stripped). The sign page has none: it doesn't load the script, and any event about it is dropped.
 
-## 0.3.0 (unreleased)
+## 0.3.0 (2026-11-05)
 
 Sign from any chat: the hosted server builds transactions, and highwire.fun/sign signs them in your own wallet.
 
