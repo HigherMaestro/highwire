@@ -201,17 +201,24 @@ def build_svgs() -> dict[str, str]:
     )
     out["x-banner.svg"] = svg(1500, 500, banner, "Highwire, the agent wire for higher.fun")
 
-    # Social preview 1200x630.
+    # Social preview 1200x630, on ink so it stands out in a timeline (light or dark). It says what Highwire does in
+    # one line, at a size that still reads when X shows the card small. X lays the domain over the bottom-left, so
+    # nothing sits below y 520 there.
     og = (
-        f'<defs>{wire_gradient("ow", 820, 1080)}</defs>'
-        f'<rect width="1200" height="630" fill="{PAPER}"/>'
-        f'<line x1="820" y1="110" x2="820" y2="520" stroke="{INK}" stroke-width="26" stroke-linecap="round"/>'
-        f'<line x1="1080" y1="110" x2="1080" y2="520" stroke="{INK}" stroke-width="26" stroke-linecap="round"/>'
-        f'<path d="M820 210 Q950 400 1080 210" fill="none" stroke="url(#ow)" stroke-width="11" stroke-linecap="round"/>'
-        f'<circle cx="950" cy="305" r="17" fill="#FFFFFF" stroke="{INK}" stroke-width="5"/>'
-        + text_el("highwire", "grotesk", 700, 120, 84, 300, INK, -0.05)
-        + text_el("The agent wire for higher.fun", "grotesk", 500, 34, 90, 362, MUTED)
-        + text_el("An MCP server for AI agents", "mono", 500, 22, 91, 412, MUTED)
+        f'<defs>{wire_gradient("ow", 860, 1100)}'
+        f'<radialGradient id="og-glow"><stop offset="0" stop-color="#F7C84C" stop-opacity=".75"/>'
+        f'<stop offset=".45" stop-color="#F6A9C4" stop-opacity=".35"/><stop offset="1" stop-color="{SIGNAL}" stop-opacity="0"/></radialGradient></defs>'
+        f'<rect width="1200" height="630" fill="{INK}"/>'
+        f'<line x1="860" y1="120" x2="860" y2="510" stroke="{PAPER}" stroke-width="26" stroke-linecap="round"/>'
+        f'<line x1="1100" y1="120" x2="1100" y2="510" stroke="{PAPER}" stroke-width="26" stroke-linecap="round"/>'
+        f'<path d="M860 220 Q980 400 1100 220" fill="none" stroke="url(#ow)" stroke-width="14" stroke-linecap="round"/>'
+        f'<circle cx="980" cy="310" r="78" fill="url(#og-glow)"/>'
+        f'<circle cx="980" cy="310" r="19" fill="#FFFFFF" stroke="{INK}" stroke-width="5"/>'
+        + text_el("highwire", "grotesk", 700, 104, 78, 196, PAPER, -0.05)
+        + text_el("Your AI can now trade,", "grotesk", 700, 50, 82, 296, PAPER, -0.02)
+        + text_el("launch and claim", "grotesk", 700, 50, 82, 356, PAPER, -0.02)
+        + text_el("on higher.fun.", "grotesk", 700, 50, 82, 416, PAPER, -0.02)
+        + text_el("MCP server \u00b7 on npm and the MCP Registry", "mono", 500, 22, 84, 486, "#A7ACB4")
     )
     out["og.svg"] = svg(1200, 630, og, "Highwire, the agent wire for higher.fun")
     return out
