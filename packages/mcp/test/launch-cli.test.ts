@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createKeypairFile, LAUNCH_POLICY_TEMPLATE, loadKeypair } from "highwire-agent";
-import { defaultLaunchKey, parseLaunchArgs, runLaunch, runPolicyInit, runWallet } from "../src/launch-cli.ts";
+import { defaultLaunchKey, parseLaunchArgs, runLaunch, runPolicyInit, runPost, runWallet } from "../src/launch-cli.ts";
 
 // Unit tests only: wallets are throwaway files in a temp folder, never funded, and nothing here reaches a cluster.
 
@@ -110,5 +110,14 @@ test("orders claim needs --every-hours and a wallet, and touches nothing without
   assert.equal(await runOrders(["claim", "--every-hours", "lots"], { ...n.io, signal, env: { HIGHWIRE_HOME: home() } }), 2);
   const w = capture();
   assert.equal(await runOrders(["claim", "--every-hours", "24"], { ...w.io, signal, env: { HIGHWIRE_HOME: home() } }), 1);
+  assert.match(w.err.join("\n"), /highwire wallet new/);
+});
+
+test("post needs exactly one of --mint and --chat, and text, and a wallet", async () => {
+  for (const argv of [["hello"], ["--chat"], ["--chat", "--mint", "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix", "hi"], ["--yolo", "hi"]]) {
+    assert.equal(await runPost(argv, { ...capture().io, env: { HIGHWIRE_HOME: home() } }), 2, argv.join(" "));
+  }
+  const w = capture();
+  assert.equal(await runPost(["--chat", "gm"], { ...w.io, env: { HIGHWIRE_HOME: home() } }), 1);
   assert.match(w.err.join("\n"), /highwire wallet new/);
 });

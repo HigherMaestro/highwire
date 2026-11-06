@@ -128,7 +128,8 @@ with the `highwire` memo. The day's limit counted 0.245 SOL, what the wallet act
   wallet is the creator, if it's worth funding.
 - **Fee claims on a schedule** (done, unreleased): a `fee_claim` standing order claims creator fees once enough is
   waiting and can buy the coin back with a share of each claim; `highwire orders claim` places one.
-- **Sign-in tools:** posting comments and chat through `/auth/nonce` and `/auth/verify`, if higher.fun wants agents posting.
+- **Posting** (done, unreleased): `post_comment` and `post_chat` through the local signer, inside the policy's
+  `posts` section. Asking higher.fun for an agent label on posts would help people tell agents apart.
 - ~~**Publishing**~~ Done 2026-11-06: `highwire-core`, `highwire-agent` and `highwire-mcp` on npm, and the MCP registry
   listing `fun.highwire/highwire` from 0.4.1 (npm package and hosted endpoint), proved by highwire.fun's domain key.
   Every release since goes to both.

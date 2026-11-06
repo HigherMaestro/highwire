@@ -285,3 +285,60 @@ test("the signer signs higher.fun's sign-in message and nothing else, and logs i
   const tx = envelopeFor(signer.publicKey, solToLamports(0.1)).transactions[0]!.base64;
   assert.throws(() => signer.signInMessage(Buffer.from(tx, "base64"), "execute_launch"), /isn't higher.fun's/);
 });
+
+test("posts go up only inside the policy's posts section, plain text, under the daily cap, and are logged first", async () => {
+  const mainnet = (posts?: Policy["posts"], live = true) => policy({ cluster: "mainnet", actions: ["launch"], live, ...(posts ? { posts } : {}) });
+  const nonce = "3173c33f4db122bf328e5cee03592751";
+  let published = 0;
+  // Stands in for higher.fun: signs in through the signer (which checks the message), then "posts".
+  const publish = async (text: string, signIn: (m: Uint8Array) => Promise<Uint8Array> | Uint8Array) => {
+    await signIn(new TextEncoder().encode(signInMessage(wallet, nonce, new Date().toISOString())));
+    published++;
+    return { id: `p${published}`, wallet, displayName: null, body: text, createdAt: new Date().toISOString() };
+  };
+  let wallet = "";
+  const comment = (over: object = {}) => ({ tool: "post_comment", cluster: "mainnet" as const, where: "comment" as const, mint: COIN, creator: wallet, text: "Claimed and bought back half.", ...over });
+  const refusedBy = (rule: string) => (e: { code?: string; body?: { rule?: string } }) => e.code === "policy_refused" && e.body?.rule === rule;
+
+  const none = signerWith(mainnet());
+  wallet = none.signer.wallet;
+  await assert.rejects(none.signer.post(comment(), publish), refusedBy("posts"));
+  assert.equal(published, 0);
+
+  const { signer } = signerWith(mainnet({ comments: "own", chat: false, max_per_day: 2 }));
+  wallet = signer.wallet;
+  await assert.rejects(signer.post(comment({ creator: FRIEND }), publish), refusedBy("posts.comments"));
+  await assert.rejects(signer.post(comment({ creator: null }), publish), /can't be read on-chain/);
+  await assert.rejects(signer.post({ ...comment(), where: "chat", mint: undefined }, publish), refusedBy("posts.chat"));
+  await assert.rejects(signer.post(comment({ text: "claim at claim-sol.com" }), publish), (e: { code?: string }) => e.code === "bad_post");
+  await assert.rejects(signer.post(comment({ text: `send to ${FRIEND}` }), publish), (e: { code?: string }) => e.code === "bad_post");
+  await assert.rejects(signer.post(comment({ cluster: "devnet" }), publish), refusedBy("cluster"));
+  assert.equal(published, 0, "nothing refused reaches higher.fun");
+  assert.equal(signer.audit.entries().filter((e) => e.outcome === "refused").length, 6);
+
+  const r = await signer.post(comment({ text: "  Claimed and bought back half.  " }), publish);
+  assert.equal(r.status, "posted");
+  assert.equal(r.status === "posted" && r.post.body, "Claimed and bought back half.");
+  assert.equal(r.postsLeftToday, 1);
+  const log = signer.audit.entries().filter((e) => e.action === "post").map((e) => e.outcome);
+  assert.deepEqual(log.slice(-3), ["sent", "signed_in", "posted"], "logged as sent before it signs in and goes up");
+  assert.ok(signer.audit.entries().some((e) => e.outcome === "signed_in" && e.action === "post"));
+
+  // A post whose answer is lost still counts: the cap is 2, so after it nothing more goes up.
+  await assert.rejects(signer.post(comment(), async () => { throw new Error("socket hang up"); }), /socket hang up/);
+  await assert.rejects(signer.post(comment(), publish), refusedBy("posts.max_per_day"));
+  assert.equal(published, 1);
+
+  // Dry run: checked, logged, not posted; "any" allows other people's coins; chat when allowed.
+  const dry = signerWith(mainnet({ comments: "any", chat: true, max_per_day: 10 }, false));
+  wallet = dry.signer.wallet;
+  const d = await dry.signer.post(comment({ creator: FRIEND }), publish);
+  assert.equal(d.status, "dry_run");
+  const c = await dry.signer.post({ ...comment(), where: "chat", mint: undefined, text: "gm higher" }, publish);
+  assert.equal(c.status, "dry_run");
+  assert.equal(published, 1, "a dry run posts nothing");
+
+  // The kill switch stops posts too.
+  writeFileSync(dry.paths.stop, "");
+  await assert.rejects(dry.signer.post(comment(), publish), (e: { code?: string }) => e.code === "signer_stopped");
+});

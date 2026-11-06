@@ -4,6 +4,7 @@ import { VersionedTransaction, type Connection, type Keypair } from "@solana/web
 import bs58 from "bs58";
 import { ed25519 } from "@noble/curves/ed25519";
 import {
+  checkPostText,
   checkSignInMessage,
   HigherError,
   isRefreshable,
@@ -12,8 +13,11 @@ import {
   withBlockhash,
   type Cluster,
   type Envelope,
+  type Posted,
+  type PostWhere,
+  type SignMessage,
 } from "highwire-core";
-import { AuditLog } from "./audit.ts";
+import { AuditLog, type AuditAction } from "./audit.ts";
 import { withFileLock } from "./lock.ts";
 import type { AgentPaths } from "./paths.ts";
 import { checkPolicy, loadPolicy, plural, policyWarnings, type Action, type Intent, type Policy } from "./policy.ts";
@@ -23,6 +27,22 @@ import { checkPolicy, loadPolicy, plural, policyWarnings, type Action, type Inte
 // unless the policy says "live": true. Every execute, refused or not, is
 // written to the audit log. Executes run one at a time, so two calls can't both
 // fit under the daily limit.
+
+/** A comment or chat message to post on higher.fun as the signer's wallet. */
+export interface PostRequest {
+  tool: string;
+  cluster: Cluster;
+  where: PostWhere;
+  /** The coin, for a comment. */
+  mint?: string;
+  /** The coin's creator, read on-chain, for a comment. null when it couldn't be read. */
+  creator?: string | null;
+  text: string;
+}
+
+export type PostResult =
+  | { status: "dry_run"; text: string; postsLeftToday: number }
+  | { status: "posted"; post: Posted; postsLeftToday: number };
 
 export interface ExecuteRequest {
   /** The tool that asked, for the audit log. */
@@ -303,15 +323,84 @@ export class LocalSigner {
 
   /**
    * Signs higher.fun's sign-in message, and nothing else, so a launch can upload its image and metadata or look up an
-   * X or GitHub account. The message is checked to be exactly higher.fun's, for this wallet, from just now; it moves no
-   * funds. The tool must have passed precheck("launch") first. Logged like everything else.
+   * X or GitHub account, or a post can go up. The message is checked to be exactly higher.fun's, for this wallet, from
+   * just now; it moves no funds. The tool must have passed precheck("launch") first (post() checks its own policy).
+   * Logged like everything else.
    */
-  signInMessage(message: Uint8Array, tool: string): Uint8Array {
+  signInMessage(message: Uint8Array, tool: string, action: AuditAction = "launch"): Uint8Array {
     if (stopped(this.paths.stop)) throw new HigherError(`Stopped: ${this.paths.stop} exists, so nothing is signed.`, { code: "signer_stopped" });
     checkSignInMessage(new TextDecoder().decode(message), this.wallet);
     const signature = ed25519.sign(message, this.keypair.secretKey.subarray(0, 32));
-    this.audit.append({ tool, action: "launch", cluster: "mainnet", wallet: this.wallet, outcome: "signed_in", sol: "0", lamports: "0", reason: "signed higher.fun's sign-in message" });
+    this.audit.append({ tool, action, cluster: "mainnet", wallet: this.wallet, outcome: "signed_in", sol: "0", lamports: "0", reason: "signed higher.fun's sign-in message" });
     return signature;
+  }
+
+  /**
+   * Posts a comment or a chat message on higher.fun as this wallet, if the policy's `posts` section allows it: the
+   * kill switch, mainnet, where it goes (a comment on one of the wallet's own coins unless `comments` is "any"; chat
+   * only with `chat`), the text (no links, no addresses, higher.fun's length limits) and the daily cap. A dry run
+   * unless the policy is live. `publish` signs in (through signInMessage) and posts; it's called only once all of that
+   * passes, and the post is logged before it goes up, so it counts against the cap even if the answer is lost.
+   */
+  post(req: PostRequest, publish: (text: string, signIn: SignMessage) => Promise<Posted>): Promise<PostResult> {
+    const run = this.queue.then(() => withFileLock(this.paths.lock, () => this.postNow(req, publish)));
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async postNow(req: PostRequest, publish: (text: string, signIn: SignMessage) => Promise<Posted>): Promise<PostResult> {
+    const entry = (outcome: "refused" | "dry_run" | "sent" | "posted" | "failed", extra: { text?: string; reason?: string; label?: string } = {}) =>
+      this.audit.append({
+        tool: req.tool,
+        action: "post",
+        cluster: req.cluster,
+        wallet: this.wallet,
+        outcome,
+        sol: "0",
+        lamports: "0",
+        where: req.where,
+        ...(req.mint ? { mint: req.mint } : {}),
+        ...extra,
+      });
+    let text: string;
+    let left: number;
+    let policy: Policy;
+    try {
+      if (stopped(this.paths.stop)) throw new HigherError(`Stopped: ${this.paths.stop} exists, so nothing is posted until the user removes it.`, { code: "signer_stopped" });
+      policy = loadPolicy(this.paths.policy);
+      if (policy.cluster !== req.cluster) throw refused("cluster", `the policy is for ${policy.cluster}, and this server is on ${req.cluster}`);
+      if (req.cluster !== "mainnet") throw refused("cluster", "higher.fun's comments and chat are on mainnet");
+      const posts = policy.posts;
+      if (!posts) throw refused("posts", "the policy has no posts section, so it doesn't allow posting");
+      if (req.where === "chat" && !posts.chat) throw refused("posts.chat", "the policy doesn't allow posting to higher.fun's chat");
+      if (req.where === "comment") {
+        if (!req.mint) throw new HigherError("A comment needs the coin's mint.", { code: "bad_post" });
+        if (posts.comments === "none") throw refused("posts.comments", "the policy doesn't allow comments");
+        if (posts.comments === "own" && req.creator !== this.wallet) {
+          throw refused("posts.comments", req.creator === null ? "the coin's creator can't be read on-chain, and the policy allows comments only on this wallet's own coins" : "the policy allows comments only on coins this wallet launched");
+        }
+      }
+      text = checkPostText(req.text, req.where);
+      const used = this.audit.postsSince();
+      if (used >= posts.max_per_day) throw refused("posts.max_per_day", `${used} posts in the last 24 hours already, the policy's most`);
+      left = posts.max_per_day - used;
+    } catch (err) {
+      entry("refused", { text: req.text.slice(0, 500), reason: err instanceof Error ? err.message : String(err) });
+      throw err;
+    }
+    if (!policy.live) {
+      entry("dry_run", { text });
+      return { status: "dry_run", text, postsLeftToday: left };
+    }
+    entry("sent", { text });
+    try {
+      const post = await publish(text, (m) => this.signInMessage(m, req.tool, "post"));
+      entry("posted", { label: post.id });
+      return { status: "posted", post, postsLeftToday: left - 1 };
+    } catch (err) {
+      entry("failed", { reason: err instanceof Error ? err.message : String(err) });
+      throw err;
+    }
   }
 
   /** Once per RPC: its genesis hash must be the policy's cluster's, whatever HIGHWIRE_CLUSTER says. */

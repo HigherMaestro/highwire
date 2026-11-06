@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Chain, HigherApi, LiveFeed, MintSource, SolanaRpc } from "highwire-core";
+import type { Chain, HigherApi, HigherSession, LiveFeed, MintSource, SolanaRpc } from "highwire-core";
 import type { LocalSigner } from "highwire-agent";
 
 export interface Deps {
@@ -19,10 +19,12 @@ export interface Deps {
   attestationSeed?: Uint8Array;
   /** The opt-in local signer (HIGHWIRE_KEYPAIR_PATH). Never set on the hosted endpoint. */
   signer?: ExecutionSigner;
+  /** A fresh higher.fun session to sign in to, for posting (the local signer only). */
+  newSession: () => HigherSession;
 }
 
 /** What the execute tools use of the local signer. */
-export type ExecutionSigner = Pick<LocalSigner, "wallet" | "publicKey" | "status" | "precheck" | "execute" | "signInMessage" | "logOrder" | "paths">;
+export type ExecutionSigner = Pick<LocalSigner, "wallet" | "publicKey" | "status" | "precheck" | "execute" | "signInMessage" | "logOrder" | "post" | "paths">;
 
 export const address = (what: string) =>
   z

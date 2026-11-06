@@ -2,8 +2,9 @@ import bs58 from "bs58";
 import { HigherError, NetworkError, ValidationError } from "../lib/errors.ts";
 import { DEFAULT_API_URL } from "./constants.ts";
 
-// A signed-in session with higher.fun's API, for the calls its create page makes after the wallet signs in: image and
-// metadata uploads, and resolving an X or GitHub handle to the wallet that receives a coin's fees. Signing in means
+// A signed-in session with higher.fun's API, for the calls its site makes after the wallet signs in: image and
+// metadata uploads, resolving an X or GitHub handle to the wallet that receives a coin's fees, and posting a comment
+// or a chat message. Signing in means
 // the wallet signs higher.fun's Sign-In With Solana message, so only the local signer (which holds the key) can do it;
 // the hosted endpoint never can. The message is checked to be exactly higher.fun's before it's signed: a signature is
 // never given for anything else.
@@ -36,6 +37,39 @@ export function checkSignInMessage(message: string, wallet: string, now = Date.n
     throw new ValidationError("higher.fun's sign-in message isn't from just now, so it wasn't signed.", { code: "bad_sign_in" });
   }
   return { nonce, issuedAt };
+}
+
+/** The longest comment and chat message higher.fun takes, in characters (its site's own limits). */
+export const POST_LIMITS = { comment: 500, chat: 280 } as const;
+export type PostWhere = keyof typeof POST_LIMITS;
+
+const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/;
+const LINK = /[a-z][a-z0-9+.-]*:\/\/|\bwww\.|\b[a-z0-9-]+(?:\.|\s*\[\.\]\s*|\s*\(\.\)\s*|\s+dot\s+)(?:com|fun|io|xyz|net|org|app|gg|so|me|co|ly|link|site|live|vip|top|info|pro|ai|to|sh|tv|cc|us|club|online|claim|gift|money|finance)\b|\bt\.me\b|discord\.gg/i;
+const ADDRESS = /[1-9A-HJ-NP-Za-km-z]{32,44}/;
+
+/**
+ * The text an agent may post, trimmed, or why not. higher.fun's own rules (length, no control characters) plus
+ * Highwire's: no links or web addresses and no wallet or mint addresses, since chat is where phishing links and
+ * "send SOL here" scams live, and a post from an agent should never become one.
+ */
+export function checkPostText(text: string, where: PostWhere): string {
+  const t = text.trim();
+  const max = POST_LIMITS[where];
+  if (!t) throw new ValidationError("Write something to post.", { code: "bad_post" });
+  if ([...t].length > max) throw new ValidationError(`A ${where === "chat" ? "chat message" : "comment"} is at most ${max} characters; this is ${[...t].length}.`, { code: "bad_post" });
+  if (CONTROL.test(t)) throw new ValidationError("The text has control or invisible characters; write it as plain text.", { code: "bad_post" });
+  if (LINK.test(t)) throw new ValidationError("Posts can't carry links or web addresses. Write it without them.", { code: "bad_post" });
+  if (ADDRESS.test(t)) throw new ValidationError("Posts can't carry wallet or mint addresses: people are told never to send funds to an address from chat. Name the coin by its ticker instead.", { code: "bad_post" });
+  return t;
+}
+
+export interface Posted {
+  id: string;
+  wallet: string;
+  displayName: string | null;
+  body: string;
+  createdAt: string;
+  mint?: string;
 }
 
 export type SignMessage = (message: Uint8Array) => Promise<Uint8Array> | Uint8Array;
@@ -118,6 +152,16 @@ export class HigherSession {
   /** Uploads the coin's metadata JSON; returns its URI for the launch. */
   async uploadMetadata(input: CoinMetadataInput): Promise<string> {
     return (await this.json<{ metadataUri: string }>("/uploads/metadata", input)).metadataUri;
+  }
+
+  /** Posts a comment on a coin's page as the signed-in wallet. Check the text with checkPostText first. */
+  postComment(mint: string, body: string): Promise<Posted> {
+    return this.json<Posted>(`/coins/${encodeURIComponent(mint)}/comments`, { body });
+  }
+
+  /** Posts a message to higher.fun's site chat as the signed-in wallet. Check the text with checkPostText first. */
+  postChat(body: string): Promise<Posted> {
+    return this.json<Posted>("/chat", { body });
   }
 
   /** The wallet higher.fun pays an X or GitHub account's creator fees to (it holds it until they claim). */

@@ -60,6 +60,7 @@ const POLICY_KEYS: [string, string][] = [
   ["creators", "allow: only trade coins launched by these wallets."],
   ["transfer_allowlist", "The only wallets transfers may go to. Empty by default."],
   ["orders", "kinds: which standing orders an agent may place (stop_loss, take_profit, recurring_buy, fee_claim); max_open: how many at once (default 10). Without it, none."],
+  ["posts", "comments: own (only coins the wallet launched, the default), any or none; chat: true to allow higher.fun's site chat; max_per_day (default 10). Without it, none."],
 ];
 
 const ERRORS: [string, string][] = [
@@ -299,6 +300,12 @@ export default async function Docs() {
                 the coin back; <code>highwire orders claim --every-hours 24</code> places one from the shell. Every fill passes the whole policy again, is simulated and is
                 logged with its order&apos;s id. <code>highwire orders list</code> and <code>highwire orders cancel</code>{" "}
                 show and cancel them.
+              </p>
+              <p className="muted">
+                <strong>Posting.</strong> With a <code>posts</code> section, <code>post_comment</code> and{" "}
+                <code>post_chat</code> post on higher.fun as the wallet: a comment on its own coin (or any coin, if you
+                allow it) or a message in the site chat. Plain text only: links and wallet or mint addresses are refused.
+                Each post is logged before it goes up and counts against the daily cap.
               </p>
             </section>
 

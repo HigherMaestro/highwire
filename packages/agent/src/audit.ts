@@ -3,20 +3,24 @@ import { dirname } from "node:path";
 import type { Cluster } from "highwire-core";
 import type { Action } from "./policy.ts";
 
+/** Posts aren't an execute action: the policy's `posts` section allows them. */
+export type AuditAction = Action | "post";
+
 // The audit log: one JSON line per execute, whether it was refused, a dry run or
 // signed. Signed entries are written as each transaction is sent, before it
 // confirms, so a crash can't hide a spend. The daily limit is counted from here.
 
 /**
- * signed_in: the signer signed higher.fun's sign-in message for a launch's uploads; it moves no funds. order: a standing
- * order was placed, cancelled or closed (its fills are logged like any trade).
+ * signed_in: the signer signed higher.fun's sign-in message for a launch's uploads or a post; it moves no funds. order:
+ * a standing order was placed, cancelled or closed (its fills are logged like any trade). posted: a comment or chat
+ * message went up on higher.fun.
  */
-export type Outcome = "refused" | "dry_run" | "sent" | "confirmed" | "failed" | "signed_in" | "order";
+export type Outcome = "refused" | "dry_run" | "sent" | "confirmed" | "failed" | "signed_in" | "order" | "posted";
 
 export interface AuditEntry {
   time: string;
   tool: string;
-  action: Action;
+  action: AuditAction;
   cluster: Cluster;
   wallet: string;
   outcome: Outcome;
@@ -31,6 +35,9 @@ export interface AuditEntry {
   reason?: string;
   /** The standing order this came from. */
   order?: string;
+  /** A post's text, and where it went ("comment" or "chat"). */
+  text?: string;
+  where?: string;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -97,5 +104,11 @@ export class AuditLog {
       total += BigInt(e.lamports);
     }
     return total;
+  }
+
+  /** Posts sent in the last 24 hours, for the policy's daily cap: each counts once (its "sent" line), up or not. */
+  postsSince(ms = DAY_MS): number {
+    const since = this.now().getTime() - ms;
+    return this.entries().filter((e) => e.action === "post" && e.outcome === "sent" && Date.parse(e.time) >= since).length;
   }
 }

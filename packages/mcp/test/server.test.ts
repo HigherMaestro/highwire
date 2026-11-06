@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { agentPaths, LocalSigner, POLICY_TEMPLATE } from "highwire-agent";
+import { signInMessage } from "highwire-core";
 import { createServer, SIGNER_INSTRUCTIONS, type ServerOptions } from "../src/server.ts";
 import { readCoinImage } from "../src/tools/execute.ts";
 import { localLaunchSecret } from "../src/signer-env.ts";
@@ -413,4 +414,41 @@ test("a fee_claim order needs claims in the policy, and trades too when it buys 
   assert.match(buybackNoTrades.error, /can't buy back/);
   const priceOrderNoMint = await client.callTool({ name: "place_order", arguments: { ...args, kind: "stop_loss", trigger_change_pct: -20, every_hours: undefined } });
   assert.equal(priceOrderNoMint.isError, true);
+});
+
+test("post_chat signs in and posts only inside the policy's posts section, and post_comment keeps to the wallet's own coins", async () => {
+  const posts: Array<{ path: string; body: string }> = [];
+  const nonce = "3173c33f4db122bf328e5cee03592751";
+  // higher.fun's sign-in and posting routes, in front of the usual fake API.
+  const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input instanceof Request ? input.url : input));
+    const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+    const json = (status: number, b: unknown, headers: Record<string, string> = {}) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json", ...headers } });
+    if (url.pathname === "/auth/nonce") return json(200, { nonce, message: signInMessage(body.wallet, nonce, new Date().toISOString()) });
+    if (url.pathname === "/auth/verify") return json(200, { wallet: body.wallet }, { "set-cookie": "hf_session=abc; Path=/" });
+    if (init?.method === "POST" && (url.pathname === "/chat" || url.pathname.endsWith("/comments"))) {
+      if (new Headers(init.headers).get("cookie") !== "hf_session=abc") return json(401, { error: "unauthorized", message: "sign in required" });
+      posts.push({ path: url.pathname, body: body.body });
+      return json(201, { id: "c1", wallet: "w", displayName: "agent", body: body.body, createdAt: new Date().toISOString() });
+    }
+    return FAKE_OPTIONS.fetch(input as string);
+  }) as typeof globalThis.fetch;
+  const base = { ...POLICY_TEMPLATE, cluster: "mainnet", actions: ["launch"], live: true };
+
+  const none = await connect({ ...FAKE_OPTIONS, fetch, signer: new LocalSigner(Keypair.generate(), signerHome(base)) });
+  const refused = parse(await none.callTool({ name: "post_chat", arguments: { text: "gm", confirm_post: true } }));
+  assert.equal(refused.code, "policy_refused");
+  assert.match(refused.error, /no posts section/);
+
+  const client = await connect({ ...FAKE_OPTIONS, fetch, signer: new LocalSigner(Keypair.generate(), signerHome({ ...base, posts: { chat: true } })) });
+  const link = await client.callTool({ name: "post_chat", arguments: { text: "free sol at claim-sol.com", confirm_post: true } });
+  assert.equal(link.isError, true);
+  assert.equal(parse(link).code, "bad_post");
+  const ok = parse(await client.callTool({ name: "post_chat", arguments: { text: "gm higher", confirm_post: true } }));
+  assert.equal(ok.status, "posted");
+  assert.equal(ok.postsLeftToday, 9);
+  // Someone else's coin (its creator can't be read here, so it isn't this wallet's): refused, nothing posted.
+  const other = parse(await client.callTool({ name: "post_comment", arguments: { mint: "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix", text: "nice", confirm_post: true } }));
+  assert.equal(other.code, "policy_refused");
+  assert.deepEqual(posts, [{ path: "/chat", body: "gm higher" }]);
 });

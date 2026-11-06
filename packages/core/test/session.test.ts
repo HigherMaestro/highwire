@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ed25519 } from "@noble/curves/ed25519";
 import bs58 from "bs58";
 import { Keypair } from "@solana/web3.js";
-import { checkSignInMessage, HigherSession, signInMessage } from "../src/higher/session.ts";
+import { checkPostText, checkSignInMessage, HigherSession, signInMessage } from "../src/higher/session.ts";
 
 // A stand-in for higher.fun's API, with the same shapes its site relies on: a nonce, the signed message verified
 // against the wallet, a session cookie, and uploads and lookups that need it.
@@ -32,8 +32,14 @@ function fakeHigher(opts: { message?: (wallet: string, nonce: string, at: string
       case "/uploads/metadata":
         if (!authed) return json(401, { error: "unauthorized", message: "sign in required" });
         return body.ticker === "TAKEN" ? json(409, { error: "ticker_taken", message: "$TAKEN is already live" }) : json(200, { metadataUri: "https://ipfs/meta.json" });
+      case "/chat":
+        return authed ? json(201, { id: "c1", wallet: "w", displayName: null, body: body.body, createdAt: at }) : json(401, { error: "unauthorized", message: "sign in required" });
       case "/fee-recipients/resolve":
         return authed ? json(200, { provider: body.provider, handle: body.handle, wallet: "9qfu1eHi6aWrPGKYTbDcKcFbYBPj2VexzfWJYVvJ48E1" }) : json(401, { error: "unauthorized", message: "sign in required" });
+    }
+    const comment = /^\/coins\/(\w+)\/comments$/.exec(path);
+    if (comment && init?.method === "POST") {
+      return authed ? json(201, { id: "m1", mint: comment[1], wallet: "w", displayName: null, body: body.body, createdAt: at }) : json(401, { error: "unauthorized", message: "sign in required" });
     }
     return json(404, { error: "not_found", message: "no route" });
   }) as typeof globalThis.fetch;
@@ -70,4 +76,28 @@ test("anything but higher.fun's exact sign-in message, for this wallet and from 
   }
   assert.equal(signed, 0);
   assert.doesNotThrow(() => checkSignInMessage(signInMessage(wallet, "3173c33f4db122bf328e5cee03592751", new Date().toISOString()), wallet));
+});
+
+test("posts a comment and a chat message as {body}, signed in", async () => {
+  const { fetch, calls } = fakeHigher();
+  const s = new HigherSession("https://api.higher.fun", fetch);
+  await assert.rejects(s.postChat("gm"), /sign in required/);
+  await s.signIn(wallet, sign);
+  assert.equal((await s.postChat("gm")).body, "gm");
+  const c = await s.postComment("ALBA7iVjFkQzxPQQCovkK7zQiaXUPmixt2dZxNstXiPp", "claimed and bought back");
+  assert.deepEqual([c.mint, c.body], ["ALBA7iVjFkQzxPQQCovkK7zQiaXUPmixt2dZxNstXiPp", "claimed and bought back"]);
+  assert.ok(calls.includes("/coins/ALBA7iVjFkQzxPQQCovkK7zQiaXUPmixt2dZxNstXiPp/comments"));
+});
+
+test("post text: plain words pass, trimmed; links, addresses, hidden characters and long text don't", () => {
+  for (const ok of ["gm, $LGTM just claimed its fees and bought back half", "Launch is live. Fun times ahead", "Bought 0.5 SOL, e.g. a small bag", "3 holders -> 30. lfg"]) {
+    assert.equal(checkPostText(`  ${ok} `, "chat"), ok);
+  }
+  for (const bad of ["go to higher.fun now", "claim at https://x.co", "visit claim-sol[.]com", "free sol at airdrop dot fun", "www.scam", "dm t.me/scam", "discord.gg/abc", "send to 7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce", "hi\u200bthere", "a\u202eb", "line\u0007", "   "]) {
+    assert.throws(() => checkPostText(bad, "comment"), (e: { code?: string }) => e.code === "bad_post", bad);
+  }
+  const words = (n: number) => "hi ".repeat(n).slice(0, n);
+  assert.throws(() => checkPostText(words(281), "chat"), /at most 280/);
+  assert.equal(checkPostText(words(500), "comment").length, 500);
+  assert.throws(() => checkPostText(words(501) + "!", "comment"), /at most 500/);
 });

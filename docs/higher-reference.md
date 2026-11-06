@@ -196,6 +196,13 @@ token for prices. Lists return `{items, nextCursor}`. On 2026-11-05 `/coins/:min
 | `GET /users/:wallet`, `/coins`, `/earnings`, `/locks` | profile, coins created, `paidOut`/`pendingPayout`, creator locks |
 | `GET /sol-price`, `GET /launch-fee`, `GET /tickers/:ticker`, `GET /sponsored` | |
 
+**Posting** (read from the site's code on 2026-11-06, not yet called): `POST /coins/:mint/comments {body}` and
+`POST /chat {body}`, both with the sign-in session. The site checks `body` before sending: trimmed, no control
+characters, 1-500 characters for a comment and 1-280 for chat, and a word filter; the server presumably checks the
+same. A comment comes back as `{id, mint, wallet, displayName, body, createdAt}`, a chat message the same without
+`mint`. `GET /chat/settings` returns `{slowModeSeconds}` (0 that day). Highwire's `checkPostText` adds its own rules on
+top (no links, no addresses).
+
 Routes the web app uses that we haven't called yet: `/auth/nonce`, `/auth/verify`, `/auth/me`, `/auth/logout` (wallet
 sign-in), `POST /uploads/image`, `POST /uploads/metadata`, `POST /mints/reserve`, `POST /fee-recipients/resolve`
 (`{provider, handle}` for X/GitHub launches), `POST /chat`, `POST /coins/:mint/comments`, `/sponsor/quote`,

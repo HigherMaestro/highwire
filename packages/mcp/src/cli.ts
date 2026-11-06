@@ -3,7 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { serverOptionsFromEnv } from "./env.ts";
 import { createServer, VERSION } from "./server.ts";
 import { localLaunchSecret, signerFromEnv } from "./signer-env.ts";
-import { runClaim, runLaunch, runPolicyInit, runWallet } from "./launch-cli.ts";
+import { runClaim, runLaunch, runPolicyInit, runPost, runWallet } from "./launch-cli.ts";
 import { runOrders } from "./orders-cli.ts";
 import { runWatch } from "./watch.ts";
 
@@ -17,6 +17,7 @@ if (args[0] === "policy" && args[1] === "init") process.exit(runPolicyInit(args.
 if (args[0] === "wallet") process.exit(await runWallet(args.slice(1), io));
 if (args[0] === "launch") process.exit(await runLaunch(args.slice(1), io));
 if (args[0] === "claim") process.exit(await runClaim(args.slice(1), io));
+if (args[0] === "post") process.exit(await runPost(args.slice(1), io));
 if (args[0] === "watch" || args[0] === "orders") {
   const ctl = new AbortController();
   process.once("SIGINT", () => ctl.abort());
@@ -51,6 +52,7 @@ Commands:
   highwire wallet new      make your own wallet for launching (~/.highwire/wallet.json); wallet address prints it
   highwire launch          launch a coin from that wallet, inside your policy (highwire launch --help)
   highwire claim           collect the wallet's creator fees
+  highwire post            post a comment on your coin, or in higher.fun's chat, inside your policy (highwire post --help)
   highwire watch           higher.fun's live feed in the terminal: launches, graduations, buys and sells
                            (highwire watch --help for the filters)
   highwire orders run      fill standing orders (stop-loss, take-profit, recurring buys, fee claims) until Ctrl-C

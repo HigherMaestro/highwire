@@ -45,6 +45,18 @@ export const PolicySchema = z
       })
       .strict()
       .optional(),
+    /**
+     * Posting on higher.fun as this wallet: comments on coins (only the wallet's own launches, by default, or any coin),
+     * site chat if `chat` is true, at most `max_per_day` posts in any 24 hours. Without it, none. Mainnet only.
+     */
+    posts: z
+      .object({
+        comments: z.enum(["none", "own", "any"]).default("own"),
+        chat: z.boolean().default(false),
+        max_per_day: z.number().int().min(1).max(100).default(10),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

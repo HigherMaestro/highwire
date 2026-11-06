@@ -65,7 +65,8 @@ sign page are in [docs/unsigned-transactions.md](docs/unsigned-transactions.md).
 | `build_transfer` | SOL or a higher.fun coin to another wallet, unsigned. No `sign_url`: the sign page never signs transfers |
 | `get_signer_status` | With the local signer: its wallet, live or dry run, the policy, and what's left of today's limit |
 | `execute_trade`, `execute_launch`, `execute_claim`, `execute_transfer` | With the local signer: build exactly what the build tool builds, check the policy, simulate again, then sign and send (or dry-run) |
-| `place_order`, `list_orders`, `cancel_order` | With the local signer: standing orders (stop-loss, take-profit, recurring buys) that `highwire orders run` fills inside the policy |
+| `place_order`, `list_orders`, `cancel_order` | With the local signer: standing orders (stop-loss, take-profit, recurring buys, fee claims) that `highwire orders run` fills inside the policy |
+| `post_comment`, `post_chat` | With the local signer: post a comment on a coin or a message in higher.fun's chat as the wallet, inside the policy's `posts` section |
 
 **The sign page** ([highwire.fun/sign](https://highwire.fun/sign)) reads the transaction from the link's fragment,
 which never reaches a server, decodes every instruction from the bytes, shows what you spend and receive, the fees, the
@@ -233,6 +234,7 @@ you'd let an agent spend.
 | `creators` | `allow`: only coins launched by these wallets |
 | `transfer_allowlist` | the only recipients for `execute_transfer` |
 | `orders` | `kinds`: the standing orders an agent may place (`stop_loss`, `take_profit`, `recurring_buy`, `fee_claim`), and `max_open` (default 10). Without it, none |
+| `posts` | `comments`: `own` (the default: only coins the wallet launched), `any` or `none`; `chat`: `true` to allow higher.fun's site chat (default false); `max_per_day` (default 10, comments and chat together). Mainnet only. Without it, none |
 
 Every execute is written to `~/.highwire/audit.jsonl`: refusals, dry runs, and each signature as it's sent. Creating
 `~/.highwire/STOP` refuses everything until you delete it. `HIGHWIRE_HOME` and `HIGHWIRE_POLICY_PATH` move the files.
@@ -261,6 +263,12 @@ the audit log with its order's id. A fill the runner can't be sure about (it sto
 was lost) closes the order as failed rather than risk filling it twice; a fee claim whose answer was lost just waits
 for its next run, since claiming again is harmless, but its buyback closes the order. `highwire orders list` and
 `highwire orders cancel <id>` work without the keypair.
+
+**Posting.** With a `posts` section, `post_comment` and `post_chat` (or `highwire post --mint <mint> "…"` and
+`highwire post --chat "…"`) post on higher.fun as the wallet: the signer signs higher.fun's sign-in message, and the
+post goes up under the wallet's name. Plain text only: links, web addresses and wallet or mint addresses are refused,
+since chat is where phishing lives. Each post is written to the audit log before it goes up, counts against
+`max_per_day` whether or not the answer comes back, and is a dry run until the policy is live.
 
 ## Repository
 

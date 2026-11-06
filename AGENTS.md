@@ -11,7 +11,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/higher/api.ts` | typed client for api.higher.fun |
 | `packages/core/src/higher/constants.ts` | addresses and fee modes |
 | `packages/core/src/higher/format.ts` | unit conversion and the untrusted-content flags |
-| `packages/core/src/higher/session.ts` | `HigherSession`: higher.fun sign-in (its exact message, checked before signing), uploads and fee-recipient lookups. Local signer only |
+| `packages/core/src/higher/session.ts` | `HigherSession`: higher.fun sign-in (its exact message, checked before signing), uploads, fee-recipient lookups, and posting comments and chat (`checkPostText`). Local signer only |
 | `packages/core/src/lib/` | HTTP client with retries, and the error classes |
 | `packages/core/src/solana/rpc.ts` | the few RPC reads we need, over fetch |
 | `packages/core/src/risk.ts` | `evaluateRisk`, the rug-check verdict |
@@ -90,6 +90,9 @@ Streamable HTTP. An npm workspaces monorepo. Read
   widen what's already set up. Keep `skill.md` true to the commands: it's what agents read.
 - **Signing messages:** the local signer signs one kind of message, higher.fun's sign-in message, through
   `signInMessage`, after `checkSignInMessage` matches it word for word. Never add a general sign-message path.
+- **Posting** goes only through `LocalSigner.post()`, inside the policy's `posts` section (own coins by default, chat
+  only when allowed, a daily cap counted from the audit log), with `checkPostText` refusing links and addresses. Log
+  the post before it goes up. Never post to test: the unit tests fake higher.fun.
 - **Transfers** go only through the local signer, to the policy's allowlist. The sign page refuses them: a sign link
   can come from anyone.
 - **Never** accept private keys or seed phrases through tool arguments. Never commit keys, `.env` files or keypairs.

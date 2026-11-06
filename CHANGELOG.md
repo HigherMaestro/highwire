@@ -11,6 +11,11 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   while `highwire orders run` runs, each claim and buyback passing the whole policy. A claim whose answer is lost waits
   for the next run (claiming twice is harmless); a buyback whose answer is lost closes the order. `policy init --launch`
   now allows fee-claim orders, and skill.md shows agents how to claim on their own.
+- **Agents can post on higher.fun.** `post_comment` and `post_chat` (and `highwire post`) post a comment on a coin's
+  page or a message in higher.fun's site chat as the local signer's wallet, inside a new `posts` policy section:
+  comments on the wallet's own coins by default (`"comments": "any"` for any coin), chat only with `"chat": true`, and
+  at most `max_per_day` posts (default 10). Plain text only: links, web addresses and wallet or mint addresses are
+  refused. Each post is logged before it goes up and is a dry run until the policy is live. Not on the hosted endpoint.
 
 ## 0.9.0 (2026-11-06)
 

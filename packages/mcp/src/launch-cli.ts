@@ -284,3 +284,41 @@ export function runPolicyInit(argv: string[], io: CliIo): number {
   }
   return 0;
 }
+
+const POST_USAGE = `highwire post: post on higher.fun as your wallet, inside your policy's "posts" section
+
+  highwire post --mint <mint> "text"   a comment on a coin's page (by default only coins your wallet launched)
+  highwire post --chat "text"          a message in higher.fun's site chat (needs "chat": true)
+  --json                               print the result as JSON
+
+Plain text only: links, web addresses and wallet or mint addresses are refused. Comments are up to 500 characters and
+chat messages up to 280. It's public and signed in as your wallet, and a dry run until the policy is live. Allow it by
+adding a "posts" section to the policy, for example: "posts": {"comments": "own", "chat": true, "max_per_day": 10}`;
+
+/** `highwire post`: post_comment or post_chat with the CLI's signer. */
+export async function runPost(argv: string[], io: CliIo): Promise<number> {
+  if (argv.includes("--help")) {
+    io.out(POST_USAGE);
+    return 0;
+  }
+  let parsed;
+  try {
+    parsed = parseArgs({ args: argv, options: { mint: { type: "string" }, chat: { type: "boolean" }, json: { type: "boolean" } }, allowPositionals: true, strict: true });
+  } catch (err) {
+    io.err(`highwire post: ${(err as Error).message}\n\n${POST_USAGE}`);
+    return 2;
+  }
+  const { values, positionals } = parsed;
+  const text = positionals.join(" ").trim();
+  if (!text || (values.mint === undefined) === !values.chat) {
+    io.err(`highwire post: give --mint <mint> or --chat, and the text\n\n${POST_USAGE}`);
+    return 2;
+  }
+  const r = await callTool(io.env ?? process.env, io, values.chat ? "post_chat" : "post_comment", { ...(values.mint ? { mint: values.mint } : {}), text, confirm_post: true });
+  if (!r) return 1;
+  if (values.json) io.out(JSON.stringify(r.body, null, 2));
+  else if (!r.ok) printFailure(io, "post", r.body);
+  else if (r.body.status === "dry_run") io.out(`Dry run: the policy isn't live, so nothing was posted. It would post: ${String(r.body.text)}`);
+  else io.out(`Posted${r.body.page ? ` on ${String(r.body.page)}` : " in higher.fun's chat"}: ${String(r.body.text)} (${String(r.body.postsLeftToday)} more allowed today)`);
+  return r.ok ? 0 : 1;
+}
