@@ -185,8 +185,8 @@ export class LocalSigner {
   }
 
   /** Logs a standing order being placed, cancelled or closed. Fills are logged by execute(), like any trade. */
-  logOrder(tool: string, order: { id: string; cluster: Cluster; mint: string }, reason: string) {
-    this.audit.append({ tool, action: "trade", cluster: order.cluster, wallet: this.wallet, outcome: "order", sol: "0", lamports: "0", mint: order.mint, order: order.id, reason });
+  logOrder(tool: string, order: { id: string; cluster: Cluster; mint?: string; kind?: string }, reason: string) {
+    this.audit.append({ tool, action: order.kind === "fee_claim" ? "claim" : "trade", cluster: order.cluster, wallet: this.wallet, outcome: "order", sol: "0", lamports: "0", ...(order.mint ? { mint: order.mint } : {}), order: order.id, reason });
   }
 
   private async executeNow(connection: Connection, req: ExecuteRequest): Promise<ExecuteResult> {

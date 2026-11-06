@@ -81,9 +81,10 @@ Streamable HTTP. An npm workspaces monorepo. Read
   a lock file so two processes take turns, and only after the RPC's genesis hash matches the policy's cluster. Test it
   with a fake connection, never a real
   cluster.
-- **Standing orders** fill only through `executeTrade` and `LocalSigner.execute()`, so each fill passes the whole
-  policy then. Agents may place only the kinds the policy's `orders` section allows. Trigger on on-chain prices from a
-  fresh quote, never on a feed message. When a fill's outcome is unknown, close the order; never risk a second fill.
+- **Standing orders** fill only through `executeTrade` (fee claims through `buildClaimFor`, as `execute_claim` does)
+  and `LocalSigner.execute()`, so each fill passes the whole policy then. Agents may place only the kinds the policy's `orders` section allows. Trigger on on-chain prices from a
+  fresh quote, never on a feed message. When a fill's outcome is unknown, close the order; never risk a second fill. The one exception is a fee claim's
+  claim, which is safe to repeat, so it waits for the next run; its buyback is a trade and closes the order.
 - **The CLI's own commands** (`launch`, `claim`) go through the execute tools on an in-process server, never around
   them. `wallet new` never overwrites a file or prints a key, and `policy init` never replaces a policy, so neither can
   widen what's already set up. Keep `skill.md` true to the commands: it's what agents read.

@@ -177,7 +177,7 @@ for (const cluster of clusters) {
   // with the stop-loss's trigger moved above the price so it fires.
   const ohome = mkdtempSync(join(tmpdir(), "highwire-rehearse-orders-"));
   const opaths = agentPaths({ HIGHWIRE_HOME: ohome });
-  writeFileSync(opaths.policy, JSON.stringify({ ...policy, actions: ["trade"], orders: { kinds: ["stop_loss", "recurring_buy"], max_open: 5 } }));
+  writeFileSync(opaths.policy, JSON.stringify({ ...policy, actions: ["trade", "claim"], orders: { kinds: ["stop_loss", "recurring_buy", "fee_claim"], max_open: 5 } }));
   const osigner = new LocalSigner(watchOnly, opaths);
   const options = { ...serverOptionsFromEnv({ ...process.env, HIGHWIRE_CLUSTER: cluster, SOLANA_RPC_URL: rpcFor(cluster) }), signer: osigner };
   const oclient = new Client({ name: "rehearse-orders", version: "0" });
@@ -212,6 +212,25 @@ for (const cluster of clusters) {
     });
     const tagged = osigner.audit.entries().filter((e) => e.outcome === "sent" && e.order);
     rows.push({ cluster, what: "audit log ties each fill to its order", ok: tagged.length === 2, result: `${tagged.length} sends tagged with their order` });
+
+    // A fee claim that buys back with all of it: devnet's wallet created its coin, so it has curve fees to claim;
+    // mainnet's only holds one, so its claim should find nothing and wait for the next run.
+    const claim = await ocall("place_order", { kind: "fee_claim", every_hours: 6, min_claim_sol: 0, buyback_pct: 100, mint, max_slippage_bps: 300, confirm_order: true });
+    if (claim.isError) rows.push({ cluster, what: "place_order fee_claim with a full buyback", ok: false, result: `${claim.out.code}: ${claim.out.error}` });
+    else {
+      const sentBefore = sends.length;
+      await runner.tick();
+      const fc = book.get(claim.out.order.id)!;
+      const steps = fc.history.map((h) => `${h.step} ${h.outcome}${h.reason ? ` (${h.reason})` : ""}`).join(", ");
+      const claimStep = fc.history.find((h) => h.step === "claim");
+      const signedOk = sends.slice(sentBefore).every((x) => x.signed && x.simulated.startsWith("ok"));
+      rows.push({
+        cluster,
+        what: `place_order fee_claim, then the runner claims ${claim.out.now.claimableSol} SOL and buys back`,
+        ok: fc.status === "open" && fc.failures === 0 && (claimStep?.outcome === "sent" || claimStep?.outcome === "skipped") && signedOk,
+        result: `${steps}; next run ${fc.nextRunAt}${sends.length > sentBefore ? `; ${sends.slice(sentBefore).map((x) => `signed bytes simulate ${x.simulated}`).join("; ")}` : ""}`,
+      });
+    }
   }
   await oclient.close();
   rmSync(ohome, { recursive: true, force: true });

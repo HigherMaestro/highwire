@@ -53,7 +53,8 @@ Commands:
   highwire claim           collect the wallet's creator fees
   highwire watch           higher.fun's live feed in the terminal: launches, graduations, buys and sells
                            (highwire watch --help for the filters)
-  highwire orders run      fill standing orders (stop-loss, take-profit, recurring buys) until Ctrl-C
+  highwire orders run      fill standing orders (stop-loss, take-profit, recurring buys, fee claims) until Ctrl-C
+  highwire orders claim    claim creator fees on a schedule (--every-hours 24), and optionally buy back with them
   highwire orders list     the open orders; highwire orders cancel <id> cancels one
 
 Without a local signer Highwire never signs: build tools return unsigned transactions and a sign_url for your own

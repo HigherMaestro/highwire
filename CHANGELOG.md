@@ -2,6 +2,16 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- **Fee claims on a schedule, with optional buybacks.** A new standing-order kind, `fee_claim`: every `every_hours`,
+  if at least `min_claim_sol` (default 0.001 SOL) of the wallet's creator fees is waiting, it claims them through the
+  signer as `execute_claim` does, and with `buyback_pct` and `mint` spends that share of what came in buying the coin.
+  Place one with `place_order` or `highwire orders claim --every-hours 24 [--buyback-pct 50 --mint <mint>]`; it fills
+  while `highwire orders run` runs, each claim and buyback passing the whole policy. A claim whose answer is lost waits
+  for the next run (claiming twice is harmless); a buyback whose answer is lost closes the order. `policy init --launch`
+  now allows fee-claim orders, and skill.md shows agents how to claim on their own.
+
 ## 0.9.0 (2026-11-06)
 
 - **Highwire's trade fee: 0.3% on trades it builds, on mainnet.** One SOL transfer to Highwire's wallet

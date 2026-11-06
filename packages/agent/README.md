@@ -10,7 +10,7 @@ Dry run until the policy says `"live": true`. MIT.
 - `AuditLog`: one JSON line per refusal, dry run and signature in `~/.highwire/audit.jsonl`, and the daily count.
 - `LocalSigner`: checks an envelope from `highwire-core` against the policy, simulates each transaction again, then
   signs, sends and confirms, one execute at a time. `~/.highwire/STOP` refuses everything.
-- `OrderBook` and `OrderRunner`: standing orders (stop-loss, take-profit, recurring buys) in `~/.highwire/orders.json`,
+- `OrderBook` and `OrderRunner`: standing orders (stop-loss, take-profit, recurring buys, fee claims) in `~/.highwire/orders.json`,
   filled through `LocalSigner` while `highwire orders run` runs, only the kinds the policy's `orders` section allows.
 
 You don't use it directly: `highwire-mcp` turns it on when `HIGHWIRE_KEYPAIR_PATH` is set. See the main README's

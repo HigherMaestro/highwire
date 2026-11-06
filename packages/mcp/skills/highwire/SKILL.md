@@ -30,7 +30,7 @@ creator can claim, whatever the mode.
 | How a wallet's coins have done | `get_wallet_pnl`: average cost, realized and unrealized profit, from the wallet's own transactions. If it returns `history_unavailable`, the RPC can't search history; say so rather than estimating |
 | Act with the local signer (only if the user turned it on) | `get_signer_status`, `execute_trade`, `execute_launch`, `execute_claim`, `execute_transfer` |
 | Launch on your own from a shell (no person in the loop) | `npx -y highwire-mcp wallet new`, `policy init --launch`, then `launch --name … --ticker … --image …` and `claim`; the steps are at highwire.fun/skill.md |
-| Stop-loss, take-profit, recurring buys (local signer, if the policy allows orders) | `place_order`, `list_orders`, `cancel_order`; they fill while the user runs `highwire orders run` |
+| Stop-loss, take-profit, recurring buys, scheduled fee claims with optional buybacks (local signer, if the policy allows orders) | `place_order`, `list_orders`, `cancel_order`; they fill while the user runs `highwire orders run` |
 
 Prompts: `scan_launches`, `coin_due_diligence`, `creator_report`, `plan_launch`.
 

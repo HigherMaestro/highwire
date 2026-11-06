@@ -7,7 +7,8 @@ import { HigherError, type Quote } from "highwire-core";
 import { holdProcessLock, lockHolder } from "../src/lock.ts";
 import { OrderBook, type NewOrder, type Order } from "../src/orders.ts";
 import { PolicySchema } from "../src/policy.ts";
-import { OrderRunner, MAX_ORDER_FAILURES, type OrderMarket } from "../src/runner.ts";
+import { OrderRunner, MAX_ORDER_FAILURES, MIN_BUYBACK_LAMPORTS, type OrderMarket } from "../src/runner.ts";
+import { describeOrder } from "../src/orders.ts";
 import type { ExecuteResult } from "../src/signer.ts";
 
 const WALLET = "H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5";
@@ -20,6 +21,7 @@ function tmpBook(now: () => Date = () => new Date()) {
 }
 
 const stop = (o: Partial<NewOrder> = {}): NewOrder => ({ kind: "stop_loss", cluster: "mainnet", wallet: WALLET, mint: MINT, maxSlippageBps: 300, triggerPriceSol: 0.00001, sellPct: 50, ...o });
+const claimer = (o: Partial<NewOrder> = {}): NewOrder => ({ kind: "fee_claim", cluster: "mainnet", wallet: WALLET, mint: MINT, maxSlippageBps: 300, everyHours: 6, minClaimSol: 0.001, buybackPct: 50, nextRunAt: "2026-11-06T12:00:00.000Z", expiresAt: "2026-12-06T12:00:00.000Z", ...o });
 const dca = (o: Partial<NewOrder> = {}): NewOrder => ({ kind: "recurring_buy", cluster: "mainnet", wallet: WALLET, mint: MINT, maxSlippageBps: 300, sol: 0.01, everyHours: 24, times: 2, nextRunAt: "2026-11-06T12:00:00.000Z", ...o });
 
 /** A market the test drives: a spot price, a balance, and what each trade returns. */
@@ -29,6 +31,10 @@ function fakeMarket() {
     balance: 2_000_000_000n, // 2,000 tokens
     quotes: 0,
     trades: [] as { order: string; side: string; amountIn: bigint }[],
+    claims: [] as { order: string; minLamports: bigint }[],
+    /** What the wallet has to claim, in lamports, and what a claim returns. */
+    claimable: 100_000_000n,
+    claimNext: (): ExecuteResult | Error => ({ status: "sent", wallet: WALLET, cluster: "mainnet", transactions: [{ index: 0, label: "Claim", signature: `claim${m.claims.length - 1}`, confirmed: true }], summary: [], spentSol: 0, dayLeftSol: 1 }),
     next: (): ExecuteResult | Error => ({ status: "sent", wallet: WALLET, cluster: "mainnet", transactions: [{ index: 0, label: "Trade", signature: `sig${m.trades.length - 1}`, confirmed: true }], summary: [], spentSol: 0, dayLeftSol: 1 }),
     market: null as unknown as OrderMarket,
   };
@@ -44,6 +50,13 @@ function fakeMarket() {
       const r = m.next();
       if (r instanceof Error) throw r;
       return r;
+    },
+    claim: async ({ order, minLamports }) => {
+      if (m.claimable === 0n || m.claimable < minLamports) return { result: null, lamports: m.claimable };
+      m.claims.push({ order: order.id, minLamports });
+      const r = m.claimNext();
+      if (r instanceof Error) throw r;
+      return { result: r, lamports: m.claimable };
     },
   };
   return m;
@@ -304,4 +317,92 @@ test("descriptions say what an order does, with prices in plain decimals", async
   assert.equal(describeOrder(stop({ kind: "take_profit", triggerPriceSol: 0.00003, minSolOut: 1 })), `Sell 50% of ${MINT} if its price rises to 0.00003 SOL or above, for at least 1 SOL`);
   assert.equal(describeOrder(dca()), `Buy 0.01 SOL of ${MINT} every 24 hours, 2 times`);
   assert.equal(describeOrder(dca({ everyHours: 1, times: 1 })), `Buy 0.01 SOL of ${MINT} every hour, once`);
+});
+
+test("a fee claim claims on schedule, then buys back its share of what came in", async () => {
+  const c = clock();
+  const book = tmpBook(c.now);
+  const m = fakeMarket();
+  const o = await book.place(claimer(), 5);
+  const r = runner(book, m, c);
+  await r.tick();
+  assert.deepEqual(m.claims, [{ order: o.id, minLamports: 1_000_000n }]);
+  // Half of the 0.1 SOL claimed.
+  assert.deepEqual(m.trades, [{ order: o.id, side: "buy", amountIn: 50_000_000n }]);
+  let after = book.get(o.id)!;
+  assert.equal(after.status, "open");
+  assert.equal(after.runsDone, 1);
+  assert.deepEqual(after.history.map((h) => [h.step, h.outcome]), [["claim", "sent"], ["buyback", "sent"]]);
+  assert.match(after.history[0]!.reason!, /claimed about 0.1 SOL/);
+  assert.equal(after.nextRunAt, "2026-11-06T18:00:00.000Z");
+  // Not due again until six hours on.
+  c.advance(3_600_000);
+  await r.tick();
+  assert.equal(m.claims.length, 1);
+  c.advance(5 * 3_600_000);
+  await r.tick();
+  assert.equal(m.claims.length, 2);
+  after = book.get(o.id)!;
+  assert.equal(after.runsDone, 2);
+});
+
+test("a fee claim skips a dusting, notes it once, and buys back nothing too small", async () => {
+  const c = clock();
+  const book = tmpBook(c.now);
+  const m = fakeMarket();
+  m.claimable = 500_000n; // under the 0.001 SOL minimum
+  const o = await book.place(claimer(), 5);
+  const r = runner(book, m, c);
+  await r.tick();
+  c.advance(6 * 3_600_000);
+  await r.tick();
+  assert.equal(m.claims.length, 0);
+  let after = book.get(o.id)!;
+  assert.deepEqual(after.history.map((h) => [h.step, h.outcome]), [["claim", "skipped"]]);
+  assert.match(after.history[0]!.reason!, /under its 0.001 SOL minimum/);
+  // Enough to claim, but half of it is under the smallest buyback.
+  m.claimable = MIN_BUYBACK_LAMPORTS + 1n;
+  c.advance(6 * 3_600_000);
+  await r.tick();
+  assert.equal(m.claims.length, 1);
+  assert.equal(m.trades.length, 0);
+  after = book.get(o.id)!;
+  assert.deepEqual(after.history.slice(-2).map((h) => [h.step, h.outcome]), [["claim", "sent"], ["buyback", "skipped"]]);
+  // Without a buyback, it only claims.
+  const plain = await book.place(claimer({ mint: undefined, buybackPct: undefined }), 5);
+  await runner(book, m, c).tick();
+  assert.equal(book.get(plain.id)!.history.at(-1)!.step, "claim");
+  assert.equal(m.trades.length, 0);
+});
+
+test("a fee claim's unanswered claim is tried again next run; an unanswered buyback closes it", async () => {
+  const c = clock();
+  const book = tmpBook(c.now);
+  const m = fakeMarket();
+  m.claimNext = () => new HigherError("no answer", { code: "send_failed" });
+  const o = await book.place(claimer(), 5);
+  const r = runner(book, m, c);
+  await r.tick();
+  let after = book.get(o.id)!;
+  assert.equal(after.status, "open");
+  assert.equal(m.trades.length, 0);
+  assert.equal(after.nextRunAt, "2026-11-06T18:00:00.000Z");
+
+  m.claimNext = () => ({ status: "sent", wallet: WALLET, cluster: "mainnet", transactions: [{ index: 0, label: "Claim", signature: "c", confirmed: true }], summary: [], spentSol: 0, dayLeftSol: 1 });
+  m.next = () => new HigherError("no answer", { code: "send_failed" });
+  c.advance(6 * 3_600_000);
+  await r.tick();
+  after = book.get(o.id)!;
+  assert.equal(after.status, "failed");
+  assert.match(after.closeReason!, /buyback's send outcome is unknown/);
+});
+
+test("fee claims are a kind the policy can allow, and describe themselves", () => {
+  const base = { version: 1, cluster: "mainnet", actions: ["claim", "trade"], max_sol_per_tx: 0.1, max_sol_per_day: 0.5, max_slippage_bps: 300 };
+  assert.deepEqual(PolicySchema.parse({ ...base, orders: { kinds: ["fee_claim"] } }).orders?.kinds, ["fee_claim"]);
+  assert.equal(
+    describeOrder({ kind: "fee_claim", mint: MINT, everyHours: 6, minClaimSol: 0.001, buybackPct: 50 }),
+    `Claim creator fees every 6 hours when at least 0.001 SOL is waiting, then spend 50% of what came in buying ${MINT}`,
+  );
+  assert.equal(describeOrder({ kind: "fee_claim", everyHours: 1 }), "Claim creator fees every hour");
 });

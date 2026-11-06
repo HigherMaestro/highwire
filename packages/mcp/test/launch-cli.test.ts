@@ -99,3 +99,16 @@ test("launch without a wallet says how to make one, and touches nothing", async 
   assert.equal(await runLaunch(["--ticker", "CAT"], { ...u.io, env: { HIGHWIRE_HOME: home() } }), 2);
   assert.match(u.err[0]!, /give --name/);
 });
+
+test("orders claim needs --every-hours and a wallet, and touches nothing without them", async () => {
+  const { runOrders } = await import("../src/orders-cli.ts");
+  const signal = new AbortController().signal;
+  const u = capture();
+  assert.equal(await runOrders(["claim"], { ...u.io, signal, env: { HIGHWIRE_HOME: home() } }), 2);
+  assert.match(u.err[0]!, /--every-hours/);
+  const n = capture();
+  assert.equal(await runOrders(["claim", "--every-hours", "lots"], { ...n.io, signal, env: { HIGHWIRE_HOME: home() } }), 2);
+  const w = capture();
+  assert.equal(await runOrders(["claim", "--every-hours", "24"], { ...w.io, signal, env: { HIGHWIRE_HOME: home() } }), 1);
+  assert.match(w.err.join("\n"), /highwire wallet new/);
+});

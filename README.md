@@ -232,7 +232,7 @@ you'd let an agent spend.
 | `coins` | `allow` or `deny` lists of mints. Before going live, list the coins (or `creators`) you mean the agent to trade: without an allow-list it may buy any higher.fun coin within your limits, and the signer warns you so |
 | `creators` | `allow`: only coins launched by these wallets |
 | `transfer_allowlist` | the only recipients for `execute_transfer` |
-| `orders` | `kinds`: the standing orders an agent may place (`stop_loss`, `take_profit`, `recurring_buy`), and `max_open` (default 10). Without it, none |
+| `orders` | `kinds`: the standing orders an agent may place (`stop_loss`, `take_profit`, `recurring_buy`, `fee_claim`), and `max_open` (default 10). Without it, none |
 
 Every execute is written to `~/.highwire/audit.jsonl`: refusals, dry runs, and each signature as it's sent. Creating
 `~/.highwire/STOP` refuses everything until you delete it. `HIGHWIRE_HOME` and `HIGHWIRE_POLICY_PATH` move the files.
@@ -244,6 +244,10 @@ can place orders with `place_order`, which wait in `~/.highwire/orders.json`:
   `trigger_change_pct` from now), and `take_profit` once it rises to one. `min_sol_out` makes either wait rather than
   sell for less.
 - `recurring_buy` buys `sol` every `every_hours`, `times` times.
+- `fee_claim` claims the wallet's creator fees every `every_hours` when at least `min_claim_sol` is waiting (default
+  0.001 SOL), and with `buyback_pct` and `mint` spends that share of the SOL each claim brought in buying the coin. It
+  needs `claim` in the policy's `actions`, and `trade` too for buybacks. `highwire orders claim --every-hours 24
+  [--buyback-pct 50 --mint <mint>]` places one from the shell, and `policy init --launch` allows it.
 
 They fill only while this runs, with the same `HIGHWIRE_KEYPAIR_PATH` (one runner at a time):
 
@@ -254,7 +258,8 @@ HIGHWIRE_KEYPAIR_PATH=~/.config/solana/agent.json npx -y highwire-mcp orders run
 Price orders are checked against the coin's on-chain price every minute, and within seconds of a trade on it (the live
 feed only says when to look). Each fill passes the whole policy again, dry run included, is simulated and is written to
 the audit log with its order's id. A fill the runner can't be sure about (it stopped mid-fill, or the send's answer
-was lost) closes the order as failed rather than risk filling it twice. `highwire orders list` and
+was lost) closes the order as failed rather than risk filling it twice; a fee claim whose answer was lost just waits
+for its next run, since claiming again is harmless, but its buyback closes the order. `highwire orders list` and
 `highwire orders cancel <id>` work without the keypair.
 
 ## Repository

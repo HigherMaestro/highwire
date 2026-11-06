@@ -1,20 +1,25 @@
+import { parseArgs } from "node:util";
 import { lstatSync } from "node:fs";
 import { agentPaths, AuditLog, describeOrder, holdProcessLock, lockHolder, loadPolicy, OrderBook, OrderRunner, type Order } from "highwire-agent";
 import { serverOptionsFromEnv } from "./env.ts";
 import { createDeps } from "./server.ts";
 import { signerFromEnv } from "./signer-env.ts";
 import { orderMarket } from "./tools/orders.ts";
+import { callTool } from "./launch-cli.ts";
 
 // `highwire orders run|list|cancel`: the standing orders in ~/.highwire/orders.json. `run` fills them for the wallet
 // in HIGHWIRE_KEYPAIR_PATH until Ctrl-C, inside the policy, one runner at a time.
 
-export const ORDERS_USAGE = `highwire orders: standing orders for the local signer (stop-loss, take-profit, recurring buys)
+export const ORDERS_USAGE = `highwire orders: standing orders for the local signer (stop-loss, take-profit, recurring buys, fee claims)
 
   highwire orders run           fill open orders for HIGHWIRE_KEYPAIR_PATH's wallet until Ctrl-C
   highwire orders list [--all]  open orders (or every order) in the book
   highwire orders cancel <id>   cancel an open order
+  highwire orders claim --every-hours <h> [--min-sol <sol>] [--buyback-pct <pct> --mint <mint>] [--slippage-bps <bps>]
+                                claim the wallet's creator fees every <h> hours (when at least --min-sol is waiting,
+                                default 0.001), and buy back --mint with that share of each claim
 
-Agents place orders with the place_order tool, and only kinds the policy's "orders" section allows. Every fill is
+Agents place orders with the place_order tool (or \`orders claim\`), and only kinds the policy's "orders" section allows. Every fill is
 checked against the whole policy, simulated and written to the audit log, like execute_trade.`;
 
 type Env = Record<string, string | undefined>;
@@ -27,7 +32,7 @@ export interface OrdersIo {
 }
 
 const line = (o: Order) =>
-  `${o.id}  ${o.status.padEnd(9)}  ${describeOrder(o)}${o.kind === "recurring_buy" && o.status === "open" ? ` (${o.runsDone} done, next ${o.nextRunAt})` : ""}${o.closeReason ? `: ${o.closeReason}` : ""}`;
+  `${o.id}  ${o.status.padEnd(9)}  ${describeOrder(o)}${(o.kind === "recurring_buy" || o.kind === "fee_claim") && o.status === "open" ? ` (${o.runsDone} done, next ${o.nextRunAt})` : ""}${o.closeReason ? `: ${o.closeReason}` : ""}`;
 
 export async function runOrders(argv: string[], io: OrdersIo): Promise<number> {
   const env = io.env ?? process.env;
@@ -51,17 +56,57 @@ export async function runOrders(argv: string[], io: OrdersIo): Promise<number> {
         return 2;
       }
       const o = await book.cancel(id, "cancelled from the command line");
-      new AuditLog(paths.audit).append({ tool: "highwire orders cancel", action: "trade", cluster: o.cluster, wallet: o.wallet, outcome: "order", sol: "0", lamports: "0", mint: o.mint, order: o.id, reason: `cancelled: ${describeOrder(o)}` });
+      new AuditLog(paths.audit).append({ tool: "highwire orders cancel", action: o.kind === "fee_claim" ? "claim" : "trade", cluster: o.cluster, wallet: o.wallet, outcome: "order", sol: "0", lamports: "0", ...(o.mint ? { mint: o.mint } : {}), order: o.id, reason: `cancelled: ${describeOrder(o)}` });
       io.out(line(o));
       return 0;
     }
     if (cmd === "run") return await runRunner(env, paths, book, io);
+    if (cmd === "claim") return await placeClaim(rest, env, io);
   } catch (err) {
     io.err(`highwire orders: ${err instanceof Error ? err.message : String(err)}`);
     return 1;
   }
   io.out(ORDERS_USAGE);
   return cmd === undefined || cmd === "--help" ? 0 : 2;
+}
+
+/** `highwire orders claim`: a fee_claim order, placed through place_order with the CLI's signer. */
+async function placeClaim(argv: string[], env: Env, io: OrdersIo): Promise<number> {
+  let values;
+  try {
+    ({ values } = parseArgs({
+      args: argv,
+      options: { "every-hours": { type: "string" }, "min-sol": { type: "string" }, "buyback-pct": { type: "string" }, mint: { type: "string" }, "slippage-bps": { type: "string" }, json: { type: "boolean" } },
+      strict: true,
+    }));
+  } catch (err) {
+    io.err(`highwire orders claim: ${(err as Error).message}\n\n${ORDERS_USAGE}`);
+    return 2;
+  }
+  const num = (v: string | undefined) => (v === undefined ? undefined : Number(v));
+  const args: Record<string, unknown> = {
+    kind: "fee_claim",
+    every_hours: num(values["every-hours"]),
+    max_slippage_bps: num(values["slippage-bps"]) ?? 500,
+    confirm_order: true,
+    ...(values["min-sol"] !== undefined ? { min_claim_sol: num(values["min-sol"]) } : {}),
+    ...(values["buyback-pct"] !== undefined ? { buyback_pct: num(values["buyback-pct"]) } : {}),
+    ...(values.mint !== undefined ? { mint: values.mint } : {}),
+  };
+  if (args.every_hours === undefined || Object.values(args).some((v) => typeof v === "number" && !Number.isFinite(v))) {
+    io.err(`highwire orders claim: give --every-hours, and numbers for the other flags\n\n${ORDERS_USAGE}`);
+    return 2;
+  }
+  const r = await callTool(env, { out: io.out, err: io.err }, "place_order", args);
+  if (!r) return 1;
+  if (values.json) io.out(JSON.stringify(r.body, null, 2));
+  else if (!r.ok) io.err(`highwire orders claim: ${String(r.body.error)}${r.body.next_step ? `\n${String(r.body.next_step)}` : ""}`);
+  else {
+    const o = r.body.order as Order & { description: string };
+    io.out(`${o.id}  ${o.description}. Waiting now: ${String((r.body.now as { claimableSol?: number })?.claimableSol ?? "?")} SOL.`);
+    io.out((r.body.runner as { running: boolean }).running ? "A runner is filling orders." : "It runs while `highwire orders run` is running.");
+  }
+  return r.ok ? 0 : 1;
 }
 
 async function runRunner(env: Env, paths: ReturnType<typeof agentPaths>, book: OrderBook, io: OrdersIo): Promise<number> {

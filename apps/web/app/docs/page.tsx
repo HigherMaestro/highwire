@@ -59,7 +59,7 @@ const POLICY_KEYS: [string, string][] = [
   ["coins", "allow: only these coins; deny: never these. For trades and coin transfers."],
   ["creators", "allow: only trade coins launched by these wallets."],
   ["transfer_allowlist", "The only wallets transfers may go to. Empty by default."],
-  ["orders", "kinds: which standing orders an agent may place (stop_loss, take_profit, recurring_buy); max_open: how many at once (default 10). Without it, none."],
+  ["orders", "kinds: which standing orders an agent may place (stop_loss, take_profit, recurring_buy, fee_claim); max_open: how many at once (default 10). Without it, none."],
 ];
 
 const ERRORS: [string, string][] = [
@@ -292,9 +292,11 @@ export default async function Docs() {
               </p>
               <p className="muted">
                 <strong>Standing orders.</strong> With an <code>orders</code> section in the policy, an agent can place a
-                stop-loss, a take-profit or a recurring buy with <code>place_order</code>. <code>highwire orders run</code>{" "}
-                fills them while it runs: price orders against the coin&apos;s on-chain price (the live feed only says when to
-                look), recurring buys on their schedule. Every fill passes the whole policy again, is simulated and is
+                stop-loss, a take-profit, a recurring buy or a fee claim with <code>place_order</code>.{" "}
+                <code>highwire orders run</code> fills them while it runs: price orders against the coin&apos;s on-chain price
+                (the live feed only says when to look), recurring buys and fee claims on their schedule. A fee claim
+                collects the wallet&apos;s creator fees once enough is waiting, and can spend a share of each claim buying
+                the coin back; <code>highwire orders claim --every-hours 24</code> places one from the shell. Every fill passes the whole policy again, is simulated and is
                 logged with its order&apos;s id. <code>highwire orders list</code> and <code>highwire orders cancel</code>{" "}
                 show and cancel them.
               </p>

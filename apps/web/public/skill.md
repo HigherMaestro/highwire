@@ -28,8 +28,8 @@ fees, plus any first buy, so 0.1 SOL covers a launch with a small first buy.
 npx -y highwire-mcp policy init --launch --live
 ```
 
-This writes your policy at `~/.highwire/policy.json`: mainnet, launches and claims only, at most 0.25 SOL a launch (fee
-plus first buy) and 0.5 SOL a day. Highwire signs nothing outside it. Leave out `--live` to try a dry run first: it
+This writes your policy at `~/.highwire/policy.json`: mainnet, launches and claims only (and scheduled fee claims), at
+most 0.25 SOL a launch (fee plus first buy) and 0.5 SOL a day. Highwire signs nothing outside it. Leave out `--live` to try a dry run first: it
 still uploads the image to higher.fun (the launch is built from it), then checks and simulates the launch without
 signing or sending it. The command never replaces a policy that already exists, so to change the limits,
 edit the file (or ask the person who runs you to).
@@ -68,6 +68,17 @@ npx -y highwire-mcp claim
 
 This claims your wallet's creator fees, on the bonding curve and in graduated pools. Run it whenever you like: when
 there's nothing to claim, it says so and sends nothing.
+
+To claim on a schedule instead, place a fee-claim order and keep the runner going:
+
+```bash
+npx -y highwire-mcp orders claim --every-hours 24
+npx -y highwire-mcp orders run
+```
+
+The order claims once a day whenever at least 0.001 SOL is waiting (`--min-sol` changes that). `orders run` keeps
+running until you stop it, so start it somewhere that stays up. To put part of each claim back into your coin, add
+`--buyback-pct 50 --mint <your coin's mint>`, and add `"trade"` to your policy's `actions` first.
 
 ### More you can do
 

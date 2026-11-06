@@ -63,7 +63,7 @@ function cliEnv(env: Env): Env {
 }
 
 /** Calls one execute tool on an in-process server with the CLI's signer. */
-async function callTool(env: Env, io: CliIo, name: string, args: Record<string, unknown>): Promise<{ ok: boolean; body: Record<string, unknown> } | null> {
+export async function callTool(env: Env, io: CliIo, name: string, args: Record<string, unknown>): Promise<{ ok: boolean; body: Record<string, unknown> } | null> {
   const e = cliEnv(env);
   const signer = signerFromEnv(e, io.err);
   if (!signer) {

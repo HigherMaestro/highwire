@@ -392,3 +392,25 @@ test("place_order needs the policy's orders section, and a placed order can be l
   assert.equal(tools.find((t) => t.name === "place_order")?.annotations?.destructiveHint, true);
   assert.equal(tools.find((t) => t.name === "cancel_order")?.annotations?.destructiveHint, false);
 });
+
+test("a fee_claim order needs claims in the policy, and trades too when it buys back", async () => {
+  const policy = { ...POLICY_TEMPLATE, cluster: "mainnet", actions: ["trade"], max_slippage_bps: 300, orders: { kinds: ["fee_claim"] } };
+  const paths = signerHome(policy);
+  const signer = new FixtureSigner(Keypair.generate(), paths);
+  const client = await connect({ fetch: fixtureFetch("buy-curve"), retries: 0, signer });
+  const args = { kind: "fee_claim", every_hours: 6, max_slippage_bps: 200, confirm_order: true };
+
+  const noClaims = parse(await client.callTool({ name: "place_order", arguments: args }));
+  assert.equal(noClaims.code, "policy_refused");
+  assert.match(noClaims.error, /claims/);
+
+  writeFileSync(paths.policy, JSON.stringify({ ...policy, actions: ["claim"] }));
+  const halfBuyback = await client.callTool({ name: "place_order", arguments: { ...args, buyback_pct: 50 } });
+  assert.equal(halfBuyback.isError, true);
+  assert.match(parse(halfBuyback).error, /both buyback_pct and mint/);
+  const buybackNoTrades = parse(await client.callTool({ name: "place_order", arguments: { ...args, buyback_pct: 50, mint: "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix" } }));
+  assert.equal(buybackNoTrades.code, "policy_refused");
+  assert.match(buybackNoTrades.error, /can't buy back/);
+  const priceOrderNoMint = await client.callTool({ name: "place_order", arguments: { ...args, kind: "stop_loss", trigger_change_pct: -20, every_hours: undefined } });
+  assert.equal(priceOrderNoMint.isError, true);
+});

@@ -40,7 +40,7 @@ export const PolicySchema = z
      */
     orders: z
       .object({
-        kinds: z.array(z.enum(["stop_loss", "take_profit", "recurring_buy"])).min(1),
+        kinds: z.array(z.enum(["stop_loss", "take_profit", "recurring_buy", "fee_claim"])).min(1),
         max_open: z.number().int().min(1).max(50).default(10),
       })
       .strict()
@@ -64,7 +64,9 @@ export const POLICY_TEMPLATE = {
 
 /**
  * A starting policy for an agent that launches coins on its own: mainnet, launches and claims only, room for the
- * launch fee and a small first buy. Still a dry run until the user sets "live": true (or asks for it when writing it).
+ * launch fee and a small first buy, and fee-claim orders so `highwire orders claim` can collect creator fees on a
+ * schedule. Buying back with them needs "trade" added. Still a dry run until the user sets "live": true (or asks for it
+ * when writing it).
  */
 export const LAUNCH_POLICY_TEMPLATE = {
   version: 1,
@@ -75,6 +77,7 @@ export const LAUNCH_POLICY_TEMPLATE = {
   max_sol_per_day: 0.5,
   max_slippage_bps: 500,
   transfer_allowlist: [],
+  orders: { kinds: ["fee_claim"], max_open: 3 },
 } satisfies z.input<typeof PolicySchema>;
 
 /**

@@ -5,8 +5,9 @@ import type { ExecuteResult } from "./signer.ts";
 // Runs the standing orders in the book for one wallet: `highwire orders run`. Price orders are checked against the
 // coin's spot price on-chain, from a fresh quote: every minute, and within seconds of a trade on the coin when the live
 // feed reports one. The feed only says when to look, so a forged or stale message can't fire an order. Recurring buys
-// run on their schedule. Each fill is built and executed by `market.trade`, which goes through LocalSigner.execute:
-// the user's policy, the kill switch, a fresh simulation and the audit log, exactly as execute_trade.
+// and fee claims run on their schedule. Each fill is built and executed by `market.trade` or `market.claim`, which go
+// through LocalSigner.execute: the user's policy, the kill switch, a fresh simulation and the audit log, exactly as
+// execute_trade and execute_claim.
 
 export interface OrderMarket {
   /** The wallet's balance in the coin, in base units. */
@@ -15,6 +16,11 @@ export interface OrderMarket {
   quote(mint: string, side: "buy" | "sell", amountIn: bigint, slippageBps: number): Promise<Quote>;
   /** Builds the trade as execute_trade does and executes it through the local signer. */
   trade(req: { order: Order; side: "buy" | "sell"; amountIn: bigint; slippageBps: number }): Promise<ExecuteResult>;
+  /**
+   * Claims the wallet's creator fees as execute_claim does, through the local signer, when at least `minLamports` of SOL
+   * is waiting. `lamports` is the SOL the claim collects (read before it's built); `result` is null when it wasn't made.
+   */
+  claim(req: { order: Order; minLamports: bigint }): Promise<{ result: ExecuteResult | null; lamports: bigint }>;
 }
 
 export interface RunnerOptions {
@@ -38,6 +44,10 @@ export interface RunnerOptions {
 
 /** Failures in a row (RPC, simulation) before an order is given up on. */
 export const MAX_ORDER_FAILURES = 5;
+/** A fee claim doesn't buy back with less than this: the trade's own fees would eat it. */
+export const MIN_BUYBACK_LAMPORTS = 1_000_000n;
+
+const isPriceOrder = (o: Order) => o.kind === "stop_loss" || o.kind === "take_profit";
 /** The live feed's per-socket channel budget, less room for nothing else. */
 const MAX_HINTED_MINTS = 16;
 
@@ -69,7 +79,7 @@ export class OrderRunner {
 
   /** Coins with open price orders, which the feed watches for hints. */
   watchedMints(): string[] {
-    return [...new Set(this.open().filter((x) => x.kind !== "recurring_buy").map((x) => x.mint))].slice(0, MAX_HINTED_MINTS);
+    return [...new Set(this.open().filter(isPriceOrder).map((x) => x.mint!))].slice(0, MAX_HINTED_MINTS);
   }
 
   /** A trade on `mint` was seen: check it at the next tick, if the last check was long enough ago. */
@@ -99,10 +109,13 @@ export class OrderRunner {
         this.log(`order ${order.id} expired: ${describeOrder(order)}`);
         continue;
       }
+      const due = order.nextRunAt !== undefined && Date.parse(order.nextRunAt) <= now.getTime();
       if (order.kind === "recurring_buy") {
-        if (order.nextRunAt && Date.parse(order.nextRunAt) <= now.getTime()) await this.fill(order, "buy", solToLamports(order.sol!), undefined);
-      } else if (checked.has(order.mint) || this.due(order.mint, now.getTime())) {
-        checked.add(order.mint);
+        if (due) await this.fill(order, "buy", solToLamports(order.sol!), undefined);
+      } else if (order.kind === "fee_claim") {
+        if (due) await this.claimRun(order);
+      } else if (checked.has(order.mint!) || this.due(order.mint!, now.getTime())) {
+        checked.add(order.mint!);
         await this.checkPrice(order);
       }
     }
@@ -132,10 +145,10 @@ export class OrderRunner {
     let quote: Quote;
     let amount: bigint;
     try {
-      const balance = await this.o.market.balance(order.mint);
+      const balance = await this.o.market.balance(order.mint!);
       amount = (balance * BigInt(Math.round(order.sellPct! * 100))) / 10_000n;
       // With nothing to sell, quote one token, just to read the price.
-      quote = await this.o.market.quote(order.mint, "sell", amount > 0n ? amount : 1_000_000n, order.maxSlippageBps);
+      quote = await this.o.market.quote(order.mint!, "sell", amount > 0n ? amount : 1_000_000n, order.maxSlippageBps);
     } catch (err) {
       this.log(`order ${order.id}: couldn't check the price (${err instanceof Error ? err.message : String(err)}); trying again later`);
       return;
@@ -223,6 +236,111 @@ export class OrderRunner {
     });
     const after = this.o.book.get(order.id);
     this.log(`order ${order.id}: ${after?.history.at(-1)?.outcome ?? "?"}${after?.history.at(-1)?.signatures ? ` ${after.history.at(-1)!.signatures!.join(", ")}` : ""}${after?.status !== "open" ? ` (now ${after?.status}: ${after?.closeReason})` : ""}${error && !result ? ` (${error instanceof Error ? error.message : String(error)})` : ""}`);
+  }
+
+  /**
+   * One fee-claim run: claim the creator fees if enough is waiting, then buy back `mint` with `buybackPct` of what came
+   * in, then schedule the next run. A claim whose send went unanswered is safe to try again (a second claim finds
+   * nothing), so it waits for the next run; a buyback whose send went unanswered closes the order, like any fill.
+   */
+  private async claimRun(order: Order) {
+    const startedAt = this.now();
+    const taken = await this.o.book.update(order.id, (x) => {
+      if (x.status === "open" && !x.fillingSince) x.fillingSince = startedAt.toISOString();
+    });
+    if (!taken || taken.status !== "open" || taken.fillingSince !== startedAt.toISOString()) return;
+
+    let claim: { result: ExecuteResult | null; lamports: bigint } | undefined;
+    let claimError: unknown;
+    try {
+      claim = await this.o.market.claim({ order: taken, minLamports: solToLamports(order.minClaimSol ?? 0) });
+    } catch (err) {
+      claimError = err;
+    }
+    const claimed = claim?.result && (claim.result.status === "sent" || claim.result.status === "dry_run") ? claim.lamports : 0n;
+    const buyLamports = order.buybackPct && order.mint ? (claimed * BigInt(Math.round(order.buybackPct * 100))) / 10_000n : 0n;
+    let buy: ExecuteResult | undefined;
+    let buyError: unknown;
+    if (buyLamports >= MIN_BUYBACK_LAMPORTS) {
+      try {
+        buy = await this.o.market.trade({ order: taken, side: "buy", amountIn: buyLamports, slippageBps: order.maxSlippageBps });
+      } catch (err) {
+        buyError = err;
+      }
+    }
+
+    const now = this.now();
+    const at = now.toISOString();
+    const nextRun = new Date(now.getTime() + order.everyHours! * 3_600_000).toISOString();
+    const codeOf = (err: unknown) => (err instanceof HigherError ? err.code : undefined);
+    const why = (err: unknown) => (err instanceof Error ? err.message : String(err));
+    const refusedCodes = new Set(["policy_refused", "no_policy", "policy_invalid"]);
+    await this.o.book.update(order.id, (x) => {
+      delete x.fillingSince;
+      const quiet = (run: Omit<OrderRun, "at">) => {
+        const last = x.history.at(-1);
+        if (!(last && last.outcome === run.outcome && last.reason === run.reason)) record(x, { at, ...run });
+      };
+      if (claimError !== undefined) {
+        const code = codeOf(claimError);
+        if (code === "signer_stopped") return;
+        if (code && refusedCodes.has(code)) {
+          quiet({ outcome: "refused", reason: why(claimError), step: "claim" });
+          x.nextRunAt = nextRun;
+          return;
+        }
+        x.failures += 1;
+        record(x, { at, outcome: "failed", reason: why(claimError), step: "claim" });
+        if (code !== "send_failed" && x.failures >= MAX_ORDER_FAILURES) close(x, "failed", `failed ${x.failures} times in a row; last: ${why(claimError)}`, now);
+        else x.nextRunAt = code === "send_failed" ? nextRun : new Date(now.getTime() + TRANSIENT_WAIT_MS * x.failures).toISOString();
+        return;
+      }
+      x.failures = 0;
+      x.nextRunAt = nextRun;
+      if (!claim?.result) {
+        const reason = !claim || claim.lamports === 0n ? "nothing to claim" : `only ${lamportsNumber(claim.lamports)} SOL to claim, under its ${x.minClaimSol} SOL minimum`;
+        quiet({ outcome: "skipped", reason, step: "claim" });
+        return;
+      }
+      const r = claim.result;
+      const dry = r.status === "dry_run";
+      const sigs = r.transactions.map((t) => t.signature);
+      record(x, {
+        at,
+        outcome: r.status === "partly_sent" ? "partly_sent" : dry ? "dry_run" : "sent",
+        ...(sigs.length ? { signatures: sigs } : {}),
+        reason: `${dry ? "would claim" : "claimed"} about ${lamportsNumber(claim.lamports)} SOL${r.status === "partly_sent" ? `; only part was sent (${r.transactions.at(-1)?.error ?? "see the audit log"}), and the next run claims the rest` : ""}`,
+        step: "claim",
+      });
+      x.runsDone += 1;
+      if (!(x.buybackPct && x.mint) || r.status === "partly_sent") return;
+      if (buyLamports < MIN_BUYBACK_LAMPORTS) {
+        record(x, { at, outcome: "skipped", reason: `${lamportsNumber(buyLamports)} SOL is too little to buy back`, step: "buyback" });
+        return;
+      }
+      if (buy) {
+        const bs = buy.transactions.map((t) => t.signature);
+        if (buy.status === "partly_sent") {
+          record(x, { at, outcome: "partly_sent", signatures: bs, reason: buy.transactions.at(-1)?.error, step: "buyback" });
+          close(x, "failed", "only part of a buyback was sent: check the signatures before placing it again", now);
+          return;
+        }
+        record(x, { at, outcome: buy.status === "dry_run" ? "dry_run" : "sent", ...(bs.length ? { signatures: bs } : {}), reason: `bought back with ${lamportsNumber(buyLamports)} SOL`, step: "buyback" });
+        return;
+      }
+      const code = codeOf(buyError);
+      if (code === "signer_stopped") return;
+      if (code === "send_failed") {
+        record(x, { at, outcome: "failed", reason: why(buyError), step: "buyback" });
+        close(x, "failed", "a buyback's send outcome is unknown: check the audit log's signature before placing it again", now);
+        return;
+      }
+      // Refused or failed: the SOL stays in the wallet, and the next run buys back with what it claims then.
+      record(x, { at, outcome: code && refusedCodes.has(code) ? "refused" : "failed", reason: why(buyError), step: "buyback" });
+    });
+    const after = this.o.book.get(order.id);
+    const lastTwo = after?.history.slice(-2).map((h) => `${h.step ?? ""} ${h.outcome}${h.reason ? ` (${h.reason})` : ""}`).join("; ");
+    this.log(`order ${order.id}: ${lastTwo ?? "?"}${after?.status !== "open" ? ` (now ${after?.status}: ${after?.closeReason})` : ""}`);
   }
 
   /**
