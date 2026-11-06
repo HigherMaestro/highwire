@@ -114,7 +114,9 @@ with the `highwire` memo. The day's limit counted 0.245 SOL, what the wallet act
 
 - **OAuth on the hosted endpoint**, before it does anything beyond public reads and unsigned builds (for example
   sign-in tools or a hosted signer, which it must never become without it).
-- **Live feed:** subscribe to `wss://api.higher.fun/ws` for launches, trades and graduations.
+- **Live alerts:** subscribe to `wss://api.higher.fun/ws` for launches, trades and graduations (next).
+- **Recurring buys and stop-loss:** orders the local signer runs, inside the policy; needs a long-running process (next).
+- **Profit and loss** on positions, from cost basis in trade history (blocked in part by the trades API's paging).
 - **Sign-in tools:** posting comments and chat through `/auth/nonce` and `/auth/verify`, if higher.fun wants agents posting.
 - ~~**Publishing**~~ Done 2026-11-06: `highwire-core`, `highwire-agent` and `highwire-mcp` on npm, and the MCP registry
   listing `fun.highwire/highwire` 0.4.1 (npm package and hosted endpoint), proved by highwire.fun's domain key.

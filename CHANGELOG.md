@@ -7,6 +7,8 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 - **A new link preview.** highwire.fun's card on X and elsewhere is now on ink, and says what Highwire does: your
   agent can trade, launch and claim on higher.fun. The page description says the same, in place of the read-only wording
   from before the transaction tools.
+- **The roadmap on the home page** moves install (npm and the MCP Registry) into Now, and lists what's next: live
+  alerts, recurring buys and stop-loss, then profit and loss and posting.
 
 ## 0.4.2 (2026-11-06)
 
