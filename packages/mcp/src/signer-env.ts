@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dirname } from "node:path";
-import { agentPaths, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, policyWarnings, type AgentPaths } from "highwire-agent";
+import { agentPaths, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, policyWarnings, type AgentPaths, type Policy } from "highwire-agent";
 
 // The local signer, for the stdio server only: turned on by HIGHWIRE_KEYPAIR_PATH, which names a keypair file on the
 // user's machine. The hosted route never imports this file.
@@ -35,11 +35,14 @@ export function signerFromEnv(env: Env = process.env, warn: (msg: string) => voi
   return new LocalSigner(keypair, paths, warning);
 }
 
-/** Writes the starting policy (devnet, dry run) unless one exists. Returns where it is and whether it was written. */
-export function initPolicy(paths: AgentPaths = agentPaths()): { path: string; written: boolean } {
+/**
+ * Writes a starting policy (by default devnet, dry run) unless one exists, so it can never widen a policy already in
+ * place. Returns where it is and whether it was written.
+ */
+export function initPolicy(paths: AgentPaths = agentPaths(), template: Partial<Policy> & Record<string, unknown> = POLICY_TEMPLATE): { path: string; written: boolean } {
   if (existsSync(paths.policy)) return { path: paths.policy, written: false };
   mkdirSync(dirname(paths.policy), { recursive: true, mode: 0o700 });
-  writeFileSync(paths.policy, JSON.stringify(POLICY_TEMPLATE, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+  writeFileSync(paths.policy, JSON.stringify(template, null, 2) + "\n", { mode: 0o600, flag: "wx" });
   chmodSync(paths.policy, 0o600);
   return { path: paths.policy, written: true };
 }

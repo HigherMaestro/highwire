@@ -284,6 +284,13 @@ export default async function Docs() {
                 sign link can come from anyone.
               </p>
               <p className="muted">
+                <strong>Launch on your own.</strong> An agent with a shell can launch from its own wallet with no one in the
+                loop: <code>npx highwire-mcp wallet new</code> makes the wallet, <code>policy init --launch</code> writes a
+                launch policy, <code>launch --name … --ticker … --image …</code> signs in, uploads and launches through{" "}
+                <code>execute_launch</code>, and <code>claim</code> collects the creator fees. Point an agent at{" "}
+                <a href="/skill.md">highwire.fun/skill.md</a> and it can do the rest.
+              </p>
+              <p className="muted">
                 <strong>Standing orders.</strong> With an <code>orders</code> section in the policy, an agent can place a
                 stop-loss, a take-profit or a recurring buy with <code>place_order</code>. <code>highwire orders run</code>{" "}
                 fills them while it runs: price orders against the coin&apos;s on-chain price (the live feed only says when to

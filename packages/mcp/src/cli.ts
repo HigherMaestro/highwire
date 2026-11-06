@@ -2,7 +2,8 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { serverOptionsFromEnv } from "./env.ts";
 import { createServer, VERSION } from "./server.ts";
-import { initPolicy, localLaunchSecret, signerFromEnv } from "./signer-env.ts";
+import { localLaunchSecret, signerFromEnv } from "./signer-env.ts";
+import { runClaim, runLaunch, runPolicyInit, runWallet } from "./launch-cli.ts";
 import { runOrders } from "./orders-cli.ts";
 import { runWatch } from "./watch.ts";
 
@@ -11,18 +12,17 @@ if (args.includes("--version")) {
   console.log(VERSION);
   process.exit(0);
 }
-if (args[0] === "policy" && args[1] === "init") {
-  const { path, written } = initPolicy();
-  console.log(written ? `Wrote a starting policy to ${path}: devnet, dry run, trades and claims, 0.1 SOL a transaction, 0.5 SOL a day.\nEdit it to change the limits; set "live": true only when you want it to send.` : `A policy already exists at ${path}; left it as it is.`);
-  process.exit(0);
-}
+const io = { out: (line: string) => console.log(line), err: (line: string) => console.error(line) };
+if (args[0] === "policy" && args[1] === "init") process.exit(runPolicyInit(args.slice(2), io));
+if (args[0] === "wallet") process.exit(await runWallet(args.slice(1), io));
+if (args[0] === "launch") process.exit(await runLaunch(args.slice(1), io));
+if (args[0] === "claim") process.exit(await runClaim(args.slice(1), io));
 if (args[0] === "watch" || args[0] === "orders") {
   const ctl = new AbortController();
   process.once("SIGINT", () => ctl.abort());
   const code = await (args[0] === "watch" ? runWatch : runOrders)(args.slice(1), {
     apiUrl: serverOptionsFromEnv().apiUrl,
-    out: (line) => console.log(line),
-    err: (line) => console.error(line),
+    ...io,
     signal: ctl.signal,
   });
   process.exit(code);
@@ -47,6 +47,10 @@ Local signer (off unless HIGHWIRE_KEYPAIR_PATH is set):
 
 Commands:
   highwire policy init     write a starting policy: devnet, dry run, small limits
+                           (--launch: mainnet launches and claims; --live to send for real)
+  highwire wallet new      make your own wallet for launching (~/.highwire/wallet.json); wallet address prints it
+  highwire launch          launch a coin from that wallet, inside your policy (highwire launch --help)
+  highwire claim           collect the wallet's creator fees
   highwire watch           higher.fun's live feed in the terminal: launches, graduations, buys and sells
                            (highwire watch --help for the filters)
   highwire orders run      fill standing orders (stop-loss, take-profit, recurring buys) until Ctrl-C

@@ -21,6 +21,8 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/tx/transfer.ts` | `buildTransfer`: SOL or a higher.fun coin to another wallet. Transfers never get a sign link |
 | `packages/agent/src/` | `highwire-agent`, the opt-in local signer: `policy.ts` (the schema and `checkPolicy`), `keypair.ts`, `audit.ts` (the JSONL log and the daily count), `signer.ts` (`LocalSigner`: check, re-simulate, sign, send, confirm), `paths.ts` (`~/.highwire`), `orders.ts` (`OrderBook`: standing orders in `orders.json`), `runner.ts` (`OrderRunner`: fills them through the signer), `lock.ts` |
 | `packages/mcp/src/tools/execute.ts` | `build_transfer`, `get_signer_status` and the execute tools (`executeTrade` is the one path for execute_trade and order fills); `signer-env.ts` turns the signer on from `HIGHWIRE_KEYPAIR_PATH` (the CLI only) |
+| `packages/mcp/src/launch-cli.ts` | `highwire wallet new`, `highwire launch`, `highwire claim` and `policy init --launch`: an agent launching from its own wallet. launch and claim call `execute_launch` and `execute_claim` on an in-process server, so they run the tools' code |
+| `apps/web/public/skill.md` | highwire.fun/skill.md: the instructions an agent follows to launch on its own, or with a person's wallet |
 | `packages/mcp/src/tools/orders.ts`, `orders-cli.ts` | `place_order`, `list_orders`, `cancel_order`, and `highwire orders run\|list\|cancel` |
 | `packages/core/src/higher/live.ts`, `packages/mcp/src/watch.ts` | `LiveFeed` (higher.fun's websocket), `watch_market` and `highwire watch` |
 | `packages/core/src/browser.ts` | `highwire-core/browser`: the browser-safe exports for the sign page. `test/sign.test.ts` walks its imports |
@@ -76,6 +78,9 @@ Streamable HTTP. An npm workspaces monorepo. Read
 - **Standing orders** fill only through `executeTrade` and `LocalSigner.execute()`, so each fill passes the whole
   policy then. Agents may place only the kinds the policy's `orders` section allows. Trigger on on-chain prices from a
   fresh quote, never on a feed message. When a fill's outcome is unknown, close the order; never risk a second fill.
+- **The CLI's own commands** (`launch`, `claim`) go through the execute tools on an in-process server, never around
+  them. `wallet new` never overwrites a file or prints a key, and `policy init` never replaces a policy, so neither can
+  widen what's already set up. Keep `skill.md` true to the commands: it's what agents read.
 - **Signing messages:** the local signer signs one kind of message, higher.fun's sign-in message, through
   `signInMessage`, after `checkSignInMessage` matches it word for word. Never add a general sign-message path.
 - **Transfers** go only through the local signer, to the policy's allowlist. The sign page refuses them: a sign link

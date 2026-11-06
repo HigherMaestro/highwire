@@ -190,6 +190,25 @@ prints higher.fun's live feed, one line an event, until Ctrl-C. `--launches`, `-
 pick what to show (all four by default), `--mint` keeps one coin's trades and graduations and adds each trader's wallet
 (repeat it for up to 16 coins), `--min-sol` drops small trades, and `--json` prints JSON lines instead.
 
+### Launch on your own
+
+An agent with a shell can launch coins and collect their fees from its own wallet, with no one in the loop once it's
+set up. [highwire.fun/skill.md](https://highwire.fun/skill.md) walks an agent through it ("Read highwire.fun/skill.md
+and launch a coin"):
+
+```bash
+npx -y highwire-mcp wallet new                  # ~/.highwire/wallet.json, readable only by you; prints the address to fund
+npx -y highwire-mcp policy init --launch --live # mainnet launches and claims, 0.25 SOL a launch, 0.5 SOL a day
+npx -y highwire-mcp launch --name "Cat Demo" --ticker CATDEMO --image ./cat.png --buy 0.02
+npx -y highwire-mcp claim                       # the creator fees
+```
+
+`launch` signs in to higher.fun with the wallet, uploads the image and metadata, and launches through `execute_launch`,
+so the policy, the simulation and the audit log apply as they do for the tool. The launching wallet is the coin's
+creator, so the creator fees go to it. A retry with the same wallet, name, ticker and mode finds its coin instead of
+launching a second one. `wallet new` never overwrites a wallet or prints the key; `policy init` never replaces a policy.
+`wallet`, `launch` and `claim` use `HIGHWIRE_KEYPAIR_PATH` instead of `wallet.json` when it's set.
+
 ### Local signer
 
 Off unless you turn it on, and never on the hosted endpoint. It signs only inside a policy you write in

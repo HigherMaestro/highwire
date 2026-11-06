@@ -84,7 +84,7 @@ export const LIST_ONLY_SIGNER: ExecutionSigner = {
   logOrder: () => {
     throw new ValidationError("This server has no local signer.", { code: "no_signer" });
   },
-  paths: { home: "", policy: "", audit: "", stop: "", lock: "", orders: "", ordersRunner: "" },
+  paths: { home: "", policy: "", audit: "", stop: "", lock: "", orders: "", ordersRunner: "", wallet: "" },
 };
 
 /** The coin's creator, from its pool on-chain, not from higher.fun's API. null when it can't be read. */

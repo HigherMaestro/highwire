@@ -4,6 +4,14 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Launch on your own, from a shell.** `highwire wallet new` makes the agent's own wallet (`~/.highwire/wallet.json`,
+  readable only by you; it never overwrites one or prints the key), `highwire policy init --launch` writes a mainnet
+  launch-and-claim policy (dry run unless `--live`), `highwire launch --name … --ticker … --image …` signs in to
+  higher.fun, uploads the image and metadata and launches from that wallet, and `highwire claim` collects the creator
+  fees. launch and claim run `execute_launch` and `execute_claim`, so the policy, simulation and audit log apply. A retry
+  of the same coin from the same wallet finds it instead of launching a second.
+- **highwire.fun/skill.md:** the steps an agent follows to launch on its own, or with a person's wallet through the
+  hosted server.
 - `get_wallet_pnl` gives each coin's spot price to six significant figures, not seventeen.
 - An RPC that rate-limits (Solana's public one often does) now comes back as `rate_limited`, saying to retry once and
   that `SOLANA_RPC_URL` avoids it, instead of an `internal_error` with the RPC's raw reply.

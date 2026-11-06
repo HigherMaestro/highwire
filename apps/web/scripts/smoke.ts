@@ -80,6 +80,7 @@ try {
     ["/terms", "Draft, pending legal review"],
     ["/privacy", "Draft, pending legal review"],
     ["/changelog", "0.3.0"],
+    ["/skill.md", "npx -y highwire-mcp launch"],
   ] as const) {
     const page = await (await fetch(`${base}${path}`)).text();
     check(`GET ${path}`, page.includes(text), `${page.length} bytes`);

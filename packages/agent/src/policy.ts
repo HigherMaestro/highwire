@@ -63,6 +63,21 @@ export const POLICY_TEMPLATE = {
 } satisfies z.input<typeof PolicySchema>;
 
 /**
+ * A starting policy for an agent that launches coins on its own: mainnet, launches and claims only, room for the
+ * launch fee and a small first buy. Still a dry run until the user sets "live": true (or asks for it when writing it).
+ */
+export const LAUNCH_POLICY_TEMPLATE = {
+  version: 1,
+  cluster: "mainnet",
+  live: false,
+  actions: ["launch", "claim"],
+  max_sol_per_tx: 0.25,
+  max_sol_per_day: 0.5,
+  max_slippage_bps: 500,
+  transfer_allowlist: [],
+} satisfies z.input<typeof PolicySchema>;
+
+/**
  * What a policy leaves open that the user may not mean to. A live policy with no coin or creator allow-list lets an
  * agent buy any higher.fun coin within the limits, including one whose description talks it into buying.
  */

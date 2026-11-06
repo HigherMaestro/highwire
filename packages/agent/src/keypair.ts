@@ -1,4 +1,5 @@
-import { readFileSync, statSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { Keypair } from "@solana/web3.js";
 import { HigherError } from "highwire-core";
 
@@ -6,6 +7,23 @@ import { HigherError } from "highwire-core";
 // the Solana CLI's format (a JSON array of 64 bytes). The key is only ever read
 // from that file: never from a tool argument or an environment value. Errors
 // never include the file's contents.
+
+/**
+ * Makes a new keypair file in the Solana CLI's format, readable only by the user, for `highwire wallet new`. It never
+ * overwrites a file (an existing wallet may hold funds) and returns only the public address: the key stays in the file.
+ */
+export function createKeypairFile(path: string): { address: string; written: boolean } {
+  try {
+    return { address: loadKeypair(path).keypair.publicKey.toBase58(), written: false };
+  } catch (err) {
+    if (!(err instanceof HigherError) || err.code !== "no_keypair") throw err;
+  }
+  const keypair = Keypair.generate();
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  writeFileSync(path, JSON.stringify(Array.from(keypair.secretKey)) + "\n", { mode: 0o600, flag: "wx" });
+  chmodSync(path, 0o600);
+  return { address: keypair.publicKey.toBase58(), written: true };
+}
 
 export interface LoadedKeypair {
   keypair: Keypair;

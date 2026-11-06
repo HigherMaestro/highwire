@@ -18,6 +18,8 @@ export interface AgentPaths {
   orders: string;
   /** Held by the one `highwire orders run` process, so no order fills twice. */
   ordersRunner: string;
+  /** The wallet `highwire wallet new` makes. The CLI's launch and claim commands use it when HIGHWIRE_KEYPAIR_PATH isn't set. */
+  wallet: string;
 }
 
 export function agentPaths(env: Record<string, string | undefined> = process.env): AgentPaths {
@@ -30,5 +32,6 @@ export function agentPaths(env: Record<string, string | undefined> = process.env
     lock: join(home, "execute.lock"),
     orders: join(home, "orders.json"),
     ordersRunner: join(home, "orders-runner.lock"),
+    wallet: join(home, "wallet.json"),
   };
 }
