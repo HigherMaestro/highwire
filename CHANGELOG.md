@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.4.2 (2026-11-06)
 
 - **Launch retries survive a restart.** The `highwire` CLI derives launch mints from a secret it keeps in
   `~/.highwire/launch-secret` (created once, readable only by you) when `HIGHWIRE_LAUNCH_SECRET` isn't set. Before, it
