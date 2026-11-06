@@ -120,7 +120,7 @@ with the `highwire` memo. The day's limit counted 0.245 SOL, what the wallet act
 - **Recurring buys and stop-loss** (done in 0.6.0): `place_order`, `list_orders` and `cancel_order` keep stop-loss,
   take-profit and recurring-buy orders in `~/.highwire/orders.json`, allowed by the policy's `orders` section, and
   `highwire orders run` fills them through the local signer, checking prices on-chain with the live feed as a hint.
-- **Profit and loss** (built, unreleased): `get_wallet_pnl` works out average cost, realized and unrealized profit from
+- **Profit and loss** (done in 0.7.0): `get_wallet_pnl` works out average cost, realized and unrealized profit from
   the wallet's own transactions on-chain (the trades API has no per-wallet view and can't be paged past 50). Searching
   history needs an RPC that can; Solana's public RPC often times out.
 - **Sign-in tools:** posting comments and chat through `/auth/nonce` and `/auth/verify`, if higher.fun wants agents posting.

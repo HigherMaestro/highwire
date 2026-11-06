@@ -27,7 +27,7 @@ import { registerLocalTools } from "./tools/execute.ts";
 import { registerTransactionTools } from "./tools/transactions.ts";
 import type { Deps, ExecutionSigner } from "./tools/shared.ts";
 
-export const VERSION = "0.6.0";
+export const VERSION = "0.7.0";
 
 export const INSTRUCTIONS = `Tools for higher.fun, an open-source Solana launchpad ("Lower Fees, Higher Together").
 Coins start on a Raydium LaunchLab bonding curve and graduate to a Raydium pool. Each coin has a fee mode fixed at launch:

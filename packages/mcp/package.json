@@ -1,6 +1,6 @@
 {
   "name": "highwire-mcp",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Highwire: the MCP server that lets AI agents use higher.fun, the open-source Solana launchpad",
   "type": "module",
   "license": "MIT",
@@ -40,8 +40,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
-    "highwire-agent": "0.6.0",
-    "highwire-core": "0.6.0",
+    "highwire-agent": "0.7.0",
+    "highwire-core": "0.7.0",
     "zod": "4.6.7"
   },
   "mcpName": "fun.highwire/highwire"

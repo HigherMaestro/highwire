@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.7.0 (2026-11-06)
 
 - **Profit and loss: `get_wallet_pnl`.** For a wallet's higher.fun coins (its five largest holdings, or the coins you
   name, sold out or not): SOL spent and received, average cost, realized profit on sells and unrealized profit on
@@ -13,6 +13,8 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   times out, which comes back as `history_unavailable`. On the hosted endpoint it costs 10 of the rate limit.
 - **The fees page has its own link preview**, so links to /fees and each coin's fee page show what they are. It's built
   with the other brand images in `brand/scripts/build.py`.
+- Orders describe a one-off recurring buy as "every hour, once", and the runner logs trigger prices in plain decimals,
+  not exponent notation.
 
 ## 0.6.0 (2026-11-06)
 
