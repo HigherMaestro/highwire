@@ -10,6 +10,7 @@ import {
 import { PublicKey } from "@solana/web3.js";
 import type { Coin, HigherApi } from "../higher/api.ts";
 import { feeModeOfPlatform, type FeeMode } from "../higher/constants.ts";
+import { pooled } from "../lib/pool.ts";
 import { WSOL, type Chain } from "./chain.ts";
 import { lamportsNumber } from "./units.ts";
 
@@ -109,19 +110,6 @@ async function inChunks<T, R>(items: T[], size: number, fn: (chunk: T[]) => Prom
   return out;
 }
 
-async function pooled<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const i = next++;
-        out[i] = await fn(items[i]!);
-      }
-    }),
-  );
-  return out;
-}
 
 /** Every coin higher.fun lists, for names and 24-hour volume. Best effort: a coin missing here keeps its mint. */
 async function listedCoins(api: HigherApi, warnings: string[]): Promise<Map<string, Coin>> {

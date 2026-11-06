@@ -66,7 +66,7 @@ export const READ_TOOLS = [
   "watch_market",
 ];
 
-export const TRANSACTION_TOOLS = ["build_claim_creator_fees", "build_launch", "build_trade", "get_wallet_positions", "quote_trade"];
+export const TRANSACTION_TOOLS = ["build_claim_creator_fees", "build_launch", "build_trade", "get_wallet_pnl", "get_wallet_positions", "quote_trade"];
 /** Served by the stdio server only: the sign page never signs transfers. */
 export const LOCAL_ONLY_TOOLS = ["build_transfer"];
 /** Only with a local signer. */

@@ -49,6 +49,7 @@ execute tools sign and send only inside it. Dry run until the policy says `"live
 |---|---|
 | `quote_trade` | Quote a buy (SOL in) or sell (tokens in) on the curve or, after graduation, the CPMM pool: output, minimum out, price impact, fees split by fee mode |
 | `get_wallet_positions` | A wallet's SOL and its higher.fun coins (recognised on-chain), valued at the last price |
+| `get_wallet_pnl` | Profit and loss on a wallet's coins from its own transactions on-chain: average cost, realized and unrealized, through any app. Needs an RPC that can search history |
 | `build_trade` | The trade as an unsigned transaction. Needs `confirm_trade: true`, `max_slippage_bps` (at most 1500) and `max_sol` |
 | `build_launch` | Create a coin (Old or New school), pay the launch fee after checking its treasury, optional first buy and creator lock. Needs `confirm_launch: true` and an `idempotency_key` |
 | `build_claim_creator_fees` | Claim curve creator fees and graduated pools' creator fees; reports the off-chain locked-LP payouts |
@@ -114,7 +115,7 @@ refreshes the blockhash and changes nothing else); launch links, whose new mint 
 
 ### Hosted
 
-Nothing to install, no key. The hosted server has all 25 tools; the build tools only return unsigned transactions and a
+Nothing to install, no key. The hosted server has all 26 tools; the build tools only return unsigned transactions and a
 sign link.
 
 **Claude Code**

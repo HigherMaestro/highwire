@@ -51,6 +51,16 @@ await call("get_coin_fees", { mint: HIGH }, (o) => `${o.totalFeesSol} SOL in fee
 await call("get_ecosystem_fees", { top: 3 }, (o) => `${o.totals.coins} coins, ${o.totals.feesSol} SOL in fees; top $${o.coins[0]?.ticker}`);
 await call("quote_trade", { mint: HIGH, side: "buy", sol: 0.1 }, (o) => `0.1 SOL buys ${o.tokensOut} $HIGH in the ${o.venue}, impact ${o.priceImpactPct}%`);
 await call("get_wallet_positions", { wallet: "DFZYHaTZiRFWo23q5NQZCBTxXGZi36ZwVNP62iyB2Vmj" }, (o) => `${o.solBalance} SOL, ${o.positions.length} higher.fun coins`);
+// Solana's public RPC often times out searching history; that's the tool working, so it isn't counted as a failure.
+const pnl = await client.callTool({ name: "get_wallet_pnl", arguments: { wallet: "DFZYHaTZiRFWo23q5NQZCBTxXGZi36ZwVNP62iyB2Vmj", mints: ["ESWuXHiwswpkfhQtA6A1tAtiBJh9A5hUDYj5fEYhigh"] } });
+const pnlText = (pnl.content as Array<{ text: string }>)[0]?.text ?? "";
+const pnlOut = JSON.parse(pnlText);
+if (!pnl.isError) console.log(`ok   get_wallet_pnl: ${pnlOut.coins[0].transactions.buys} buys, total ${pnlOut.totals.totalSol} SOL`);
+else if (pnlOut.code === "history_unavailable") console.log("ok   get_wallet_pnl: the RPC timed out searching history (set SOLANA_RPC_URL to a provider's to check it fully)");
+else {
+  failed++;
+  console.log(`FAIL get_wallet_pnl: ${pnlText}`);
+}
 
 const coin = await client.readResource({ uri: `higher://coins/${HIGH}` });
 console.log(`ok   resource higher://coins/{mint}: ${(coin.contents[0] as { text: string }).text.length} chars`);

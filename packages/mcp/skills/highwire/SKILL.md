@@ -27,6 +27,7 @@ creator can claim, whatever the mode.
 | A wallet or creator | `get_wallet_profile`, `get_creator_coins`, `get_leaderboard` |
 | The platform | `get_platform_info`, `check_ticker`, `get_chat` |
 | Trade, launch or claim | `quote_trade`, `get_wallet_positions`, `build_trade`, `build_launch`, `build_claim_creator_fees` |
+| How a wallet's coins have done | `get_wallet_pnl`: average cost, realized and unrealized profit, from the wallet's own transactions. If it returns `history_unavailable`, the RPC can't search history; say so rather than estimating |
 | Act with the local signer (only if the user turned it on) | `get_signer_status`, `execute_trade`, `execute_launch`, `execute_claim`, `execute_transfer` |
 | Stop-loss, take-profit, recurring buys (local signer, if the policy allows orders) | `place_order`, `list_orders`, `cancel_order`; they fill while the user runs `highwire orders run` |
 

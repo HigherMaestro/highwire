@@ -192,8 +192,8 @@ export const TOOL_GROUPS: { id: string; title: string; blurb: string; tools: str
   {
     id: "trade",
     title: "Trade and launch",
-    blurb: "Quotes, positions, and transactions you review and sign in your own wallet on highwire.fun/sign.",
-    tools: ["quote_trade", "get_wallet_positions", "build_trade", "build_launch", "build_claim_creator_fees"],
+    blurb: "Quotes, positions, profit and loss, and transactions you review and sign in your own wallet on highwire.fun/sign.",
+    tools: ["quote_trade", "get_wallet_positions", "get_wallet_pnl", "build_trade", "build_launch", "build_claim_creator_fees"],
   },
   {
     id: "signer",

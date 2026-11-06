@@ -4,6 +4,13 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Profit and loss: `get_wallet_pnl`.** For a wallet's higher.fun coins (its five largest holdings, or the coins you
+  name, sold out or not): SOL spent and received, average cost, realized profit on sells and unrealized profit on
+  what's held, valued at what selling it all would return now. It's worked out from the wallet's own transactions
+  on-chain, since higher.fun's trades list has no per-wallet view, so trades through any app or router count. Trades
+  paid in another token, such as USDC, are valued at the SOL the coin's pool took in or paid out. It reads up to 200
+  transactions a call and says what it left out. Searching history needs an RPC that can: Solana's public RPC often
+  times out, which comes back as `history_unavailable`. On the hosted endpoint it costs 10 of the rate limit.
 - **The fees page has its own link preview**, so links to /fees and each coin's fee page show what they are. It's built
   with the other brand images in `brand/scripts/build.py`.
 

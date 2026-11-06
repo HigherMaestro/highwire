@@ -89,6 +89,7 @@ test("build tools cost five units of the per-IP budget, heavy reads more than on
   assert.equal(requestCost(call("quote_trade")), 2);
   assert.equal(requestCost(call("get_wallet_positions", { wallet: "x" })), 10);
   assert.equal(requestCost(call("get_wallet_positions", { wallet: "x", mints: ["y"] })), 3);
+  assert.equal(requestCost(call("get_wallet_pnl", { wallet: "x" })), 10);
   assert.equal(requestCost(call("get_coin")), 1);
   assert.equal(requestCost(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" })), 1);
   assert.equal(requestCost("not json"), 1);

@@ -12,7 +12,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 // The hosted endpoint serves every tool, the build tools included (HOSTED_TRANSACTION_TOOLS).
-const EXPECTED_TOOLS = 25;
+const EXPECTED_TOOLS = 26;
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -119,6 +119,15 @@ try {
   const watch = await client.callTool({ name: "watch_market", arguments: { events: ["buy", "sell"], wait_seconds: 10, max_events: 2 } });
   const watchText = (watch.content as Array<{ text: string }>)[0]?.text ?? "";
   check("tools/call watch_market", !watch.isError, watch.isError ? watchText : `${JSON.parse(watchText).events.length} live trades`);
+  const pnl = await client.callTool({ name: "get_wallet_pnl", arguments: { wallet: "DFZYHaTZiRFWo23q5NQZCBTxXGZi36ZwVNP62iyB2Vmj", mints: ["ESWuXHiwswpkfhQtA6A1tAtiBJh9A5hUDYj5fEYhigh"] } });
+  const pnlText = (pnl.content as Array<{ text: string }>)[0]?.text ?? "";
+  const pnlOut = JSON.parse(pnlText) as { code?: string; totals?: { totalSol: number } };
+  // Solana's public RPC often times out searching history; that's the tool working. Production has its own RPC.
+  check(
+    "tools/call get_wallet_pnl",
+    !pnl.isError || pnlOut.code === "history_unavailable",
+    pnl.isError ? (pnlOut.code === "history_unavailable" ? "the RPC timed out searching history" : pnlText) : `total ${pnlOut.totals?.totalSol} SOL`,
+  );
   await client.close();
 } catch (err) {
   failed++;

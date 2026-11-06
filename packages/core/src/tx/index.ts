@@ -5,6 +5,7 @@ export * from "./decode.ts";
 export * from "./envelope.ts";
 export * from "./fees.ts";
 export * from "./launch.ts";
+export * from "./pnl.ts";
 export * from "./positions.ts";
 export * from "./quote.ts";
 export * from "./refresh.ts";

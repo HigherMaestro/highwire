@@ -1,8 +1,8 @@
 # highwire-mcp
 
-The MCP server that lets AI agents use [higher.fun](https://higher.fun), the open-source Solana launchpad. 26 tools: 20
-for launches, coins, trades, holders, creators, fees, rug checks and live alerts, and 6 that quote and build unsigned
-trades, launches, creator fee claims and transfers. Trades, launches and claims come with a link to sign in your own
+The MCP server that lets AI agents use [higher.fun](https://higher.fun), the open-source Solana launchpad. 27 tools: 20
+for launches, coins, trades, holders, creators, fees, rug checks and live alerts, and 7 for positions, profit and loss,
+quotes and unsigned trades, launches, creator fee claims and transfers. Trades, launches and claims come with a link to sign in your own
 wallet on highwire.fun. Plus 4 prompts and 2 resources. No keys needed: it signs only if you turn on the opt-in local
 signer, which adds 8 tools that sign and send, or place standing orders, inside a policy you write.
 

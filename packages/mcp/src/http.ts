@@ -48,6 +48,8 @@ export const BUILD_COST = 5;
  */
 export const TOOL_COSTS: Record<string, (args: Record<string, unknown>) => number> = {
   get_wallet_positions: (args) => (Array.isArray(args.mints) && args.mints.length ? 3 : 10),
+  // A wallet's history: up to 200 transactions fetched one by one.
+  get_wallet_pnl: () => 10,
   quote_trade: () => 2,
   rug_check: () => 2,
   // Every higher.fun coin's pools, read on-chain (cached for a few minutes per instance), or one coin's.

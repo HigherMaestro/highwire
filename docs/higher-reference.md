@@ -138,6 +138,13 @@ vaults appended), and a 0.02 SOL System transfer to `7j6tyzm…`. Highwire's bui
 Trades on the coin API include third-party routers (Axiom's `FLASHX…`, Jupiter) and transaction version 1 messages;
 `getTransaction` needs `maxSupportedTransactionVersion: 1` to read them. Highwire builds v0.
 
+A wallet's history in one coin is the history of its token accounts for that coin, which `get_wallet_pnl` reads with
+`getSignaturesForAddress`. On 2026-11-06 Solana's public mainnet RPC answered that in a second or two for recent
+activity but often timed out (15 seconds and more) when the search had to go further back, even for 20 signatures;
+devnet answered at once. Some trades pay in USDC through a router, with another wallet paying the network fee: the
+wallet's SOL doesn't move, but the coin's pool vault (owned by the LaunchLab or CPMM authority, which every pool
+shares) shows the SOL leg.
+
 ## Sign-in, uploads and mint reservation
 
 - **Wallet sign-in:** `POST /auth/nonce {wallet}` returns `{nonce, message, expiresAt}`; the wallet signs a

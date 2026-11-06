@@ -51,6 +51,8 @@ const NEXT_STEPS: Record<string, string> = {
   orders_invalid: "Tell the user their orders file has the problem in the error; only they can fix or remove it. Nothing was changed.",
   order_closed: "That order isn't open any more. list_orders shows what happened to it.",
   already_running: "Another `highwire orders run` is already filling orders; only one may run.",
+  history_unavailable:
+    "Tell the user the RPC timed out searching this wallet's history. Setting SOLANA_RPC_URL to an RPC provider's URL (one that keeps full transaction history) fixes it; get_wallet_positions still shows what the wallet holds now.",
   too_large: "The transaction doesn't fit in Solana's size limit. For a launch, try a shorter metadata_uri or drop the first buy.",
 };
 
