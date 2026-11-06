@@ -51,6 +51,11 @@ const config: NextConfig = {
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
         ],
       },
+      // The MCP registry's proof that highwire.fun publishes fun.highwire/highwire: the public key, as plain text.
+      {
+        source: "/.well-known/mcp-registry-auth",
+        headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }],
+      },
       // /sign's Content-Security-Policy comes from proxy.ts, with a fresh nonce per request.
       {
         source: "/sign",

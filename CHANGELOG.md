@@ -2,6 +2,14 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## 0.4.1 (2026-11-06)
+
+- **The MCP registry.** `highwire-mcp` is listed as `fun.highwire/highwire`, with both ways to run it: the npm package
+  (`npx highwire-mcp`) and the hosted endpoint. highwire.fun serves the registry's domain proof at
+  `/.well-known/mcp-registry-auth`.
+- **Sign links survive chat apps.** The sign page strips the percent-encoding, line breaks and zero-width spaces that
+  chat apps put into long links before decoding, and says plainly when a link was cut short.
+
 ## 0.4.0 (2026-11-06)
 
 The first release on npm: `highwire-core`, `highwire-agent` and `highwire-mcp` 0.4.0. `npx highwire-mcp` runs the
