@@ -94,6 +94,14 @@ Streamable HTTP. An npm workspaces monorepo. Read
   other agent-tooling projects as inspiration, in the repo or on the site. Naming the platforms Highwire works with
   (higher.fun, Raydium, Solana) is fine.
 
+## Releasing
+
+Bump the versions, add the changelog section, then publish to npm in order: `highwire-core`, `highwire-agent`,
+`highwire-mcp` (each `npm publish -w <name> --access public`; npm asks for the maintainer's security key). For a new
+`highwire-mcp` version, update `version` in the root `server.json` (both places) and, once npm shows it, run
+`mcp-publisher publish`: the registry listing is `fun.highwire/highwire`, proved by
+`apps/web/public/.well-known/mcp-registry-auth`. The domain key's private half stays with the maintainer, never in the repo.
+
 ## Before you say it's done
 
 Run `npm run typecheck`, `npm test` and `npm run build` from the root. Run `npm run smoke` too, which needs network

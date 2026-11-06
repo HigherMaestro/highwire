@@ -116,5 +116,6 @@ with the `highwire` memo. The day's limit counted 0.245 SOL, what the wallet act
   sign-in tools or a hosted signer, which it must never become without it).
 - **Live feed:** subscribe to `wss://api.higher.fun/ws` for launches, trades and graduations.
 - **Sign-in tools:** posting comments and chat through `/auth/nonce` and `/auth/verify`, if higher.fun wants agents posting.
-- **Publishing:** to the MCP registry, once `highwire-mcp` is on npm.
+- ~~**Publishing**~~ Done 2026-11-06: `highwire-core`, `highwire-agent` and `highwire-mcp` on npm, and the MCP registry
+  listing `fun.highwire/highwire` 0.4.1 (npm package and hosted endpoint), proved by highwire.fun's domain key.
 - **Partnering:** ask the higher.fun team for a stable API contract and an agent rate-limit tier.
