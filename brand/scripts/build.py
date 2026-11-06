@@ -183,21 +183,41 @@ def build_svgs() -> dict[str, str]:
         )
         out[name] = svg(round(lw, 2), round(lh, 2), body, label)
 
-    # X banner 1500x500. The profile picture covers the bottom-left (about x 40-390, y 330-500 on
-    # phones) and some views trim the top and bottom edges, so the text sits high and the H's posts
-    # stop short of the edges. Nothing here should change as the tool list grows.
+    # X banner 1500x500, on ink like the link preview, so the paper profile picture stands out against it. One wire
+    # runs edge to edge, as in the films, with a station for each thing an agent can do along it, and the node at
+    # "trade". The profile picture covers the bottom-left (about x 40-390, y 330-500 on phones) and some views trim
+    # the top and bottom edges, so the text sits high on the left and the stations start right of the picture. The
+    # stations are what Highwire does, not its tool list, so they don't change as tools are added.
+    wy0, wsag = 318, 34  # the wire's height at the edges, and its drop at the middle
+
+    def wire_y(x: float) -> float:
+        u = (x + 40) / 1580
+        return (1 - u) ** 2 * wy0 + 2 * u * (1 - u) * (wy0 + 2 * wsag) + u ** 2 * wy0
+
+    stations = ["rug-check", "trade", "launch", "claim", "alerts", "orders"]
+    xs = [560 + i * 170 for i in range(len(stations))]
+    marks = ""
+    for name, x in zip(stations, xs):
+        y = wire_y(x)
+        _, adv, _ = text_outline(name, "mono", 500, 21)
+        marks += (
+            f'<line x1="{x}" y1="{y - 40:.1f}" x2="{x}" y2="{y + 22:.1f}" stroke="{PAPER}" stroke-width="9" stroke-linecap="round"/>'
+            + text_el(name, "mono", 500, 21, x - adv / 2, y + 64, "#A7ACB4")
+        )
+    nx, ny = xs[1], wire_y(xs[1])
+    _, url_w, _ = text_outline("highwire.fun", "mono", 500, 24)
     banner = (
-        f'<defs>{wire_gradient("bw", 980, 1360)}</defs>'
-        f'<rect width="1500" height="500" fill="{PAPER}"/>'
-        f'<path d="M660 70 Q830 185 980 160" fill="none" stroke="{INK}" stroke-opacity=".18" stroke-width="2"/>'
-        f'<path d="M1360 160 Q1440 176 1520 168" fill="none" stroke="{INK}" stroke-opacity=".18" stroke-width="2"/>'
-        f'<line x1="980" y1="72" x2="980" y2="428" stroke="{INK}" stroke-width="26" stroke-linecap="round"/>'
-        f'<line x1="1360" y1="72" x2="1360" y2="428" stroke="{INK}" stroke-width="26" stroke-linecap="round"/>'
-        f'<path d="M980 160 Q1170 340 1360 160" fill="none" stroke="url(#bw)" stroke-width="11" stroke-linecap="round"/>'
-        f'<circle cx="1170" cy="250" r="17" fill="#FFFFFF" stroke="{INK}" stroke-width="5"/>'
-        + text_el("highwire", "grotesk", 700, 132, 104, 192, INK, -0.05)
-        + text_el("The agent wire for higher.fun", "grotesk", 500, 34, 110, 254, MUTED)
-        + text_el("highwire.fun", "mono", 500, 22, 111, 300, MUTED)
+        f'<defs>{wire_gradient("bw", 0, 1500)}'
+        f'<radialGradient id="bn-glow"><stop offset="0" stop-color="#F7C84C" stop-opacity=".75"/>'
+        f'<stop offset=".45" stop-color="#F6A9C4" stop-opacity=".35"/><stop offset="1" stop-color="{SIGNAL}" stop-opacity="0"/></radialGradient></defs>'
+        f'<rect width="1500" height="500" fill="{INK}"/>'
+        f'<path d="M-40 {wy0} Q750 {wy0 + 2 * wsag} 1540 {wy0}" fill="none" stroke="url(#bw)" stroke-width="9" stroke-linecap="round"/>'
+        + marks
+        + f'<circle cx="{nx}" cy="{ny:.1f}" r="64" fill="url(#bn-glow)"/>'
+        f'<circle cx="{nx}" cy="{ny:.1f}" r="15" fill="#FFFFFF" stroke="{INK}" stroke-width="5"/>'
+        + text_el("highwire", "grotesk", 700, 124, 106, 170, PAPER, -0.05)
+        + text_el("The agent wire for higher.fun", "grotesk", 500, 36, 112, 232, "#A7ACB4")
+        + text_el("highwire.fun", "mono", 500, 24, 1392 - url_w, 112, SIGNAL)
     )
     out["x-banner.svg"] = svg(1500, 500, banner, "Highwire, the agent wire for higher.fun")
 
