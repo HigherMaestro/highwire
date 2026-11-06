@@ -4,8 +4,8 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
-- **A new link preview.** highwire.fun's card on X and elsewhere is now on ink, and says what Highwire does: your AI
-  can trade, launch and claim on higher.fun. The page description says the same, in place of the read-only wording
+- **A new link preview.** highwire.fun's card on X and elsewhere is now on ink, and says what Highwire does: your
+  agent can trade, launch and claim on higher.fun. The page description says the same, in place of the read-only wording
   from before the transaction tools.
 
 ## 0.4.2 (2026-11-06)

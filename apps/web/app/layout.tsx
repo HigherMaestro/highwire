@@ -10,7 +10,7 @@ const grotesk = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500", "700"
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["500"], variable: "--font-mono" });
 
 const description =
-  "Highwire is an MCP server that lets your AI trade, launch coins and claim creator fees on higher.fun, the open-source Solana launchpad: from any chat with a sign link, or on its own inside limits you set.";
+  "Highwire is an MCP server that lets your agent trade, launch coins and claim creator fees on higher.fun, the open-source Solana launchpad: from any chat with a sign link, or on its own inside limits you set.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

@@ -215,7 +215,7 @@ def build_svgs() -> dict[str, str]:
         f'<circle cx="980" cy="310" r="78" fill="url(#og-glow)"/>'
         f'<circle cx="980" cy="310" r="19" fill="#FFFFFF" stroke="{INK}" stroke-width="5"/>'
         + text_el("highwire", "grotesk", 700, 104, 78, 196, PAPER, -0.05)
-        + text_el("Your AI can now trade,", "grotesk", 700, 50, 82, 296, PAPER, -0.02)
+        + text_el("Your agent can now trade,", "grotesk", 700, 50, 82, 296, PAPER, -0.02)
         + text_el("launch and claim", "grotesk", 700, 50, 82, 356, PAPER, -0.02)
         + text_el("on higher.fun.", "grotesk", 700, 50, 82, 416, PAPER, -0.02)
         + text_el("MCP server \u00b7 on npm and the MCP Registry", "mono", 500, 22, 84, 486, "#A7ACB4")

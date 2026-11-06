@@ -1,1 +1,1 @@
-Highwire: your AI can now trade, launch and claim on higher.fun. An MCP server, on npm and the MCP Registry.
+Highwire: your agent can now trade, launch and claim on higher.fun. An MCP server, on npm and the MCP Registry.
