@@ -211,16 +211,17 @@ export default async function Home() {
             <ol className="road">
               <li className="road-now">
                 <span className="road-tag">Now</span>
-                <h3>Sign from any chat</h3>
+                <h3>Sign from any chat, or set the limits</h3>
                 <p className="muted">
-                  {hostedCount} hosted tools. Ask Claude or ChatGPT to buy, sell, launch or claim, open the sign link it gives
-                  you, and sign in your own wallet. The agent never holds keys.
+                  {hostedCount} hosted tools: ask Claude or ChatGPT to buy, sell, launch or claim, then sign the link in your
+                  own wallet. Or run it locally and let an agent act on its own, inside caps and allowlists you write. Every
+                  fee on higher.fun is tracked at <a href="/fees">/fees</a>.
                 </p>
               </li>
               <li>
                 <span className="road-tag">Next</span>
-                <h3>Agents with limits</h3>
-                <p className="muted">An opt-in local signer with per-trade and daily caps, and allowlists.</p>
+                <h3>One command to install</h3>
+                <p className="muted">Highwire on npm and the MCP registry, so any client can add it by name.</p>
               </li>
               <li>
                 <span className="road-tag">Later</span>
