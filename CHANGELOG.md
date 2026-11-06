@@ -73,8 +73,8 @@ creates, holds or manages a wallet, and the hosted endpoint still never signs.
   each transaction is sent. The daily limit is counted from it. Creating `~/.highwire/STOP` refuses everything.
 - **Transfers.** `build_transfer` sends SOL or a higher.fun coin to another wallet, checked to the lamport and the
   recipient. It's local only and has no sign link: the sign page refuses transfers, since a link can come from anyone.
-- **Donations:** Highwire's one donation wallet, `7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce`, is on the home page and
-  in every page's list of official links.
+- **Donations:** Highwire's one donation wallet, `7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce`, is on the home page,
+  linked from every page's footer.
 - **Ecosystem fees** at highwire.fun/fees: every fee all of higher.fun's coins have paid and who got it (creators,
   higher.fun, Raydium, the pools), by phase and fee mode, what's waiting to be claimed, and a searchable table of every
   coin, each with its own page at `/fees/<mint>`. Curve fees are measured from each pool's on-chain fee counter; pool

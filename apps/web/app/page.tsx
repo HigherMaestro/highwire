@@ -235,7 +235,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="section" aria-labelledby="support-title">
+        <section className="section" id="support" aria-labelledby="support-title">
           <div className="wrap">
             <div className="section-head">
               <h2 id="support-title">Support Highwire</h2>
