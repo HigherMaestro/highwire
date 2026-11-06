@@ -48,7 +48,7 @@ const side = z.enum(["buy", "sell"]).describe("buy spends SOL for tokens; sell s
 const sol = z.number().positive().max(1_000_000).optional().describe("For a buy: SOL to spend.");
 const tokens = z.number().positive().max(1_000_000_000).optional().describe("For a sell: whole tokens to sell (supply is 1B).");
 
-function tradeAmount(args: { side: "buy" | "sell"; sol?: number; tokens?: number }): bigint {
+export function tradeAmount(args: { side: "buy" | "sell"; sol?: number; tokens?: number }): bigint {
   if (args.side === "buy") {
     if (args.sol === undefined || args.tokens !== undefined) throw new ValidationError("A buy takes `sol` (and not `tokens`).");
     return solToLamports(args.sol);

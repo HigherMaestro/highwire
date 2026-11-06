@@ -29,6 +29,8 @@ export interface ExecuteRequest {
   tool: string;
   intent: Intent;
   envelope: Envelope;
+  /** The standing order this fills, for the audit log. */
+  order?: string;
 }
 
 export interface ExecutedTransaction {
@@ -163,7 +165,7 @@ export class LocalSigner {
     return run;
   }
 
-  private log(req: Pick<ExecuteRequest, "tool" | "intent">, outcome: "refused" | "dry_run" | "sent" | "confirmed" | "failed", extra: { lamports?: bigint; label?: string; signature?: string; reason?: string } = {}) {
+  private log(req: Pick<ExecuteRequest, "tool" | "intent" | "order">, outcome: "refused" | "dry_run" | "sent" | "confirmed" | "failed", extra: { lamports?: bigint; label?: string; signature?: string; reason?: string } = {}) {
     const lamports = extra.lamports ?? 0n;
     this.audit.append({
       tool: req.tool,
@@ -178,7 +180,13 @@ export class LocalSigner {
       ...(extra.label ? { label: extra.label } : {}),
       ...(extra.signature ? { signature: extra.signature } : {}),
       ...(extra.reason ? { reason: extra.reason } : {}),
+      ...(req.order ? { order: req.order } : {}),
     });
+  }
+
+  /** Logs a standing order being placed, cancelled or closed. Fills are logged by execute(), like any trade. */
+  logOrder(tool: string, order: { id: string; cluster: Cluster; mint: string }, reason: string) {
+    this.audit.append({ tool, action: "trade", cluster: order.cluster, wallet: this.wallet, outcome: "order", sol: "0", lamports: "0", mint: order.mint, order: order.id, reason });
   }
 
   private async executeNow(connection: Connection, req: ExecuteRequest): Promise<ExecuteResult> {

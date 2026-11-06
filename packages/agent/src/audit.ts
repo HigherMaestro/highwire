@@ -7,8 +7,11 @@ import type { Action } from "./policy.ts";
 // signed. Signed entries are written as each transaction is sent, before it
 // confirms, so a crash can't hide a spend. The daily limit is counted from here.
 
-/** signed_in: the signer signed higher.fun's sign-in message for a launch's uploads; it moves no funds. */
-export type Outcome = "refused" | "dry_run" | "sent" | "confirmed" | "failed" | "signed_in";
+/**
+ * signed_in: the signer signed higher.fun's sign-in message for a launch's uploads; it moves no funds. order: a standing
+ * order was placed, cancelled or closed (its fills are logged like any trade).
+ */
+export type Outcome = "refused" | "dry_run" | "sent" | "confirmed" | "failed" | "signed_in" | "order";
 
 export interface AuditEntry {
   time: string;
@@ -26,6 +29,8 @@ export interface AuditEntry {
   label?: string;
   signature?: string;
   reason?: string;
+  /** The standing order this came from. */
+  order?: string;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

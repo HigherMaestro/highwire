@@ -4,7 +4,7 @@ The MCP server that lets AI agents use [higher.fun](https://higher.fun), the ope
 for launches, coins, trades, holders, creators, fees, rug checks and live alerts, and 6 that quote and build unsigned
 trades, launches, creator fee claims and transfers. Trades, launches and claims come with a link to sign in your own
 wallet on highwire.fun. Plus 4 prompts and 2 resources. No keys needed: it signs only if you turn on the opt-in local
-signer, which adds 5 tools that sign and send inside a policy you write.
+signer, which adds 8 tools that sign and send, or place standing orders, inside a policy you write.
 
 ```bash
 claude mcp add highwire -- npx -y highwire-mcp

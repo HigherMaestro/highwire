@@ -48,6 +48,9 @@ const NEXT_STEPS: Record<string, string> = {
   launch_for_unavailable:
     "higher.fun hasn't switched on launching for an X or GitHub account yet, so nothing was uploaded or spent. Tell the user, and launch without launch_for if they want (the creator fees then go to the signer's wallet).",
   live_unavailable: "The live feed needs Node 22 or later. Tell the user, and use get_trade_tape for the latest events meanwhile.",
+  orders_invalid: "Tell the user their orders file has the problem in the error; only they can fix or remove it. Nothing was changed.",
+  order_closed: "That order isn't open any more. list_orders shows what happened to it.",
+  already_running: "Another `highwire orders run` is already filling orders; only one may run.",
   too_large: "The transaction doesn't fit in Solana's size limit. For a launch, try a shorter metadata_uri or drop the first buy.",
 };
 

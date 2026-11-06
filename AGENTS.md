@@ -18,8 +18,10 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/tx/` | quotes and unsigned transactions: `chain.ts` (web3.js and Raydium's SDK behind one fetch), `quote.ts`, `trade.ts`, `launch.ts` (also `DerivedLaunchKeys`), `claim.ts`, `positions.ts`, `decode.ts` (plain-language decoding and the safety checks), `envelope.ts` (the memo, simulation, `finish()`), `format.ts` (the envelope types), `sign-link.ts` (sign URLs), `review.ts` (the sign page's checks), `refresh.ts` (blockhash refresh for wallet-only transactions) |
 | `packages/core/src/tx/fees.ts` | `ecosystemFees`: every higher.fun coin's fees by recipient and phase, for /fees. Curve lines are measured, pool lines computed from volume at on-chain rates |
 | `packages/core/src/tx/transfer.ts` | `buildTransfer`: SOL or a higher.fun coin to another wallet. Transfers never get a sign link |
-| `packages/agent/src/` | `highwire-agent`, the opt-in local signer: `policy.ts` (the schema and `checkPolicy`), `keypair.ts`, `audit.ts` (the JSONL log and the daily count), `signer.ts` (`LocalSigner`: check, re-simulate, sign, send, confirm), `paths.ts` (`~/.highwire`) |
-| `packages/mcp/src/tools/execute.ts` | `build_transfer`, `get_signer_status` and the execute tools; `signer-env.ts` turns the signer on from `HIGHWIRE_KEYPAIR_PATH` (the CLI only) |
+| `packages/agent/src/` | `highwire-agent`, the opt-in local signer: `policy.ts` (the schema and `checkPolicy`), `keypair.ts`, `audit.ts` (the JSONL log and the daily count), `signer.ts` (`LocalSigner`: check, re-simulate, sign, send, confirm), `paths.ts` (`~/.highwire`), `orders.ts` (`OrderBook`: standing orders in `orders.json`), `runner.ts` (`OrderRunner`: fills them through the signer), `lock.ts` |
+| `packages/mcp/src/tools/execute.ts` | `build_transfer`, `get_signer_status` and the execute tools (`executeTrade` is the one path for execute_trade and order fills); `signer-env.ts` turns the signer on from `HIGHWIRE_KEYPAIR_PATH` (the CLI only) |
+| `packages/mcp/src/tools/orders.ts`, `orders-cli.ts` | `place_order`, `list_orders`, `cancel_order`, and `highwire orders run\|list\|cancel` |
+| `packages/core/src/higher/live.ts`, `packages/mcp/src/watch.ts` | `LiveFeed` (higher.fun's websocket), `watch_market` and `highwire watch` |
 | `packages/core/src/browser.ts` | `highwire-core/browser`: the browser-safe exports for the sign page. `test/sign.test.ts` walks its imports |
 | `packages/mcp/src/server.ts` | `createServer()`: instructions, tool groups, resources |
 | `packages/mcp/src/tools/*.ts` | one `registerXTools(server, deps)` per group; `transactions.ts` holds the v0.2 tools |
@@ -70,6 +72,9 @@ Streamable HTTP. An npm workspaces monorepo. Read
   a lock file so two processes take turns, and only after the RPC's genesis hash matches the policy's cluster. Test it
   with a fake connection, never a real
   cluster.
+- **Standing orders** fill only through `executeTrade` and `LocalSigner.execute()`, so each fill passes the whole
+  policy then. Agents may place only the kinds the policy's `orders` section allows. Trigger on on-chain prices from a
+  fresh quote, never on a feed message. When a fill's outcome is unknown, close the order; never risk a second fill.
 - **Signing messages:** the local signer signs one kind of message, higher.fun's sign-in message, through
   `signInMessage`, after `checkSignInMessage` matches it word for word. Never add a general sign-message path.
 - **Transfers** go only through the local signer, to the policy's allowlist. The sign page refuses them: a sign link

@@ -28,6 +28,7 @@ creator can claim, whatever the mode.
 | The platform | `get_platform_info`, `check_ticker`, `get_chat` |
 | Trade, launch or claim | `quote_trade`, `get_wallet_positions`, `build_trade`, `build_launch`, `build_claim_creator_fees` |
 | Act with the local signer (only if the user turned it on) | `get_signer_status`, `execute_trade`, `execute_launch`, `execute_claim`, `execute_transfer` |
+| Stop-loss, take-profit, recurring buys (local signer, if the policy allows orders) | `place_order`, `list_orders`, `cancel_order`; they fill while the user runs `highwire orders run` |
 
 Prompts: `scan_launches`, `coin_due_diligence`, `creator_report`, `plan_launch`.
 

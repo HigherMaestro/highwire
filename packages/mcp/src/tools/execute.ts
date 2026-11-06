@@ -3,11 +3,12 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, resolve, sep } from "node:path";
 import { PublicKey, VersionedTransaction } from "@solana/web3.js";
-import { buildTransfer, describeTransaction, HigherError, HigherSession, solToLamports, summarizeQuote, tokensToBase, ValidationError, type Envelope } from "highwire-core";
+import { buildTrade, buildTransfer, describeTransaction, HigherError, HigherSession, solToLamports, summarizeQuote, tokensToBase, ValidationError, type Envelope } from "highwire-core";
 import type { ExecuteResult, Intent } from "highwire-agent";
 import { friendlyError, jsonResult, run, runResult } from "../result.ts";
 import { BUILD, EXECUTE, READ_ONLY, address, mint, type Deps, type ExecutionSigner } from "./shared.ts";
-import { buildClaimFor, buildLaunchFor, buildTradeFor, launchDetails, launchShape, tradeShape } from "./transactions.ts";
+import { registerOrderTools } from "./orders.ts";
+import { buildClaimFor, buildLaunchFor, launchDetails, launchShape, tradeAmount, tradeShape } from "./transactions.ts";
 
 // The local signer's tools, registered only when the user has set
 // HIGHWIRE_KEYPAIR_PATH on their own machine (never on the hosted endpoint).
@@ -80,8 +81,48 @@ export const LIST_ONLY_SIGNER: ExecutionSigner = {
   signInMessage: () => {
     throw new ValidationError("This server has no local signer.", { code: "no_signer" });
   },
-  paths: { home: "", policy: "", audit: "", stop: "", lock: "" },
+  logOrder: () => {
+    throw new ValidationError("This server has no local signer.", { code: "no_signer" });
+  },
+  paths: { home: "", policy: "", audit: "", stop: "", lock: "", orders: "", ordersRunner: "" },
 };
+
+/** The coin's creator, from its pool on-chain, not from higher.fun's API. null when it can't be read. */
+export function creatorOf(chain: Deps["chain"], mint: string): Promise<string | null> {
+  return chain.market(new PublicKey(mint)).then((m) => (m.stage === "graduated" ? m.pool.poolCreator : m.pool.creator).toBase58(), () => null);
+}
+
+export interface TradeExecution {
+  mint: string;
+  side: "buy" | "sell";
+  /** Lamports in for a buy, token base units for a sell. */
+  amountIn: bigint;
+  slippageBps: number;
+  /** A buy may spend at most this; a sell may return at most this. */
+  maxLamports: bigint;
+}
+
+/**
+ * A trade for the local signer's wallet, built exactly as build_trade builds it and handed to the signer, which checks
+ * the policy and signs, or dry-runs. execute_trade and every standing order's fill come through here.
+ */
+export async function executeTrade(deps: Deps, signer: ExecutionSigner, tool: string, req: TradeExecution, order?: string) {
+  const { chain } = deps;
+  const policy = signer.precheck("trade", chain.cluster, tool);
+  const built = await buildTrade(chain, { wallet: signer.publicKey, mint: new PublicKey(req.mint), side: req.side, amountIn: req.amountIn, slippageBps: req.slippageBps, maxLamports: req.maxLamports });
+  const creator = policy.creators ? await creatorOf(chain, req.mint) : null;
+  const intent: Intent = {
+    action: "trade",
+    cluster: chain.cluster,
+    solOut: req.side === "buy" ? built.quote.amountInUsed : 0n,
+    // The slippage the signed bytes allow, which for a pool swap can sit a little under the quote's.
+    slippageBps: Math.max(req.slippageBps, impliedSlippageBps(built.envelope, chain.cluster, built.quote.amountOut)),
+    mint: req.mint,
+    creator,
+  };
+  const result = await signer.execute(chain.connection, { tool, intent, envelope: built.envelope, ...(order ? { order } : {}) });
+  return { built, result };
+}
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
@@ -173,22 +214,14 @@ function registerExecuteTools(server: McpServer, deps: Deps, signer: ExecutionSi
     },
     (args) =>
       runResult(async () => {
-        const policy = signer.precheck("trade", cluster, "execute_trade");
-        const built = await buildTradeFor(deps, signer.publicKey, args);
-        // The coin's creator, from its pool on-chain, not from higher.fun's API.
-        const creator = policy.creators
-          ? await chain.market(new PublicKey(args.mint)).then((m) => (m.stage === "graduated" ? m.pool.poolCreator : m.pool.creator).toBase58(), () => null)
-          : null;
-        const r = await go("execute_trade", {
-          action: "trade",
-          cluster,
-          solOut: args.side === "buy" ? built.quote.amountInUsed : 0n,
-          // The slippage the signed bytes allow, which for a pool swap can sit a little under the quote's.
-          slippageBps: Math.max(args.max_slippage_bps, impliedSlippageBps(built.envelope, cluster, built.quote.amountOut)),
+        const { built, result } = await executeTrade(deps, signer, "execute_trade", {
           mint: args.mint,
-          creator,
-        }, built.envelope);
-        return jsonResult(executed(r, { quote: summarizeQuote(built.quote) }));
+          side: args.side,
+          amountIn: tradeAmount(args),
+          slippageBps: args.max_slippage_bps,
+          maxLamports: solToLamports(args.max_sol),
+        });
+        return jsonResult(executed(result, { quote: summarizeQuote(built.quote) }));
       }),
   );
 
@@ -324,4 +357,6 @@ function registerExecuteTools(server: McpServer, deps: Deps, signer: ExecutionSi
         return jsonResult(executed(done, {}));
       }),
   );
+
+  registerOrderTools(server, deps, signer);
 }

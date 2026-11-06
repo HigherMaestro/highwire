@@ -14,9 +14,11 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { LaunchpadPool } from "@raydium-io/raydium-sdk-v2";
 import { Connection, Keypair, PublicKey, VersionedTransaction } from "@solana/web3.js";
 import bs58 from "bs58";
-import { agentPaths, LocalSigner } from "highwire-agent";
+import { agentPaths, LocalSigner, OrderBook, OrderRunner } from "highwire-agent";
 import { Chain, DEFAULT_RPC_URLS, type Cluster } from "highwire-core";
 import { createServer, serverOptionsFromEnv } from "../src/index.ts";
+import { createDeps } from "../src/server.ts";
+import { orderMarket } from "../src/tools/orders.ts";
 
 const clusters = (process.env.SIM_CLUSTERS ?? "mainnet,devnet").split(",") as Cluster[];
 const rpcFor = (c: Cluster) => (c === "mainnet" ? process.env.SOLANA_RPC_URL : process.env.SOLANA_DEVNET_RPC_URL) || DEFAULT_RPC_URLS[c];
@@ -170,6 +172,49 @@ for (const cluster of clusters) {
   });
   await client.close();
   rmSync(home, { recursive: true, force: true });
+
+  // Standing orders, in a home of their own: placed through the tools, then filled by one pass of the real runner,
+  // with the stop-loss's trigger moved above the price so it fires.
+  const ohome = mkdtempSync(join(tmpdir(), "highwire-rehearse-orders-"));
+  const opaths = agentPaths({ HIGHWIRE_HOME: ohome });
+  writeFileSync(opaths.policy, JSON.stringify({ ...policy, actions: ["trade"], orders: { kinds: ["stop_loss", "recurring_buy"], max_open: 5 } }));
+  const osigner = new LocalSigner(watchOnly, opaths);
+  const options = { ...serverOptionsFromEnv({ ...process.env, HIGHWIRE_CLUSTER: cluster, SOLANA_RPC_URL: rpcFor(cluster) }), signer: osigner };
+  const oclient = new Client({ name: "rehearse-orders", version: "0" });
+  const [oa, ob] = InMemoryTransport.createLinkedPair();
+  await Promise.all([createServer(options).connect(oa), oclient.connect(ob)]);
+  const ocall = async (name: string, args: Record<string, unknown>) => {
+    await pause();
+    const res = await oclient.callTool({ name, arguments: args });
+    return { isError: Boolean(res.isError), out: JSON.parse((res.content as Array<{ text: string }>)[0]!.text) };
+  };
+  const stopLoss = await ocall("place_order", { kind: "stop_loss", mint, trigger_change_pct: -50, sell_pct: 10, max_slippage_bps: 300, confirm_order: true });
+  rows.push({ cluster, what: "place_order stop_loss 50% down, 10%", ok: !stopLoss.isError && stopLoss.out.order?.status === "open", result: stopLoss.isError ? `${stopLoss.out.code}: ${stopLoss.out.error}` : `${stopLoss.out.order.description}; now ${stopLoss.out.now.spotPriceSol} SOL` });
+  const dca = await ocall("place_order", { kind: "recurring_buy", mint, sol: 0.005, every_hours: 24, times: 2, max_slippage_bps: 300, confirm_order: true });
+  rows.push({ cluster, what: "place_order recurring_buy 0.005 SOL daily, twice", ok: !dca.isError && dca.out.order?.status === "open", result: dca.isError ? `${dca.out.code}: ${dca.out.error}` : dca.out.order.description });
+  const refusedKind = await ocall("place_order", { kind: "take_profit", mint, trigger_change_pct: 100, max_slippage_bps: 300, confirm_order: true });
+  rows.push({ cluster, what: "place_order take_profit (not in the policy's kinds)", ok: refusedKind.isError && refusedKind.out.code === "policy_refused", result: `${refusedKind.out.code}: ${refusedKind.out.error}` });
+
+  if (!stopLoss.isError && !dca.isError) {
+    const book = new OrderBook(opaths.orders);
+    await book.update(stopLoss.out.order.id, (o) => (o.triggerPriceSol = 1e9));
+    const before = sends.length;
+    const runner = new OrderRunner({ book, wallet, cluster, market: orderMarket(createDeps(options), osigner), log: (l) => console.log(`  runner: ${l}`) });
+    await runner.tick();
+    const mine = sends.slice(before);
+    const sl = book.get(stopLoss.out.order.id)!;
+    const rb = book.get(dca.out.order.id)!;
+    rows.push({
+      cluster,
+      what: "runner fills the triggered stop-loss and the due recurring buy",
+      ok: sl.status === "done" && rb.runsDone === 1 && rb.status === "open" && mine.length === 2 && mine.every((s) => s.signed && s.simulated.startsWith("ok")),
+      result: `stop-loss ${sl.status} (${sl.history.at(-1)?.outcome}${sl.history.at(-1)?.reason ? `: ${sl.history.at(-1)?.reason}` : ""}), recurring buy ${rb.runsDone}/2 (${rb.history.at(-1)?.outcome}${rb.history.at(-1)?.reason ? `: ${rb.history.at(-1)?.reason}` : ""}); ${mine.map((s) => `signed bytes simulate ${s.simulated}`).join("; ")}`,
+    });
+    const tagged = osigner.audit.entries().filter((e) => e.outcome === "sent" && e.order);
+    rows.push({ cluster, what: "audit log ties each fill to its order", ok: tagged.length === 2, result: `${tagged.length} sends tagged with their order` });
+  }
+  await oclient.close();
+  rmSync(ohome, { recursive: true, force: true });
 }
 
 console.log("\nResults");

@@ -2,6 +2,16 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- **Standing orders for the local signer: stop-loss, take-profit and recurring buys.** `place_order` keeps them in
+  `~/.highwire/orders.json`, and `highwire orders run` fills them: price orders against the coin's on-chain price,
+  checked every minute and within seconds of a trade (the live feed only says when to look), recurring buys on their
+  schedule. Agents may place only the kinds the policy's new `orders` section allows, up to its `max_open`. Each fill
+  goes through the signer like `execute_trade`: the whole policy, the kill switch, a fresh simulation, and the audit
+  log, tagged with the order's id. A fill the runner can't be sure about closes the order rather than risk a second
+  one. `list_orders`, `cancel_order`, `highwire orders list` and `highwire orders cancel` show and cancel them.
+
 ## 0.5.0 (2026-11-06)
 
 - **Live alerts.** `watch_market` waits on higher.fun's live feed for up to 50 seconds and returns launches,

@@ -347,3 +347,48 @@ test("watch_market returns live events in SOL, and reports each as progress", as
   const tooLong = await client.callTool({ name: "watch_market", arguments: { wait_seconds: 51 } });
   assert.equal(tooLong.isError, true);
 });
+
+test("place_order needs the policy's orders section, and a placed order can be listed and cancelled", async () => {
+  const policy = { ...POLICY_TEMPLATE, cluster: "mainnet", actions: ["trade"], max_slippage_bps: 300 };
+  const paths = signerHome(policy);
+  const signer = new FixtureSigner(Keypair.generate(), paths);
+  const client = await connect({ fetch: fixtureFetch("buy-curve"), retries: 0, signer });
+  const args = { kind: "recurring_buy", mint: "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix", sol: 0.01, every_hours: 24, times: 3, max_slippage_bps: 200, confirm_order: true };
+
+  const refused = await client.callTool({ name: "place_order", arguments: args });
+  assert.equal(refused.isError, true);
+  assert.equal(parse(refused).code, "policy_refused");
+  assert.match(parse(refused).error, /doesn't allow recurring_buy orders/);
+
+  writeFileSync(paths.policy, JSON.stringify({ ...policy, orders: { kinds: ["recurring_buy"], max_open: 1 } }));
+  const tooLoose = await client.callTool({ name: "place_order", arguments: { ...args, max_slippage_bps: 400 } });
+  assert.equal(parse(tooLoose).code, "policy_refused");
+  const mixed = await client.callTool({ name: "place_order", arguments: { ...args, trigger_price_sol: 1 } });
+  assert.equal(mixed.isError, true);
+
+  const placed = parse(await client.callTool({ name: "place_order", arguments: args }));
+  assert.equal(placed.order.status, "open");
+  assert.equal(placed.order.kind, "recurring_buy");
+  assert.match(placed.order.description, /Buy 0.01 SOL of EE3p.* every 24 hours, 3 times/);
+  assert.equal(placed.now.totalSol, 0.03);
+  assert.equal(placed.live, false);
+  assert.equal(placed.runner.running, false);
+  assert.match(placed.runner.note, /highwire orders run/);
+
+  const second = await client.callTool({ name: "place_order", arguments: args });
+  assert.match(parse(second).error, /allows 1 open orders/);
+
+  const listed = parse(await client.callTool({ name: "list_orders", arguments: {} }));
+  assert.deepEqual(listed.orders.map((o: { id: string }) => o.id), [placed.order.id]);
+  assert.deepEqual(listed.policy.orders, { kinds: ["recurring_buy"], max_open: 1 });
+
+  const cancelled = parse(await client.callTool({ name: "cancel_order", arguments: { id: placed.order.id } }));
+  assert.equal(cancelled.order.status, "cancelled");
+  assert.equal(parse(await client.callTool({ name: "list_orders", arguments: {} })).orders.length, 0);
+  assert.equal(parse(await client.callTool({ name: "cancel_order", arguments: { id: placed.order.id } })).code, "order_closed");
+  assert.deepEqual(signer.audit.entries().filter((e) => e.outcome === "order").map((e) => e.reason?.split(":")[0]), ["placed", "cancelled"]);
+
+  const { tools } = await client.listTools();
+  assert.equal(tools.find((t) => t.name === "place_order")?.annotations?.destructiveHint, true);
+  assert.equal(tools.find((t) => t.name === "cancel_order")?.annotations?.destructiveHint, false);
+});

@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { serverOptionsFromEnv } from "./env.ts";
 import { createServer, VERSION } from "./server.ts";
 import { initPolicy, localLaunchSecret, signerFromEnv } from "./signer-env.ts";
+import { runOrders } from "./orders-cli.ts";
 import { runWatch } from "./watch.ts";
 
 const args = process.argv.slice(2);
@@ -15,10 +16,10 @@ if (args[0] === "policy" && args[1] === "init") {
   console.log(written ? `Wrote a starting policy to ${path}: devnet, dry run, trades and claims, 0.1 SOL a transaction, 0.5 SOL a day.\nEdit it to change the limits; set "live": true only when you want it to send.` : `A policy already exists at ${path}; left it as it is.`);
   process.exit(0);
 }
-if (args[0] === "watch") {
+if (args[0] === "watch" || args[0] === "orders") {
   const ctl = new AbortController();
   process.once("SIGINT", () => ctl.abort());
-  const code = await runWatch(args.slice(1), {
+  const code = await (args[0] === "watch" ? runWatch : runOrders)(args.slice(1), {
     apiUrl: serverOptionsFromEnv().apiUrl,
     out: (line) => console.log(line),
     err: (line) => console.error(line),
@@ -48,6 +49,8 @@ Commands:
   highwire policy init     write a starting policy: devnet, dry run, small limits
   highwire watch           higher.fun's live feed in the terminal: launches, graduations, buys and sells
                            (highwire watch --help for the filters)
+  highwire orders run      fill standing orders (stop-loss, take-profit, recurring buys) until Ctrl-C
+  highwire orders list     the open orders; highwire orders cancel <id> cancels one
 
 Without a local signer Highwire never signs: build tools return unsigned transactions and a sign_url for your own
 wallet. With one, it signs only inside your policy, and only sends when the policy says "live": true.`);

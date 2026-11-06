@@ -14,6 +14,10 @@ export interface AgentPaths {
   stop: string;
   /** Held while an execute runs, so two Highwire processes can't both fit under the daily limit. */
   lock: string;
+  /** Standing orders: stop-loss, take-profit and recurring buys. */
+  orders: string;
+  /** Held by the one `highwire orders run` process, so no order fills twice. */
+  ordersRunner: string;
 }
 
 export function agentPaths(env: Record<string, string | undefined> = process.env): AgentPaths {
@@ -24,5 +28,7 @@ export function agentPaths(env: Record<string, string | undefined> = process.env
     audit: join(home, "audit.jsonl"),
     stop: join(home, "STOP"),
     lock: join(home, "execute.lock"),
+    orders: join(home, "orders.json"),
+    ordersRunner: join(home, "orders-runner.lock"),
   };
 }

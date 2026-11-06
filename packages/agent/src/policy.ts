@@ -34,6 +34,17 @@ export const PolicySchema = z
     creators: z.object({ allow: z.array(address) }).strict().optional(),
     /** The only wallets transfers may go to. */
     transfer_allowlist: z.array(address).default([]),
+    /**
+     * Standing orders: which kinds an agent may place, and how many may be open. Without it, none. Each fill is a
+     * trade, so it needs "trade" in actions and passes every rule above when it runs.
+     */
+    orders: z
+      .object({
+        kinds: z.array(z.enum(["stop_loss", "take_profit", "recurring_buy"])).min(1),
+        max_open: z.number().int().min(1).max(50).default(10),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

@@ -199,7 +199,7 @@ export const TOOL_GROUPS: { id: string; title: string; blurb: string; tools: str
     id: "signer",
     title: "Local signer",
     blurb: "Opt-in, on your own machine: signs and sends only inside the policy file you write, and dry-runs by default.",
-    tools: ["get_signer_status", "execute_trade", "execute_launch", "execute_claim", "execute_transfer", "build_transfer"],
+    tools: ["get_signer_status", "execute_trade", "execute_launch", "execute_claim", "execute_transfer", "place_order", "list_orders", "cancel_order", "build_transfer"],
   },
 ];
 

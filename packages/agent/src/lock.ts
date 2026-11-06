@@ -55,3 +55,40 @@ export async function withFileLock<T>(path: string, fn: () => Promise<T>, waitMs
     rmSync(path, { force: true });
   }
 }
+
+/** The pid holding a process lock, if that process is still running. */
+export function lockHolder(path: string): number | null {
+  try {
+    const { pid } = JSON.parse(readFileSync(path, "utf8")) as { pid?: number };
+    return typeof pid === "number" && alive(pid) ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Holds the lock at `path` for as long as this process wants it, unlike withFileLock's short holds: it's stale only
+ * once its process is gone. Returns the release, or throws when another live process holds it.
+ */
+export function holdProcessLock(path: string, what: string): () => void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const fd = openSync(path, "wx", 0o600);
+      writeSync(fd, JSON.stringify({ pid: process.pid, at: Date.now() }));
+      closeSync(fd);
+      let held = true;
+      return () => {
+        if (!held) return;
+        held = false;
+        if (lockHolder(path) === process.pid) rmSync(path, { force: true });
+      };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      const pid = lockHolder(path);
+      if (pid !== null || attempt > 0) {
+        throw new HigherError(`${what} is already running${pid !== null ? ` (pid ${pid})` : ""}; only one may run at a time (lock ${path}).`, { code: "already_running" });
+      }
+      rmSync(path, { force: true });
+    }
+  }
+}

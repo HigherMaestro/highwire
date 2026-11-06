@@ -3,3 +3,6 @@ export * from "./keypair.ts";
 export * from "./paths.ts";
 export * from "./policy.ts";
 export * from "./signer.ts";
+export * from "./lock.ts";
+export * from "./orders.ts";
+export * from "./runner.ts";
