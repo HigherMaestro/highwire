@@ -4,13 +4,14 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { attestationPublicKey, attestationSeed, decodeSignPayload, verifyAttestation } from "highwire-core";
 import { rpcUrlEnv, serverOptionsFromEnv } from "../src/env.ts";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { agentPaths, LocalSigner, POLICY_TEMPLATE } from "highwire-agent";
 import { createServer, SIGNER_INSTRUCTIONS, type ServerOptions } from "../src/server.ts";
 import { readCoinImage } from "../src/tools/execute.ts";
+import { localLaunchSecret } from "../src/signer-env.ts";
 import { ALL_TOOLS, BUILD_TOOLS, EXECUTE_TOOLS, FAKE_OPTIONS } from "./fake.ts";
 import { fixtureFetch } from "./replay.ts";
 
@@ -289,4 +290,14 @@ test("execute_launch only uploads a real image, and never a file from the signer
   const key = join(dir, "key.json");
   writeFileSync(key, "[1,2,3]");
   assert.throws(() => readCoinImage(key, { paths }, key), /signer's folder/);
+});
+
+test("the local server keeps its launch secret, so a launch retried after a restart gets the same coin", () => {
+  const home = mkdtempSync(join(tmpdir(), "highwire-secret-"));
+  const env = { HIGHWIRE_HOME: home };
+  const first = localLaunchSecret(env);
+  assert.ok(first.length >= 32);
+  assert.equal(localLaunchSecret(env), first, "read back, not remade");
+  assert.equal(statSync(join(home, "launch-secret")).mode & 0o077, 0, "readable only by the user");
+  assert.equal(localLaunchSecret({ ...env, HIGHWIRE_LAUNCH_SECRET: "set-by-env" }), "set-by-env");
 });

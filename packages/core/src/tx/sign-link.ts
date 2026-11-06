@@ -212,7 +212,8 @@ export function parseEnvelope(v: unknown): Envelope {
     expiresAfterBlockHeight: int(e.expiresAfterBlockHeight, "expiresAfterBlockHeight"),
     // v1 has no builtAt, which keeps its transactions strict.
     ...(v1 ? {} : { builtAt: int(e.builtAt, "builtAt") }),
-    ...(e.attestation !== undefined ? { attestation: attestationOf(e.attestation) } : {}),
     howToSign: typeof e.howToSign === "string" ? e.howToSign.slice(0, 1000) : "",
+    // Last, where attestEnvelope adds it, so a decoded link serialises the same as the envelope it came from.
+    ...(e.attestation !== undefined ? { attestation: attestationOf(e.attestation) } : {}),
   };
 }

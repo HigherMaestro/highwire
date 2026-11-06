@@ -1,4 +1,6 @@
-import { chmodSync, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { dirname } from "node:path";
 import { agentPaths, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, policyWarnings, type AgentPaths } from "highwire-agent";
 
@@ -40,4 +42,29 @@ export function initPolicy(paths: AgentPaths = agentPaths()): { path: string; wr
   writeFileSync(paths.policy, JSON.stringify(POLICY_TEMPLATE, null, 2) + "\n", { mode: 0o600, flag: "wx" });
   chmodSync(paths.policy, 0o600);
   return { path: paths.policy, written: true };
+}
+
+/**
+ * The local server's launch secret: HIGHWIRE_LAUNCH_SECRET if set, else a random one kept in HIGHWIRE_HOME
+ * (`launch-secret`, readable only by the user), made on first use. Launch mints derive from it, so a retried launch
+ * finds the coin it already created even after the server restarted, instead of making a second one.
+ */
+export function localLaunchSecret(env: Env = process.env, paths: AgentPaths = agentPaths(env)): string {
+  if (env.HIGHWIRE_LAUNCH_SECRET) return env.HIGHWIRE_LAUNCH_SECRET;
+  const file = join(paths.home, "launch-secret");
+  try {
+    const kept = readFileSync(file, "utf8").trim();
+    if (kept.length >= 32) return kept;
+  } catch {
+    /* not made yet */
+  }
+  mkdirSync(paths.home, { recursive: true, mode: 0o700 });
+  const secret = randomBytes(32).toString("hex");
+  try {
+    writeFileSync(file, secret + "\n", { mode: 0o600, flag: "wx" });
+  } catch {
+    // Another process made it first: use theirs.
+    return readFileSync(file, "utf8").trim();
+  }
+  return secret;
 }

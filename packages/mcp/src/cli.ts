@@ -2,7 +2,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { serverOptionsFromEnv } from "./env.ts";
 import { createServer, VERSION } from "./server.ts";
-import { initPolicy, signerFromEnv } from "./signer-env.ts";
+import { initPolicy, localLaunchSecret, signerFromEnv } from "./signer-env.ts";
 
 const args = process.argv.slice(2);
 if (args.includes("--version")) {
@@ -25,7 +25,7 @@ Environment (all optional):
   HIGHER_TIMEOUT_MS        default 15000
   HIGHER_RETRIES           default 2
   HIGHWIRE_SITE_URL        default https://highwire.fun (where sign_url points)
-  HIGHWIRE_LAUNCH_SECRET   derive launch mints from this secret instead of keeping them in memory
+  HIGHWIRE_LAUNCH_SECRET   derive launch mints from this secret (default: one kept in HIGHWIRE_HOME/launch-secret)
 
 Local signer (off unless HIGHWIRE_KEYPAIR_PATH is set):
   HIGHWIRE_KEYPAIR_PATH    a Solana CLI keypair file; turns on the execute tools for that wallet
@@ -41,7 +41,8 @@ wallet. With one, it signs only inside your policy, and only sends when the poli
 }
 
 const signer = signerFromEnv();
-const server = createServer({ ...serverOptionsFromEnv(), signer });
+// Launch mints derive from a kept secret, so a retry after a restart finds its coin instead of making a second one.
+const server = createServer({ ...serverOptionsFromEnv(), launchKeySecret: localLaunchSecret(), signer });
 
 await server.connect(new StdioServerTransport());
 // stdout carries the protocol, so logs go to stderr.

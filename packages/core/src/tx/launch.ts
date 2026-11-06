@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { createVestingAccount, getPdaCreatorVault, getPdaVestId, LaunchpadConfig, TxVersion } from "@raydium-io/raydium-sdk-v2";
+import { createVestingAccount, getPdaCreatorVault, getPdaVestId, LaunchpadConfig, LaunchpadPool, TxVersion } from "@raydium-io/raydium-sdk-v2";
 import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
 import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type AddressLookupTableAccount } from "@solana/web3.js";
@@ -11,6 +11,7 @@ import {
   FEE_MODES,
   LAUNCH_FEE_CAP_LAMPORTS,
   coinUrl,
+  feeModeOfPlatform,
   platformFor,
   type FeeMode,
 } from "../higher/constants.ts";
@@ -51,6 +52,50 @@ export interface LaunchInput {
   /** The new coin's mint keypair. Highwire generates one per idempotency key; it only ever signs the coin's creation. */
   mint: Keypair;
   simulate?: boolean;
+}
+
+/**
+ * For a coin this wallet created on New school with a creator lock that was never assigned to it: the lock assignment,
+ * built and checked like any other. Null when there's nothing to assign.
+ */
+async function pendingLockAssignment(
+  chain: Chain,
+  wallet: PublicKey,
+  mint: PublicKey,
+  poolId: PublicKey,
+  data: Buffer,
+  simulate: boolean | undefined,
+): Promise<Extract<LaunchResult, { status: "built" }> | null> {
+  const pool = LaunchpadPool.decode(data);
+  if (!pool.creator.equals(wallet) || feeModeOfPlatform(chain.cluster, pool.platformId.toBase58()) !== "rewards") return null;
+  const v = pool.vestingSchedule;
+  const remaining = BigInt(v.totalLockedAmount.toString()) - BigInt(v.totalAllocatedShare.toString()) - BigInt(pool.platformVestingShare.toString());
+  if (remaining <= 0n) return null;
+  const vestingRecord = getPdaVestId(chain.key("launchLabProgram"), poolId, wallet).publicKey;
+  if (await chain.connection.getAccountInfo(vestingRecord)) return null;
+  const ix = createVestingAccount(chain.key("launchLabProgram"), wallet, wallet, poolId, vestingRecord, new BN(remaining.toString()));
+  const { blockhash } = await chain.connection.getLatestBlockhash("confirmed");
+  const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: blockhash, instructions: [ix] }).compileToV0Message());
+  const done = await finish({
+    chain,
+    wallet,
+    kind: "launch",
+    txs: [{ tx, label: "assign the creator lock to the creator", expect: { wallet, vestingPool: poolId } }],
+    simulate,
+  });
+  const supply = BigInt(pool.supply.toString());
+  return {
+    status: "built",
+    resumed: true,
+    mint: mint.toBase58(),
+    poolId: poolId.toBase58(),
+    mode: "rewards",
+    platformId: pool.platformId.toBase58(),
+    launchFee: null,
+    devBuySol: 0,
+    creatorLock: { pct: Number((remaining * 10_000n) / supply) / 100, tokens: remaining },
+    envelope: done.envelope,
+  };
 }
 
 /** What a launch-for account is topped up to when it holds less, so it can pay to claim its fees. */
@@ -113,6 +158,8 @@ export type LaunchResult =
       devBuySol: number;
       creatorLock: { pct: number; tokens: bigint } | null;
       envelope: Envelope;
+      /** The coin already exists; this envelope only assigns its creator lock, which a first attempt didn't. */
+      resumed?: true;
     };
 
 export interface LaunchMetadata {
@@ -220,8 +267,11 @@ export async function buildLaunch(chain: Chain, api: HigherApi | null, input: La
   const wallet = input.wallet;
   const mint = input.mint;
   const poolId = chain.launchPoolId(mint.publicKey);
-  if (await chain.connection.getAccountInfo(poolId)) {
-    return { status: "already_launched", mint: mint.publicKey.toBase58(), url: coinUrl(mint.publicKey.toBase58()) };
+  const existing = await chain.connection.getAccountInfo(poolId);
+  if (existing) {
+    // The coin landed. If its creator lock was never assigned (that transaction expired or failed), build just that.
+    const resumed = await pendingLockAssignment(chain, wallet, mint.publicKey, poolId, existing.data, input.simulate);
+    return resumed ?? { status: "already_launched", mint: mint.publicKey.toBase58(), url: coinUrl(mint.publicKey.toBase58()) };
   }
   if (api && chain.cluster === "mainnet") {
     const { available } = await api.ticker(input.ticker.toUpperCase());

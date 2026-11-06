@@ -79,10 +79,13 @@ refreshes the blockhash and changes nothing else); launch links, whose new mint 
 - Caps: `max_slippage_bps` at most 1500, and no transaction moves more than `HIGHWIRE_MAX_SOL_PER_TX` (10 SOL by
   default).
 - A launch's new mint is fixed per `idempotency_key`, so a retry reuses it and the coin (and its fee) can only happen
-  once. The local server keeps it in memory (a restart forgets it). The hosted endpoint keeps nothing: it derives the
-  mint with HMAC-SHA256 from `HIGHWIRE_LAUNCH_SECRET`, the key and the launch (cluster, wallet, name, ticker, fee mode),
-  so any serverless instance gives a retry the same mint, and once the coin exists a retry returns `already_launched`.
-  Reusing a key for a different coin gets a different mint.
+  once. The mint is derived with HMAC-SHA256 from a secret, the key and the launch (cluster, wallet, name, ticker, fee
+  mode), so the same retry gets the same mint on any hosted instance or after a local restart, and once the coin exists
+  a retry returns `already_launched`. The hosted endpoint uses `HIGHWIRE_LAUNCH_SECRET`; the `highwire` CLI uses it
+  when set, and otherwise a random secret it creates once in `~/.highwire/launch-secret`. Reusing a key for a different
+  coin gets a different mint.
+- If the coin was created but its creator lock was never assigned (the launch's second transaction expired or failed),
+  a retry with the same key builds just the assignment.
 - higher.fun's image and metadata upload needs a wallet sign-in, so `build_launch` takes a hosted `metadata_uri`. Without
   one it returns the metadata JSON to host. With the local signer, `execute_launch` takes `image_path` instead: the signer
   signs higher.fun's sign-in message (checked word for word, and nothing else), uploads the image and metadata, and
@@ -166,7 +169,7 @@ claude mcp add highwire -- npx -y highwire-mcp
 | `HIGHER_TIMEOUT_MS` | `15000` |
 | `HIGHER_RETRIES` | `2` |
 | `HIGHWIRE_SITE_URL` | `https://highwire.fun`: where `sign_url` points; `http://localhost:3000` for a local site |
-| `HIGHWIRE_LAUNCH_SECRET` | unset: launch mints are kept in memory. Set, they are derived from it (the hosted endpoint always derives) |
+| `HIGHWIRE_LAUNCH_SECRET` | the secret launch mints are derived from. Unset, the CLI creates one in `~/.highwire/launch-secret` |
 | `HIGHWIRE_RATE_LIMIT` | `60` units a minute per IP; a build costs 5 (hosted endpoint only) |
 
 The site (apps/web) also reads `NEXT_PUBLIC_SOLANA_RPC_URL` and `NEXT_PUBLIC_SOLANA_DEVNET_RPC_URL`, the RPCs the sign

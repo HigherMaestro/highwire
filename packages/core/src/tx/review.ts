@@ -160,6 +160,18 @@ export function acceptedSlippagePct(minOut: bigint, simulatedOut: bigint): numbe
   return Number(((simulatedOut - minOut) * 10_000n) / simulatedOut) / 100;
 }
 
+/**
+ * A link that only assigns a coin's creator lock (resuming a launch whose first attempt landed without it): the pool it
+ * names. The checker still requires the wallet to be both creator and beneficiary, and LaunchLab refuses anyone but the
+ * pool's creator, so an assignment on someone else's pool can only fail.
+ */
+function vestingOnly(ixs: ReturnType<typeof resolveInstructions>, wallet: PublicKey): { vestingPool?: PublicKey } {
+  const L = DISCRIMINATORS.launchLab;
+  const v = ixs.filter((ix) => hex(ix.data.subarray(0, 8)) === L.createVestingAccount);
+  if (v.length !== 1 || !v[0]!.keys[0]?.equals(wallet) || !v[0]!.keys[2]) return {};
+  return { vestingPool: v[0]!.keys[2] };
+}
+
 /** What the transaction must stick to, worked out from its own instructions and pinned to higher.fun's addresses. */
 function expectationsOf(
   tx: VersionedTransaction,
@@ -206,7 +218,7 @@ function expectationsOf(
     platformId,
     extraSigners,
     ...(feeTransfer && ctx.launchFeeWallet ? { launchFee: { to: new PublicKey(ctx.launchFeeWallet), maxLamports: LAUNCH_FEE_CAP_LAMPORTS } } : {}),
-    ...(createdPools.length === 1 ? { vestingPool: new PublicKey(createdPools[0]!) } : {}),
+    ...(createdPools.length === 1 ? { vestingPool: new PublicKey(createdPools[0]!) } : vestingOnly(ixs, wallet)),
   };
 }
 

@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { LaunchpadPool } from "@raydium-io/raydium-sdk-v2";
+import BN from "bn.js";
 import { Keypair, PublicKey, SystemProgram, TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
+import { buildLaunch } from "../src/tx/launch.ts";
 import { ADDRESSES } from "../src/higher/constants.ts";
 import { Chain } from "../src/tx/chain.ts";
 import { assertSafe, associatedTokenAddress, NATIVE_MINT_ADDRESS, PROGRAMS } from "../src/tx/decode.ts";
@@ -89,4 +92,43 @@ test("a launch for another account names them as creator and funds them, and onl
   // And the sign page never signs one.
   const problems = reviewEnvelope(built.envelope, { lookupTables: tables }).problems;
   assert.ok(problems.some((p) => /creates a coin for someone else/.test(p)), problems.join("; "));
+});
+
+test("a launch whose creator lock never got assigned can be resumed: a retry builds just the assignment", async () => {
+  const { owner, data } = JSON.parse(readFileSync(new URL("./fixtures/lgtm-pool.json", import.meta.url), "utf8")) as { owner: string; data: string };
+  const pool = LaunchpadPool.decode(Buffer.from(data, "base64"));
+  const supply = BigInt(pool.supply.toString());
+  // $LGTM's real pool, as if its creator had asked for a 5% lock whose assignment expired before it was sent.
+  pool.vestingSchedule.totalLockedAmount = new BN(((supply * 5n) / 100n).toString());
+  pool.vestingSchedule.totalAllocatedShare = new BN(0);
+  const buf = Buffer.alloc(Buffer.from(data, "base64").length);
+  LaunchpadPool.encode(pool, buf);
+  const creator = pool.creator;
+  const mint = pool.mintA;
+  const poolId = new PublicKey("HiqFQ4pxYspnFKPKQXGRbRsDucSvkRvY3f46Ly7Dtf5T");
+  const fetch = (async (_u: string | URL, init?: RequestInit) => {
+    const { method, params, id } = JSON.parse(String(init?.body));
+    const ok = (result: unknown) => new Response(JSON.stringify({ jsonrpc: "2.0", id, result }), { headers: { "content-type": "application/json" } });
+    if (method === "getAccountInfo") {
+      const value = params[0] === poolId.toBase58() ? { data: [buf.toString("base64"), "base64"], executable: false, lamports: 1, owner, rentEpoch: 0, space: buf.length } : null;
+      return ok({ context: { slot: 1 }, value });
+    }
+    if (method === "getLatestBlockhash") return ok({ context: { slot: 1 }, value: { blockhash: PublicKey.default.toBase58(), lastValidBlockHeight: 100 } });
+    throw new Error(`unexpected ${method}`);
+  }) as typeof globalThis.fetch;
+  const chain = new Chain({ cluster: "mainnet", fetch });
+  const keys = { get: () => ({ publicKey: mint }) as unknown as Keypair };
+  const r = await buildLaunch(chain, null, {
+    wallet: creator, name: "Looks Good To Me", ticker: "LGTM", metadataUri: "https://example.com/m.json", mode: "rewards", slippageBps: 500,
+    mint: keys.get() as Keypair, simulate: false,
+  });
+  assert.ok(r.status === "built" && r.resumed, r.status);
+  assert.equal(r.envelope.transactions.length, 1);
+  assert.equal(r.creatorLock?.pct, 5);
+  assert.ok(r.envelope.transactions[0]!.summary.some((l) => /Assign .* locked tokens of pool HiqFQ4/.test(l)));
+  // The sign page reviews it cleanly: the wallet assigns its own coin's lock to itself.
+  assert.deepEqual(reviewEnvelope(r.envelope).problems, []);
+  // Someone else's wallet gets no resume: only the coin's creator can assign its lock.
+  const other = await buildLaunch(chain, null, { wallet: Keypair.generate().publicKey, name: "x", ticker: "X", metadataUri: "https://example.com/m.json", mode: "rewards", slippageBps: 500, mint: keys.get() as Keypair, simulate: false });
+  assert.equal(other.status, "already_launched");
 });

@@ -2,6 +2,15 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- **Launch retries survive a restart.** The `highwire` CLI derives launch mints from a secret it keeps in
+  `~/.highwire/launch-secret` (created once, readable only by you) when `HIGHWIRE_LAUNCH_SECRET` isn't set. Before, it
+  kept them in memory, so a retry after a restart got a new mint and could launch the coin twice.
+- **A creator lock that never got assigned can be finished.** A launch with a creator lock is two transactions. If the
+  coin landed but the assignment expired or failed, a retry with the same idempotency key now builds just the
+  assignment instead of returning `already_launched`. The sign page accepts a link holding only that assignment.
+
 ## 0.4.1 (2026-11-06)
 
 - **The MCP registry.** `highwire-mcp` is listed as `fun.highwire/highwire`, with both ways to run it: the npm package

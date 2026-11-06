@@ -148,7 +148,8 @@ So trade and claim links work for up to 10 minutes, and launch links for about a
 2. For each transaction, in order: decode `base64` into a `VersionedTransaction`, show `summary`, have the wallet sign
    it unchanged (`signTransaction`), and send it. Wait for confirmation before sending one that `dependsOn` it.
 3. If sending fails with an expired blockhash, call the build tool again. For a launch, use the same `idempotency_key`:
-   the mint stays the same, so the coin can't be created twice.
+   the mint stays the same, so the coin can't be created twice. If the coin was created but a creator lock's assignment
+   didn't land, the retry returns just that assignment.
 
 A consumer should re-check before asking the wallet to sign, the way higher.fun's own site does:
 - the fee payer and the only unsigned signer is the connected wallet;

@@ -193,6 +193,7 @@ export function launchDetails(deps: Deps, r: Extract<LaunchResult, { envelope: E
     launchFee: r.launchFee,
     devBuySol: r.devBuySol,
     creatorLock: r.creatorLock ? { pct: r.creatorLock.pct, tokens: tokensNumber(r.creatorLock.tokens) } : null,
+    ...(r.resumed ? { resumed: "The coin already exists; its creator lock was never assigned. This only assigns it to the creator." } : {}),
     ...(deps.chain.cluster === "devnet" ? { note: "Devnet: higher.fun's API serves mainnet only, so no launch fee is charged." } : {}),
     ...(costs > 1 ? { order: "Send the transactions in order; the lock assignment needs the coin to exist first." } : {}),
   };

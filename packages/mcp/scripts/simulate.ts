@@ -95,26 +95,34 @@ async function getJson(url: string): Promise<any> {
 /** Mainnet: a curve coin and a graduated coin from the API, with public wallets that hold them and SOL. */
 async function mainnetPlan(chain: Chain) {
   const api = "https://api.higher.fun";
-  const pick = async (sort: string, status: string) => {
+  const candidates = async (sort: string, status: string) => {
     const { items } = await getJson(`${api}/coins?sort=${sort}&limit=30`);
-    const coin = items.find((c: any) => c.status === status);
-    if (!coin) throw new Error(`no ${status} coin in /coins?sort=${sort}`);
-    return coin;
+    const coins = items.filter((c: any) => c.status === status).slice(0, 5);
+    if (coins.length === 0) throw new Error(`no ${status} coin in /coins?sort=${sort}`);
+    return coins;
   };
-  const curve = await pick("trending", "curve");
-  const graduated = await pick("mcap", "graduated");
   const holderOf = async (mint: string) => {
     const { items } = await getJson(`${api}/coins/${mint}/holders`);
-    for (const h of items.filter((h: any) => !h.isCurve && !h.isCreator).slice(0, 8)) {
+    for (const h of items.filter((h: any) => !h.isCurve && !h.isCreator).slice(0, 20)) {
       if (h.wallet in KNOWN_VAULTS) continue;
       const lamports = await chain.connection.getBalance(new PublicKey(h.wallet));
       // A tenth of the holding, and at most 100k tokens, keeps the sell under the 5 SOL cap.
       if (lamports >= 0.2e9) return { wallet: h.wallet, tokens: Math.min(100_000, Math.floor(Number(h.balance) / 1e6 / 10)) };
       await pause(500);
     }
-    throw new Error(`no holder of ${mint} with 0.2 SOL`);
+    return null;
   };
-  return { curve, graduated, curveHolder: await holderOf(curve.mint), graduatedHolder: await holderOf(graduated.mint), creator: graduated.creator };
+  // The first of the top few coins with a holder who has the SOL to simulate as.
+  const withHolder = async (sort: string, status: string) => {
+    for (const coin of await candidates(sort, status)) {
+      const holder = await holderOf(coin.mint);
+      if (holder) return { coin, holder };
+    }
+    throw new Error(`no ${status} coin in /coins?sort=${sort} has a holder with 0.2 SOL`);
+  };
+  const curve = await withHolder("trending", "curve");
+  const graduated = await withHolder("mcap", "graduated");
+  return { curve: curve.coin, graduated: graduated.coin, curveHolder: curve.holder, graduatedHolder: graduated.holder, creator: graduated.coin.creator };
 }
 
 const KNOWN_VAULTS: Record<string, true> = {
