@@ -367,12 +367,17 @@ function registerExecuteTools(server: McpServer, deps: Deps, signer: ExecutionSi
     r.status === "dry_run"
       ? { status: r.status, ...extra, text: r.text, postsLeftToday: r.postsLeftToday, note: 'Dry run: nothing was posted. The policy allows it; it has "live": false, which only the user can change.' }
       : { status: r.status, ...extra, id: r.post.id, text: r.post.body, postedAs: r.post.displayName ?? r.post.wallet, postsLeftToday: r.postsLeftToday };
-  const postWith = (req: Omit<PostRequest, "cluster">, send: (session: HigherSession, text: string) => Promise<Posted>) =>
-    signer.post({ ...req, cluster }, async (text, signIn) => {
+  const postWith = (req: Omit<PostRequest, "cluster">, send: (session: HigherSession, text: string) => Promise<Posted>) => {
+    // higher.fun's comments and chat are on mainnet, and a comment's coin is checked on this server's cluster.
+    if (cluster !== "mainnet") {
+      throw new ValidationError("Posting is on higher.fun, which is mainnet, and this server is on devnet. Run it without HIGHWIRE_CLUSTER=devnet (or with HIGHWIRE_CLUSTER=mainnet).", { code: "wrong_cluster" });
+    }
+    return signer.post({ ...req, cluster }, async (text, signIn) => {
       const session = deps.newSession();
       await session.signIn(signer.wallet, signIn);
       return send(session, text);
     });
+  };
 
   server.registerTool(
     "post_comment",

@@ -440,6 +440,11 @@ test("post_chat signs in and posts only inside the policy's posts section, and p
   assert.equal(refused.code, "policy_refused");
   assert.match(refused.error, /no posts section/);
 
+  const devnet = await connect({ ...FAKE_OPTIONS, fetch, cluster: "devnet", signer: new LocalSigner(Keypair.generate(), signerHome({ ...base, posts: { chat: true } })) });
+  const wrong = parse(await devnet.callTool({ name: "post_chat", arguments: { text: "gm", confirm_post: true } }));
+  assert.equal(wrong.code, "wrong_cluster");
+  assert.match(wrong.error, /HIGHWIRE_CLUSTER/);
+
   const client = await connect({ ...FAKE_OPTIONS, fetch, signer: new LocalSigner(Keypair.generate(), signerHome({ ...base, posts: { chat: true } })) });
   const link = await client.callTool({ name: "post_chat", arguments: { text: "free sol at claim-sol.com", confirm_post: true } });
   assert.equal(link.isError, true);
