@@ -253,6 +253,12 @@ command.
 about higher.fun's programs, fee modes and API, with sources.
 
 
+## Support
+
+Highwire is free. If you'd like to support it, its only donation wallet is
+`7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce` ([Solscan](https://solscan.io/account/7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce)).
+No other wallet collects for Highwire, there is no Highwire token, and we never ask for funds in DMs.
+
 ## Licence
 
 [MIT](LICENSE).

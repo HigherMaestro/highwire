@@ -6,7 +6,7 @@ import { getCatalog, groupTools } from "../lib/catalog.ts";
 import { graduatingCoins, type CoinSummary } from "../lib/coins.ts";
 import { CLAUDE_CODE_COMMAND } from "../lib/connect.ts";
 import { coinLabel } from "../lib/names.ts";
-import { REPO_URL } from "../lib/site.ts";
+import { DONATION_URL, DONATION_WALLET, REPO_URL } from "../lib/site.ts";
 
 // Static, refreshed every minute for the live strip.
 export const revalidate = 60;
@@ -231,6 +231,25 @@ export default async function Home() {
             <p className="muted small road-foot">
               Follow along on <a href={REPO_URL}>GitHub</a>.
             </p>
+          </div>
+        </section>
+
+        <section className="section" aria-labelledby="support-title">
+          <div className="wrap">
+            <div className="section-head">
+              <h2 id="support-title">Support Highwire</h2>
+              <p>
+                Highwire is free and open source. If it&apos;s useful to you and you&apos;d like to chip in, donations go to
+                this Solana wallet, and only this one. Entirely optional.
+              </p>
+            </div>
+            <div className="support">
+              <CopyCommand code={DONATION_WALLET} label="Highwire's donation wallet" />
+              <p className="muted small">
+                <a href={DONATION_URL}>See it on Solscan</a>. Check the address matches before you send: we never ask for
+                funds in DMs, and no other wallet collects for Highwire.
+              </p>
+            </div>
           </div>
         </section>
       </main>

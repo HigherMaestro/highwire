@@ -1,4 +1,4 @@
-import { REPO_URL, SITE_URL, X_HANDLE, X_URL } from "../lib/site.ts";
+import { DONATION_URL, DONATION_WALLET, REPO_URL, SITE_URL, X_HANDLE, X_URL } from "../lib/site.ts";
 import { Lockup } from "./Mark.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
@@ -42,9 +42,13 @@ export function SiteHeader() {
 export function OfficialNotice() {
   return (
     <aside className="notice" aria-label="Official links">
-      <strong>There is no Highwire token.</strong> Any coin using the Highwire name is not ours. If that ever changes, it
-      will be announced here and on <a href={X_URL}>{X_HANDLE}</a> first. Official links: <a href={SITE_URL}>highwire.fun</a>
-      , <a href={X_URL}>{X_HANDLE}</a> and <a href={REPO_URL}>github.com/HigherMaestro/highwire</a>.
+      <strong>There is no Highwire token.</strong> Any coin using the Highwire name is not ours. Official links:{" "}
+      <a href={SITE_URL}>highwire.fun</a>, <a href={X_URL}>{X_HANDLE}</a> and{" "}
+      <a href={REPO_URL}>github.com/HigherMaestro/highwire</a>. Our only donation wallet is{" "}
+      <a href={DONATION_URL} className="mono-wrap">
+        {DONATION_WALLET}
+      </a>
+      ; we never ask for funds in DMs.
     </aside>
   );
 }
