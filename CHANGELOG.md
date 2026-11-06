@@ -2,6 +2,11 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- **The fees page has its own link preview**, so links to /fees and each coin's fee page show what they are. It's built
+  with the other brand images in `brand/scripts/build.py`.
+
 ## 0.6.0 (2026-11-06)
 
 - **Standing orders for the local signer: stop-loss, take-profit and recurring buys.** `place_order` keeps them in

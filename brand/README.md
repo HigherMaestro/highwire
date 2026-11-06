@@ -17,12 +17,14 @@ Tagline: **The agent wire for higher.fun.**
 | X profile picture | `png/x-avatar-400.png` (paper), `png/x-avatar-dark-400.png` (ink) |
 | X banner | `png/x-banner-1500x500.png` |
 | Link previews (Open Graph) | `png/og-1200x630.png` |
+| The fees page's link preview | `png/og-fees-1200x630.png` |
 | Site icons | `favicon.ico` (16/32/48), `svg/favicon.svg`, `png/icon-192.png`, `png/icon-512.png`, `png/apple-touch-icon-180.png` |
 | Colour and type tokens | `tokens.json`, `tokens.css` |
 
 All SVG text is converted to outlines, so the files look the same on machines without the fonts.
 
-The site uses copies of the favicon, icons and link-preview image in `apps/web/app/`. Copy them again after a rebuild.
+The site uses copies of the favicon, icons and link-preview images in `apps/web/app/` (the fees one in
+`apps/web/app/fees/`). Copy them again after a rebuild.
 
 ## Colour
 

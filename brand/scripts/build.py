@@ -221,6 +221,37 @@ def build_svgs() -> dict[str, str]:
         + text_el("MCP server \u00b7 on npm and the MCP Registry", "mono", 500, 22, 84, 486, "#A7ACB4")
     )
     out["og.svg"] = svg(1200, 630, og, "Highwire, the agent wire for higher.fun")
+
+    # The fees page's preview: one fee riding the node splits four ways, in the recipient colours the page uses
+    # (apps/web/lib/fees.ts). The strands are all one weight, so it shows who gets paid, not how much.
+    recipients = [("Creators", "#F6A9C4"), ("higher.fun", "#F7C84C"), ("Raydium", "#93E2FB"), ("The pool", "#A6EFCB")]
+    src_x, src_y, end_x = 790, 330, 912
+    strands = "".join(
+        f'<path d="M{src_x} {src_y} C{src_x + 70} {src_y} {end_x - 70} {y} {end_x} {y}" fill="none" stroke="{c}" stroke-width="8" stroke-linecap="round"/>'
+        f'<circle cx="{end_x}" cy="{y}" r="11" fill="{c}"/>'
+        for (_, c), y in zip(recipients, (180, 280, 380, 480))
+    )
+    labels = "".join(
+        text_el(name, "grotesk", 500, 34, end_x + 34, y + 12, PAPER, -0.01)
+        for (name, _), y in zip(recipients, (180, 280, 380, 480))
+    )
+    fees = (
+        f'<defs><radialGradient id="fg-glow"><stop offset="0" stop-color="#F7C84C" stop-opacity=".75"/>'
+        f'<stop offset=".45" stop-color="#F6A9C4" stop-opacity=".35"/><stop offset="1" stop-color="{SIGNAL}" stop-opacity="0"/></radialGradient></defs>'
+        f'<rect width="1200" height="630" fill="{INK}"/>'
+        f'<line x1="{src_x}" y1="120" x2="{src_x}" y2="540" stroke="{PAPER}" stroke-width="26" stroke-linecap="round"/>'
+        + strands
+        + f'<circle cx="{src_x}" cy="{src_y}" r="78" fill="url(#fg-glow)"/>'
+        f'<circle cx="{src_x}" cy="{src_y}" r="19" fill="#FFFFFF" stroke="{INK}" stroke-width="5"/>'
+        + labels
+        + text_el("highwire", "grotesk", 700, 56, 80, 132, PAPER, -0.05)
+        + text_el("ECOSYSTEM FEES", "mono", 500, 22, 84, 200, SIGNAL, 0.08)
+        + text_el("Every fee on", "grotesk", 700, 62, 80, 284, PAPER, -0.02)
+        + text_el("higher.fun, and", "grotesk", 700, 62, 80, 356, PAPER, -0.02)
+        + text_el("who got it.", "grotesk", 700, 62, 80, 428, PAPER, -0.02)
+        + text_el("Read from Solana · every coin, every fee", "mono", 500, 22, 84, 494, "#A7ACB4")
+    )
+    out["og-fees.svg"] = svg(1200, 630, fees, "Highwire: every fee on higher.fun, and who got it")
     return out
 
 
@@ -270,6 +301,7 @@ def main() -> None:
         ("x-avatar-dark.svg", "x-avatar-dark-400.png", 400, 400, False),
         ("x-banner.svg", "x-banner-1500x500.png", 1500, 500, False),
         ("og.svg", "og-1200x630.png", 1200, 630, False),
+        ("og-fees.svg", "og-fees-1200x630.png", 1200, 630, False),
         ("mark.svg", "mark-1024.png", 1024, 1024, True),
         ("mark-dark.svg", "mark-dark-1024.png", 1024, 1024, True),
         ("lockup.svg", "lockup-1600.png", 0, 0, True),
