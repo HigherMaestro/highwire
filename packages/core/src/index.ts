@@ -1,6 +1,7 @@
 export * from "./higher/api.ts";
 export * from "./higher/constants.ts";
 export * from "./higher/format.ts";
+export * from "./higher/live.ts";
 export * from "./higher/session.ts";
 export * from "./lib/errors.ts";
 export * from "./lib/http.ts";

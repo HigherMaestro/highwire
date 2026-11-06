@@ -301,3 +301,49 @@ test("the local server keeps its launch secret, so a launch retried after a rest
   assert.equal(statSync(join(home, "launch-secret")).mode & 0o077, 0, "readable only by the user");
   assert.equal(localLaunchSecret({ ...env, HIGHWIRE_LAUNCH_SECRET: "set-by-env" }), "set-by-env");
 });
+
+test("watch_market returns live events in SOL, and reports each as progress", async () => {
+  const MINT = "ALBA7iVjFkQzxPQQCovkK7zQiaXUPmixt2dZxNstXiPp";
+  const sent: string[] = [];
+  const liveSocket = () => {
+    const s = {
+      onopen: null as ((ev: unknown) => void) | null,
+      onmessage: null as ((ev: { data: unknown }) => void) | null,
+      onclose: null as ((ev: unknown) => void) | null,
+      onerror: null as ((ev: unknown) => void) | null,
+      readyState: 0,
+      send: (data: string) => sent.push(data),
+      close: () => s.onclose?.({}),
+    };
+    queueMicrotask(() => {
+      s.readyState = 1;
+      s.onopen?.({});
+      for (const [side, lamports] of [["buy", "54258128"], ["sell", "2500000000"], ["buy", "1200000000"]]) {
+        s.onmessage?.({
+          data: JSON.stringify({
+            type: "trade",
+            channel: `trades:${MINT}`,
+            trade: { signature: `sig${side}${lamports}`, mint: MINT, wallet: "L6zEMm9nQ2BK9V7NqaooHKJsEDxndNbjnTEDrKC8axF", side, quoteAmount: lamports, tokenAmount: "1063414202700", price: "0.00000005", blockTime: "2026-11-06T11:53:40.000Z" },
+          }),
+        });
+      }
+    });
+    return s;
+  };
+  const client = await connect({ ...FAKE_OPTIONS, liveSocket });
+  const progress: string[] = [];
+  const res = await client.callTool(
+    { name: "watch_market", arguments: { events: ["buy", "sell"], mints: [MINT], min_sol: 1, max_events: 2 } },
+    undefined,
+    { onprogress: (p) => progress.push(`${p.progress}/${p.total} ${p.message}`) },
+  );
+  assert.equal(res.isError, undefined);
+  const out = parse(res);
+  assert.deepEqual(sent, [JSON.stringify({ op: "subscribe", channel: `trades:${MINT}` })]);
+  assert.equal(out.ended, "max_events");
+  assert.deepEqual(out.events.map((e: { kind: string; sol: number }) => [e.kind, e.sol]), [["sell", 2.5], ["buy", 1.2]]);
+  assert.deepEqual(progress, [`1/2 sell ${MINT}, 2.5 SOL`, `2/2 buy ${MINT}, 1.2 SOL`]);
+
+  const tooLong = await client.callTool({ name: "watch_market", arguments: { wait_seconds: 51 } });
+  assert.equal(tooLong.isError, true);
+});

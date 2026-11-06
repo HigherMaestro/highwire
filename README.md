@@ -30,6 +30,7 @@ execute tools sign and send only inside it. Dry run until the policy says `"live
 | `get_coin_candles` | OHLC candles in SOL |
 | `get_coin_comments` | The coin's comments, flagged for links and impersonators |
 | `get_trade_tape` | Site-wide live feed of trades, launches and graduations |
+| `watch_market` | Live alerts: waits up to 50 seconds on higher.fun's live feed and returns launches, graduations, buys and sells as they land, filtered by coin and size |
 | `get_top_coins` | Most-traded coins over 24h or 7d |
 | `get_leaderboard` | Top traders or creators |
 | `get_featured_coin` | The coin on the home page right now |
@@ -112,7 +113,7 @@ refreshes the blockhash and changes nothing else); launch links, whose new mint 
 
 ### Hosted
 
-Nothing to install, no key. The hosted server has all 24 tools; the build tools only return unsigned transactions and a
+Nothing to install, no key. The hosted server has all 25 tools; the build tools only return unsigned transactions and a
 sign link.
 
 **Claude Code**
@@ -132,11 +133,11 @@ claude mcp add --transport http highwire https://highwire.fun/mcp
 ```
 
 The endpoint speaks stateless Streamable HTTP: POST JSON-RPC, get JSON back. Each IP gets 60 units a minute: a build
-tool call costs 5, anything else 1.
+tool or `watch_market` call costs 5, a few heavy reads 2 to 10, anything else 1.
 
 ### Local (stdio)
 
-Needs Node 20 or later.
+Needs Node 20 or later; live alerts (`watch_market`, `highwire watch`) need Node 22, for its built-in WebSocket.
 
 **Claude Code**
 
@@ -176,6 +177,16 @@ The site (apps/web) also reads `NEXT_PUBLIC_SOLANA_RPC_URL` and `NEXT_PUBLIC_SOL
 page calls from the browser, and allows only their origins in its CSP. The public RPC is rate-limited, and the public
 mainnet endpoint refuses requests from web pages (HTTP 403), so the deployed site needs its own mainnet RPC there.
 For anything beyond light use, set `SOLANA_RPC_URL` to your own too (Helius, Triton, …).
+
+### Live alerts in the terminal
+
+```bash
+npx -y highwire-mcp watch --min-sol 1
+```
+
+prints higher.fun's live feed, one line an event, until Ctrl-C. `--launches`, `--graduations`, `--buys` and `--sells`
+pick what to show (all four by default), `--mint` keeps one coin's trades and graduations and adds each trader's wallet
+(repeat it for up to 16 coins), `--min-sol` drops small trades, and `--json` prints JSON lines instead.
 
 ### Local signer
 

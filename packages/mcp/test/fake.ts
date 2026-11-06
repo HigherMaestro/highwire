@@ -63,6 +63,7 @@ export const READ_TOOLS = [
   "list_coins",
   "rug_check",
   "search_coins",
+  "watch_market",
 ];
 
 export const TRANSACTION_TOOLS = ["build_claim_creator_fees", "build_launch", "build_trade", "get_wallet_positions", "quote_trade"];

@@ -192,7 +192,26 @@ token for prices. Lists return `{items, nextCursor}`. On 2026-11-05 `/coins/:min
 Routes the web app uses that we haven't called yet: `/auth/nonce`, `/auth/verify`, `/auth/me`, `/auth/logout` (wallet
 sign-in), `POST /uploads/image`, `POST /uploads/metadata`, `POST /mints/reserve`, `POST /fee-recipients/resolve`
 (`{provider, handle}` for X/GitHub launches), `POST /chat`, `POST /coins/:mint/comments`, `/sponsor/quote`,
-`/sponsor/confirm`, `/users/:wallet/graduated`, `/users/me`, `/reports`, and the `wss://api.higher.fun/ws` live feed.
+`/sponsor/confirm`, `/users/:wallet/graduated`, `/users/me` and `/reports`.
+
+## Live feed (`wss://api.higher.fun/ws`)
+
+The socket higher.fun's site keeps open (checked 2026-11-06). No sign-in. Send `{"op":"subscribe","channel":…}` (or
+`unsubscribe`); the site keeps at most 20 channels on one socket. Every message is JSON with a `type` and its `channel`:
+
+| Channel | Message |
+|---|---|
+| `tape` | `{type:"tape", event}`: the `/tape` entry (`id` is `signature:index`, `kind` ∈ `new` `buy` `sell` `graduated`, `mint`, `ticker`, `quoteAmount`, `price`, `at`). Every trade on every coin, without the wallet: over 90 seconds it carried all 49 trades the per-coin channels did, at about 1.4 events a second |
+| `trades:<mint>` | `{type:"trade", trade, candle?}`: a `/coins/:mint/trades` item (with `wallet` and `tokenAmount`) and the 1m candle it updates |
+| `coins:new` | `{type:"coin:new", coin}`: a `/coins` list item |
+| `coins:graduated` | `{type:"coin:graduated", mint, poolId}` |
+| `chat:global` | `{type:"chat", message}` and `{type:"chat:hidden", ids}` (moderation). User content |
+
+An unknown channel answers `{type:"error", message:"unknown channel: …"}`. The site reconnects with a jittered backoff
+of up to 16 seconds; nothing is replayed, so events during a drop are missed. Highwire's `LiveFeed` (`higher/live.ts`)
+does the same, and takes launches and graduations from their own channels and trades from the tape (or each coin's
+channel when watching coins).
+
 
 ## Content seen in the wild
 

@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { serverOptionsFromEnv } from "./env.ts";
 import { createServer, VERSION } from "./server.ts";
 import { initPolicy, localLaunchSecret, signerFromEnv } from "./signer-env.ts";
+import { runWatch } from "./watch.ts";
 
 const args = process.argv.slice(2);
 if (args.includes("--version")) {
@@ -13,6 +14,17 @@ if (args[0] === "policy" && args[1] === "init") {
   const { path, written } = initPolicy();
   console.log(written ? `Wrote a starting policy to ${path}: devnet, dry run, trades and claims, 0.1 SOL a transaction, 0.5 SOL a day.\nEdit it to change the limits; set "live": true only when you want it to send.` : `A policy already exists at ${path}; left it as it is.`);
   process.exit(0);
+}
+if (args[0] === "watch") {
+  const ctl = new AbortController();
+  process.once("SIGINT", () => ctl.abort());
+  const code = await runWatch(args.slice(1), {
+    apiUrl: serverOptionsFromEnv().apiUrl,
+    out: (line) => console.log(line),
+    err: (line) => console.error(line),
+    signal: ctl.signal,
+  });
+  process.exit(code);
 }
 if (args.includes("--help")) {
   console.log(`highwire ${VERSION}: the MCP server for higher.fun (stdio)
@@ -34,6 +46,8 @@ Local signer (off unless HIGHWIRE_KEYPAIR_PATH is set):
 
 Commands:
   highwire policy init     write a starting policy: devnet, dry run, small limits
+  highwire watch           higher.fun's live feed in the terminal: launches, graduations, buys and sells
+                           (highwire watch --help for the filters)
 
 Without a local signer Highwire never signs: build tools return unsigned transactions and a sign_url for your own
 wallet. With one, it signs only inside your policy, and only sends when the policy says "live": true.`);

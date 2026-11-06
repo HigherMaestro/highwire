@@ -39,6 +39,7 @@ await call("get_coin_holders", { mint: HIGH }, (o) => o.holders.slice(0, 3).map(
 await call("get_coin_candles", { mint: HIGH, interval: "1h", limit: 5 }, (o) => `${o.candles.length} candles, last close ${o.candles.at(-1)?.close}`);
 await call("get_coin_comments", { mint: HIGH }, (o) => `${o.comments.length} comments, ${o.comments.filter((c: any) => c.flags).length} flagged`);
 await call("get_trade_tape", {}, (o) => `${o.events.length} events`);
+await call("watch_market", { events: ["buy", "sell"], wait_seconds: 15, max_events: 3 }, (o) => `${o.events.length} live trades in ${o.seconds}s (${o.ended})`);
 await call("get_top_coins", { window: "24h" }, (o) => o.coins.slice(0, 3).map((c: any) => `#${c.rank} $${c.ticker}`).join(", "));
 await call("get_leaderboard", { kind: "creators", window: "7d" }, (o) => `${o.rows.length} creators`);
 await call("get_featured_coin", {}, (o) => (o.featured === null ? "none featured right now" : `$${o.ticker}`));

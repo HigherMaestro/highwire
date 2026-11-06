@@ -162,8 +162,8 @@ export const TOOL_GROUPS: { id: string; title: string; blurb: string; tools: str
   {
     id: "discover",
     title: "Discover",
-    blurb: "What's launching, trending and about to graduate.",
-    tools: ["list_coins", "search_coins", "get_top_coins", "get_featured_coin", "get_trade_tape", "get_leaderboard"],
+    blurb: "What's launching, trending and about to graduate, and live alerts as it happens.",
+    tools: ["list_coins", "search_coins", "get_top_coins", "get_featured_coin", "get_trade_tape", "watch_market", "get_leaderboard"],
   },
   {
     id: "research",

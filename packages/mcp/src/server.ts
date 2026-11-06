@@ -10,9 +10,12 @@ import {
   DerivedLaunchKeys,
   HigherApi,
   LaunchKeys,
+  LiveFeed,
+  liveUrlFor,
   SolanaRpc,
   summarizeCoinDetail,
   type Cluster,
+  type LiveSocketFactory,
 } from "highwire-core";
 import { registerPrompts } from "./prompts.ts";
 import { registerFeeTools } from "./tools/fees.ts";
@@ -96,6 +99,8 @@ export interface ServerOptions {
   timeoutMs?: number;
   retries?: number;
   fetch?: typeof globalThis.fetch;
+  /** Opens the live feed's socket. Default the built-in WebSocket; tests pass a fake. */
+  liveSocket?: LiveSocketFactory;
 }
 
 export const DEFAULT_MAX_SOL_PER_TX = 10;
@@ -115,6 +120,7 @@ export function createDeps(opts: ServerOptions = {}): Deps {
   });
   return {
     api: new HigherApi(http),
+    live: new LiveFeed(liveUrlFor(opts.apiUrl ?? DEFAULT_API_URL), opts.liveSocket),
     // The read tools look at higher.fun's coins, which live on mainnet.
     rpc: new SolanaRpc(cluster === "mainnet" ? rpcUrl : DEFAULT_RPC_URL, opts.timeoutMs, opts.fetch),
     chain: new Chain({ cluster, rpcUrl, timeoutMs: opts.timeoutMs, fetch: opts.fetch }),

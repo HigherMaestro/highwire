@@ -12,7 +12,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 // The hosted endpoint serves every tool, the build tools included (HOSTED_TRANSACTION_TOOLS).
-const EXPECTED_TOOLS = 24;
+const EXPECTED_TOOLS = 25;
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -115,6 +115,10 @@ try {
   const quote = await client.callTool({ name: "quote_trade", arguments: { mint: "7ymF66Z6VhgNiwadtVhjTtT6U7iQRpSxeiRrhfufhigh", side: "buy", sol: 0.1 } });
   const quoteText = (quote.content as Array<{ text: string }>)[0]?.text ?? "";
   check("tools/call quote_trade", !quote.isError, quote.isError ? quoteText : `0.1 SOL buys ${JSON.parse(quoteText).tokensOut} $HIGH`);
+
+  const watch = await client.callTool({ name: "watch_market", arguments: { events: ["buy", "sell"], wait_seconds: 10, max_events: 2 } });
+  const watchText = (watch.content as Array<{ text: string }>)[0]?.text ?? "";
+  check("tools/call watch_market", !watch.isError, watch.isError ? watchText : `${JSON.parse(watchText).events.length} live trades`);
   await client.close();
 } catch (err) {
   failed++;

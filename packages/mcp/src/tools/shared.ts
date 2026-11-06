@@ -1,9 +1,11 @@
 import { z } from "zod";
-import type { Chain, HigherApi, MintSource, SolanaRpc } from "highwire-core";
+import type { Chain, HigherApi, LiveFeed, MintSource, SolanaRpc } from "highwire-core";
 import type { LocalSigner } from "highwire-agent";
 
 export interface Deps {
   api: HigherApi;
+  /** higher.fun's live feed (wss://api.higher.fun/ws), for watch_market. */
+  live: LiveFeed;
   rpc: SolanaRpc;
   /** Solana and Raydium access for quotes and transaction builds, on the configured cluster. */
   chain: Chain;

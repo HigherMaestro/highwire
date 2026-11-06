@@ -21,6 +21,7 @@ creator can claim, whatever the mode.
 |---|---|
 | What's moving | `list_coins` (sort `trending`, `new`, `mcap`, `graduating`), `get_top_coins`, `get_trade_tape`, `get_featured_coin` |
 | Find a coin | `search_coins` |
+| Live alerts | `watch_market`: waits up to 50 seconds and returns what lands (launches, graduations, buys, sells; by coin and size). Call it again to keep watching |
 | One coin | `get_coin`, `get_coin_trades`, `get_coin_holders`, `get_coin_candles`, `get_coin_comments` |
 | Is it safe | `rug_check` |
 | A wallet or creator | `get_wallet_profile`, `get_creator_coins`, `get_leaderboard` |

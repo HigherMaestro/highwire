@@ -114,7 +114,9 @@ with the `highwire` memo. The day's limit counted 0.245 SOL, what the wallet act
 
 - **OAuth on the hosted endpoint**, before it does anything beyond public reads and unsigned builds (for example
   sign-in tools or a hosted signer, which it must never become without it).
-- **Live alerts:** subscribe to `wss://api.higher.fun/ws` for launches, trades and graduations (next).
+- **Live alerts** (built, unreleased): `watch_market` waits on `wss://api.higher.fun/ws` for launches, graduations,
+  buys and sells, filtered by coin and size, and `highwire watch` streams them to the terminal. Alerts pushed to a chat
+  without being asked for wait on MCP clients showing server notifications.
 - **Recurring buys and stop-loss:** orders the local signer runs, inside the policy; needs a long-running process (next).
 - **Profit and loss** on positions, from cost basis in trade history (blocked in part by the trades API's paging).
 - **Sign-in tools:** posting comments and chat through `/auth/nonce` and `/auth/verify`, if higher.fun wants agents posting.

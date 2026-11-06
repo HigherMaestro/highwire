@@ -4,6 +4,13 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Live alerts.** `watch_market` waits on higher.fun's live feed for up to 50 seconds and returns launches,
+  graduations, buys and sells as they land: all of higher.fun, or up to 16 coins (with each trader's wallet), and only
+  trades above a size if you like. It reports each event as progress while it waits, and says so when the feed dropped
+  and events were missed. On the hosted endpoint too, where it costs 5 units of the rate limit.
+- **`highwire watch`** prints the same feed in the terminal, one line an event or JSON lines, with the same filters,
+  until Ctrl-C. Coin names and tickers are stripped of control characters first, since creators write them.
+
 - **A new link preview.** highwire.fun's card on X and elsewhere is now on ink, and says what Highwire does: your
   agent can trade, launch and claim on higher.fun. The page description says the same, in place of the read-only wording
   from before the transaction tools.

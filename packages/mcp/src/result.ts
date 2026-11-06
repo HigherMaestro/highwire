@@ -47,6 +47,7 @@ const NEXT_STEPS: Record<string, string> = {
     "Pass mints with the higher.fun coins to check (search_coins finds them by name or ticker); that reads only those coins.",
   launch_for_unavailable:
     "higher.fun hasn't switched on launching for an X or GitHub account yet, so nothing was uploaded or spent. Tell the user, and launch without launch_for if they want (the creator fees then go to the signer's wallet).",
+  live_unavailable: "The live feed needs Node 22 or later. Tell the user, and use get_trade_tape for the latest events meanwhile.",
   too_large: "The transaction doesn't fit in Solana's size limit. For a launch, try a shorter metadata_uri or drop the first buy.",
 };
 
