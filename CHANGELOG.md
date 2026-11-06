@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.10.0 (2026-11-06)
 
 - **Fee claims on a schedule, with optional buybacks.** A new standing-order kind, `fee_claim`: every `every_hours`,
   if at least `min_claim_sol` (default 0.001 SOL) of the wallet's creator fees is waiting, it claims them through the

@@ -7,7 +7,7 @@ counts and version with each release.
 
 | Directory | Status | Next step |
 |---|---|---|
-| Official MCP Registry | Listed: `fun.highwire/highwire`, 0.9.0 | Published with every release |
+| Official MCP Registry | Listed: `fun.highwire/highwire`, 0.10.0 | Published with every release |
 | Glama connector | Listed, **ownership verified** (claim file at highwire.fun/.well-known/glama.json), scored A (3.5/5) | Keep the claim file published |
 | Glama server | Listed, **claimed** (glama.json), description current, Docker build passing (installs highwire-mcp from npm), first Glama release made | Bump the build step's version with each release |
 | awesome-remote-mcp-servers | PR open: punkpeye/awesome-remote-mcp-servers#4072, checks passing | Wait for review |
@@ -42,8 +42,9 @@ launches, graduations and big trades as they happen. Quote and build trades, coi
 unsigned transactions: each comes with a link to review it, rebuilt from the transaction's own bytes, and sign it in
 your own wallet. Highwire never holds a key.
 
-Run it locally and an agent can act on its own inside limits you write: trade, launch, claim, place stop-loss,
-take-profit and recurring-buy orders, and see its profit and loss. Agents with a shell can launch a coin from their
+Run it locally and an agent can act on its own inside limits you write: trade, launch, claim its fees on a schedule
+and buy back, place stop-loss, take-profit, limit-buy and recurring-buy orders, post on higher.fun, and see its profit
+and loss. Agents with a shell can launch a coin from their
 own wallet with one command, following highwire.fun/skill.md.
 
 26 tools on the hosted endpoint, no key or sign-up. Trades it builds carry a 0.3% fee, shown in each transaction;
