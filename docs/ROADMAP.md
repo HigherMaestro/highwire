@@ -46,7 +46,7 @@ Not done, and why:
 - **The hosted endpoint** has none of these tools (done in M1).
 - **The signing page** on highwire.fun (done in M1).
 
-## M1 (v0.3.0): sign from any chat (built, unreleased)
+## M1 (v0.3.0): sign from any chat (done)
 
 Decisions D4 (attribution memo), D6 (hosted build tools) and D9 (terms, privacy, changelog).
 
@@ -76,7 +76,7 @@ Not verified, and left to the maintainer:
   `HIGHWIRE_LAUNCH_SECRET` too.
 - Legal review of /terms and /privacy.
 
-## M2 (v0.4.0): local signer and execution (built, unreleased)
+## M2 (v0.4.0): local signer and execution (done)
 
 Decision D1: local signer only. Highwire never creates, holds or manages a wallet; the hosted endpoint never signs.
 
@@ -125,5 +125,6 @@ with the `highwire` memo. The day's limit counted 0.245 SOL, what the wallet act
   history needs an RPC that can; Solana's public RPC often times out.
 - **Sign-in tools:** posting comments and chat through `/auth/nonce` and `/auth/verify`, if higher.fun wants agents posting.
 - ~~**Publishing**~~ Done 2026-11-06: `highwire-core`, `highwire-agent` and `highwire-mcp` on npm, and the MCP registry
-  listing `fun.highwire/highwire` 0.4.1 (npm package and hosted endpoint), proved by highwire.fun's domain key.
+  listing `fun.highwire/highwire` from 0.4.1 (npm package and hosted endpoint), proved by highwire.fun's domain key.
+  Every release since goes to both.
 - **Partnering:** ask the higher.fun team for a stable API contract and an agent rate-limit tier.

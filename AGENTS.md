@@ -92,6 +92,8 @@ Streamable HTTP. An npm workspaces monorepo. Read
   is a per-instance brake). Build calls cost `BUILD_COST` units of the rate limit, heavy reads `TOOL_COSTS`. The
   shared per-IP cap lives in Vercel Firewall rules (`vercel firewall rules list`), not in the code. It signs each
   envelope it builds (`attestation`) so the sign page can tell an unedited link.
+- **Pushing to `main` deploys production:** the Vercel project is connected to the repository. Push only what's
+  ready to go live, and check the deployment it starts.
 - **Workspace packages in the site** resolve through `apps/web/next.config.ts`'s Turbopack aliases and `transpilePackages`, so
   Vercel needs no package build. Any `highwire-*` package the site's imports reach at runtime needs an entry in both, and
   a dependency in `apps/web/package.json`; a local build can pass without one, since the packages' `dist` exist here.
@@ -106,9 +108,11 @@ Streamable HTTP. An npm workspaces monorepo. Read
 ## Releasing
 
 Bump the versions, add the changelog section, then publish to npm in order: `highwire-core`, `highwire-agent`,
-`highwire-mcp` (each `npm publish -w <name> --access public`; npm asks for the maintainer's security key). For a new
-`highwire-mcp` version, update `version` in the root `server.json` (both places) and, once npm shows it, run
-`mcp-publisher publish`: the registry listing is `fun.highwire/highwire`, proved by
+`highwire-mcp` (each `npm publish -w <name> --access public`; npm asks for the maintainer's security key). A new
+version can take about five minutes to show in `npm view`. For a new `highwire-mcp` version, update `version` in the
+root `server.json` (both places) and, once npm shows it, log in and publish in one go (the login lasts only minutes):
+`mcp-publisher login http --domain highwire.fun --private-key …` then `mcp-publisher publish`. Until npm shows the
+version the registry answers 400, and after the login expires 401: the registry listing is `fun.highwire/highwire`, proved by
 `apps/web/public/.well-known/mcp-registry-auth`. The domain key's private half stays with the maintainer, never in the repo.
 
 ## Before you say it's done

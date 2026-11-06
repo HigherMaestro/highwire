@@ -279,17 +279,19 @@ SMOKE_URL=https://highwire.fun npm run smoke -w highwire-web
 
 ### Deploying
 
-The site runs on Vercel (project `highwire`, root directory `apps/web`, Node 22), and is deployed from the CLI. The
-project has no Git connection, so pushing to GitHub doesn't deploy. Before deploying 0.3, set these in the project:
-`NEXT_PUBLIC_SOLANA_RPC_URL` (a mainnet RPC that accepts browser requests from highwire.fun; it is public, so use a key
-restricted to that origin), `SOLANA_RPC_URL` (the server-side RPC the build tools use), and `HIGHWIRE_LAUNCH_SECRET` (a
-long random string; changing it changes the mint of any launch still being retried). From the repo root:
+The site runs on Vercel (project `highwire`, root directory `apps/web`, Node 22), connected to this repository:
+every push to `main` deploys production. The project needs `NEXT_PUBLIC_SOLANA_RPC_URL` (a mainnet RPC that accepts
+browser requests from highwire.fun; it is public, so use a key restricted to that origin), `SOLANA_RPC_URL` (the
+server-side RPC the build tools and `get_wallet_pnl` use; it must be able to search transaction history), and
+`HIGHWIRE_LAUNCH_SECRET` (a long random string; changing it changes the mint of any launch still being retried).
+
+To deploy without a push, run this from the repo root, never from a package folder (that makes a new Vercel project):
 
 ```bash
 vercel deploy --prod --scope groovys-projects
 ```
 
-`.vercelignore` keeps local-only files out of the upload. `www.highwire.fun` redirects to `highwire.fun`. After a
+`.vercelignore` keeps local-only files out of a CLI upload. `www.highwire.fun` redirects to `highwire.fun`. After a
 deploy, run the hosted smoke check above.
 
 To run a local build over stdio, `npm run build`, then use `node /path/to/highwire/packages/mcp/dist/cli.js` as the

@@ -2,6 +2,14 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- `get_wallet_pnl` gives each coin's spot price to six significant figures, not seventeen.
+- An RPC that rate-limits (Solana's public one often does) now comes back as `rate_limited`, saying to retry once and
+  that `SOLANA_RPC_URL` avoids it, instead of an `internal_error` with the RPC's raw reply.
+- Docs: the site deploys from GitHub on every push to `main`, and the release steps say how long npm and the MCP
+  Registry login take.
+
 ## 0.7.0 (2026-11-06)
 
 - **Profit and loss: `get_wallet_pnl`.** For a wallet's higher.fun coins (its five largest holdings, or the coins you

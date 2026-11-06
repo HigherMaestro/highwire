@@ -311,7 +311,7 @@ export function summarizeCoinPnl(p: CoinPnl, opts: { ticker?: string | null; his
     url: coinUrl(p.mint),
     stage: p.stage === "curve" ? "bonding curve" : p.stage,
     tokensHeld,
-    spotPriceSol: p.spotPriceSol,
+    spotPriceSol: p.spotPriceSol === null ? null : Number(p.spotPriceSol.toPrecision(6)),
     valueSol: value === null ? null : sol(value),
     costBasisSol: sol(b.costLamports),
     avgCostSol: tokensHeld > 0 && b.costLamports > 0 ? Number((b.costLamports / 1e9 / tokensHeld).toPrecision(6)) : null,

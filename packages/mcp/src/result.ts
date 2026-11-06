@@ -88,6 +88,16 @@ function classify(err: unknown): FriendlyError {
   if (err instanceof HigherError) {
     return { error: err.message, code: err.code ?? `http_${err.status ?? "error"}` };
   }
+  // web3.js retries a 429 itself, then throws a plain Error carrying the RPC's body.
+  if (err instanceof Error && /^429\b|Too Many Requests/i.test(err.message)) {
+    return {
+      error: "The Solana RPC is limiting requests (429).",
+      code: "rate_limited",
+      next_step:
+        "Wait a few seconds, then retry once. If it keeps happening, tell the user: Solana's public RPC rate-limits hard, " +
+        "and setting SOLANA_RPC_URL to an RPC provider's URL avoids it.",
+    };
+  }
   return {
     error: err instanceof Error ? err.message : String(err),
     code: "internal_error",

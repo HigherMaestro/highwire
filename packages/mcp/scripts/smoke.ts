@@ -22,6 +22,11 @@ async function call(name: string, args: Record<string, unknown>, show: (out: any
   const res = await client.callTool({ name, arguments: args });
   const text = (res.content as Array<{ text: string }>)[0]?.text ?? "";
   if (res.isError) {
+    // Solana's public RPC rate-limits by IP, and this check calls it many times in a row: that's the machine, not the tool.
+    if (JSON.parse(text).code === "rate_limited") {
+      console.log(`skip ${name}: the RPC rate-limited this run (set SOLANA_RPC_URL to a provider's to check it)`);
+      return;
+    }
     failed++;
     console.log(`FAIL ${name}: ${text}`);
     return;
