@@ -14,6 +14,7 @@ import {
   type Expectations,
 } from "./decode.ts";
 import type { Envelope } from "./format.ts";
+import { MAX_CLOCK_SKEW_SECONDS } from "./refresh.ts";
 import { formatLamports, formatTokens } from "./units.ts";
 
 // The review the signing page runs before it lets a wallet sign. A sign link
@@ -35,6 +36,8 @@ export function platformClaimFeeWallet(data: Uint8Array): string {
 }
 
 export interface ReviewContext {
+  /** The page's clock, in unix seconds: a link that claims to be built later than this (and some skew) is refused. */
+  now?: number;
   /**
    * higher.fun's launch-fee wallet, read on-chain from the New school platform config (the same check the builder
    * runs). Without it, a launch that pays a fee fails the review.
@@ -52,6 +55,7 @@ export interface Effect {
 
 export interface ReviewedTransaction {
   index: number;
+  /** What the transaction does, rebuilt from its bytes. The link's own label is never shown: anyone can write it. */
   label: string;
   tx: VersionedTransaction | null;
   decoded: DecodedTransaction | null;
@@ -72,6 +76,8 @@ export interface ReviewedTransaction {
 export interface EnvelopeReview {
   cluster: Cluster;
   wallet: string;
+  /** What the transactions do, from their bytes: what the page's title says, whatever the link calls itself. */
+  kind: Envelope["kind"];
   transactions: ReviewedTransaction[];
   /** Every problem, prefixed with its transaction. Empty means safe to offer for signing (simulation still to come). */
   problems: string[];
@@ -116,6 +122,40 @@ function effectsOf(d: DecodedTransaction, launchFeeWallet: string | null | undef
   }
   for (const l of d.locks) out.push({ kind: "other", text: `Lock ${formatTokens(l.amount)} tokens for you, vesting after graduation (pool ${l.pool})` });
   return out;
+}
+
+/** A transaction's title, from what its instructions do. */
+function titleOf(d: DecodedTransaction): string {
+  const launch = d.launches[0];
+  if (launch) return d.trades.length ? `Create the coin $${launch.symbol} and buy some` : `Create the coin $${launch.symbol}`;
+  if (d.claims.length) return "Claim your creator fees";
+  if (d.locks.length) return "Lock some of your new coin's supply for you";
+  const t = d.trades[0];
+  if (t?.kind === "curve-buy") return "Buy a coin on the bonding curve";
+  if (t?.kind === "curve-sell") return "Sell a coin on the bonding curve";
+  if (t?.kind === "cpmm-swap") return t.inputMint === NATIVE_MINT_ADDRESS ? "Buy a coin in its Raydium pool" : "Sell a coin in its Raydium pool";
+  if (d.transfers.length || d.tokenTransfers.length) return "Send to another wallet";
+  return "A transaction";
+}
+
+/** What kind of envelope these transactions make, from their bytes. */
+function kindOf(txs: ReviewedTransaction[]): Envelope["kind"] | null {
+  const d = txs.map((t) => t.decoded).filter((x): x is DecodedTransaction => x !== null);
+  if (d.some((x) => x.launches.length)) return "launch";
+  if (d.some((x) => x.claims.length)) return "claim";
+  if (d.some((x) => x.trades.length)) return "trade";
+  if (d.some((x) => x.transfers.length || x.tokenTransfers.length)) return "transfer";
+  return null;
+}
+
+/**
+ * How much worse than the simulated outcome a trade accepts, in percent: its minimum out against what the simulation
+ * actually gets (token base units on a buy, lamports on a sell). Null when there's nothing to compare.
+ */
+export function acceptedSlippagePct(minOut: bigint, simulatedOut: bigint): number | null {
+  if (simulatedOut <= 0n) return null;
+  if (minOut >= simulatedOut) return 0;
+  return Number(((simulatedOut - minOut) * 10_000n) / simulatedOut) / 100;
 }
 
 /** What the transaction must stick to, worked out from its own instructions and pinned to higher.fun's addresses. */
@@ -180,7 +220,7 @@ export function reviewEnvelope(env: Envelope, ctx: ReviewContext = {}): Envelope
     const problems: string[] = [];
     const base: ReviewedTransaction = {
       index: t.index,
-      label: t.label,
+      label: `Transaction ${t.index + 1}`,
       tx: null,
       decoded: null,
       summary: [],
@@ -220,6 +260,7 @@ export function reviewEnvelope(env: Envelope, ctx: ReviewContext = {}): Envelope
       return base;
     }
     base.decoded = decoded;
+    base.label = titleOf(decoded);
     base.summary = summaryLines(decoded);
     base.summaryMatches = base.summary.length === t.summary.length && base.summary.every((l, i) => l === t.summary[i]);
     decoded.instructions.forEach((ix, i) => {
@@ -243,9 +284,15 @@ export function reviewEnvelope(env: Envelope, ctx: ReviewContext = {}): Envelope
   });
 
   const problems = transactions.flatMap((t) => t.problems.map((p) => `Transaction ${t.index + 1}: ${p}`));
+  const kind = kindOf(transactions);
+  if (kind && kind !== env.kind) problems.push(`The link calls itself a ${env.kind}, but its transactions are a ${kind}`);
+  if (env.builtAt !== undefined && ctx.now !== undefined && env.builtAt > ctx.now + MAX_CLOCK_SKEW_SECONDS) {
+    problems.push("The link says it was built in the future, so its age can't be trusted");
+  }
   return {
     cluster,
     wallet: env.wallet,
+    kind: kind ?? env.kind,
     transactions,
     problems,
     launches: transactions.flatMap((t) => t.decoded?.launches.map((l) => l.mint) ?? []),

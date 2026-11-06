@@ -86,6 +86,10 @@ export interface SimulationResult {
   unitsConsumed?: number;
   /** Lamports: the wallet's balance after the transaction, minus before. */
   netLamports?: number;
+  /** Base units: each watched token account's balance after the transaction, minus before. */
+  tokenNet?: Record<string, bigint>;
+  /** How far below what the simulation gets a trade's minimum out is, in percent. */
+  acceptedSlippagePct?: number;
   logs: string[];
   at: number;
 }
@@ -100,10 +104,18 @@ function simulationError(err: unknown, logs: string[]): string {
  * Simulates the transaction exactly as it is: no signature check (the wallet hasn't signed yet), and with its own
  * blockhash, so an expired one fails here instead of in the wallet.
  */
-export async function simulate(url: string, base64: string, wallet: string): Promise<SimulationResult> {
-  const [before, r] = await Promise.all([
+export async function simulate(url: string, base64: string, wallet: string, watch: string[] = []): Promise<SimulationResult> {
+  const amount = (data?: [string, string] | null) => {
+    if (!data) return 0n;
+    const bytes = Uint8Array.from(atob(data[0]), (c) => c.charCodeAt(0));
+    return bytes.length >= 72 ? new DataView(bytes.buffer).getBigUint64(64, true) : 0n;
+  };
+  const [before, tokensBefore, r] = await Promise.all([
     getBalance(url, wallet),
-    rpc<{ value: { err: unknown; logs: string[] | null; unitsConsumed?: number; accounts?: ({ lamports: number } | null)[] } }>(
+    watch.length
+      ? rpc<{ value: ({ data: [string, string] } | null)[] }>(url, "getMultipleAccounts", [watch, { encoding: "base64", commitment: "confirmed" }])
+      : Promise.resolve({ value: [] }),
+    rpc<{ value: { err: unknown; logs: string[] | null; unitsConsumed?: number; accounts?: ({ lamports: number; data?: [string, string] } | null)[] } }>(
       url,
       "simulateTransaction",
       [
@@ -113,7 +125,7 @@ export async function simulate(url: string, base64: string, wallet: string): Pro
           sigVerify: false,
           replaceRecentBlockhash: false,
           commitment: "confirmed",
-          accounts: { encoding: "base64", addresses: [wallet] },
+          accounts: { encoding: "base64", addresses: [wallet, ...watch] },
         },
       ],
     ),
@@ -124,10 +136,15 @@ export async function simulate(url: string, base64: string, wallet: string): Pro
     const expired = r.value.err === "BlockhashNotFound" || JSON.stringify(r.value.err).includes("BlockhashNotFound");
     return { ok: false, expired, error: expired ? "The blockhash has expired." : simulationError(r.value.err, logs), logs: logs.slice(-12), at: Date.now() };
   }
+  const tokenNet: Record<string, bigint> = {};
+  watch.forEach((a, i) => {
+    tokenNet[a] = amount(r.value.accounts?.[i + 1]?.data) - amount(tokensBefore.value[i]?.data);
+  });
   return {
     ok: true,
     unitsConsumed: r.value.unitsConsumed,
     netLamports: after === undefined ? undefined : after - before,
+    tokenNet,
     logs: [],
     at: Date.now(),
   };

@@ -8,6 +8,7 @@ import { assertSafe, MEMO_LINE } from "../src/tx/decode.ts";
 import { highwireMemo } from "../src/tx/envelope.ts";
 import type { Envelope } from "../src/tx/format.ts";
 import { DerivedLaunchKeys, launchFingerprint } from "../src/tx/launch.ts";
+import { canRefresh } from "../src/tx/refresh.ts";
 import { lookupTableAddresses, platformClaimFeeWallet, reviewEnvelope } from "../src/tx/review.ts";
 import {
   decodeSignPayload,
@@ -140,7 +141,7 @@ test("the review of a launch needs the on-chain fee wallet and its lookup tables
   assert.equal(ok.transactions[0]!.networkFeeLamports, 10_000n, "the wallet and the presigned mint");
   // Without the fee wallet, the fee is a transfer to a stranger.
   const blind = reviewEnvelope(env, { lookupTables: tables });
-  assert.ok(blind.problems.some((p) => /not the wallet's own token account/.test(p)));
+  assert.ok(blind.problems.some((p) => /not the wallet's own wrapped-SOL account/.test(p)));
   // A different fee wallet fails the same way.
   assert.ok(reviewEnvelope(env, { launchFeeWallet: TRADER.toBase58(), lookupTables: tables }).problems.length > 0);
 });
@@ -151,7 +152,7 @@ test("the review refuses a tampered link", async () => {
   const stranger = Keypair.generate().publicKey;
   const drain = SystemProgram.transfer({ fromPubkey: TRADER, toPubkey: stranger, lamports: 1_000_000_000 });
   const drained = reviewEnvelope(swap(env, 0, withExtra(t.base64, drain)));
-  assert.ok(drained.problems.some((p) => /not the wallet's own token account/.test(p)), drained.problems.join("; "));
+  assert.ok(drained.problems.some((p) => /not the wallet's own wrapped-SOL account/.test(p)), drained.problems.join("; "));
   assert.equal(drained.transactions[0]!.summaryMatches, false);
 
   const unknownProgram = new TransactionInstruction({ programId: stranger, keys: [], data: Buffer.from([1]) });
@@ -212,4 +213,20 @@ test("the browser entry never reaches Node built-ins or Raydium's SDK", () => {
   visit(new URL("../src/browser.ts", import.meta.url));
   assert.deepEqual(banned, []);
   assert.ok(seen.size >= 7);
+});
+
+test("the review titles each transaction from its bytes, and refuses a link that misnames its kind or its age", async () => {
+  const { env } = await envelope("buy-curve");
+  const lying = { ...env, kind: "claim" as const, transactions: env.transactions.map((t) => ({ ...t, label: "Claim your free 25 SOL airdrop (verified by Highwire)" })) };
+  const r = reviewEnvelope(lying);
+  assert.equal(r.kind, "trade");
+  assert.equal(r.transactions[0]!.label, "Buy a coin on the bonding curve");
+  assert.ok(r.problems.some((p) => /calls itself a claim, but its transactions are a trade/.test(p)), r.problems.join("; "));
+  assert.deepEqual(reviewEnvelope(env).problems, []);
+
+  const now = Math.floor(Date.now() / 1000);
+  const future = { ...env, builtAt: now + 3600 };
+  assert.ok(reviewEnvelope(future, { now }).problems.some((p) => /built in the future/.test(p)));
+  assert.equal(canRefresh(future, now), false);
+  assert.equal(canRefresh({ builtAt: now + 60 }, now), true, "a little clock skew is fine");
 });

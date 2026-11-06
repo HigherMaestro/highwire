@@ -34,6 +34,9 @@ export function isRefreshable(tx: VersionedTransaction, wallet: string): boolean
   return signers.every((k, i) => k.toBase58() === wallet || empty(tx.signatures[i]));
 }
 
+/** How far ahead of this clock a link's builtAt may be: the builder's clock may run a little fast. */
+export const MAX_CLOCK_SKEW_SECONDS = 120;
+
 /** The link's age in seconds, or null for a link with no `builtAt` (v1), which never refreshes. */
 export function linkAgeSeconds(env: Pick<Envelope, "builtAt">, nowSeconds: number): number | null {
   return env.builtAt === undefined ? null : Math.max(0, nowSeconds - env.builtAt);
@@ -41,6 +44,8 @@ export function linkAgeSeconds(env: Pick<Envelope, "builtAt">, nowSeconds: numbe
 
 /** Whether the link is young enough to refresh. */
 export function canRefresh(env: Pick<Envelope, "builtAt">, nowSeconds: number): boolean {
+  // A link can be edited by anyone, builtAt included: one "built" in the future never refreshes.
+  if (env.builtAt !== undefined && env.builtAt > nowSeconds + MAX_CLOCK_SKEW_SECONDS) return false;
   const age = linkAgeSeconds(env, nowSeconds);
   return age !== null && age <= REFRESH_MAX_AGE_SECONDS;
 }

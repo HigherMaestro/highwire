@@ -80,6 +80,8 @@ export interface DecodedTrade {
   outputMint?: string;
   /** For a curve trade, the coin's mint. */
   mint?: string;
+  /** The token account the trade pays into (the coin account on a buy, wrapped SOL on a pool sell). */
+  outAccount?: string;
 }
 
 export interface DecodedInstruction {
@@ -192,7 +194,7 @@ export function describeTransaction(
       if (disc === L.buyExactIn) {
         const amountIn = u64(d, 8);
         const minOut = u64(d, 16);
-        out.trades.push({ kind: "curve-buy", amountIn, minOut, mint: k(9) });
+        out.trades.push({ kind: "curve-buy", amountIn, minOut, mint: k(9), outAccount: k(5) });
         known(`Buy coin ${k(9)} on the LaunchLab curve (pool ${k(4)}, platform ${k(3)}): pay ${formatLamports(amountIn)} SOL, receive at least ${formatTokens(minOut)} tokens`);
       } else if (disc === L.sellExactIn) {
         const amountIn = u64(d, 8);
@@ -227,7 +229,7 @@ export function describeTransaction(
         const minOut = u64(d, 16);
         const inputMint = k(10);
         const outputMint = k(11);
-        out.trades.push({ kind: "cpmm-swap", amountIn, minOut, inputMint, outputMint });
+        out.trades.push({ kind: "cpmm-swap", amountIn, minOut, inputMint, outputMint, outAccount: k(5) });
         const isBuy = inputMint === NATIVE_MINT_ADDRESS;
         known(
           isBuy
@@ -291,18 +293,29 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
   for (const s of required) if (!allowedSigners.some((x) => x.equals(s))) fail(`the transaction needs an unexpected signer: ${s.toBase58()}`);
 
   const ixs = resolveInstructions(tx, lookupTables);
-  // Token accounts this transaction may move the wallet's SOL into: its ATAs, and accounts it initialises for itself.
-  const own = new Set(
-    [PROGRAMS.token, PROGRAMS.token2022].map((p) => associatedTokenAddress(new PublicKey(NATIVE_MINT_ADDRESS), wallet, new PublicKey(p)).toBase58()),
-  );
+  const WSOL = new PublicKey(NATIVE_MINT_ADDRESS);
+  const isTokenProgram = (k: PublicKey) => k.toBase58() === PROGRAMS.token || k.toBase58() === PROGRAMS.token2022;
+  // Accounts this transaction may move the wallet's SOL into: the wallet's own wrapped-SOL accounts. That's its
+  // wrapped-SOL ATAs, and accounts the transaction itself creates and initialises for the native mint, owned by the
+  // wallet. A coin's token account, or one for any other mint, never takes SOL: an account initialised for a mint
+  // someone else controls could be frozen, and one owned by another program could be emptied by it.
+  const wsol = new Set([PROGRAMS.token, PROGRAMS.token2022].map((p) => associatedTokenAddress(WSOL, wallet, new PublicKey(p)).toBase58()));
+  const created = new Set<string>();
+  const initialised = new Map<string, { mint: string; owner: string }>();
   for (const ix of ixs) {
     const p = ix.programId.toBase58();
-    if (p === PROGRAMS.associatedToken && ix.keys[2]?.equals(wallet)) own.add(ix.keys[1]!.toBase58());
-    if ((p === PROGRAMS.token || p === PROGRAMS.token2022) && ix.data[0] === 1 && ix.keys[2]?.equals(wallet)) own.add(ix.keys[0]!.toBase58());
-    if ((p === PROGRAMS.token || p === PROGRAMS.token2022) && (ix.data[0] === 16 || ix.data[0] === 18)) {
-      if (new PublicKey(ix.data.subarray(1, 33)).equals(wallet)) own.add(ix.keys[0]!.toBase58());
+    const d = ix.data;
+    if (p === PROGRAMS.system && d.length >= 4 && (d.readUInt32LE(0) === 0 || d.readUInt32LE(0) === 3) && ix.keys[1]) created.add(ix.keys[1].toBase58());
+    if ((p === PROGRAMS.token || p === PROGRAMS.token2022) && ix.keys[0] && ix.keys[1]) {
+      if (d[0] === 1 && ix.keys[2]) initialised.set(ix.keys[0].toBase58(), { mint: ix.keys[1].toBase58(), owner: ix.keys[2].toBase58() });
+      if ((d[0] === 16 || d[0] === 18) && d.length >= 33) initialised.set(ix.keys[0].toBase58(), { mint: ix.keys[1].toBase58(), owner: new PublicKey(d.subarray(1, 33)).toBase58() });
     }
   }
+  for (const k of created) {
+    const init = initialised.get(k);
+    if (init && init.mint === NATIVE_MINT_ADDRESS && init.owner === w) wsol.add(k);
+  }
+  const isWsol = (k: PublicKey) => wsol.has(k.toBase58());
 
   let feeTransfers = 0;
   let memos = 0;
@@ -330,25 +343,39 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
         } else if (send?.lamports !== undefined && to.equals(send.to)) {
           if (lamports !== send.lamports) fail(`instruction ${i + 1}: sends a different amount of SOL than asked`);
           if (++transfers > 1) fail(`instruction ${i + 1}: more than one transfer`);
-        } else if (!own.has(to.toBase58())) fail(`instruction ${i + 1}: SOL transfer to ${to.toBase58()}, which is not the wallet's own token account`);
+        } else if (!isWsol(to)) fail(`instruction ${i + 1}: SOL transfer to ${to.toBase58()}, which is not the wallet's own wrapped-SOL account`);
       } else if (type === 0 || type === 3) {
-        if (!own.has(key(1).toBase58())) fail(`instruction ${i + 1}: creates an account the wallet doesn't own`);
+        // CreateAccount and CreateAccountWithSeed both end with lamports (u64), space (u64) and the owning program.
+        if (d.length < 4 + 8 + 8 + 32) fail(`instruction ${i + 1}: a malformed create-account instruction`);
+        const owner = new PublicKey(d.subarray(d.length - 32));
+        const space = d.readBigUInt64LE(d.length - 40);
+        if (!isTokenProgram(owner)) fail(`instruction ${i + 1}: creates an account owned by ${owner.toBase58()}, not a token program`);
+        if (space > 200n) fail(`instruction ${i + 1}: creates an account bigger than a token account`);
+        if (!isWsol(key(1))) fail(`instruction ${i + 1}: creates an account that isn't initialised as the wallet's own wrapped SOL`);
       } else fail(`instruction ${i + 1}: System instruction ${type} is not allowed`);
     } else if (p === PROGRAMS.associatedToken) {
       if (!(d.length === 0 || (d.length === 1 && (d[0] === 0 || d[0] === 1)))) fail(`instruction ${i + 1}: associated-token instruction not allowed`);
       if (!key(0).equals(wallet)) fail(`instruction ${i + 1}: opens a token account paid for by someone else`);
+      // The ATA program runs whatever token program it's given, so pin it, and the address it derives.
+      if (!isTokenProgram(key(5))) fail(`instruction ${i + 1}: opens a token account under ${key(5).toBase58()}, which isn't a token program`);
+      if (key(4).toBase58() !== PROGRAMS.system) fail(`instruction ${i + 1}: opens a token account with an unexpected system program`);
+      if (!key(1).equals(associatedTokenAddress(key(3), key(2), key(5)))) fail(`instruction ${i + 1}: the token account isn't the associated address for its owner and mint`);
       // A token transfer may open the recipient's own associated account for the coin it sends.
       const forRecipient =
         send?.mint !== undefined && key(2).equals(send.to) && key(3).equals(send.mint) && key(1).equals(associatedTokenAddress(send.mint, send.to, key(5)));
       if (!key(2).equals(wallet) && !forRecipient) fail(`instruction ${i + 1}: opens a token account for someone else`);
     } else if (p === PROGRAMS.token || p === PROGRAMS.token2022) {
       const t = d[0];
-      if (t === 17) return;
+      if (t === 17) {
+        if (!isWsol(key(0))) fail(`instruction ${i + 1}: syncs an account that isn't the wallet's wrapped SOL`);
+        return;
+      }
       if (t === 1 || t === 16 || t === 18) {
-        if (!own.has(key(0).toBase58())) fail(`instruction ${i + 1}: initialises a token account for someone else`);
+        if (!isWsol(key(0)) || !created.has(key(0).toBase58())) fail(`instruction ${i + 1}: initialises a token account that isn't the wallet's own wrapped SOL`);
         return;
       }
       if (t === 9) {
+        if (!isWsol(key(0))) fail(`instruction ${i + 1}: closes an account that isn't the wallet's wrapped SOL`);
         if (!key(1).equals(wallet) || !key(2).equals(wallet)) fail(`instruction ${i + 1}: closes a token account to someone other than the wallet`);
         return;
       }
@@ -384,14 +411,29 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
       if (!exp.platformId || !key(platformIndex).equals(exp.platformId)) fail(`instruction ${i + 1}: LaunchLab instruction for a platform other than higher.fun's`);
       if (!key(0).equals(wallet)) fail(`instruction ${i + 1}: LaunchLab instruction for someone other than the wallet`);
       if (disc === L.initializeV2 && !key(1).equals(wallet)) fail(`instruction ${i + 1}: the coin isn't being created for the wallet`);
+      if (disc === L.buyExactIn || disc === L.sellExactIn) {
+        // Exactly the accounts Highwire builds: the wallet's own coin account and wrapped SOL, the pool's vaults under
+        // LaunchLab's authority, the platform's fee vault, and no share-fee receiver.
+        if (ix.keys.length !== 18 || d.length !== 32) fail(`instruction ${i + 1}: a curve trade with an unexpected layout`);
+        if (d.readBigUInt64LE(24) !== 0n) fail(`instruction ${i + 1}: a curve trade that pays a share fee to someone`);
+        if (d.readBigUInt64LE(16) === 0n) fail(`instruction ${i + 1}: a curve trade with no minimum-out guard`);
+        if (key(1).toBase58() !== a.launchLabAuth || key(14).toBase58() !== a.launchLabProgram) fail(`instruction ${i + 1}: a curve trade with unexpected LaunchLab accounts`);
+        if (!key(10).equals(WSOL) || key(12).toBase58() !== PROGRAMS.token || !isTokenProgram(key(11))) fail(`instruction ${i + 1}: a curve trade that isn't against SOL`);
+        if (!key(5).equals(associatedTokenAddress(key(9), wallet, key(11)))) fail(`instruction ${i + 1}: a curve trade into or out of a coin account that isn't the wallet's`);
+        if (!isWsol(key(6))) fail(`instruction ${i + 1}: a curve trade paying from or into SOL that isn't the wallet's`);
+        const platformVault = PublicKey.findProgramAddressSync([key(3).toBuffer(), WSOL.toBuffer()], ix.programId)[0];
+        if (!key(16).equals(platformVault)) fail(`instruction ${i + 1}: a curve trade with the wrong platform fee vault`);
+      }
     } else if (p === a.cpmmProgram) {
       if (exp.allowCpmm === false) fail(`instruction ${i + 1}: this flow never calls the CPMM program`);
       const C = DISCRIMINATORS.cpmm;
       const disc = hex(d.subarray(0, 8));
       const ownAta = (acct: number, mint: number, prog: number) =>
-        own.has(key(acct).toBase58()) || key(acct).equals(associatedTokenAddress(key(mint), wallet, key(prog)));
+        (key(mint).equals(WSOL) && isWsol(key(acct))) || key(acct).equals(associatedTokenAddress(key(mint), wallet, key(prog)));
       if (disc === C.swapBaseInput) {
         if (!key(0).equals(wallet)) fail(`instruction ${i + 1}: CPMM swap for someone else`);
+        if (d.length < 24 || d.readBigUInt64LE(16) === 0n) fail(`instruction ${i + 1}: a pool swap with no minimum-out guard`);
+        if (!key(10).equals(WSOL) && !key(11).equals(WSOL)) fail(`instruction ${i + 1}: a pool swap that isn't against SOL`);
         if (!key(2).toBase58() || key(2).toBase58() !== a.cpmmConfig) fail(`instruction ${i + 1}: CPMM swap outside higher.fun's fee tier`);
         if (!ownAta(4, 10, 8) || !ownAta(5, 11, 9)) fail(`instruction ${i + 1}: CPMM swap pays from or into an account that isn't the wallet's`);
       } else if (disc === C.collectCreatorFee) {

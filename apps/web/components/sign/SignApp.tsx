@@ -3,6 +3,7 @@
 import { AddressLookupTableAccount, PublicKey, VersionedTransaction } from "@solana/web3.js";
 import type { Wallet, WalletAccount } from "@wallet-standard/base";
 import {
+  acceptedSlippagePct,
   ADDRESSES,
   assertSameExceptBlockhash,
   canRefresh,
@@ -11,6 +12,7 @@ import {
   formatLamports,
   linkAgeSeconds,
   lookupTableAddresses,
+  NATIVE_MINT_ADDRESS,
   platformClaimFeeWallet,
   profileUrl,
   REFRESH_MAX_AGE_SECONDS,
@@ -96,6 +98,11 @@ const solscanTx = (sig: string, cluster: Envelope["cluster"]) => `https://solsca
 const solscanAccount = (a: string, cluster: Envelope["cluster"]) => `https://solscan.io/account/${a}${cluster === "devnet" ? "?cluster=devnet" : ""}`;
 const clock = (unixSeconds: number) => new Date(unixSeconds * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
+const LOOKUP_TABLE_PROGRAM = "AddressLookupTab1e1111111111111111111111111";
+
+/** Above this, a trade's minimum out is so far below what it gets now that signing it would hand the difference away. */
+const MAX_ACCEPTED_SLIPPAGE_PCT = 50;
+
 const KIND_TITLE: Record<Envelope["kind"], string> = {
   trade: "Review a trade",
   launch: "Review a coin launch",
@@ -129,11 +136,12 @@ async function load(hash: string): Promise<Loaded> {
     const lookupTables: AddressLookupTableAccount[] = [];
     for (const key of lookupTableAddresses(link)) {
       const info = await getAccountInfo(rpcUrl, key);
-      if (!info) continue;
+      // Only a real lookup table: anything else would make the review decode accounts the runtime won't use.
+      if (!info || info.owner !== LOOKUP_TABLE_PROGRAM) continue;
       const data = Uint8Array.from(atob(info.data[0]), (c) => c.charCodeAt(0));
       lookupTables.push(new AddressLookupTableAccount({ key: new PublicKey(key), state: AddressLookupTableAccount.deserialize(data) }));
     }
-    const ctx: ReviewContext = { launchFeeWallet: feeWallet, lookupTables };
+    const ctx: ReviewContext = { launchFeeWallet: feeWallet, lookupTables, now: nowSeconds() };
     const refreshable = link.builtAt === undefined ? [] : refreshableIndexes(link);
     let env = link;
     if (refreshable.length && canRefresh(link, nowSeconds())) {
@@ -203,11 +211,13 @@ export function SignApp() {
 
   // Follow the block height and the clock for the expiry and the link's age, until everything has landed.
   useEffect(() => {
-    if (!ready?.rpcUrl || allDone) return;
+    if (!ready?.rpcUrl || allDone || ready.review.problems.length) return;
     const rpcUrl = ready.rpcUrl;
     let stop = false;
     const tick = async () => {
       setNow(nowSeconds());
+      // A background tab doesn't need the height; it's read again when the tab comes back.
+      if (document.hidden) return;
       try {
         const h = await getBlockHeight(rpcUrl);
         if (!stop) {
@@ -225,7 +235,7 @@ export function SignApp() {
       stop = true;
       clearInterval(id);
     };
-  }, [ready?.rpcUrl, allDone]);
+  }, [ready?.rpcUrl, ready?.review.problems.length, allDone]);
 
   const update = useCallback((i: number, patch: Partial<TxState>) => {
     setTxs((prev) => prev.map((t, j) => (j === i ? { ...t, ...patch } : t)));
@@ -241,6 +251,8 @@ export function SignApp() {
     const want = indexes.filter((i) => r.refreshable.includes(i));
     if (!want.length) return { env: r.env, review: r.review };
     const fresh = refreshEnvelope(r.link, await getLatestBlockhash(r.rpcUrl), nowSeconds(), want).env;
+    // A different link may have loaded while the blockhash was fetched: never mix the two.
+    if (readyRef.current && readyRef.current.link !== r.link) return null;
     const current = readyRef.current ?? r;
     const env = merge(current.env, fresh, want);
     const next: Ready = { ...current, env, review: reviewEnvelope(env, current.ctx) };
@@ -256,7 +268,27 @@ export function SignApp() {
       if (!r || !target) return null;
       update(i, { simulating: true });
       try {
-        const sim = await simulate(r.rpcUrl, target.transactions[i]!.base64, target.wallet);
+        const decoded = r.review.transactions[i]?.decoded;
+        const buys = (decoded?.trades ?? []).filter((t) => t.kind === "curve-buy" || (t.kind === "cpmm-swap" && t.inputMint === NATIVE_MINT_ADDRESS));
+        const watch = [...new Set(buys.map((t) => t.outAccount).filter((a): a is string => !!a))];
+        let sim: SimulationResult = await simulate(r.rpcUrl, target.transactions[i]!.base64, target.wallet, watch);
+        // What the trade accepts against what it gets right now: a hand-made link can set any minimum out.
+        if (sim.ok && decoded) {
+          const rt = r.review.transactions[i]!;
+          let worst: number | null = null;
+          for (const t of decoded.trades) {
+            const isBuy = buys.includes(t);
+            const out = isBuy
+              ? t.outAccount ? sim.tokenNet?.[t.outAccount] ?? 0n : 0n
+              : sim.netLamports !== undefined ? BigInt(sim.netLamports) + rt.networkFeeLamports + rt.priorityFeeLamports : 0n;
+            const pct = acceptedSlippagePct(t.minOut, out);
+            if (pct !== null && (worst === null || pct > worst)) worst = pct;
+          }
+          if (worst !== null) sim = { ...sim, acceptedSlippagePct: worst };
+          if (worst !== null && worst > MAX_ACCEPTED_SLIPPAGE_PCT) {
+            sim = { ...sim, ok: false, error: `This trade accepts ${worst}% less than it gets right now. Highwire never builds more than 15%: don't sign it.` };
+          }
+        }
         update(i, { sim, simulating: false });
         return sim;
       } catch (err) {
@@ -435,7 +467,11 @@ export function SignApp() {
 
       update(i, { step: "confirming", signature });
       setAnnounce(`Transaction ${i + 1} sent. Waiting for confirmation.`);
-      const result = await confirm(r0.rpcUrl, signature, t.lastValidBlockHeight);
+      // A refreshed transaction's last valid height came from the RPC; a strict one's from the link, which anyone can
+      // edit, so stop waiting at most a few minutes past the current height either way.
+      const sentAt = await getBlockHeight(r0.rpcUrl).catch(() => null);
+      const until = sentAt === null ? t.lastValidBlockHeight : Math.min(t.lastValidBlockHeight, sentAt + 300);
+      const result = await confirm(r0.rpcUrl, signature, until);
       if (result.status === "confirmed") {
         update(i, { step: "confirmed" });
         setAnnounce(`Transaction ${i + 1} confirmed.`);
@@ -509,7 +545,7 @@ export function SignApp() {
 
       <section className="sign-panel" aria-labelledby="sign-title">
         <p className="eyebrow">Highwire sign page{cluster === "devnet" ? " · devnet" : ""}</p>
-        <h1 id="sign-title">{KIND_TITLE[e.kind]}</h1>
+        <h1 id="sign-title">{KIND_TITLE[review.kind]}</h1>
         {cluster === "devnet" ? (
           <p className="sign-flag">Devnet: test SOL only. Make sure your wallet is set to devnet.</p>
         ) : null}
@@ -790,6 +826,13 @@ function TxCard(props: {
                   </li>
                 ))}
               </ul>
+              {sim?.acceptedSlippagePct !== undefined ? (
+                <p className={sim.acceptedSlippagePct > 15 ? "sign-flag" : "muted small"}>
+                  {sim.acceptedSlippagePct > 0
+                    ? `The minimum is ${sim.acceptedSlippagePct}% below what the simulation gets right now.`
+                    : "The minimum is what the simulation gets right now."}
+                </p>
+              ) : null}
             </div>
           ) : null}
           {other.length ? (

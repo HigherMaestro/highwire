@@ -282,7 +282,7 @@ function txOf(payer: PublicKey, ...ixs: Parameters<typeof SystemProgram.transfer
 
 test("the checker refuses SOL sent to someone else", () => {
   const tx = txOf(wallet, { fromPubkey: wallet, toPubkey: stranger, lamports: 1 });
-  assert.throws(() => assertSafe(tx, "mainnet", { wallet }), /not the wallet's own token account/);
+  assert.throws(() => assertSafe(tx, "mainnet", { wallet }), /not the wallet's own wrapped-SOL account/);
 });
 
 test("the checker refuses a different fee payer", () => {
