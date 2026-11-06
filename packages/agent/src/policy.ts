@@ -51,6 +51,18 @@ export const POLICY_TEMPLATE = {
   transfer_allowlist: [],
 } satisfies z.input<typeof PolicySchema>;
 
+/**
+ * What a policy leaves open that the user may not mean to. A live policy with no coin or creator allow-list lets an
+ * agent buy any higher.fun coin within the limits, including one whose description talks it into buying.
+ */
+export function policyWarnings(p: Policy): string[] {
+  const out: string[] = [];
+  if (p.live && p.actions.includes("trade") && !p.coins?.allow && !p.creators?.allow) {
+    out.push("Live, with no coins.allow or creators.allow: an agent may buy any higher.fun coin within your limits. List the coins (or creators) you mean it to trade.");
+  }
+  return out;
+}
+
 /** The policy, or why there isn't a usable one. */
 export function loadPolicy(path: string): Policy {
   let text: string;

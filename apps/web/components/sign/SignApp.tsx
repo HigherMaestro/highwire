@@ -20,6 +20,7 @@ import {
   refreshEnvelope,
   reviewEnvelope,
   STALE_WARNING_SECONDS,
+  verifyAttestation,
   type Envelope,
   type EnvelopeReview,
   type ReviewContext,
@@ -102,6 +103,15 @@ const LOOKUP_TABLE_PROGRAM = "AddressLookupTab1e1111111111111111111111111";
 
 /** Above this, a trade's minimum out is so far below what it gets now that signing it would hand the difference away. */
 const MAX_ACCEPTED_SLIPPAGE_PCT = 50;
+/**
+ * The same, for a link highwire.fun didn't sign (a local Highwire server's, or an edited one): its age can't be
+ * trusted, so its minimum out may be from an old quote. Highwire never builds more than 15%; this leaves room for the
+ * price to move.
+ */
+const MAX_UNVERIFIED_SLIPPAGE_PCT = 20;
+
+/** The key highwire.fun signs its links with, baked in at build time (next.config.ts). Empty in local builds. */
+const LINK_KEY = process.env.NEXT_PUBLIC_HIGHWIRE_LINK_KEY || undefined;
 
 const KIND_TITLE: Record<Envelope["kind"], string> = {
   trade: "Review a trade",
@@ -141,7 +151,7 @@ async function load(hash: string): Promise<Loaded> {
       const data = Uint8Array.from(atob(info.data[0]), (c) => c.charCodeAt(0));
       lookupTables.push(new AddressLookupTableAccount({ key: new PublicKey(key), state: AddressLookupTableAccount.deserialize(data) }));
     }
-    const ctx: ReviewContext = { launchFeeWallet: feeWallet, lookupTables, now: nowSeconds() };
+    const ctx: ReviewContext = { launchFeeWallet: feeWallet, lookupTables, now: nowSeconds(), attestation: verifyAttestation(link, LINK_KEY) };
     const refreshable = link.builtAt === undefined ? [] : refreshableIndexes(link);
     let env = link;
     if (refreshable.length && canRefresh(link, nowSeconds())) {
@@ -285,7 +295,8 @@ export function SignApp() {
             if (pct !== null && (worst === null || pct > worst)) worst = pct;
           }
           if (worst !== null) sim = { ...sim, acceptedSlippagePct: worst };
-          if (worst !== null && worst > MAX_ACCEPTED_SLIPPAGE_PCT) {
+          const limit = r.ctx.attestation === "verified" ? MAX_ACCEPTED_SLIPPAGE_PCT : MAX_UNVERIFIED_SLIPPAGE_PCT;
+          if (worst !== null && worst > limit) {
             sim = { ...sim, ok: false, error: `This trade accepts ${worst}% less than it gets right now. Highwire never builds more than 15%: don't sign it.` };
           }
         }
@@ -564,6 +575,14 @@ export function SignApp() {
           <div>
             <dt>Network</dt>
             <dd>Solana {cluster}</dd>
+          </div>
+          <div>
+            <dt>Built by</dt>
+            <dd>
+              {loaded.ctx.attestation === "verified"
+                ? "highwire.fun, unchanged since (its signature checks out)"
+                : "Not verified: a local Highwire server, or a link someone edited. Check the amounts below yourself."}
+            </dd>
           </div>
           <div>
             <dt>Expires</dt>

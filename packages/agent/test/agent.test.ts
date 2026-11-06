@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type Connection } from "@solana/web3.js";
 import { ENVELOPE_FORMAT, HOW_TO_SIGN, solToLamports, type Envelope } from "highwire-core";
-import { agentPaths, checkPolicy, GENESIS_HASHES, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, PolicySchema, type Intent, type Policy } from "../src/index.ts";
+import { agentPaths, checkPolicy, GENESIS_HASHES, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, PolicySchema, policyWarnings, type Intent, type Policy } from "../src/index.ts";
 
 // Unit tests only: a throwaway in-memory keypair and a fake RPC. Nothing here touches a real cluster.
 
@@ -265,4 +265,10 @@ test("a torn last line in the audit log doesn't swallow the next spend", async (
   const { connection } = fakeConnection();
   await signer.execute(connection, { tool: "execute_transfer", intent: send(0.1), envelope: envelopeFor(signer.publicKey, solToLamports(0.1)) });
   assert.equal(signer.audit.spentSince("devnet"), solToLamports(0.1));
+});
+
+test("a live policy with no coin or creator allow-list is flagged", () => {
+  assert.equal(policyWarnings(policy({ live: true, actions: ["trade"] })).length, 1);
+  assert.deepEqual(policyWarnings(policy({ live: true, actions: ["trade"], coins: { allow: [COIN] } })), []);
+  assert.deepEqual(policyWarnings(policy({ live: false, actions: ["trade"] })), []);
 });

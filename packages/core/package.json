@@ -37,12 +37,15 @@
     "prepack": "npm run build && cp ../../LICENSE ."
   },
   "dependencies": {
+    "@noble/curves": "1.9.7",
+    "@noble/hashes": "1.8.0",
     "@raydium-io/raydium-sdk-v2": "0.2.74-alpha",
     "@solana/spl-token": "0.4.15",
     "@solana/web3.js": "1.99.0",
     "bn.js": "5.2.5"
   },
   "devDependencies": {
-    "@types/bn.js": "5.2.0"
+    "@types/bn.js": "5.2.0",
+    "bs58": "6.0.0"
   }
 }

@@ -57,7 +57,16 @@ export interface Envelope {
   expiresAfterBlockHeight: number;
   /** When it was built, in unix seconds. Missing on v1 envelopes. */
   builtAt?: number;
+  /** The hosted server's signature over what it built (attest.ts), so the sign page can tell an unedited link. */
+  attestation?: Attestation;
   howToSign: string;
+}
+
+export interface Attestation {
+  /** The signing key, base58. */
+  key: string;
+  /** An ed25519 signature, base64. */
+  sig: string;
 }
 
 export const HOW_TO_SIGN =

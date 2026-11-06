@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { SignApp } from "../../components/sign/SignApp.tsx";
 
-// Static shell; everything else happens in the browser (components/sign).
-// next.config.ts gives this route its own strict security headers.
+// A small shell; everything else happens in the browser (components/sign). Rendered per request, so its scripts can
+// carry the nonce proxy.ts puts in its Content-Security-Policy; next.config.ts adds the rest of its headers.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Sign",

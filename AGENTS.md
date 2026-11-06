@@ -29,7 +29,8 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/mcp/skills/` | the operator skill, shipped in the npm package |
 | `apps/web/app/` | the Next.js site: `/`, `/docs`, `/fees` and `/fees/[mint]` (ecosystem fees, regenerated every 10 minutes; `lib/fees.ts` loads them), `/sign`, `/changelog` (renders the root `CHANGELOG.md`), `/terms`, `/privacy`, `/mcp` (mounts `createHttpHandler`), `/api/health` |
 | `apps/web/components/sign/`, `apps/web/lib/sign/` | the sign page: `SignApp.tsx`, `rpc.ts` (JSON-RPC from the browser), `wallets.ts` (Wallet Standard) |
-| `apps/web/next.config.ts` | Turbopack aliases and `/sign`'s security headers (its CSP allows connections to the RPC origins only) |
+| `apps/web/next.config.ts` | Turbopack aliases, every page's security headers, and the public key for link attestations (derived from `HIGHWIRE_LAUNCH_SECRET` at build time) |
+| `apps/web/proxy.ts`, `apps/web/lib/sign/csp.ts` | `/sign`'s Content-Security-Policy, with a fresh nonce per request: no inline script runs but Next's own and the theme script (by hash); connections only to the RPC origins |
 | `CHANGELOG.md` | every release; add to the top section with each change |
 | `packages/*/test/` | `node:test` via tsx. `server.test.ts` and `http.test.ts` drive the real server with a fake API |
 | `*/scripts/smoke.ts` | the live checks: stdio in `packages/mcp`, hosted in `apps/web` |
@@ -79,7 +80,9 @@ Streamable HTTP. An npm workspaces monorepo. Read
 - **The hosted endpoint** is public and unauthenticated. It serves the build tools because they only return unsigned
   transactions; it must never sign, hold a key or send. `HOSTED_TRANSACTION_TOOLS` in `http.ts` is the one switch.
   It is stateless: nothing may depend on memory surviving between requests (launch mints are derived, the rate limit
-  is a per-instance brake). Build calls cost `BUILD_COST` units of the rate limit.
+  is a per-instance brake). Build calls cost `BUILD_COST` units of the rate limit, heavy reads `TOOL_COSTS`. The
+  shared per-IP cap lives in Vercel Firewall rules (`vercel firewall rules list`), not in the code. It signs each
+  envelope it builds (`attestation`) so the sign page can tell an unedited link.
 - **Next.js** is 16 (App Router, Turbopack). Its docs ship in `node_modules/next/dist/docs/`; check them rather than
   memory before using a Next API. `next build` and `next dev` share `apps/web/.next`: if dev fails with a
   `next/font` "Module not found" error, stop it, delete `apps/web/.next` and start it again.

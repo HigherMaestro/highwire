@@ -13,6 +13,8 @@ export interface Deps {
   maxSolPerTx: number;
   /** The site sign links point at. */
   siteUrl: string;
+  /** Signs each envelope so the sign page can tell it's unedited (attest.ts): set from HIGHWIRE_LAUNCH_SECRET. */
+  attestationSeed?: Uint8Array;
   /** The opt-in local signer (HIGHWIRE_KEYPAIR_PATH). Never set on the hosted endpoint. */
   signer?: ExecutionSigner;
 }

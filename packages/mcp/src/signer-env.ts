@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { agentPaths, loadKeypair, LocalSigner, POLICY_TEMPLATE, type AgentPaths } from "highwire-agent";
+import { agentPaths, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, policyWarnings, type AgentPaths } from "highwire-agent";
 
 // The local signer, for the stdio server only: turned on by HIGHWIRE_KEYPAIR_PATH, which names a keypair file on the
 // user's machine. The hosted route never imports this file.
@@ -15,6 +15,11 @@ export function signerFromEnv(env: Env = process.env, warn: (msg: string) => voi
   if (warning) warn(`[highwire] ${warning}`);
   const paths = agentPaths(env);
   if (!existsSync(paths.policy)) warn(`[highwire] Local signer on for ${keypair.publicKey.toBase58()}, but there's no policy at ${paths.policy}, so nothing executes. Run: highwire policy init`);
+  try {
+    for (const w of policyWarnings(loadPolicy(paths.policy))) warn(`[highwire] ${w}`);
+  } catch {
+    /* no usable policy: said above, or by get_signer_status */
+  }
   // Anyone who can write the policy or the audit log can raise the limits or reset the day's count.
   for (const [what, path] of [["policy", paths.policy], ["folder", paths.home]] as const) {
     try {

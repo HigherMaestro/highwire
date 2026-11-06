@@ -1,3 +1,4 @@
+export * from "./attest.ts";
 export * from "./chain.ts";
 export * from "./claim.ts";
 export * from "./decode.ts";

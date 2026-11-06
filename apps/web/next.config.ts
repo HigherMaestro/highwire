@@ -1,45 +1,26 @@
 import { fileURLToPath } from "node:url";
+import { ed25519 } from "@noble/curves/ed25519";
+import { hmac } from "@noble/hashes/hmac";
+import { sha256 } from "@noble/hashes/sha2";
+import bs58 from "bs58";
 import type { NextConfig } from "next";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const isDev = process.env.NODE_ENV === "development";
-
-const PUBLIC_RPCS = ["https://api.mainnet-beta.solana.com", "https://api.devnet.solana.com"];
-
-/** The RPC origins the sign page may call: the configured ones (NEXT_PUBLIC_*), else the public endpoints. */
-function rpcOrigins(): string[] {
-  const configured = [process.env.NEXT_PUBLIC_SOLANA_RPC_URL, process.env.NEXT_PUBLIC_SOLANA_DEVNET_RPC_URL];
-  const urls = [configured[0] || PUBLIC_RPCS[0]!, configured[1] || PUBLIC_RPCS[1]!];
-  return [...new Set(urls.map((u) => new URL(u).origin))];
-}
 
 /**
- * The signing page's policy. Scripts and styles come from this site only ('unsafe-inline' because Next.js inlines its
- * bootstrap scripts in static pages and the theme script runs before paint; no third-party script is allowed). The page
- * may connect only to the Solana RPCs, so it cannot send anything to Highwire or anyone else. Wallet extensions inject
- * their own scripts outside the page's CSP; their icons are data: URIs.
+ * The public key the sign page trusts for link attestations: the hosted server signs with a seed derived from
+ * HIGHWIRE_LAUNCH_SECRET, the same way as attestationSeed() in packages/core/src/tx/attest.ts (keep the two in step).
+ * Only the public half reaches the page. Without the secret (local builds), every link shows as unverified.
  */
-function signCsp(): string {
-  return [
-    "default-src 'none'",
-    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:",
-    "font-src 'self'",
-    // Dev adds 'self' for hot reload's websocket.
-    `connect-src ${rpcOrigins().join(" ")}${isDev ? " 'self'" : ""}`,
-    "manifest-src 'self'",
-    "frame-src 'none'",
-    "worker-src 'none'",
-    "object-src 'none'",
-    "base-uri 'none'",
-    "form-action 'none'",
-    "frame-ancestors 'none'",
-    ...(isDev ? [] : ["upgrade-insecure-requests"]),
-  ].join("; ");
+function linkAttestationKey(): string {
+  const secret = process.env.HIGHWIRE_LAUNCH_SECRET;
+  if (!secret) return "";
+  const seed = hmac(sha256, new TextEncoder().encode(secret), new TextEncoder().encode("highwire sign-link attestation v1"));
+  return bs58.encode(ed25519.getPublicKey(seed));
 }
 
 const config: NextConfig = {
+  env: { NEXT_PUBLIC_HIGHWIRE_LINK_KEY: linkAttestationKey() },
   // Build the workspace packages from source, so the site needs no prior build
   // step (on Vercel either). Turbopack has no custom export conditions, so
   // these aliases stand in for the "highwire-source" condition.
@@ -70,10 +51,10 @@ const config: NextConfig = {
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
         ],
       },
+      // /sign's Content-Security-Policy comes from proxy.ts, with a fresh nonce per request.
       {
         source: "/sign",
         headers: [
-          { key: "Content-Security-Policy", value: signCsp() },
           { key: "Referrer-Policy", value: "no-referrer" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },

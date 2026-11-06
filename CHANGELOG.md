@@ -38,6 +38,19 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   - IPv6 clients are limited per /64.
   - CORS allows only POST.
   - Profile bios, display names and leaderboard rows are labelled as user content.
+- **Signed links.**
+  - **What's signed:** the hosted server signs each envelope it builds (`attestation`): its build time and the exact
+    transaction bytes, with a key derived from `HIGHWIRE_LAUNCH_SECRET`.
+  - **What the sign page shows:** "built by highwire.fun, unchanged since" when the signature checks out. A link with a
+    signature that doesn't match its contents is refused.
+  - **Unverified links:** one with no signature, such as a local server's, still works. It's marked unverified and may
+    accept at most 20% below the current price instead of 50%.
+- **/sign allows no inline scripts:** its Content-Security-Policy carries a fresh nonce per request (`proxy.ts`), and
+  the theme script is allowed by its hash.
+- **A shared rate limit:** Vercel Firewall rules cap `/mcp` at 60 requests a minute per IP, and `/fees` at 120, across
+  every instance. The endpoint's own weighted limit still applies within that.
+- **Live policies:** the signer warns, at start-up and in `get_signer_status`, when a live policy lets an agent trade
+  any coin (no `coins.allow` or `creators.allow`).
 - **The site.**
   - Every page now sends `nosniff`, no-framing, referrer, permissions and HSTS headers.
   - `/fees/<mint>` costs one read for an address that isn't a higher.fun coin.

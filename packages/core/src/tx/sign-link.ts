@@ -122,6 +122,15 @@ const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 /** Checks an untrusted value is a well-formed envelope. It says nothing about whether the transactions are safe. */
+function attestationOf(raw: unknown): { key: string; sig: string } {
+  const a = raw as { key?: unknown; sig?: unknown } | null;
+  if (!a || typeof a !== "object") throw new ValidationError("not a Highwire envelope: attestation");
+  const sig = typeof a.sig === "string" && a.sig.length <= 100 && /^[A-Za-z0-9+/]+={0,2}$/.test(a.sig) ? a.sig : null;
+  const key = typeof a.key === "string" && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a.key) ? a.key : null;
+  if (!sig || !key) throw new ValidationError("not a Highwire envelope: attestation");
+  return { key, sig };
+}
+
 export function parseEnvelope(v: unknown): Envelope {
   const bad = (what: string): never => {
     throw new ValidationError(`not a Highwire envelope: ${what}`);
@@ -186,6 +195,7 @@ export function parseEnvelope(v: unknown): Envelope {
     expiresAfterBlockHeight: int(e.expiresAfterBlockHeight, "expiresAfterBlockHeight"),
     // v1 has no builtAt, which keeps its transactions strict.
     ...(v1 ? {} : { builtAt: int(e.builtAt, "builtAt") }),
+    ...(e.attestation !== undefined ? { attestation: attestationOf(e.attestation) } : {}),
     howToSign: typeof e.howToSign === "string" ? e.howToSign.slice(0, 1000) : "",
   };
 }

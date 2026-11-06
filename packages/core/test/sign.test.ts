@@ -8,6 +8,11 @@ import { assertSafe, MEMO_LINE } from "../src/tx/decode.ts";
 import { highwireMemo } from "../src/tx/envelope.ts";
 import type { Envelope } from "../src/tx/format.ts";
 import { DerivedLaunchKeys, launchFingerprint } from "../src/tx/launch.ts";
+import { ed25519 } from "@noble/curves/ed25519";
+import { hmac } from "@noble/hashes/hmac";
+import { sha256 } from "@noble/hashes/sha2";
+import bs58 from "bs58";
+import { attestationPublicKey, attestationSeed, attestEnvelope, verifyAttestation } from "../src/tx/attest.ts";
 import { canRefresh } from "../src/tx/refresh.ts";
 import { lookupTableAddresses, platformClaimFeeWallet, reviewEnvelope } from "../src/tx/review.ts";
 import {
@@ -229,4 +234,22 @@ test("the review titles each transaction from its bytes, and refuses a link that
   assert.ok(reviewEnvelope(future, { now }).problems.some((p) => /built in the future/.test(p)));
   assert.equal(canRefresh(future, now), false);
   assert.equal(canRefresh({ builtAt: now + 60 }, now), true, "a little clock skew is fine");
+});
+
+test("hosted links are signed: unchanged ones verify, edited ones are refused, others are unverified", async () => {
+  const { env } = await envelope("buy-curve");
+  const seed = attestationSeed("test-secret");
+  const key = attestationPublicKey(seed);
+  const signed = attestEnvelope(env, seed);
+  // It survives the sign link's round trip.
+  const back = await decodeSignPayload(new URL(await signUrl(signed, "https://highwire.fun")).hash);
+  assert.equal(verifyAttestation(back, key), "verified");
+  assert.equal(verifyAttestation({ ...signed, builtAt: (signed.builtAt ?? 0) + 3600 }, key), "invalid", "a forged builtAt");
+  assert.equal(verifyAttestation({ ...signed, kind: "claim" }, key), "invalid");
+  assert.equal(verifyAttestation(env, key), "unverified", "no attestation");
+  assert.equal(verifyAttestation(attestEnvelope(env, attestationSeed("someone else")), key), "unverified");
+  assert.ok(reviewEnvelope(signed, { attestation: "invalid" }).problems.some((p) => /changed after it was built/.test(p)));
+  // apps/web/next.config.ts derives the page's key with the same steps; this is that derivation, written out.
+  const fromConfig = bs58.encode(ed25519.getPublicKey(hmac(sha256, new TextEncoder().encode("test-secret"), new TextEncoder().encode("highwire sign-link attestation v1"))));
+  assert.equal(fromConfig, key);
 });

@@ -1,5 +1,6 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  attestationSeed,
   Chain,
   createHttpConfig,
   DEFAULT_API_URL,
@@ -119,6 +120,7 @@ export function createDeps(opts: ServerOptions = {}): Deps {
     launchKeys: opts.launchKeySecret !== undefined ? new DerivedLaunchKeys(opts.launchKeySecret) : launchKeys,
     maxSolPerTx: opts.maxSolPerTx ?? DEFAULT_MAX_SOL_PER_TX,
     siteUrl: opts.siteUrl ?? DEFAULT_SITE_URL,
+    ...(opts.launchKeySecret ? { attestationSeed: attestationSeed(opts.launchKeySecret) } : {}),
     signer: opts.signer,
   };
 }

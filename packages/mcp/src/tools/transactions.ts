@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  attestEnvelope,
   buildClaimCreatorFees,
   buildLaunch,
   buildTrade,
@@ -57,7 +58,9 @@ function tradeAmount(args: { side: "buy" | "sell"; sol?: number; tokens?: number
 }
 
 /** Wraps an envelope result with its sign link; a failed simulation becomes an error that still shows what was built. */
-async function envelopeResult(env: Envelope, siteUrl: string, extra: Record<string, unknown>) {
+async function envelopeResult(built: Envelope, deps: Pick<Deps, "siteUrl" | "attestationSeed">, extra: Record<string, unknown>) {
+  const env = deps.attestationSeed ? attestEnvelope(built, deps.attestationSeed) : built;
+  const siteUrl = deps.siteUrl;
   const failed = failedSimulation(env);
   if (failed) {
     return jsonResult(
@@ -210,7 +213,7 @@ export async function buildClaimFor(deps: Deps, w: PublicKey) {
 }
 
 export function registerTransactionTools(server: McpServer, deps: Deps) {
-  const { api, chain, siteUrl } = deps;
+  const { api, chain } = deps;
   const onMainnet = chain.cluster === "mainnet";
 
   server.registerTool(
@@ -279,7 +282,7 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
     (args) =>
       runResult(async () => {
         const built = await buildTradeFor(deps, new PublicKey(args.wallet), args);
-        return envelopeResult(built.envelope, siteUrl, { quote: summarizeQuote(built.quote) });
+        return envelopeResult(built.envelope, deps, { quote: summarizeQuote(built.quote) });
       }),
   );
 
@@ -307,7 +310,7 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
         if (r.status === "already_launched") {
           return jsonResult({ status: r.status, mint: r.mint, url: r.url, note: "This idempotency key's coin already exists. Nothing to sign." });
         }
-        return envelopeResult(r.envelope, siteUrl, launchDetails(deps, r));
+        return envelopeResult(r.envelope, deps, launchDetails(deps, r));
       }),
   );
 
@@ -327,7 +330,7 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
       runResult(async () => {
         const { result: r, offChainPayouts: offChain } = await buildClaimFor(deps, new PublicKey(args.wallet));
         if (!r.envelope) return jsonResult({ claimable: r.claimable, offChainPayouts: offChain, note: "Nothing to claim on-chain right now." });
-        return envelopeResult(r.envelope, siteUrl, { claimable: r.claimable, offChainPayouts: offChain });
+        return envelopeResult(r.envelope, deps, { claimable: r.claimable, offChainPayouts: offChain });
       }),
   );
 }

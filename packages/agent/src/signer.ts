@@ -14,7 +14,7 @@ import {
 import { AuditLog } from "./audit.ts";
 import { withFileLock } from "./lock.ts";
 import type { AgentPaths } from "./paths.ts";
-import { checkPolicy, loadPolicy, plural, type Action, type Intent, type Policy } from "./policy.ts";
+import { checkPolicy, loadPolicy, plural, policyWarnings, type Action, type Intent, type Policy } from "./policy.ts";
 
 // The local signer: signs and sends what Highwire built, for the one wallet whose
 // keypair the user pointed it at, and only inside the user's policy. Dry run
@@ -62,6 +62,8 @@ export interface SignerStatus {
   stopped: boolean;
   policy: Policy | null;
   policyProblem?: string;
+  /** What the policy leaves open that the user may not mean to. */
+  warnings?: string[];
   /** SOL spent in the last 24 hours on the policy's cluster. */
   spentTodaySol?: number;
   dayLeftSol?: number;
@@ -121,7 +123,8 @@ export class LocalSigner {
       const policy = loadPolicy(this.paths.policy);
       const spent = this.audit.spentSince(policy.cluster);
       const day = Math.max(0, policy.max_sol_per_day - lamportsNumber(spent));
-      return { ...base, policy, spentTodaySol: lamportsNumber(spent), dayLeftSol: Math.round(day * 1e9) / 1e9 };
+      const warnings = policyWarnings(policy);
+      return { ...base, policy, ...(warnings.length ? { warnings } : {}), spentTodaySol: lamportsNumber(spent), dayLeftSol: Math.round(day * 1e9) / 1e9 };
     } catch (err) {
       return { ...base, policy: null, policyProblem: err instanceof Error ? err.message : String(err) };
     }

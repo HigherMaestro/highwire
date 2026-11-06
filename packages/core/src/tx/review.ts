@@ -38,6 +38,8 @@ export function platformClaimFeeWallet(data: Uint8Array): string {
 export interface ReviewContext {
   /** The page's clock, in unix seconds: a link that claims to be built later than this (and some skew) is refused. */
   now?: number;
+  /** What verifyAttestation said about the link: "invalid" means it was changed after highwire.fun built it. */
+  attestation?: "verified" | "unverified" | "invalid";
   /**
    * higher.fun's launch-fee wallet, read on-chain from the New school platform config (the same check the builder
    * runs). Without it, a launch that pays a fee fails the review.
@@ -286,6 +288,7 @@ export function reviewEnvelope(env: Envelope, ctx: ReviewContext = {}): Envelope
   const problems = transactions.flatMap((t) => t.problems.map((p) => `Transaction ${t.index + 1}: ${p}`));
   const kind = kindOf(transactions);
   if (kind && kind !== env.kind) problems.push(`The link calls itself a ${env.kind}, but its transactions are a ${kind}`);
+  if (ctx.attestation === "invalid") problems.push("The link carries highwire.fun's signature, but something in it was changed after it was built");
   if (env.builtAt !== undefined && ctx.now !== undefined && env.builtAt > ctx.now + MAX_CLOCK_SKEW_SECONDS) {
     problems.push("The link says it was built in the future, so its age can't be trusted");
   }

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { decodeSignPayload } from "highwire-core";
+import { attestationPublicKey, attestationSeed, decodeSignPayload, verifyAttestation } from "highwire-core";
 import { rpcUrlEnv, serverOptionsFromEnv } from "../src/env.ts";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -241,4 +241,22 @@ test("execute_trade builds what build_trade builds and, without live, only dry-r
   assert.equal(refused.isError, true);
   assert.equal(parse(refused).code, "policy_refused");
   assert.equal(signer.audit.entries().at(-1)?.outcome, "refused");
+});
+
+test("with a launch secret, built envelopes carry an attestation the sign page can verify; without one, none", async () => {
+  const args = {
+    wallet: "H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5",
+    mint: "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix",
+    side: "buy",
+    sol: 0.01,
+    max_slippage_bps: 200,
+    max_sol: 5,
+    confirm_trade: true,
+  };
+  const signed = parse(await (await connect({ fetch: fixtureFetch("buy-curve"), retries: 0, launchKeySecret: "test-secret" })).callTool({ name: "build_trade", arguments: args }));
+  const key = attestationPublicKey(attestationSeed("test-secret"));
+  assert.equal(signed.unsigned.attestation?.key, key);
+  assert.equal(verifyAttestation(await decodeSignPayload(new URL(signed.sign_url).hash), key), "verified");
+  const plain = parse(await (await connect({ fetch: fixtureFetch("buy-curve"), retries: 0 })).callTool({ name: "build_trade", arguments: args }));
+  assert.equal(plain.unsigned.attestation, undefined);
 });
