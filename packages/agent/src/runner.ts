@@ -1,5 +1,5 @@
 import { HigherError, lamportsNumber, solToLamports, type Cluster, type LiveFeed, type Quote } from "highwire-core";
-import { close, describeOrder, record, type Order, type OrderBook, type OrderRun } from "./orders.ts";
+import { close, describeOrder, formatPrice, record, type Order, type OrderBook, type OrderRun } from "./orders.ts";
 import type { ExecuteResult } from "./signer.ts";
 
 // Runs the standing orders in the book for one wallet: `highwire orders run`. Price orders are checked against the
@@ -148,7 +148,7 @@ export class OrderRunner {
     if (order.minSolOut !== undefined && lamportsNumber(quote.minOut) < order.minSolOut) {
       return this.note(order, { outcome: "skipped", reason: `it triggered, but the sale would bring as little as ${lamportsNumber(quote.minOut)} SOL, under its ${order.minSolOut} SOL floor`, priceSol: price });
     }
-    this.log(`order ${order.id} triggered at ${price} SOL: ${describeOrder(order)}`);
+    this.log(`order ${order.id} triggered at ${formatPrice(price)} SOL: ${describeOrder(order)}`);
     await this.fill(order, "sell", amount, price);
   }
 

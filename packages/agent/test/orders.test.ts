@@ -303,4 +303,5 @@ test("descriptions say what an order does, with prices in plain decimals", async
   assert.equal(describeOrder(stop({ triggerPriceSol: 2.78698e-8 })), `Sell 50% of ${MINT} if its price falls to 0.0000000278698 SOL or below`);
   assert.equal(describeOrder(stop({ kind: "take_profit", triggerPriceSol: 0.00003, minSolOut: 1 })), `Sell 50% of ${MINT} if its price rises to 0.00003 SOL or above, for at least 1 SOL`);
   assert.equal(describeOrder(dca()), `Buy 0.01 SOL of ${MINT} every 24 hours, 2 times`);
+  assert.equal(describeOrder(dca({ everyHours: 1, times: 1 })), `Buy 0.01 SOL of ${MINT} every hour, once`);
 });

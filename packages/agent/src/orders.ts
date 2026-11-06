@@ -70,17 +70,17 @@ const BookSchema = z.object({ version: z.literal(1), orders: z.array(OrderSchema
 export type NewOrder = Omit<Order, "id" | "status" | "createdAt" | "runsDone" | "failures" | "history" | "closedAt" | "closeReason" | "fillingSince">;
 
 /** A price in plain decimals, never exponent notation: 0.0000000278698, not 2.78698e-8. */
-const price = (n: number | undefined) => (n === undefined ? "?" : n.toLocaleString("en-US", { maximumSignificantDigits: 6, useGrouping: false }));
+export const formatPrice = (n: number | undefined) => (n === undefined ? "?" : n.toLocaleString("en-US", { maximumSignificantDigits: 6, useGrouping: false }));
 
 /** A one-line description of an order, in tool units. */
 export function describeOrder(o: Pick<Order, "kind" | "mint" | "triggerPriceSol" | "sellPct" | "minSolOut" | "sol" | "everyHours" | "times">): string {
   switch (o.kind) {
     case "stop_loss":
-      return `Sell ${o.sellPct}% of ${o.mint} if its price falls to ${price(o.triggerPriceSol)} SOL or below${o.minSolOut ? `, for at least ${o.minSolOut} SOL` : ""}`;
+      return `Sell ${o.sellPct}% of ${o.mint} if its price falls to ${formatPrice(o.triggerPriceSol)} SOL or below${o.minSolOut ? `, for at least ${o.minSolOut} SOL` : ""}`;
     case "take_profit":
-      return `Sell ${o.sellPct}% of ${o.mint} if its price rises to ${price(o.triggerPriceSol)} SOL or above${o.minSolOut ? `, for at least ${o.minSolOut} SOL` : ""}`;
+      return `Sell ${o.sellPct}% of ${o.mint} if its price rises to ${formatPrice(o.triggerPriceSol)} SOL or above${o.minSolOut ? `, for at least ${o.minSolOut} SOL` : ""}`;
     case "recurring_buy":
-      return `Buy ${o.sol} SOL of ${o.mint} every ${o.everyHours} hours, ${o.times} times`;
+      return `Buy ${o.sol} SOL of ${o.mint} every ${o.everyHours === 1 ? "hour" : `${o.everyHours} hours`}, ${o.times === 1 ? "once" : `${o.times} times`}`;
   }
 }
 
