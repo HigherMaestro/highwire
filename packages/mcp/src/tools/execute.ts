@@ -263,7 +263,9 @@ function registerExecuteTools(server: McpServer, deps: Deps, signer: ExecutionSi
           if (r.status === "already_launched") return jsonResult({ status: r.status, mint: r.mint, url: r.url, note: "This idempotency key's coin already exists. Nothing was sent." });
           const solOut = (r.launchFee ? solToLamports(r.launchFee.sol) : 0n) + solToLamports(r.devBuySol);
           const done = await go("execute_launch", { action: "launch", cluster, solOut, slippageBps: args.dev_buy_sol ? args.max_slippage_bps : undefined, mint: r.mint }, r.envelope);
-          return jsonResult(executed(done, { ...launchDetails(deps, r), ...(launchFor ? { launchFor: { ...launchFor, note: "They get the creator fees; higher.fun holds them until they claim at higher.fun/claim." } } : {}), metadataUri }));
+          // The build's own status ("built") would hide whether it was sent; the signer's status says.
+          const { status: _built, ...details } = launchDetails(deps, r);
+          return jsonResult(executed(done, { ...details, ...(launchFor ? { launchFor: { ...launchFor, note: "They get the creator fees; higher.fun holds them until they claim at higher.fun/claim." } } : {}), metadataUri }));
         } catch (err) {
           // The upload happened; say where it is, so a retry passes metadata_uri instead of uploading again.
           if (image && metadataUri) {

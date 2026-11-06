@@ -101,6 +101,12 @@ Exit criterion met on 2026-11-05: the `highwire` CLI, with the maintainer's devn
 and a 0.08 SOL buy was refused by the policy with nothing sent. `npm run rehearse` covers the rest of the rules
 against mainnet and devnet, short of sending.
 
+First live mainnet launch through the local signer, 2026-11-06: `execute_launch` signed in to higher.fun, uploaded the
+image and metadata, and launched $LGTM ("Looks Good To Me", New school) with a 0.2 SOL first buy, inside a live policy
+capped at 0.22 SOL a launch. Mint `ALBA7iVjFkQzxPQQCovkK7zQiaXUPmixt2dZxNstXiPp`, [creation
+transaction](https://solscan.io/tx/hC8XZUUQeJTaAyvXCAsuzqM8A9PGG1TidJpfm8rEzAE4eCkZMrTShnXHMdN7Bo7SEXK4tbprW4MUqLerP8T4PBx),
+with the `highwire` memo. The day's limit counted 0.245 SOL, what the wallet actually spent with rent and fees.
+
 ## Later
 
 - **OAuth on the hosted endpoint**, before it does anything beyond public reads and unsigned builds (for example
