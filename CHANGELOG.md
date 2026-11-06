@@ -2,6 +2,16 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- **Highwire's trade fee: 0.3% on trades it builds, on mainnet.** One SOL transfer to Highwire's wallet
+  (`7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce`, the same one donations go to) just before the memo: 0.3% of the SOL
+  paid in on a buy, or of the minimum SOL out on a sell. It's in the transaction's summary, `quote_trade` and the build
+  tools show it as `highwireFee`, and the sign page lists it and refuses a link whose fee is any higher, appears twice,
+  or comes with a launch or no trade. Launches (first buys included), claims and transfers carry none, devnet carries
+  none, and Highwire still takes none of a coin's creator fees. While Highwire's wallet holds less than Solana's rent
+  minimum, trades are built without it rather than fail. The terms say so.
+
 ## 0.8.0 (2026-11-06)
 
 - **Launch on your own, from a shell.** `highwire wallet new` makes the agent's own wallet (`~/.highwire/wallet.json`,

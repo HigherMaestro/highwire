@@ -26,7 +26,7 @@ creator can claim, whatever the mode.
 | Is it safe | `rug_check` |
 | A wallet or creator | `get_wallet_profile`, `get_creator_coins`, `get_leaderboard` |
 | The platform | `get_platform_info`, `check_ticker`, `get_chat` |
-| Trade, launch or claim | `quote_trade`, `get_wallet_positions`, `build_trade`, `build_launch`, `build_claim_creator_fees` |
+| Trade, launch or claim (trades carry Highwire's 0.3% fee; tell the user before they approve) | `quote_trade`, `get_wallet_positions`, `build_trade`, `build_launch`, `build_claim_creator_fees` |
 | How a wallet's coins have done | `get_wallet_pnl`: average cost, realized and unrealized profit, from the wallet's own transactions. If it returns `history_unavailable`, the RPC can't search history; say so rather than estimating |
 | Act with the local signer (only if the user turned it on) | `get_signer_status`, `execute_trade`, `execute_launch`, `execute_claim`, `execute_transfer` |
 | Launch on your own from a shell (no person in the loop) | `npx -y highwire-mcp wallet new`, `policy init --launch`, then `launch --name … --ticker … --image …` and `claim`; the steps are at highwire.fun/skill.md |

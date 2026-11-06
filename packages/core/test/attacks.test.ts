@@ -5,13 +5,13 @@ import { LaunchpadPool } from "@raydium-io/raydium-sdk-v2";
 import BN from "bn.js";
 import { Keypair, PublicKey, SystemProgram, TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 import { buildLaunch } from "../src/tx/launch.ts";
-import { ADDRESSES } from "../src/higher/constants.ts";
+import { ADDRESSES, HIGHWIRE_WALLET, highwireFeeLamports } from "../src/higher/constants.ts";
 import { Chain } from "../src/tx/chain.ts";
-import { assertSafe, associatedTokenAddress, NATIVE_MINT_ADDRESS, PROGRAMS } from "../src/tx/decode.ts";
+import { assertSafe, associatedTokenAddress, describeTransaction, NATIVE_MINT_ADDRESS, PROGRAMS } from "../src/tx/decode.ts";
 import { replayFetch, type Recording } from "./replay.ts";
 import { runScenario } from "./run-scenario.ts";
 import { LAUNCH_FOR, LAUNCH_MINT, TRADER } from "./scenarios.ts";
-import { reviewEnvelope } from "../src/tx/review.ts";
+import { highwireFeeBound, reviewEnvelope } from "../src/tx/review.ts";
 
 // Hand-made transactions an attacker could put in a sign link, from the pre-launch audit. Each must be refused by the
 // same check the builders and the sign page run.
@@ -61,8 +61,8 @@ test("a curve trade that names someone else's accounts, pays a share fee or has 
   const real = VersionedTransaction.deserialize(Buffer.from(built.envelope.transactions[0]!.base64, "base64"));
   const ixs = TransactionMessage.decompile(real.message).instructions;
   const i = ixs.findIndex((ix) => ix.programId.toBase58() === ADDRESSES.mainnet.launchLabProgram);
-  const exp = { wallet, platformId: new PublicKey(ADDRESSES.mainnet.rewardsPlatform) };
-  // The genuine build passes.
+  // The genuine build passes, with its Highwire fee bounded as the sign page bounds it: from the trade in the bytes.
+  const exp = { wallet, platformId: new PublicKey(ADDRESSES.mainnet.rewardsPlatform), highwireFee: { maxLamports: highwireFeeBound(describeTransaction(real, "mainnet"))! } };
   assertSafe(real, "mainnet", exp);
   const tamper = (f: (ix: TransactionInstruction) => void) => {
     const copy = ixs.map((ix) => new TransactionInstruction({ programId: ix.programId, keys: ix.keys.map((k) => ({ ...k })), data: Buffer.from(ix.data) }));
@@ -131,4 +131,44 @@ test("a launch whose creator lock never got assigned can be resumed: a retry bui
   // Someone else's wallet gets no resume: only the coin's creator can assign its lock.
   const other = await buildLaunch(chain, null, { wallet: Keypair.generate().publicKey, name: "x", ticker: "X", metadataUri: "https://example.com/m.json", mode: "rewards", slippageBps: 500, mint: keys.get() as Keypair, simulate: false });
   assert.equal(other.status, "already_launched");
+});
+
+test("Highwire's trade fee: exactly one transfer, on a trade only, of at most 0.3% of the trade's SOL side", async () => {
+  const recording: Recording = JSON.parse(readFileSync(new URL("./fixtures/buy-curve.json", import.meta.url), "utf8"));
+  const built = await runScenario("buy-curve", replayFetch(recording));
+  assert.ok(built && "envelope" in built && built.envelope);
+  const env = built.envelope;
+  const real = VersionedTransaction.deserialize(Buffer.from(env.transactions[0]!.base64, "base64"));
+  const d = describeTransaction(real, "mainnet");
+  // The build pays it once, 0.3% of the SOL in, and the sign page's review accepts it and shows it.
+  assert.equal(d.highwireFees.length, 1);
+  assert.equal(d.highwireFees[0], highwireFeeLamports(d.trades[0]!.amountIn));
+  assert.ok(d.instructions.some((ix) => ix.text.startsWith("Pay Highwire's 0.3% trade fee")));
+  const ok = reviewEnvelope(env);
+  assert.deepEqual(ok.problems, []);
+  assert.ok(ok.transactions[0]!.effects.some((e) => e.kind === "spend" && /Highwire trade fee \(0\.3%\)/.test(e.text)));
+
+  // Tampered copies of the same link, each reviewed as the sign page would.
+  const ixs = TransactionMessage.decompile(real.message).instructions;
+  const feeAt = ixs.findIndex((ix) => ix.programId.equals(SystemProgram.programId) && ix.keys[1]?.pubkey.toBase58() === HIGHWIRE_WALLET);
+  assert.ok(feeAt >= 0);
+  const fee = SystemProgram.transfer({ fromPubkey: wallet, toPubkey: new PublicKey(HIGHWIRE_WALLET), lamports: 1 });
+  const relink = (instructions: TransactionInstruction[]) => {
+    const t = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: real.message.recentBlockhash, instructions }).compileToV0Message());
+    return reviewEnvelope({ ...env, transactions: [{ ...env.transactions[0]!, base64: Buffer.from(t.serialize()).toString("base64"), recentBlockhash: real.message.recentBlockhash }] }).problems.join(" ");
+  };
+  const greedy = ixs.map((ix, j) => (j === feeAt ? SystemProgram.transfer({ fromPubkey: wallet, toPubkey: new PublicKey(HIGHWIRE_WALLET), lamports: Number(d.highwireFees[0]! * 2n) }) : ix));
+  assert.match(relink(greedy), /more than 0\.3% of the trade/);
+  assert.match(relink([...ixs.slice(0, feeAt), fee, ...ixs.slice(feeAt)]), /more than one payment to Highwire/);
+  // With no trade at all there's nothing to take a fee on.
+  assert.match(relink([fee, memo]), /isn't a single trade|never makes/);
+});
+
+test("a launch never carries Highwire's trade fee, even with a first buy", async () => {
+  const recording: Recording = JSON.parse(readFileSync(new URL("./fixtures/launch-rewards.json", import.meta.url), "utf8"));
+  const built = await runScenario("launch-rewards", replayFetch(recording));
+  assert.ok(built && "envelope" in built && built.envelope);
+  const real = VersionedTransaction.deserialize(Buffer.from(built.envelope.transactions[0]!.base64, "base64"));
+  assert.deepEqual(describeTransaction(real, "mainnet").highwireFees, []);
+  assert.equal(highwireFeeBound(describeTransaction(real, "mainnet")), null);
 });

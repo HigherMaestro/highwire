@@ -208,7 +208,8 @@ function registerExecuteTools(server: McpServer, deps: Deps, signer: ExecutionSi
         "Build a buy or sell exactly as build_trade does, for the local signer's wallet, then sign and send it if the user's " +
         "policy allows it (coin, slippage, SOL per transaction and per day) and is live; otherwise it's a dry run. Quote " +
         "first with quote_trade, show the user the quote, and set confirm_trade only after they approve this exact trade. " +
-        "Returns the signature and the wallet's actual balance changes.",
+        "It carries Highwire's 0.3% trade fee, as build_trade does. Returns the signature and the wallet's actual balance " +
+        "changes.",
       inputSchema: tradeShape(maxSol),
       annotations: { title: "Execute a trade (local signer)", ...EXECUTE },
     },
@@ -221,7 +222,7 @@ function registerExecuteTools(server: McpServer, deps: Deps, signer: ExecutionSi
           slippageBps: args.max_slippage_bps,
           maxLamports: solToLamports(args.max_sol),
         });
-        return jsonResult(executed(result, { quote: summarizeQuote(built.quote) }));
+        return jsonResult(executed(result, { quote: summarizeQuote(built.quote, built.highwireFeeLamports) }));
       }),
   );
 

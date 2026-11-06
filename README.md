@@ -227,7 +227,7 @@ you'd let an agent spend.
 | `cluster` | `mainnet` or `devnet`, required |
 | `live` | `false` by default: every execute is a dry run that signs nothing |
 | `actions` | any of `trade`, `launch`, `claim`, `transfer` |
-| `max_sol_per_tx`, `max_sol_per_day` | SOL spent on trades, launch fees and first buys, and SOL sent. Each transaction may also spend up to 0.03 SOL on rent and fees. Both limits count what the simulation shows actually leaving the wallet, rent and fees included, when that's more. The day is the last 24 hours, counted from the audit log |
+| `max_sol_per_tx`, `max_sol_per_day` | SOL spent on trades, launch fees and first buys, and SOL sent. Each transaction may also spend up to 0.03 SOL on rent and fees, Highwire's 0.3% trade fee included. Both limits count what the simulation shows actually leaving the wallet, rent and fees included, when that's more. The day is the last 24 hours, counted from the audit log |
 | `max_slippage_bps` | for trades and first buys |
 | `coins` | `allow` or `deny` lists of mints. Before going live, list the coins (or `creators`) you mean the agent to trade: without an allow-list it may buy any higher.fun coin within your limits, and the signer warns you so |
 | `creators` | `allow`: only coins launched by these wallets |
@@ -322,9 +322,12 @@ about higher.fun's programs, fee modes and API, with sources.
 
 ## Support
 
-Highwire is free. If you'd like to support it, its only donation wallet is
-`7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce` ([Solscan](https://solscan.io/account/7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce)).
-No other wallet collects for Highwire, there is no Highwire token, and we never ask for funds in DMs.
+Trades that Highwire builds on mainnet carry a 0.3% fee: 0.3% of the SOL paid in on a buy, or of the minimum SOL out
+on a sell, as one transfer inside the same transaction, shown in its summary and on the sign page. Launches, claims and
+transfers carry none, and Highwire never takes any of a coin's creator fees. The fee, and any donation, goes to
+Highwire's only wallet, `7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce`
+([Solscan](https://solscan.io/account/7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce)). No other wallet collects for
+Highwire, there is no Highwire token, and we never ask for funds in DMs.
 
 ## Licence
 

@@ -1,10 +1,10 @@
 import { TxVersion } from "@raydium-io/raydium-sdk-v2";
 import BN from "bn.js";
-import { PublicKey, VersionedTransaction } from "@solana/web3.js";
-import { COMPUTE_UNITS } from "../higher/constants.ts";
+import { PublicKey, SystemProgram, VersionedTransaction } from "@solana/web3.js";
+import { COMPUTE_UNITS, HIGHWIRE_WALLET, highwireFeeApplies, highwireFeeLamports, RENT_EXEMPT_WALLET_LAMPORTS } from "../higher/constants.ts";
 import { ValidationError } from "../lib/errors.ts";
 import { WSOL, type Chain } from "./chain.ts";
-import { UnsafeTransactionError, type DecodedTrade } from "./decode.ts";
+import { describeTransaction, UnsafeTransactionError, type DecodedTrade } from "./decode.ts";
 import { finish, priorityFee, type Finished } from "./envelope.ts";
 import { quoteFromMarket, vaultBalances, type Quote, type QuoteRequest } from "./quote.ts";
 
@@ -21,6 +21,8 @@ export interface TradeRequest extends QuoteRequest {
 
 export interface BuiltTrade extends Finished {
   quote: Quote;
+  /** Highwire's trade fee in this transaction, in lamports. */
+  highwireFeeLamports: bigint;
 }
 
 const asVersioned = (tx: unknown, what: string): VersionedTransaction => {
@@ -52,6 +54,18 @@ export function assertTradeMatches(trades: DecodedTrade[], quote: Quote, mint: P
   } else if (t.minOut > quote.amountOut || t.minOut < (quote.minOut * 99n) / 100n) {
     // The pool is re-read for the swap, so a trade landing in between can move it a little.
     fail("the transaction's minimum out is more than 1% away from the quote; quote again");
+  }
+}
+
+/**
+ * Whether Highwire's wallet can take a fee: it must already hold the rent-exempt minimum, or Solana refuses a small
+ * transfer into it. If the balance can't be read, assume it can; the simulation would show otherwise.
+ */
+async function feeWalletReady(chain: Chain): Promise<boolean> {
+  try {
+    return BigInt(await chain.connection.getBalance(new PublicKey(HIGHWIRE_WALLET), "confirmed")) >= RENT_EXEMPT_WALLET_LAMPORTS;
+  } catch {
+    return true;
   }
 }
 
@@ -122,6 +136,15 @@ export async function buildTrade(chain: Chain, req: TradeRequest): Promise<Built
     tx = asVersioned(built.transaction, "cpmm.swap");
   }
 
+  // Highwire's fee, from the trade in the built bytes (a buy's SOL in, a sell's minimum SOL out): the same amounts the
+  // sign page bounds it by. A pool sell's minimum out comes from a fresh read of the pool, so the quote's can differ.
+  const built = describeTransaction(tx, chain.cluster, await chain.lookupTables([tx]));
+  assertTradeMatches(built.trades, quote, req.mint);
+  const trade = built.trades[0]!;
+  const charged = highwireFeeApplies(chain.cluster) && (await feeWalletReady(chain));
+  const fee = charged ? highwireFeeLamports(req.side === "buy" ? trade.amountIn : trade.minOut) : 0n;
+  const append = fee > 0n ? [SystemProgram.transfer({ fromPubkey: req.wallet, toPubkey: new PublicKey(HIGHWIRE_WALLET), lamports: fee })] : [];
+
   const done = await finish({
     chain,
     wallet: req.wallet,
@@ -130,16 +153,18 @@ export async function buildTrade(chain: Chain, req: TradeRequest): Promise<Built
     txs: [
       {
         tx,
+        append,
         label: `${req.side} ${quote.stage === "curve" ? "on the curve" : "in the CPMM pool"}`,
         expect: {
           wallet: req.wallet,
           platformId: market.stage === "curve" ? market.pool.platformId : undefined,
           allowLaunchLab: market.stage === "curve",
           allowCpmm: market.stage === "graduated",
+          ...(fee > 0n ? { highwireFee: { maxLamports: fee, lamports: fee } } : {}),
         },
       },
     ],
   });
   assertTradeMatches(done.decoded[0]!.trades, quote, req.mint);
-  return { ...done, quote };
+  return { ...done, quote, highwireFeeLamports: fee };
 }

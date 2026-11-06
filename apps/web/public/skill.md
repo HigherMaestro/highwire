@@ -2,7 +2,8 @@
 
 Highwire lets an agent launch coins on [higher.fun](https://higher.fun), the open-source Solana launchpad, and earn their
 creator fees. You launch from your own wallet, so you are the coin's creator on-chain: the creator fees go straight to
-you, and Highwire takes no cut. Everything runs through `npx highwire-mcp`, which needs Node 20 or later.
+you, and Highwire takes none of them. Launches are free; trades you make through Highwire carry a 0.3% fee, shown in
+each transaction. Everything runs through `npx highwire-mcp`, which needs Node 20 or later.
 
 Pick the path that fits you:
 

@@ -3,7 +3,9 @@ import { PublicKey, TransactionMessage, type AddressLookupTableAccount, type Ver
 import {
   ADDRESSES,
   COMPUTE_UNITS,
+  HIGHWIRE_FEE_BPS,
   HIGHWIRE_MEMO,
+  HIGHWIRE_WALLET,
   MEMO_PROGRAM_ID,
   PRIORITY_FEE_MICRO_LAMPORTS,
   type Cluster,
@@ -45,6 +47,9 @@ export const NATIVE_MINT_ADDRESS = "So11111111111111111111111111111111111111112"
 export function associatedTokenAddress(mint: PublicKey, owner: PublicKey, tokenProgram: PublicKey = new PublicKey(PROGRAMS.token)): PublicKey {
   return PublicKey.findProgramAddressSync([owner.toBuffer(), tokenProgram.toBuffer(), mint.toBuffer()], new PublicKey(PROGRAMS.associatedToken))[0];
 }
+
+/** The plain-language line for Highwire's trade fee. */
+export const feeLine = (lamports: bigint) => `Pay Highwire's ${HIGHWIRE_FEE_BPS / 100}% trade fee: ${formatLamports(lamports)} SOL to ${HIGHWIRE_WALLET}`;
 
 /** The plain-language line for the Highwire memo. */
 export const MEMO_LINE = `Tags the transaction as built by Highwire (memo "${HIGHWIRE_MEMO}")`;
@@ -95,8 +100,10 @@ export interface DecodedTransaction {
   signers: string[];
   instructions: DecodedInstruction[];
   trades: DecodedTrade[];
-  /** SOL transfers, by recipient. */
+  /** SOL transfers, by recipient. Highwire's trade fee is in `highwireFees`, not here. */
   transfers: { to: string; lamports: bigint }[];
+  /** Highwire's trade fee transfers, in lamports. */
+  highwireFees: bigint[];
   /** Token transfers (TransferChecked): the mint, the accounts, and the amount in base units. */
   tokenTransfers: { mint: string; from: string; to: string; owner: string; amount: bigint }[];
   /** Coins created by initialize_v2: the mint and the creator recorded on-chain. */
@@ -144,6 +151,7 @@ export function describeTransaction(
     instructions: [],
     trades: [],
     transfers: [],
+    highwireFees: [],
     tokenTransfers: [],
     launches: [],
     claims: [],
@@ -171,8 +179,13 @@ export function describeTransaction(
       const type = d.length >= 4 ? d.readUInt32LE(0) : -1;
       if (type === 2 && d.length === 12) {
         const lamports = d.readBigUInt64LE(4);
-        out.transfers.push({ to: k(1), lamports });
-        known(`Send ${formatLamports(lamports)} SOL from ${k(0)} to ${k(1)}`);
+        if (k(1) === HIGHWIRE_WALLET) {
+          out.highwireFees.push(lamports);
+          known(feeLine(lamports));
+        } else {
+          out.transfers.push({ to: k(1), lamports });
+          known(`Send ${formatLamports(lamports)} SOL from ${k(0)} to ${k(1)}`);
+        }
       } else if (type === 0) known(`Create account ${k(1)}, paid by ${k(0)}`);
       else if (type === 3) known(`Create account ${k(1)} (from a seed of ${k(0)}) to hold wrapped SOL`);
       else unknown("System instruction");
@@ -276,6 +289,11 @@ export interface Expectations {
    * recipient's associated token account (which the transaction may open). Without it, nothing may leave the wallet.
    */
   transfer?: { to: PublicKey; lamports?: bigint; mint?: PublicKey; amount?: bigint };
+  /**
+   * Highwire's trade fee: one SOL transfer to HIGHWIRE_WALLET of at most `maxLamports`, or exactly `lamports` when the
+   * builder knows it. Without it, nothing may go to Highwire.
+   */
+  highwireFee?: { maxLamports: bigint; lamports?: bigint };
 }
 
 /**
@@ -322,6 +340,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
   const isWsol = (k: PublicKey) => wsol.has(k.toBase58());
 
   let feeTransfers = 0;
+  let highwireFees = 0;
   let fundings = 0;
   let memos = 0;
   let transfers = 0;
@@ -342,7 +361,12 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
       if (type === 2 && d.length === 12) {
         const to = key(1);
         const lamports = d.readBigUInt64LE(4);
-        if (exp.launchFee && to.equals(exp.launchFee.to)) {
+        if (to.toBase58() === HIGHWIRE_WALLET) {
+          if (!exp.highwireFee) fail(`instruction ${i + 1}: a payment to Highwire, which this transaction never makes`);
+          if (lamports > exp.highwireFee!.maxLamports) fail(`instruction ${i + 1}: Highwire's fee is more than ${HIGHWIRE_FEE_BPS / 100}% of the trade`);
+          if (exp.highwireFee!.lamports !== undefined && lamports !== exp.highwireFee!.lamports) fail(`instruction ${i + 1}: Highwire's fee isn't the quoted one`);
+          if (++highwireFees > 1) fail(`instruction ${i + 1}: more than one payment to Highwire`);
+        } else if (exp.launchFee && to.equals(exp.launchFee.to)) {
           if (lamports > exp.launchFee.maxLamports) fail(`instruction ${i + 1}: launch fee above the quoted amount`);
           if (++feeTransfers > 1) fail(`instruction ${i + 1}: more than one launch fee transfer`);
         } else if (exp.creatorFunding && to.equals(exp.creatorFunding.to)) {
@@ -456,6 +480,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
   });
   if (exp.launchFee && feeTransfers !== 1) fail("the launch fee must be paid exactly once");
   if (send && transfers !== 1) fail("the transfer must happen exactly once");
+  if (exp.highwireFee?.lamports !== undefined && exp.highwireFee.lamports > 0n && highwireFees !== 1) fail("Highwire's trade fee must be paid exactly once");
 }
 
 /** Default compute limits, re-exported for the builders. */

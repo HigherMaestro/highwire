@@ -1,6 +1,6 @@
 import { Buffer } from "buffer";
 import { PublicKey, VersionedTransaction, type AddressLookupTableAccount } from "@solana/web3.js";
-import { ADDRESSES, feeModeOfPlatform, LAUNCH_FEE_CAP_LAMPORTS, type Cluster } from "../higher/constants.ts";
+import { ADDRESSES, feeModeOfPlatform, HIGHWIRE_FEE_BPS, highwireFeeApplies, highwireFeeLamports, LAUNCH_FEE_CAP_LAMPORTS, type Cluster } from "../higher/constants.ts";
 import {
   assertSafe,
   describeTransaction,
@@ -119,6 +119,7 @@ function effectsOf(d: DecodedTransaction, launchFeeWallet: string | null | undef
   for (const t of d.transfers) {
     if (launchFeeWallet && t.to === launchFeeWallet) out.push({ kind: "spend", text: `${formatLamports(t.lamports)} SOL launch fee to higher.fun (${t.to})` });
   }
+  for (const f of d.highwireFees) out.push({ kind: "spend", text: `${formatLamports(f)} SOL Highwire trade fee (${HIGHWIRE_FEE_BPS / 100}%)` });
   for (const c of d.claims) {
     out.push({ kind: "receive", text: c.kind === "curve" ? "your curve creator fees, as SOL" : `your creator fees from Raydium pool ${c.from}` });
   }
@@ -172,6 +173,18 @@ function vestingOnly(ixs: ReturnType<typeof resolveInstructions>, wallet: Public
   return { vestingPool: v[0]!.keys[2] };
 }
 
+/**
+ * The most Highwire's trade fee may be in this transaction, from its own trade: HIGHWIRE_FEE_BPS of a buy's SOL in or a
+ * sell's minimum SOL out. Null when it may carry none: off mainnet, no trade, more than one, or a launch (launches are
+ * free).
+ */
+export function highwireFeeBound(d: DecodedTransaction, cluster: Cluster = "mainnet"): bigint | null {
+  if (!highwireFeeApplies(cluster) || d.launches.length || d.trades.length !== 1) return null;
+  const t = d.trades[0]!;
+  const buy = t.kind === "curve-buy" || (t.kind === "cpmm-swap" && t.inputMint === NATIVE_MINT_ADDRESS);
+  return highwireFeeLamports(buy ? t.amountIn : t.minOut);
+}
+
 /** What the transaction must stick to, worked out from its own instructions and pinned to higher.fun's addresses. */
 function expectationsOf(
   tx: VersionedTransaction,
@@ -181,6 +194,7 @@ function expectationsOf(
   ctx: ReviewContext,
   createdPools: string[],
   problems: string[],
+  decoded: DecodedTransaction,
 ): Expectations {
   const a = ADDRESSES[cluster];
   const L = DISCRIMINATORS.launchLab;
@@ -211,6 +225,8 @@ function expectationsOf(
     else platformId = new PublicKey(id);
   }
   if (feeTransfer && creates === 0) problems.push("it pays a launch fee without launching a coin");
+  const feeBound = highwireFeeBound(decoded, cluster);
+  if (decoded.highwireFees.length && feeBound === null) problems.push("it pays Highwire a trade fee on something that isn't a single trade");
   // The only extra signer allowed is the new coin's mint, already signed by Highwire.
   const extraSigners = mints.filter((m) => presigned.includes(m)).map((m) => new PublicKey(m));
   return {
@@ -218,6 +234,7 @@ function expectationsOf(
     platformId,
     extraSigners,
     ...(feeTransfer && ctx.launchFeeWallet ? { launchFee: { to: new PublicKey(ctx.launchFeeWallet), maxLamports: LAUNCH_FEE_CAP_LAMPORTS } } : {}),
+    ...(feeBound !== null ? { highwireFee: { maxLamports: feeBound } } : {}),
     ...(createdPools.length === 1 ? { vestingPool: new PublicKey(createdPools[0]!) } : vestingOnly(ixs, wallet)),
   };
 }
@@ -282,7 +299,7 @@ export function reviewEnvelope(env: Envelope, ctx: ReviewContext = {}): Envelope
     });
 
     try {
-      assertSafe(tx, cluster, expectationsOf(tx, cluster, wallet, t.presigned, ctx, createdPools, problems), ctx.lookupTables ?? []);
+      assertSafe(tx, cluster, expectationsOf(tx, cluster, wallet, t.presigned, ctx, createdPools, problems, decoded), ctx.lookupTables ?? []);
     } catch (err) {
       problems.push(err instanceof Error ? err.message : String(err));
     }

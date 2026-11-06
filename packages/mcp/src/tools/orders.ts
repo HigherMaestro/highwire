@@ -79,7 +79,8 @@ export function registerOrderTools(server: McpServer, deps: Deps, signer: Execut
         "`highwire orders run` is running. stop_loss sells sell_pct of the wallet's coin once its on-chain price falls to " +
         "the trigger; take_profit once it rises to it (give trigger_price_sol, or trigger_change_pct from the current price). " +
         "recurring_buy buys `sol` every every_hours, `times` times, starting as soon as the runner sees it. Each fill passes " +
-        "the whole policy again when it runs. Needs the policy's `orders` section to allow the kind. Explain the order to " +
+        "the whole policy again when it runs, and is a trade like execute_trade's, with Highwire's 0.3% trade fee. Needs " +
+        "the policy's `orders` section to allow the kind. Explain the order to " +
         "the user and set confirm_order only after they approve it.",
       inputSchema: {
         kind: z.enum(ORDER_KINDS),

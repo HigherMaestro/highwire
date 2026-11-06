@@ -279,7 +279,8 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
       description:
         "Quote a buy (by SOL in) or a sell (by tokens in) of a higher.fun coin, wherever it trades now: the LaunchLab bonding " +
         "curve, or its Raydium CPMM pool after graduation. Returns the expected output, the minimum at the given slippage, " +
-        "price impact, and the fees split by who receives them under the coin's fee mode. Reads only.",
+        "price impact, the fees split by who receives them under the coin's fee mode, and Highwire's 0.3% trade fee " +
+        "(highwireFee), which a trade built through Highwire carries. Reads only.",
       inputSchema: {
         mint,
         side,
@@ -292,7 +293,8 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
     (args) =>
       run(async () => {
         const q = await quoteTrade(chain, { mint: new PublicKey(args.mint), side: args.side, amountIn: tradeAmount(args), slippageBps: args.slippage_bps });
-        return { cluster: chain.cluster, ...summarizeQuote(q) };
+        // The fee is mainnet only.
+        return { cluster: chain.cluster, ...summarizeQuote(q, chain.cluster === "mainnet" ? q.highwireFeeLamports : 0n) };
       }),
   );
 
@@ -357,14 +359,15 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
         "Quote first with quote_trade and show the user the quote. Set confirm_trade to true only after the user has " +
         "approved this exact trade (coin, side, amount, slippage). The transaction is checked instruction by instruction, " +
         "simulated, and returned as base64 with a plain-language summary and a sign_url for the user to review and sign in " +
-        "their own wallet. Highwire never signs and never needs a private key.",
+        "their own wallet. It carries Highwire's 0.3% trade fee, one transfer to Highwire's wallet shown in the summary: on " +
+        "top of a buy, or from a sell's SOL. Tell the user. Highwire never signs and never needs a private key.",
       inputSchema: { wallet: wallet.describe("The wallet that will sign and pay (public key only)."), ...tradeShape(maxSol) },
       annotations: { title: "Build a trade (unsigned)", ...BUILD },
     },
     (args) =>
       runResult(async () => {
         const built = await buildTradeFor(deps, new PublicKey(args.wallet), args);
-        return envelopeResult(built.envelope, deps, { quote: summarizeQuote(built.quote) });
+        return envelopeResult(built.envelope, deps, { quote: summarizeQuote(built.quote, built.highwireFeeLamports) });
       }),
   );
 

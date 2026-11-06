@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
-import { REPO_URL } from "../../lib/site.ts";
+import { DONATION_WALLET, REPO_URL } from "../../lib/site.ts";
 
 export const metadata: Metadata = {
   title: "Terms",
@@ -47,6 +47,16 @@ export default function TermsPage() {
                 anything. Transactions on Solana are final and can&apos;t be reversed by us or anyone else.
               </li>
             </ul>
+
+            <h2>Fees</h2>
+            <p>
+              A buy or sell that Highwire builds on Solana mainnet carries Highwire&apos;s trade fee: 0.3% of the SOL you pay
+              in on a buy, or of the minimum SOL you get on a sell. It&apos;s one transfer to Highwire&apos;s wallet,{" "}
+              <code>{DONATION_WALLET}</code>, inside the same transaction, shown in its summary, so you see it before you
+              sign. Launches, creator fee claims and transfers carry no Highwire fee, and Highwire
+              never takes any part of a coin&apos;s creator fees. higher.fun, Raydium and the Solana network charge their own
+              fees, which the quote and the summary show.
+            </p>
 
             <h2>Not financial advice</h2>
             <p>

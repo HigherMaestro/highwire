@@ -65,12 +65,13 @@ export function highwireMemo(): TransactionInstruction {
 }
 
 /**
- * Recompiles a transaction with the Highwire memo as its last instruction. Lookup tables are dropped when the
- * transaction still fits without them, so every account is visible in the bytes; otherwise they are kept.
+ * Recompiles a transaction with `extra` instructions (Highwire's trade fee) and then the Highwire memo at the end.
+ * Lookup tables are dropped when the transaction still fits without them, so every account is visible in the bytes;
+ * otherwise they are kept.
  */
-export function withHighwireMemo(tx: VersionedTransaction, tables: AddressLookupTableAccount[]): VersionedTransaction {
+export function withHighwireMemo(tx: VersionedTransaction, tables: AddressLookupTableAccount[], extra: TransactionInstruction[] = []): VersionedTransaction {
   const msg = TransactionMessage.decompile(tx.message, { addressLookupTableAccounts: tables });
-  msg.instructions.push(highwireMemo());
+  msg.instructions.push(...extra, highwireMemo());
   const fits = (t: VersionedTransaction) => {
     try {
       return t.serialize().length <= MAX_TX_BYTES;
@@ -96,6 +97,8 @@ export interface BuiltTx {
   /** Keypairs Highwire generated for this transaction (a new mint) and signs with before handing over. */
   presign?: Keypair[];
   dependsOn?: number[];
+  /** Instructions to add after the built ones and before the memo: Highwire's trade fee. */
+  append?: TransactionInstruction[];
   expect: Expectations;
 }
 
@@ -124,7 +127,7 @@ export async function finish(opts: FinishOptions): Promise<Finished> {
   const decoded: DecodedTransaction[] = [];
   const out: UnsignedTransaction[] = [];
   for (const [index, b] of opts.txs.entries()) {
-    const rebuilt = withHighwireMemo(b.tx, tables);
+    const rebuilt = withHighwireMemo(b.tx, tables, b.append);
     rebuilt.message.recentBlockhash = blockhash;
     const tx = new VersionedTransaction(rebuilt.message);
     assertSafe(tx, chain.cluster, b.expect, tables);

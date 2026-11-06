@@ -58,6 +58,12 @@ Streamable HTTP. An npm workspaces monorepo. Read
   goes through `finish()` in `packages/core/src/tx/envelope.ts`: the `highwire` memo, the allow-list check,
   plain-language decoding and simulation. Add any new instruction to `decode.ts` (both the description and
   `assertSafe`) before a builder may emit it; the sign page's review uses the same checks, so it will refuse it too.
+- **Highwire's trade fee** is `HIGHWIRE_FEE_BPS` (0.3%) to `HIGHWIRE_WALLET`, one System transfer just before the memo,
+  in trades only (never launches, first buys, claims or transfers) and on mainnet only. The builder computes it from the
+  trade in its own bytes (a buy's SOL in, a sell's minimum SOL out), and the sign page bounds it the same way
+  (`highwireFeeBound`); `attacks.test.ts` holds the links that must fail. Solana refuses a small transfer into an empty
+  wallet, so the builder leaves the fee out while `HIGHWIRE_WALLET` holds less than the rent-exempt minimum: never empty
+  that wallet completely. Changing the rate changes the terms, the README, skill.md and the docs with it.
 - **The sign page trusts only the bytes.** A sign link can come from anyone. Show summaries and titles rebuilt from the
   transaction (`reviewEnvelope`), never the envelope's own text (`label`, `kind`, `summary`), and never sign when the
   review reports a problem. `packages/core/test/attacks.test.ts` holds hand-made links the allow-list must refuse;

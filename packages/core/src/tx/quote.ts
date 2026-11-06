@@ -1,7 +1,7 @@
 import { Curve, CurveCalculator } from "@raydium-io/raydium-sdk-v2";
 import BN from "bn.js";
 import type { PublicKey } from "@solana/web3.js";
-import { FEE_MODES, type FeeMode } from "../higher/constants.ts";
+import { FEE_MODES, HIGHWIRE_FEE_BPS, highwireFeeLamports, type FeeMode } from "../higher/constants.ts";
 import { round } from "../higher/format.ts";
 import { ValidationError } from "../lib/errors.ts";
 import { WSOL, type Chain, type CpmmConfigState, type CpmmPoolState, type Market } from "./chain.ts";
@@ -49,6 +49,8 @@ export interface Quote {
   spotPriceSol: number | null;
   /** SOL per whole token this trade gets, fees included. */
   effectivePriceSol: number | null;
+  /** Highwire's trade fee if this were built now: HIGHWIRE_FEE_BPS of a buy's SOL in or a sell's minimum SOL out. */
+  highwireFeeLamports: bigint;
   notes: string[];
 }
 
@@ -86,10 +88,11 @@ export function quoteFromMarket(market: Market, req: QuoteRequest, vaults?: { va
       code: "migrating",
     });
   }
-  return market.stage === "graduated" ? cpmmQuote(market, { ...req, ...vaults }) : curveQuote(market, req);
+  const q = market.stage === "graduated" ? cpmmQuote(market, { ...req, ...vaults }) : curveQuote(market, req);
+  return { ...q, highwireFeeLamports: highwireFeeLamports(req.side === "buy" ? q.amountInUsed : q.minOut) };
 }
 
-function curveQuote(market: Extract<Market, { stage: "curve" | "migrating" }>, req: QuoteRequest): Quote {
+function curveQuote(market: Extract<Market, { stage: "curve" | "migrating" }>, req: QuoteRequest): Omit<Quote, "highwireFeeLamports"> {
   const { pool, config, platform } = market;
   const rates = {
     protocolFeeRate: config.tradeFeeRate,
@@ -175,7 +178,7 @@ export interface CpmmQuoteInputs {
   vaultB: bigint;
 }
 
-function cpmmQuote(market: Extract<Market, { stage: "graduated" }>, req: QuoteRequest & Partial<CpmmQuoteInputs>): Quote {
+function cpmmQuote(market: Extract<Market, { stage: "graduated" }>, req: QuoteRequest & Partial<CpmmQuoteInputs>): Omit<Quote, "highwireFeeLamports"> {
   if (req.vaultA === undefined || req.vaultB === undefined) throw new Error("cpmmQuote needs vault balances");
   const { pool, config } = market;
   const { a, b } = cpmmReserves(pool, req.vaultA, req.vaultB);
@@ -254,8 +257,11 @@ export async function vaultBalances(chain: Chain, pool: CpmmPoolState): Promise<
   return { vaultA: BigInt(va.value.amount), vaultB: BigInt(vb.value.amount) };
 }
 
-/** A quote in tool units: SOL, whole tokens, percentages. */
-export function summarizeQuote(q: Quote) {
+/**
+ * A quote in tool units: SOL, whole tokens, percentages. `highwireFee` is the fee a built trade actually carries, when
+ * there is one (a pool sell's minimum out is re-read at build time); otherwise the quote's own.
+ */
+export function summarizeQuote(q: Quote, highwireFee: bigint = q.highwireFeeLamports) {
   const buying = q.side === "buy";
   const sol = (v: bigint) => lamportsNumber(v);
   const tok = (v: bigint) => tokensNumber(v);
@@ -275,6 +281,13 @@ export function summarizeQuote(q: Quote) {
     fees: {
       totalSol: sol(q.feeTotalLamports),
       split: q.fees.map((f) => ({ to: f.to, sol: sol(f.lamports), ...(f.approx ? { note: "charged in tokens; shown at the pool price" } : {}) })),
+    },
+    highwireFee: {
+      sol: sol(highwireFee),
+      pct: HIGHWIRE_FEE_BPS / 100,
+      note: buying
+        ? "Highwire's trade fee, paid on top of the buy in the same transaction."
+        : "Highwire's trade fee, paid from the sale's SOL in the same transaction (0.3% of the minimum SOL out).",
     },
     notes: q.notes,
   };

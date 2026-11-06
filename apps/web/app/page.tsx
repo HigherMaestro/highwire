@@ -238,8 +238,9 @@ export default async function Home() {
             <div className="section-head">
               <h2 id="support-title">Support Highwire</h2>
               <p>
-                Highwire is free and open source. If it&apos;s useful to you and you&apos;d like to chip in, donations go to
-                this Solana wallet, and only this one. Entirely optional.
+                Highwire is open source. Trades it builds carry a 0.3% fee, shown in each transaction before you sign;
+                launches, claims and everything else are free. If you&apos;d like to chip in too, donations go to the same
+                wallet, and only this one. Entirely optional.
               </p>
             </div>
             <div className="support">

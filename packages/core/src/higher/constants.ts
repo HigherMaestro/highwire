@@ -121,6 +121,28 @@ export const COMPUTE_UNITS = { create: 600_000, curveTrade: 300_000, poolSwap: 3
 /** SPL Memo v2. Every transaction Highwire builds carries one memo with HIGHWIRE_MEMO, so its transactions can be counted on-chain. */
 export const MEMO_PROGRAM_ID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 export const HIGHWIRE_MEMO = "highwire";
+
+/** Highwire's one wallet: donations, and the trade fee. Anything else claiming to collect for Highwire isn't us. */
+export const HIGHWIRE_WALLET = "7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce";
+/**
+ * Highwire's fee on a trade it builds, in bps: one SOL transfer to HIGHWIRE_WALLET at the end of the transaction. On a
+ * buy it's this share of the SOL paid in; on a sell, of the minimum SOL out (the only SOL amount the bytes guarantee, so
+ * the sign page can check it). Launches, claims and transfers carry none.
+ */
+export const HIGHWIRE_FEE_BPS = 30;
+
+/** The fee is charged on mainnet only: devnet SOL is for trying things out. */
+export const highwireFeeApplies = (cluster: Cluster) => cluster === "mainnet";
+/**
+ * Solana's rent-exempt minimum for a plain wallet. A transfer smaller than this to a wallet that holds nothing is
+ * refused, so the builder leaves the fee out while HIGHWIRE_WALLET holds less (trades keep working; only the fee waits).
+ */
+export const RENT_EXEMPT_WALLET_LAMPORTS = 890_880n;
+
+/** The trade fee for a trade whose SOL side is `lamports` (a buy's SOL in, a sell's minimum SOL out). Rounds down. */
+export function highwireFeeLamports(lamports: bigint): bigint {
+  return (lamports * BigInt(HIGHWIRE_FEE_BPS)) / 10_000n;
+}
 export const DEFAULT_SLIPPAGE_BPS = 200;
 /** A creator lock on a New school coin: 1-10% of supply, a 7-day cliff after graduation, then 30 days linear. */
 export const CREATOR_LOCK = { minPct: 1, maxPct: 10, cliffSeconds: 604_800, unlockSeconds: 2_592_000 } as const;
