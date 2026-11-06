@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, resolve, sep } from "node:path";
 import { PublicKey, VersionedTransaction } from "@solana/web3.js";
-import { buildTransfer, describeTransaction, HigherSession, solToLamports, summarizeQuote, tokensToBase, ValidationError, type Envelope } from "highwire-core";
+import { buildTransfer, describeTransaction, HigherError, HigherSession, solToLamports, summarizeQuote, tokensToBase, ValidationError, type Envelope } from "highwire-core";
 import type { ExecuteResult, Intent } from "highwire-agent";
 import { friendlyError, jsonResult, run, runResult } from "../result.ts";
 import { BUILD, EXECUTE, READ_ONLY, address, mint, type Deps, type ExecutionSigner } from "./shared.ts";
@@ -232,7 +232,13 @@ function registerExecuteTools(server: McpServer, deps: Deps, signer: ExecutionSi
           await session.signIn(signer.wallet, (m) => signer.signInMessage(m, "execute_launch"));
           if (args.launch_for) {
             const handle = args.launch_for.handle.replace(/^@/, "").toLowerCase();
-            const r = await session.resolveFeeRecipient(args.launch_for.provider, handle);
+            const r = await session.resolveFeeRecipient(args.launch_for.provider, handle).catch((err: unknown) => {
+              // higher.fun answers this way while the feature is off on its side (seen 2026-11-06).
+              if (err instanceof HigherError && (err.code === "unavailable" || /switched on/i.test(err.message))) {
+                throw new HigherError(`${err.message.replace(/^higher\.fun: /, "higher.fun says ")}.`, { code: "launch_for_unavailable" });
+              }
+              throw err;
+            });
             launchFor = { provider: r.provider, handle: r.handle, wallet: r.wallet };
             creator = new PublicKey(r.wallet);
           }

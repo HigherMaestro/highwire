@@ -82,6 +82,8 @@ creates, holds or manages a wallet, and the hosted endpoint still never signs.
   - **`launch_for`:** an X or GitHub handle, New school. higher.fun resolves the handle to the wallet that holds that
     account's fees. The coin is created for that wallet, which gets 0.005 SOL if it holds less.
   - The sign page still never signs a launch for someone else.
+  - higher.fun hasn't switched on the handle lookup yet. Until it does, `launch_for` stops with
+    `launch_for_unavailable`, before uploading or spending anything.
 - **Donations:** Highwire's one donation wallet, `7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce`, is on the home page,
   linked from every page's footer.
 - **Ecosystem fees** at highwire.fun/fees: every fee all of higher.fun's coins have paid and who got it (creators,

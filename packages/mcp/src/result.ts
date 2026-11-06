@@ -45,6 +45,8 @@ const NEXT_STEPS: Record<string, string> = {
   send_failed: "Nothing confirmed. Check the signature on an explorer before retrying, so the same action doesn't run twice.",
   too_many_tokens:
     "Pass mints with the higher.fun coins to check (search_coins finds them by name or ticker); that reads only those coins.",
+  launch_for_unavailable:
+    "higher.fun hasn't switched on launching for an X or GitHub account yet, so nothing was uploaded or spent. Tell the user, and launch without launch_for if they want (the creator fees then go to the signer's wallet).",
   too_large: "The transaction doesn't fit in Solana's size limit. For a launch, try a shorter metadata_uri or drop the first buy.",
 };
 

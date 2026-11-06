@@ -90,7 +90,8 @@ refreshes the blockhash and changes nothing else); launch links, whose new mint 
 - `execute_launch` also takes `launch_for` (New school): an X or GitHub handle. higher.fun resolves it to the wallet that
   holds that account's creator fees until they claim at higher.fun/claim; the coin is created for that wallet, which
   gets 0.005 SOL from you if it holds less, and your first buy is still yours. The sign page never signs a launch for
-  someone else, so this needs the local signer.
+  someone else, so this needs the local signer. higher.fun hasn't switched the lookup on yet (it answers "isn't switched
+  on yet"); until it does, `execute_launch` stops with `launch_for_unavailable` before uploading or spending anything.
 
 **Prompts:**
 - `scan_launches`

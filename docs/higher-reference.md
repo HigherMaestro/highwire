@@ -159,7 +159,9 @@ Trades on the coin API include third-party routers (Axiom's `FLASHX…`, Jupiter
   site creates the coin with that wallet as `initialize_v2`'s creator (account 1, not a signer), points the first buy's
   creator vault (account 17 of `buy_exact_in`) at the new creator's, sends the wallet 0.005 SOL if it holds less, allows
   no creator lock, and passes `feeRecipient` in the uploaded metadata. A mainnet simulation of Highwire's build accepted
-  it (2026-11-05).
+  it (2026-11-05). On 2026-11-06 the lookup answered, for a signed-in wallet, "launching for an X or GitHub account isn't
+  switched on yet" (`unavailable`): the feature is off on higher.fun's side for now, and `execute_launch` says so
+  (`launch_for_unavailable`) before anything is uploaded.
 - **`POST /mints/reserve`** returns `{mint, secretKey}`: a vanity `…high` keypair from the server. The site checks the
   secret matches the address and ends in `high`, and silently falls back to a random mint when the call fails. Coins
   with random mints are indexed like any other (many listed coins don't end in `high`). Highwire generates its own
