@@ -66,8 +66,11 @@ Decisions D4 (attribution memo), D6 (hosted build tools) and D9 (terms, privacy,
 - **Pages.** /terms and /privacy as drafts pending legal review, and /changelog from `CHANGELOG.md`.
 
 Not verified, and left to the maintainer:
-- Signing with a real wallet (Phantom, Solflare, Backpack): the page was tested up to the wallet prompt, with no wallet
-  installed.
+- ~~Signing with a real wallet.~~ Done 2026-11-06: a 0.01 SOL $HIGH buy built on the hosted endpoint, opened as a sign
+  link (verified as built by highwire.fun), signed in the user's own wallet and confirmed with the `highwire` memo
+  ([transaction](https://solscan.io/tx/559k7pVa8iTefMpUQ2skvSpbwDH7bvpsQR2z1bsmQ2NJJbtQqU96dxA4RJdkY6BuysXw8L7NHVdmx7bHCZXFzBof)).
+  It received 518.77 HIGH against a 488.94 minimum. The first attempt showed that chat apps mangle long links; the
+  page now cleans that up before decoding.
 - Production RPCs: Solana's public mainnet RPC refuses browser requests, so `NEXT_PUBLIC_SOLANA_RPC_URL` must be set to
   an RPC that allows highwire.fun before the sign page works on mainnet. Set `SOLANA_RPC_URL` and
   `HIGHWIRE_LAUNCH_SECRET` too.
