@@ -59,7 +59,7 @@ const POLICY_KEYS: [string, string][] = [
   ["coins", "allow: only these coins; deny: never these. For trades and coin transfers."],
   ["creators", "allow: only trade coins launched by these wallets."],
   ["transfer_allowlist", "The only wallets transfers may go to. Empty by default."],
-  ["orders", "kinds: which standing orders an agent may place (stop_loss, take_profit, recurring_buy, fee_claim); max_open: how many at once (default 10). Without it, none."],
+  ["orders", "kinds: which standing orders an agent may place (stop_loss, take_profit, limit_buy, recurring_buy, fee_claim); max_open: how many at once (default 10). Without it, none."],
   ["posts", "comments: own (only coins the wallet launched, the default), any or none; chat: true to allow higher.fun's site chat; max_per_day (default 10). Without it, none."],
 ];
 
@@ -293,7 +293,7 @@ export default async function Docs() {
               </p>
               <p className="muted">
                 <strong>Standing orders.</strong> With an <code>orders</code> section in the policy, an agent can place a
-                stop-loss, a take-profit, a recurring buy or a fee claim with <code>place_order</code>.{" "}
+                stop-loss, a take-profit, a limit buy, a recurring buy or a fee claim with <code>place_order</code>.{" "}
                 <code>highwire orders run</code> fills them while it runs: price orders against the coin&apos;s on-chain price
                 (the live feed only says when to look), recurring buys and fee claims on their schedule. A fee claim
                 collects the wallet&apos;s creator fees once enough is waiting, and can spend a share of each claim buying

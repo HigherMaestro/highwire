@@ -121,3 +121,15 @@ test("post needs exactly one of --mint and --chat, and text, and a wallet", asyn
   assert.equal(await runPost(["--chat", "gm"], { ...w.io, env: { HIGHWIRE_HOME: home() } }), 1);
   assert.match(w.err.join("\n"), /highwire wallet new/);
 });
+
+test("orders limit-buy needs a mint, sol and exactly one trigger, and a wallet", async () => {
+  const { runOrders } = await import("../src/orders-cli.ts");
+  const signal = new AbortController().signal;
+  const M = "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix";
+  for (const argv of [["limit-buy"], ["limit-buy", "--mint", M, "--sol", "0.1"], ["limit-buy", "--mint", M, "--sol", "0.1", "--price", "1", "--drop-pct", "20"], ["limit-buy", "--mint", M, "--sol", "x", "--drop-pct", "20"]]) {
+    assert.equal(await runOrders(argv, { ...capture().io, signal, env: { HIGHWIRE_HOME: home() } }), 2, argv.join(" "));
+  }
+  const w = capture();
+  assert.equal(await runOrders(["limit-buy", "--mint", M, "--sol", "0.1", "--drop-pct", "20"], { ...w.io, signal, env: { HIGHWIRE_HOME: home() } }), 1);
+  assert.match(w.err.join("\n"), /highwire wallet new/);
+});

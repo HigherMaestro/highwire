@@ -58,7 +58,7 @@ export function viewOrder(o: Order) {
     status: o.status,
     description: describeOrder(o),
     mint: o.mint,
-    ...(o.triggerPriceSol !== undefined ? { triggerPriceSol: o.triggerPriceSol, sellPct: o.sellPct } : {}),
+    ...(o.triggerPriceSol !== undefined ? { triggerPriceSol: o.triggerPriceSol, ...(o.kind === "limit_buy" ? { sol: o.sol } : { sellPct: o.sellPct }) } : {}),
     ...(o.minSolOut !== undefined ? { minSolOut: o.minSolOut } : {}),
     ...(o.kind === "recurring_buy" ? { sol: o.sol, everyHours: o.everyHours, times: o.times, runsDone: o.runsDone, nextRunAt: o.nextRunAt } : {}),
     ...(o.kind === "fee_claim" ? { everyHours: o.everyHours, minClaimSol: o.minClaimSol, ...(o.buybackPct ? { buybackPct: o.buybackPct } : {}), runsDone: o.runsDone, nextRunAt: o.nextRunAt } : {}),
@@ -86,10 +86,11 @@ export function registerOrderTools(server: McpServer, deps: Deps, signer: Execut
     {
       title: "Place a standing order (local signer)",
       description:
-        "Place a stop-loss, take-profit, recurring buy or fee claim that the local signer runs later, without asking " +
-        "again, while `highwire orders run` is running. stop_loss sells sell_pct of the wallet's coin once its on-chain " +
-        "price falls to the trigger; take_profit once it rises to it (give trigger_price_sol, or trigger_change_pct from the " +
-        "current price). recurring_buy buys `sol` every every_hours, `times` times. fee_claim claims the wallet's creator " +
+        "Place a stop-loss, take-profit, limit buy, recurring buy or fee claim that the local signer runs later, without " +
+        "asking again, while `highwire orders run` is running. stop_loss sells sell_pct of the wallet's coin once its " +
+        "on-chain price falls to the trigger; take_profit once it rises to it (give trigger_price_sol, or trigger_change_pct " +
+        "from the current price). limit_buy buys `sol` of the coin once its price falls to the trigger, then it's done. " +
+        "recurring_buy buys `sol` every every_hours, `times` times. fee_claim claims the wallet's creator " +
         "fees every every_hours when at least min_claim_sol is waiting, and with buyback_pct spends that share of the SOL " +
         "claimed buying `mint` (say the wallet's own coin). Each run passes the whole policy again; buys and sells are trades " +
         "like execute_trade's, with Highwire's 0.3% trade fee, and claims are free. Needs the policy's `orders` section to " +
@@ -106,7 +107,7 @@ export function registerOrderTools(server: McpServer, deps: Deps, signer: Execut
           .describe("Price orders, instead of trigger_price_sol: the trigger as a change from the current price, such as -20 or 50."),
         sell_pct: z.number().min(1).max(100).default(100).describe("Price orders: the share of the wallet's balance to sell."),
         min_sol_out: z.number().positive().optional().describe("Price orders: never sell for less than this much SOL in all; it waits instead."),
-        sol: z.number().positive().max(deps.maxSolPerTx).optional().describe("recurring_buy: SOL to spend each time."),
+        sol: z.number().positive().max(deps.maxSolPerTx).optional().describe("recurring_buy: SOL to spend each time. limit_buy: SOL to spend when it triggers."),
         every_hours: z.number().min(1).max(720).optional().describe("recurring_buy and fee_claim: hours between runs."),
         times: z.number().int().min(1).max(1000).optional().describe("recurring_buy: how many buys in all."),
         min_claim_sol: z.number().min(0).max(10).default(0.001).describe("fee_claim: skip a run when less than this much SOL is waiting."),
@@ -129,6 +130,7 @@ export function registerOrderTools(server: McpServer, deps: Deps, signer: Execut
           throw refused("max_slippage_bps", `${args.max_slippage_bps} bps of slippage is over the policy's ${policy.max_slippage_bps}`);
         }
         const recurring = args.kind === "recurring_buy";
+        const limitBuy = args.kind === "limit_buy";
         if (feeClaim && (args.buyback_pct === undefined) !== (args.mint === undefined)) {
           throw new ValidationError("A fee_claim buys back only with both buyback_pct and mint (the coin to buy); give both or neither.");
         }
@@ -138,7 +140,7 @@ export function registerOrderTools(server: McpServer, deps: Deps, signer: Execut
         }
         if (args.mint !== undefined) {
           const creator = policy.creators ? await creatorOf(chain, args.mint) : null;
-          const solOut = recurring && args.sol !== undefined ? solToLamports(args.sol) : 0n;
+          const solOut = (recurring || limitBuy) && args.sol !== undefined ? solToLamports(args.sol) : 0n;
           // The coin, creator, slippage and per-transaction rules now; the daily limit is checked at each fill.
           const refusal = checkPolicy(policy, { action: "trade", cluster, solOut, slippageBps: args.max_slippage_bps, mint: args.mint, creator }, 0n);
           if (refusal && refusal.rule !== "max_sol_per_day") throw refused(refusal.rule, refusal.reason);
@@ -178,6 +180,30 @@ export function registerOrderTools(server: McpServer, deps: Deps, signer: Execut
           const q = await quoteTrade(chain, { mint: new PublicKey(args.mint!), side: "buy", amountIn: solToLamports(args.sol), slippageBps: args.max_slippage_bps });
           current = { spotPriceSol: q.spotPriceSol, eachBuyGetsTokens: tokensNumber(q.amountOut), totalSol: Math.round(args.sol * args.times * 1e9) / 1e9 };
           order = { kind: "recurring_buy", cluster, wallet: signer.wallet, mint: args.mint, maxSlippageBps: args.max_slippage_bps, sol: args.sol, everyHours: args.every_hours, times: args.times, nextRunAt: now.toISOString() };
+        } else if (limitBuy) {
+          if (args.sol === undefined) throw new ValidationError("A limit_buy takes sol, the SOL to spend when it triggers.");
+          if ((args.trigger_price_sol === undefined) === (args.trigger_change_pct === undefined)) throw new ValidationError("Give trigger_price_sol or trigger_change_pct, not both.");
+          if (args.every_hours !== undefined || args.times !== undefined || args.min_sol_out !== undefined) {
+            throw new ValidationError("A limit_buy takes sol and a trigger; every_hours and times are for recurring_buy, min_sol_out for sells.");
+          }
+          const q = await quoteTrade(chain, { mint: new PublicKey(args.mint!), side: "buy", amountIn: solToLamports(args.sol), slippageBps: args.max_slippage_bps });
+          const spot = q.spotPriceSol;
+          if (spot === null) throw new ValidationError("The coin's price can't be read on-chain right now.");
+          const trigger = args.trigger_price_sol ?? Number((spot * (1 + args.trigger_change_pct! / 100)).toPrecision(6));
+          if (trigger >= spot) {
+            throw new ValidationError(`The trigger ${trigger} SOL is at or above the current price ${spot} SOL, so it would fill at once. Use execute_trade to buy now.`);
+          }
+          current = { spotPriceSol: spot, buyGetsTokensNow: tokensNumber(q.amountOut), dropToTriggerPct: Math.round((trigger / spot - 1) * 1e4) / 100 };
+          order = {
+            kind: "limit_buy",
+            cluster,
+            wallet: signer.wallet,
+            mint: args.mint,
+            maxSlippageBps: args.max_slippage_bps,
+            sol: args.sol,
+            triggerPriceSol: trigger,
+            expiresAt: new Date(now.getTime() + args.expires_in_days * 86_400_000).toISOString(),
+          };
         } else {
           if ((args.trigger_price_sol === undefined) === (args.trigger_change_pct === undefined)) throw new ValidationError("Give trigger_price_sol or trigger_change_pct, not both.");
           if (args.sol !== undefined || args.every_hours !== undefined || args.times !== undefined) throw new ValidationError("A price order sells; sol, every_hours and times are for recurring_buy.");

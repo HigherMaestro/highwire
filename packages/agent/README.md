@@ -12,7 +12,7 @@ Dry run until the policy says `"live": true`. MIT.
   signs, sends and confirms, one execute at a time. `~/.highwire/STOP` refuses everything.
 - `LocalSigner.post()`: a comment or chat message on higher.fun, inside the policy's `posts` section, logged before it
   goes up.
-- `OrderBook` and `OrderRunner`: standing orders (stop-loss, take-profit, recurring buys, fee claims) in `~/.highwire/orders.json`,
+- `OrderBook` and `OrderRunner`: standing orders (stop-loss, take-profit, limit buys, recurring buys, fee claims) in `~/.highwire/orders.json`,
   filled through `LocalSigner` while `highwire orders run` runs, only the kinds the policy's `orders` section allows.
 
 You don't use it directly: `highwire-mcp` turns it on when `HIGHWIRE_KEYPAIR_PATH` is set. See the main README's

@@ -40,7 +40,7 @@ export const PolicySchema = z
      */
     orders: z
       .object({
-        kinds: z.array(z.enum(["stop_loss", "take_profit", "recurring_buy", "fee_claim"])).min(1),
+        kinds: z.array(z.enum(["stop_loss", "take_profit", "limit_buy", "recurring_buy", "fee_claim"])).min(1),
         max_open: z.number().int().min(1).max(50).default(10),
       })
       .strict()

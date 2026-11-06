@@ -11,6 +11,10 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   while `highwire orders run` runs, each claim and buyback passing the whole policy. A claim whose answer is lost waits
   for the next run (claiming twice is harmless); a buyback whose answer is lost closes the order. `policy init --launch`
   now allows fee-claim orders, and skill.md shows agents how to claim on their own.
+- **Limit buys.** A new standing-order kind, `limit_buy`: buy `sol` of a coin once its on-chain price falls to a
+  trigger (`trigger_price_sol`, or a negative `trigger_change_pct` from now), then it's done. Place one with
+  `place_order` or `highwire orders limit-buy --mint <mint> --sol 0.1 --drop-pct 30`; it's checked like a stop-loss
+  (every minute, sooner after a trade on the coin) and fills through the signer inside the whole policy.
 - **Agents can post on higher.fun.** `post_comment` and `post_chat` (and `highwire post`) post a comment on a coin's
   page or a message in higher.fun's site chat as the local signer's wallet, inside a new `posts` policy section:
   comments on the wallet's own coins by default (`"comments": "any"` for any coin), chat only with `"chat": true`, and

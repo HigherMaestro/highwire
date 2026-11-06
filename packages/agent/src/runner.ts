@@ -2,7 +2,8 @@ import { HigherError, lamportsNumber, solToLamports, type Cluster, type LiveFeed
 import { close, describeOrder, formatPrice, record, type Order, type OrderBook, type OrderRun } from "./orders.ts";
 import type { ExecuteResult } from "./signer.ts";
 
-// Runs the standing orders in the book for one wallet: `highwire orders run`. Price orders are checked against the
+// Runs the standing orders in the book for one wallet: `highwire orders run`. Price orders (stop-loss, take-profit and
+// limit buys) are checked against the
 // coin's spot price on-chain, from a fresh quote: every minute, and within seconds of a trade on the coin when the live
 // feed reports one. The feed only says when to look, so a forged or stale message can't fire an order. Recurring buys
 // and fee claims run on their schedule. Each fill is built and executed by `market.trade` or `market.claim`, which go
@@ -47,7 +48,7 @@ export const MAX_ORDER_FAILURES = 5;
 /** A fee claim doesn't buy back with less than this: the trade's own fees would eat it. */
 export const MIN_BUYBACK_LAMPORTS = 1_000_000n;
 
-const isPriceOrder = (o: Order) => o.kind === "stop_loss" || o.kind === "take_profit";
+const isPriceOrder = (o: Order) => o.kind === "stop_loss" || o.kind === "take_profit" || o.kind === "limit_buy";
 /** The live feed's per-socket channel budget, less room for nothing else. */
 const MAX_HINTED_MINTS = 16;
 
@@ -142,6 +143,7 @@ export class OrderRunner {
   }
 
   private async checkPrice(order: Order) {
+    if (order.kind === "limit_buy") return this.checkLimitBuy(order);
     let quote: Quote;
     let amount: bigint;
     try {
@@ -163,6 +165,22 @@ export class OrderRunner {
     }
     this.log(`order ${order.id} triggered at ${formatPrice(price)} SOL: ${describeOrder(order)}`);
     await this.fill(order, "sell", amount, price);
+  }
+
+  /** A limit buy fills once the coin's on-chain price is at or below its trigger, with the quote's slippage cap. */
+  private async checkLimitBuy(order: Order) {
+    const lamports = solToLamports(order.sol!);
+    let quote: Quote;
+    try {
+      quote = await this.o.market.quote(order.mint!, "buy", lamports, order.maxSlippageBps);
+    } catch (err) {
+      this.log(`order ${order.id}: couldn't check the price (${err instanceof Error ? err.message : String(err)}); trying again later`);
+      return;
+    }
+    const price = quote.spotPriceSol;
+    if (price === null || price > order.triggerPriceSol!) return;
+    this.log(`order ${order.id} triggered at ${formatPrice(price)} SOL: ${describeOrder(order)}`);
+    await this.fill(order, "buy", lamports, price);
   }
 
   /** Records a run unless it says the same as the last one, so a waiting order doesn't fill its history. */

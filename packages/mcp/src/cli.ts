@@ -55,7 +55,8 @@ Commands:
   highwire post            post a comment on your coin, or in higher.fun's chat, inside your policy (highwire post --help)
   highwire watch           higher.fun's live feed in the terminal: launches, graduations, buys and sells
                            (highwire watch --help for the filters)
-  highwire orders run      fill standing orders (stop-loss, take-profit, recurring buys, fee claims) until Ctrl-C
+  highwire orders run      fill standing orders (stop-loss, take-profit, limit buys, recurring buys, fee claims) until Ctrl-C
+  highwire orders limit-buy  buy a coin once its price falls to a level (--mint, --sol, --price or --drop-pct)
   highwire orders claim    claim creator fees on a schedule (--every-hours 24), and optionally buy back with them
   highwire orders list     the open orders; highwire orders cancel <id> cancels one
 

@@ -5,13 +5,14 @@ import { z } from "zod";
 import { CLUSTERS, HigherError, MAX_SLIPPAGE_BPS } from "highwire-core";
 import { withFileLock } from "./lock.ts";
 
-// Standing orders the local signer runs while `highwire orders run` is up: stop-loss and take-profit sells, recurring
-// buys, and fee claims that collect the wallet's creator fees on a schedule and can buy back a coin with them. They're kept in ~/.highwire/orders.json. An agent may place and cancel them, but only when the
+// Standing orders the local signer runs while `highwire orders run` is up: stop-loss and take-profit sells, limit buys,
+// recurring buys, and fee claims that collect the wallet's creator fees on a schedule and can buy back a coin with them.
+// They're kept in ~/.highwire/orders.json. An agent may place and cancel them, but only when the
 // user's policy has an `orders` section allowing that kind, and every fill goes through LocalSigner.execute like any
 // other trade: the same policy check, kill switch, simulation and audit log. Writes take a lock and replace the file
 // whole, so the tools and the runner can't lose each other's changes.
 
-export const ORDER_KINDS = ["stop_loss", "take_profit", "recurring_buy", "fee_claim"] as const;
+export const ORDER_KINDS = ["stop_loss", "take_profit", "limit_buy", "recurring_buy", "fee_claim"] as const;
 export type OrderKind = (typeof ORDER_KINDS)[number];
 
 export const ORDER_STATUSES = ["open", "done", "cancelled", "expired", "failed"] as const;
@@ -48,13 +49,13 @@ export const OrderSchema = z.object({
   closedAt: z.string().optional(),
   closeReason: z.string().optional(),
   maxSlippageBps: z.number().int().min(0).max(MAX_SLIPPAGE_BPS),
-  /** Stop-loss: sell once the spot price is at or below this. Take-profit: at or above. SOL per whole token. */
+  /** Stop-loss and limit buy: fill once the spot price is at or below this. Take-profit: at or above. SOL per whole token. */
   triggerPriceSol: z.number().positive().optional(),
   /** The share of the wallet's balance in the coin to sell when it triggers. */
   sellPct: z.number().min(1).max(100).optional(),
   /** Don't sell for less than this much SOL in all (a stop-limit). */
   minSolOut: z.number().positive().optional(),
-  /** Recurring buy: SOL each time, every so many hours, so many times. */
+  /** Recurring buy: SOL each time, every so many hours, so many times. Limit buy: the SOL it spends, once. */
   sol: z.number().positive().optional(),
   everyHours: z.number().min(1).max(720).optional(),
   times: z.number().int().min(1).max(1000).optional(),
@@ -88,6 +89,8 @@ export function describeOrder(o: Pick<Order, "kind" | "mint" | "triggerPriceSol"
       return `Sell ${o.sellPct}% of ${o.mint} if its price falls to ${formatPrice(o.triggerPriceSol)} SOL or below${o.minSolOut ? `, for at least ${o.minSolOut} SOL` : ""}`;
     case "take_profit":
       return `Sell ${o.sellPct}% of ${o.mint} if its price rises to ${formatPrice(o.triggerPriceSol)} SOL or above${o.minSolOut ? `, for at least ${o.minSolOut} SOL` : ""}`;
+    case "limit_buy":
+      return `Buy ${o.sol} SOL of ${o.mint} if its price falls to ${formatPrice(o.triggerPriceSol)} SOL or below`;
     case "recurring_buy":
       return `Buy ${o.sol} SOL of ${o.mint} ${every(o.everyHours)}, ${o.times === 1 ? "once" : `${o.times} times`}`;
     case "fee_claim":

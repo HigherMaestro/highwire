@@ -177,7 +177,7 @@ for (const cluster of clusters) {
   // with the stop-loss's trigger moved above the price so it fires.
   const ohome = mkdtempSync(join(tmpdir(), "highwire-rehearse-orders-"));
   const opaths = agentPaths({ HIGHWIRE_HOME: ohome });
-  writeFileSync(opaths.policy, JSON.stringify({ ...policy, actions: ["trade", "claim"], orders: { kinds: ["stop_loss", "recurring_buy", "fee_claim"], max_open: 5 } }));
+  writeFileSync(opaths.policy, JSON.stringify({ ...policy, actions: ["trade", "claim"], orders: { kinds: ["stop_loss", "limit_buy", "recurring_buy", "fee_claim"], max_open: 6 } }));
   const osigner = new LocalSigner(watchOnly, opaths);
   const options = { ...serverOptionsFromEnv({ ...process.env, HIGHWIRE_CLUSTER: cluster, SOLANA_RPC_URL: rpcFor(cluster) }), signer: osigner };
   const oclient = new Client({ name: "rehearse-orders", version: "0" });
@@ -192,26 +192,31 @@ for (const cluster of clusters) {
   rows.push({ cluster, what: "place_order stop_loss 50% down, 10%", ok: !stopLoss.isError && stopLoss.out.order?.status === "open", result: stopLoss.isError ? `${stopLoss.out.code}: ${stopLoss.out.error}` : `${stopLoss.out.order.description}; now ${stopLoss.out.now.spotPriceSol} SOL` });
   const dca = await ocall("place_order", { kind: "recurring_buy", mint, sol: 0.005, every_hours: 24, times: 2, max_slippage_bps: 300, confirm_order: true });
   rows.push({ cluster, what: "place_order recurring_buy 0.005 SOL daily, twice", ok: !dca.isError && dca.out.order?.status === "open", result: dca.isError ? `${dca.out.code}: ${dca.out.error}` : dca.out.order.description });
+  const dip = await ocall("place_order", { kind: "limit_buy", mint, sol: 0.005, trigger_change_pct: -50, max_slippage_bps: 300, confirm_order: true });
+  rows.push({ cluster, what: "place_order limit_buy 0.005 SOL at 50% down", ok: !dip.isError && dip.out.order?.status === "open", result: dip.isError ? `${dip.out.code}: ${dip.out.error}` : `${dip.out.order.description}; now ${dip.out.now.spotPriceSol} SOL` });
   const refusedKind = await ocall("place_order", { kind: "take_profit", mint, trigger_change_pct: 100, max_slippage_bps: 300, confirm_order: true });
   rows.push({ cluster, what: "place_order take_profit (not in the policy's kinds)", ok: refusedKind.isError && refusedKind.out.code === "policy_refused", result: `${refusedKind.out.code}: ${refusedKind.out.error}` });
 
-  if (!stopLoss.isError && !dca.isError) {
+  if (!stopLoss.isError && !dca.isError && !dip.isError) {
     const book = new OrderBook(opaths.orders);
     await book.update(stopLoss.out.order.id, (o) => (o.triggerPriceSol = 1e9));
+    await book.update(dip.out.order.id, (o) => (o.triggerPriceSol = 1e9));
     const before = sends.length;
     const runner = new OrderRunner({ book, wallet, cluster, market: orderMarket(createDeps(options), osigner), log: (l) => console.log(`  runner: ${l}`) });
     await runner.tick();
     const mine = sends.slice(before);
     const sl = book.get(stopLoss.out.order.id)!;
     const rb = book.get(dca.out.order.id)!;
+    const lb = book.get(dip.out.order.id)!;
+    const last = (o: typeof sl) => `${o.history.at(-1)?.outcome}${o.history.at(-1)?.reason ? `: ${o.history.at(-1)?.reason}` : ""}`;
     rows.push({
       cluster,
-      what: "runner fills the triggered stop-loss and the due recurring buy",
-      ok: sl.status === "done" && rb.runsDone === 1 && rb.status === "open" && mine.length === 2 && mine.every((s) => s.signed && s.simulated.startsWith("ok")),
-      result: `stop-loss ${sl.status} (${sl.history.at(-1)?.outcome}${sl.history.at(-1)?.reason ? `: ${sl.history.at(-1)?.reason}` : ""}), recurring buy ${rb.runsDone}/2 (${rb.history.at(-1)?.outcome}${rb.history.at(-1)?.reason ? `: ${rb.history.at(-1)?.reason}` : ""}); ${mine.map((s) => `signed bytes simulate ${s.simulated}`).join("; ")}`,
+      what: "runner fills the triggered stop-loss and limit buy, and the due recurring buy",
+      ok: sl.status === "done" && lb.status === "done" && rb.runsDone === 1 && rb.status === "open" && mine.length === 3 && mine.every((s) => s.signed && s.simulated.startsWith("ok")),
+      result: `stop-loss ${sl.status} (${last(sl)}), limit buy ${lb.status} (${last(lb)}), recurring buy ${rb.runsDone}/2 (${last(rb)}); ${mine.map((s) => `signed bytes simulate ${s.simulated}`).join("; ")}`,
     });
     const tagged = osigner.audit.entries().filter((e) => e.outcome === "sent" && e.order);
-    rows.push({ cluster, what: "audit log ties each fill to its order", ok: tagged.length === 2, result: `${tagged.length} sends tagged with their order` });
+    rows.push({ cluster, what: "audit log ties each fill to its order", ok: tagged.length === 3, result: `${tagged.length} sends tagged with their order` });
 
     // A fee claim that buys back with all of it: devnet's wallet created its coin, so it has curve fees to claim;
     // mainnet's only holds one, so its claim should find nothing and wait for the next run.

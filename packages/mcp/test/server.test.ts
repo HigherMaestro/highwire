@@ -457,3 +457,22 @@ test("post_chat signs in and posts only inside the policy's posts section, and p
   assert.equal(other.code, "policy_refused");
   assert.deepEqual(posts, [{ path: "/chat", body: "gm higher" }]);
 });
+
+test("a limit_buy needs sol and a trigger under the current price, and is placed with the policy's rules", async () => {
+  const policy = { ...POLICY_TEMPLATE, cluster: "mainnet", actions: ["trade"], max_slippage_bps: 300, max_sol_per_tx: 0.05, orders: { kinds: ["limit_buy"] } };
+  const client = await connect({ fetch: fixtureFetch("buy-curve"), retries: 0, signer: new FixtureSigner(Keypair.generate(), signerHome(policy)) });
+  const args = { kind: "limit_buy", mint: "EE3p42u2rACc3PEDcgVdqfg8JRxSYdvbn53rFoc3i1ix", sol: 0.01, trigger_change_pct: -20, max_slippage_bps: 200, confirm_order: true };
+  const noSol = parse(await client.callTool({ name: "place_order", arguments: { ...args, sol: undefined } }));
+  assert.match(noSol.error, /takes sol/);
+  const tooBig = parse(await client.callTool({ name: "place_order", arguments: { ...args, sol: 0.1 } }));
+  assert.equal(tooBig.code, "policy_refused");
+  const atOnce = parse(await client.callTool({ name: "place_order", arguments: { ...args, trigger_change_pct: 10 } }));
+  assert.match(atOnce.error, /would fill at once/);
+  const placed = parse(await client.callTool({ name: "place_order", arguments: args }));
+  assert.equal(placed.order.kind, "limit_buy");
+  assert.equal(placed.order.sol, 0.01);
+  assert.equal(placed.now.dropToTriggerPct, -20);
+  assert.ok(placed.order.triggerPriceSol < placed.now.spotPriceSol);
+  assert.match(placed.order.description, /^Buy 0.01 SOL of EE3p.* if its price falls to .* SOL or below$/);
+  assert.ok(placed.order.expiresAt);
+});

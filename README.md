@@ -65,7 +65,7 @@ sign page are in [docs/unsigned-transactions.md](docs/unsigned-transactions.md).
 | `build_transfer` | SOL or a higher.fun coin to another wallet, unsigned. No `sign_url`: the sign page never signs transfers |
 | `get_signer_status` | With the local signer: its wallet, live or dry run, the policy, and what's left of today's limit |
 | `execute_trade`, `execute_launch`, `execute_claim`, `execute_transfer` | With the local signer: build exactly what the build tool builds, check the policy, simulate again, then sign and send (or dry-run) |
-| `place_order`, `list_orders`, `cancel_order` | With the local signer: standing orders (stop-loss, take-profit, recurring buys, fee claims) that `highwire orders run` fills inside the policy |
+| `place_order`, `list_orders`, `cancel_order` | With the local signer: standing orders (stop-loss, take-profit, limit buys, recurring buys, fee claims) that `highwire orders run` fills inside the policy |
 | `post_comment`, `post_chat` | With the local signer: post a comment on a coin or a message in higher.fun's chat as the wallet, inside the policy's `posts` section |
 
 **The sign page** ([highwire.fun/sign](https://highwire.fun/sign)) reads the transaction from the link's fragment,
@@ -233,18 +233,21 @@ you'd let an agent spend.
 | `coins` | `allow` or `deny` lists of mints. Before going live, list the coins (or `creators`) you mean the agent to trade: without an allow-list it may buy any higher.fun coin within your limits, and the signer warns you so |
 | `creators` | `allow`: only coins launched by these wallets |
 | `transfer_allowlist` | the only recipients for `execute_transfer` |
-| `orders` | `kinds`: the standing orders an agent may place (`stop_loss`, `take_profit`, `recurring_buy`, `fee_claim`), and `max_open` (default 10). Without it, none |
+| `orders` | `kinds`: the standing orders an agent may place (`stop_loss`, `take_profit`, `limit_buy`, `recurring_buy`, `fee_claim`), and `max_open` (default 10). Without it, none |
 | `posts` | `comments`: `own` (the default: only coins the wallet launched), `any` or `none`; `chat`: `true` to allow higher.fun's site chat (default false); `max_per_day` (default 10, comments and chat together). Mainnet only. Without it, none |
 
 Every execute is written to `~/.highwire/audit.jsonl`: refusals, dry runs, and each signature as it's sent. Creating
 `~/.highwire/STOP` refuses everything until you delete it. `HIGHWIRE_HOME` and `HIGHWIRE_POLICY_PATH` move the files.
 
-**Standing orders.** With `"orders": {"kinds": ["stop_loss", "take_profit", "recurring_buy"]}` in the policy, an agent
+**Standing orders.** With `"orders": {"kinds": ["stop_loss", "take_profit", "limit_buy", "recurring_buy"]}` in the policy, an agent
 can place orders with `place_order`, which wait in `~/.highwire/orders.json`:
 
 - `stop_loss` sells a share of the wallet's coin once its price falls to a trigger (`trigger_price_sol`, or
   `trigger_change_pct` from now), and `take_profit` once it rises to one. `min_sol_out` makes either wait rather than
   sell for less.
+- `limit_buy` buys `sol` of the coin once its price falls to a trigger (`trigger_price_sol`, or a negative
+  `trigger_change_pct`), once. `highwire orders limit-buy --mint <mint> --sol 0.1 --drop-pct 30` places one from the
+  shell.
 - `recurring_buy` buys `sol` every `every_hours`, `times` times.
 - `fee_claim` claims the wallet's creator fees every `every_hours` when at least `min_claim_sol` is waiting (default
   0.001 SOL), and with `buyback_pct` and `mint` spends that share of the SOL each claim brought in buying the coin. It

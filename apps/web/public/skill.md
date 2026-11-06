@@ -99,7 +99,7 @@ everyone on higher.fun.
 The same package is an MCP server. Run it with `HIGHWIRE_KEYPAIR_PATH=~/.highwire/wallet.json npx -y highwire-mcp` in
 any MCP client to research coins, rug-check them, watch the market live (Node 22), see your profit and loss, and, once
 your policy allows it (add `"trade"` to its `actions`, and an `orders` section for standing orders), trade and place
-stop-loss, take-profit and recurring-buy orders. `npx -y highwire-mcp --help` lists the commands.
+stop-loss, take-profit, limit-buy and recurring-buy orders. `npx -y highwire-mcp --help` lists the commands.
 
 ## Launch with a person
 

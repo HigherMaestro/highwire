@@ -406,3 +406,37 @@ test("fee claims are a kind the policy can allow, and describe themselves", () =
   );
   assert.equal(describeOrder({ kind: "fee_claim", everyHours: 1 }), "Claim creator fees every hour");
 });
+
+test("a limit buy waits above its trigger, buys its SOL once the price falls to it, and fills once", async () => {
+  const c = clock();
+  const book = tmpBook(c.now);
+  const m = fakeMarket();
+  const o = await book.place({ kind: "limit_buy", cluster: "mainnet", wallet: WALLET, mint: MINT, maxSlippageBps: 300, sol: 0.05, triggerPriceSol: 0.000015 }, 5);
+  assert.equal(describeOrder(o), `Buy 0.05 SOL of ${MINT} if its price falls to 0.000015 SOL or below`);
+  const r = runner(book, m, c);
+  assert.deepEqual(r.watchedMints(), [MINT], "the feed watches its coin for hints");
+  await r.tick();
+  assert.equal(m.trades.length, 0, "0.00002 is above the trigger");
+  m.price = 0.000015;
+  c.advance(60_000);
+  await r.tick();
+  assert.deepEqual(m.trades, [{ order: o.id, side: "buy", amountIn: 50_000_000n }]);
+  assert.equal(book.get(o.id)!.status, "done");
+  assert.deepEqual(book.get(o.id)!.history.map((h) => [h.outcome, h.priceSol]), [["sent", 0.000015]]);
+  c.advance(60_000);
+  await r.tick();
+  assert.equal(m.trades.length, 1, "a filled limit buy never buys again");
+
+  // A lost send closes it, like any fill; the policy refusing it leaves it waiting.
+  const lost = await book.place({ kind: "limit_buy", cluster: "mainnet", wallet: WALLET, mint: MINT, maxSlippageBps: 300, sol: 0.05, triggerPriceSol: 0.00002 }, 5);
+  m.next = () => new HigherError("no answer", { code: "send_failed" });
+  c.advance(60_000);
+  await r.tick();
+  assert.equal(book.get(lost.id)!.status, "failed");
+  const waits = await book.place({ kind: "limit_buy", cluster: "mainnet", wallet: WALLET, mint: MINT, maxSlippageBps: 300, sol: 0.05, triggerPriceSol: 0.00002 }, 5);
+  m.next = () => new HigherError("The policy refused this: over the day's limit.", { code: "policy_refused" });
+  c.advance(60_000);
+  await r.tick();
+  assert.equal(book.get(waits.id)!.status, "open");
+  assert.equal(book.get(waits.id)!.history.at(-1)?.outcome, "refused");
+});
