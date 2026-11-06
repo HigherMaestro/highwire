@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.6.0 (2026-11-06)
 
 - **Standing orders for the local signer: stop-loss, take-profit and recurring buys.** `place_order` keeps them in
   `~/.highwire/orders.json`, and `highwire orders run` fills them: price orders against the coin's on-chain price,
@@ -11,6 +11,7 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   goes through the signer like `execute_trade`: the whole policy, the kill switch, a fresh simulation, and the audit
   log, tagged with the order's id. A fill the runner can't be sure about closes the order rather than risk a second
   one. `list_orders`, `cancel_order`, `highwire orders list` and `highwire orders cancel` show and cancel them.
+- **The roadmap on the home page** moves standing orders into Now; profit and loss is next.
 
 ## 0.5.0 (2026-11-06)
 

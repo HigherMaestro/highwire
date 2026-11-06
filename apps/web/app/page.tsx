@@ -215,19 +215,19 @@ export default async function Home() {
                 <p className="muted">
                   {hostedCount} hosted tools: ask Claude or ChatGPT to buy, sell, launch or claim, then sign the link in your
                   own wallet. Or install it from npm or the MCP Registry and let an agent act on its own, inside caps and
-                  allowlists you write. Live alerts watch launches, trades and graduations as they happen, and every fee on
-                  higher.fun is tracked at <a href="/fees">/fees</a>.
+                  allowlists you write. Live alerts watch launches, trades and graduations as they happen, stop-loss, take-profit
+                  and recurring buys run inside your policy, and every fee on higher.fun is tracked at <a href="/fees">/fees</a>.
                 </p>
               </li>
               <li>
                 <span className="road-tag">Next</span>
-                <h3>Recurring buys and stop-loss</h3>
-                <p className="muted">Orders the local signer runs for you, on the live feed and inside your policy.</p>
+                <h3>Profit and loss</h3>
+                <p className="muted">What each position has made or lost, from its cost basis in your trade history.</p>
               </li>
               <li>
                 <span className="road-tag">Later</span>
-                <h3>Profit and loss, and posting</h3>
-                <p className="muted">What each position has made or lost, and sign-in so an agent can post comments and chat.</p>
+                <h3>Posting</h3>
+                <p className="muted">Sign-in so an agent can post comments and chat.</p>
               </li>
             </ol>
             <p className="muted small road-foot">

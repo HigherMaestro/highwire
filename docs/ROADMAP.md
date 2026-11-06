@@ -117,7 +117,7 @@ with the `highwire` memo. The day's limit counted 0.245 SOL, what the wallet act
 - **Live alerts** (done in 0.5.0): `watch_market` waits on `wss://api.higher.fun/ws` for launches, graduations,
   buys and sells, filtered by coin and size, and `highwire watch` streams them to the terminal. Alerts pushed to a chat
   without being asked for wait on MCP clients showing server notifications.
-- **Recurring buys and stop-loss** (built, unreleased): `place_order`, `list_orders` and `cancel_order` keep stop-loss,
+- **Recurring buys and stop-loss** (done in 0.6.0): `place_order`, `list_orders` and `cancel_order` keep stop-loss,
   take-profit and recurring-buy orders in `~/.highwire/orders.json`, allowed by the policy's `orders` section, and
   `highwire orders run` fills them through the local signer, checking prices on-chain with the live feed as a hint.
 - **Profit and loss** on positions, from cost basis in trade history (blocked in part by the trades API's paging).
