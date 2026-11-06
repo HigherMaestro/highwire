@@ -91,6 +91,9 @@ Streamable HTTP. An npm workspaces monorepo. Read
   is a per-instance brake). Build calls cost `BUILD_COST` units of the rate limit, heavy reads `TOOL_COSTS`. The
   shared per-IP cap lives in Vercel Firewall rules (`vercel firewall rules list`), not in the code. It signs each
   envelope it builds (`attestation`) so the sign page can tell an unedited link.
+- **Workspace packages in the site** resolve through `apps/web/next.config.ts`'s Turbopack aliases and `transpilePackages`, so
+  Vercel needs no package build. Any `highwire-*` package the site's imports reach at runtime needs an entry in both, and
+  a dependency in `apps/web/package.json`; a local build can pass without one, since the packages' `dist` exist here.
 - **Next.js** is 16 (App Router, Turbopack). Its docs ship in `node_modules/next/dist/docs/`; check them rather than
   memory before using a Next API. `next build` and `next dev` share `apps/web/.next`: if dev fails with a
   `next/font` "Module not found" error, stop it, delete `apps/web/.next` and start it again.
