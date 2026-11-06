@@ -8,17 +8,17 @@ counts and version with each release.
 | Directory | Status | Next step |
 |---|---|---|
 | Official MCP Registry | Listed: `fun.highwire/highwire`, 0.9.0 | Published with every release |
-| Glama connector | Listed (imported from the registry), scored A (3.5/5) for tool quality, **not claimed** | Claim it (step 1) |
-| Glama server | Listed (indexed from GitHub), **stale**: says v0.1, read-only, 18 tools; **not claimed** | Claim it (step 1) |
-| awesome-remote-mcp-servers | Not listed | Pull request (step 2) |
-| awesome-mcp-servers | Not listed | Pull request (step 3) |
-| mcp.so | Not listed | Form (step 4) |
-| Smithery | Not listed | URL submission (step 5) |
-| PulseMCP | Imports from the official registry weekly | Check it's there (step 6) |
+| Glama connector | Listed, **ownership verified** (claim file at highwire.fun/.well-known/glama.json), scored A (3.5/5) | Keep the claim file published |
+| Glama server | Listed, **claimed** (glama.json), description current, Docker build passing (installs highwire-mcp from npm), first Glama release made | Bump the build step's version with each release |
+| awesome-remote-mcp-servers | PR open: punkpeye/awesome-remote-mcp-servers#4072, checks passing | Wait for review |
+| awesome-mcp-servers | PR open: punkpeye/awesome-mcp-servers#18795, checks passing | Wait for review |
+| mcp.so | Submitted: chatmcp/mcpso#6871 (the free route; the web form is now a $39 paid listing) | Wait for review |
+| Smithery | Closed to submissions since 2026-10-31: now a curated, read-only directory run by Arcade | None |
+| PulseMCP | Not listed; its submissions and imports are paused (checked 2026-11-06) | Check again later |
 | Cursor | No directory listing needed | "Add to Cursor" button (step 7) |
 | Claude Connectors Directory | Skip: its policy says "We do not generally allow cryptocurrency software" | Users can still add `https://highwire.fun/mcp` as a custom connector |
 
-Before any of these: give the GitHub repo topics. Directories and GitHub search use them, and it has none.
+The GitHub repo's topics (added 2026-11-06) help directories and GitHub search find it:
 
 ```bash
 gh repo edit HigherMaestro/highwire --add-topic mcp --add-topic mcp-server --add-topic model-context-protocol --add-topic solana --add-topic ai-agents --add-topic higher-fun --add-topic memecoin
