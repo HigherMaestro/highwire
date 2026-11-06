@@ -4,6 +4,46 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## 0.4.0 (unreleased)
 
+**Security fixes from the pre-launch audit.**
+
+- **Sign links.**
+  - **What the allow-list let through:** a hand-made link could pass every check on the sign page with any of these:
+    - an associated-token account opened under an attacker's own program, then SOL sent into it;
+    - SOL parked in a token account for a mint someone else controls;
+    - a curve trade that named someone else's token accounts, paid a share fee, or set no minimum out.
+  - **What it allows now:** SOL moves only into the wallet's own wrapped-SOL accounts. Associated-token opens pin the
+    token program and the derived address. Curve trades must match the exact layout Highwire builds.
+- **The sign page.**
+  - It no longer shows any text from the link: titles are rebuilt from the bytes.
+  - It refuses a link that misnames what it does, or that claims to have been built in the future.
+  - It shows how far a trade's minimum out sits below what the simulation gets, and refuses more than 50%.
+  - It checks that lookup tables are real.
+  - It stops polling for refused links and hidden tabs.
+- **The local signer.**
+  - **Logged before sending:** each send is logged and counted before it goes out, so a lost answer can't hide a
+    spend.
+  - **Real spend counted:** the daily limit counts what the simulation shows leaving the wallet, rent and fees
+    included.
+  - **One execute at a time:** a lock file makes two Highwire processes take turns.
+  - **Right cluster:** the RPC's genesis hash must match the policy's cluster.
+  - **Kill switch:** STOP is checked before every transaction.
+  - **Slippage and creator:** a trade's slippage is read from the signed bytes, and its creator from the chain.
+  - **Audit log:** a torn last line in the log no longer swallows the next entry.
+  - **Permissions:** loose permissions on the policy or its folder trigger a warning.
+- **The hosted endpoint.**
+  - Upstream error text is scrubbed of URLs and keys before it reaches a caller.
+  - Heavy reads cost more of the rate limit: `get_wallet_positions` costs 10, or 3 with `mints`; `quote_trade` and
+    `rug_check` cost 2.
+  - A request may batch at most 10 messages, and bodies are capped as they stream.
+  - IPv6 clients are limited per /64.
+  - CORS allows only POST.
+  - Profile bios, display names and leaderboard rows are labelled as user content.
+- **The site.**
+  - Every page now sends `nosniff`, no-framing, referrer, permissions and HSTS headers.
+  - `/fees/<mint>` costs one read for an address that isn't a higher.fun coin.
+  - Coin names with links or look-alike letters are hidden, on the home page too.
+  - Changelog links are restricted to https.
+
 Let an agent act on its own, inside rules you write: an opt-in local signer. Custody stays with you: Highwire never
 creates, holds or manages a wallet, and the hosted endpoint still never signs.
 

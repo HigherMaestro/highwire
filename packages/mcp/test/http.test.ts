@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { BUILD_COST, createHttpHandler, createRateLimiter, requestCost, type HttpHandlerOptions } from "../src/http.ts";
+import { BUILD_COST, createHttpHandler, createRateLimiter, MAX_BATCH, rateLimitKey, requestCost, type HttpHandlerOptions } from "../src/http.ts";
 import { HOSTED_INSTRUCTIONS } from "../src/server.ts";
 import { HOSTED_TOOLS, FAKE_OPTIONS } from "./fake.ts";
 import { fixtureFetch } from "./replay.ts";
@@ -83,9 +83,13 @@ const toolCall = (name: string, args: Record<string, unknown> = {}) =>
     body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args } }),
   });
 
-test("build tools cost five units of the per-IP budget, everything else one", async () => {
-  assert.equal(requestCost(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "build_trade" } })), BUILD_COST);
-  assert.equal(requestCost(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "quote_trade" } })), 1);
+test("build tools cost five units of the per-IP budget, heavy reads more than one, everything else one", async () => {
+  const call = (name: string, args?: object) => JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } });
+  assert.equal(requestCost(call("build_trade")), BUILD_COST);
+  assert.equal(requestCost(call("quote_trade")), 2);
+  assert.equal(requestCost(call("get_wallet_positions", { wallet: "x" })), 10);
+  assert.equal(requestCost(call("get_wallet_positions", { wallet: "x", mints: ["y"] })), 3);
+  assert.equal(requestCost(call("get_coin")), 1);
   assert.equal(requestCost(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" })), 1);
   assert.equal(requestCost("not json"), 1);
   const handler = createHttpHandler({ server: FAKE_OPTIONS, rateLimit: { limit: 11, windowMs: 60_000 } });
@@ -153,4 +157,19 @@ test("the rate limiter counts per key and resets each window", () => {
   assert.equal(weighted("c", 5).ok, false, "a refused call spends nothing");
   assert.equal(weighted("c", 1).ok, true);
   assert.equal(weighted("c", 1).ok, false);
+});
+
+test("big batches and bodies are refused, and IPv6 clients share their /64's budget", async () => {
+  const handler = createHttpHandler({ server: FAKE_OPTIONS, rateLimit: { limit: 3, windowMs: 60_000 } });
+  const batch = Array.from({ length: MAX_BATCH + 1 }, (_, i) => ({ jsonrpc: "2.0", id: i, method: "ping" }));
+  const post = (body: string, ip = "203.0.113.5") =>
+    new Request("http://localhost/mcp", { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "x-forwarded-for": ip }, body });
+  assert.equal((await handler(post(JSON.stringify(batch)))).status, 413);
+  assert.equal((await handler(post("x".repeat(300 * 1024)))).status, 413);
+  assert.equal(rateLimitKey("2001:db8:1:2:aaaa::1"), "2001:db8:1:2::/64");
+  assert.equal(rateLimitKey("2001:db8:1:2:ffff:ffff:ffff:ffff"), "2001:db8:1:2::/64");
+  assert.equal(rateLimitKey("203.0.113.5"), "203.0.113.5");
+  const ping = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" });
+  for (const ip of ["2001:db8:1:2::1", "2001:db8:1:2::2", "2001:db8:1:2::3"]) assert.notEqual((await handler(post(ping, ip))).status, 429);
+  assert.equal((await handler(post(ping, "2001:db8:1:2::4"))).status, 429);
 });

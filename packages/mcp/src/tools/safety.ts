@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { bpsToPct, coinUrl, evaluateRisk, summarizeSafety } from "highwire-core";
+import { bpsToPct, coinUrl, evaluateRisk, publicMessage, summarizeSafety } from "highwire-core";
 import { run } from "../result.ts";
 import { READ_ONLY, mint, type Deps } from "./shared.ts";
 
@@ -19,7 +19,7 @@ export function registerSafetyTools(server: McpServer, { api, rpc }: Deps) {
       run(async () => {
         const [coin, onchain] = await Promise.all([
           api.coin(mint),
-          rpc.mintInfo(mint).catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) })),
+          rpc.mintInfo(mint).catch((err: unknown) => ({ error: publicMessage(err instanceof Error ? err.message : String(err)) })),
         ]);
         const { verdict, flags } = evaluateRisk(coin, onchain);
         return {

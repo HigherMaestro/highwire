@@ -101,12 +101,16 @@ highwire.fun/sign is a static page; all of this runs in the browser:
    RPCs (`NEXT_PUBLIC_SOLANA_RPC_URL` for mainnet, `NEXT_PUBLIC_SOLANA_DEVNET_RPC_URL` for devnet, by default the
    public endpoints), picked by the envelope's `cluster`.
 2. It reviews each transaction from its bytes with `reviewEnvelope` (`packages/core/src/tx/review.ts`): it rebuilds the
-   summary from the instructions instead of trusting `summary`, and applies the allow-list below, with LaunchLab
+   summary, each transaction's title and the page's own title from the instructions, never showing the envelope's
+   `label`, `kind`, `summary` or `howToSign`. It refuses a link whose `kind` doesn't match what its transactions do, or
+   whose `builtAt` is in the future. It applies the allow-list below, with LaunchLab
    platforms pinned to higher.fun's and a launch fee allowed only to the fee wallet it reads from the New school
    platform config on-chain. The wallet's signature slot must be empty and every other signer presigned.
 3. It shows what is spent and received, the network and priority fees, the fee payer, the expiry, and every
    transaction in order, and simulates each one (`sigVerify: false`, its own blockhash, so an expired one fails) with
-   the wallet's balance before and after.
+   the wallet's balance before and after, and, for a buy, the coin account's. It shows how far each trade's minimum out
+   sits below what the simulation gets, flags more than 15%, and refuses more than 50%: a hand-made link can set any
+   minimum.
 4. It connects a Wallet Standard wallet and signs only with the fee payer's account. A transaction with a presigned
    mint goes through `solana:signTransaction`, the page checks the message came back unchanged with the mint's
    signature in place, and sends it; others go through `solana:signAndSendTransaction`. Then it polls
@@ -172,11 +176,11 @@ Every instruction must be on this list, or the build fails with `unsafe_transact
 |---|---|
 | Compute Budget | set compute limit (at most 1.4M), set priority fee (at most 2,000,000 micro-lamports per CU) |
 | SPL Memo v2 (`MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`) | one memo, exactly `highwire`, with no accounts. Every built transaction carries it as its last instruction, to attribute it to Highwire |
-| System | transfers from the wallet into its own token accounts; one launch fee to the fee wallet recorded on-chain, at most the quoted amount; creating the wallet's own token accounts |
-| Associated Token | open a token account owned and paid for by the wallet |
-| Token | sync native, initialise the wallet's own account, close an account to the wallet |
-| Raydium LaunchLab | `initialize_v2` (creator = wallet, on the chosen fee mode's platform config), `buy_exact_in` and `sell_exact_in` (on the coin's higher.fun platform), `create_vesting_account` (the creator lock, to the wallet, on the new coin's pool), `claim_creator_fee` (into the wallet's own account) |
-| Raydium CPMM | `swap_base_input` and `collect_creator_fee`, for the wallet, on higher.fun's fee tier, into the wallet's own accounts |
+| System | transfers from the wallet only into its own wrapped-SOL accounts (its wrapped-SOL ATA, or an account this transaction creates and initialises for the native mint, owned by the wallet); one launch fee to the fee wallet recorded on-chain, at most the quoted amount; creating such a wrapped-SOL account (owned by a token program, at most 200 bytes) |
+| Associated Token | open a token account paid for by the wallet, for the wallet (or a transfer's recipient), under the Token or Token-2022 program and the System program, at the address those derive |
+| Token | sync native, initialise and close the wallet's own wrapped-SOL accounts (closing back to the wallet) |
+| Raydium LaunchLab | `initialize_v2` (creator = wallet, on the chosen fee mode's platform config); `buy_exact_in` and `sell_exact_in` on the coin's higher.fun platform, with exactly the 18 accounts Highwire builds, the wallet's own coin account and wrapped SOL, LaunchLab's authority, the platform's fee vault, no share fee and a nonzero minimum out; `create_vesting_account` (the creator lock, to the wallet, on the new coin's pool); `claim_creator_fee` (into the wallet's own account) |
+| Raydium CPMM | `swap_base_input` against SOL with a nonzero minimum out, and `collect_creator_fee`, for the wallet, on higher.fun's fee tier, into the wallet's own accounts |
 
 Then the tool checks the intent: one trade of the quoted kind, coin, amount and minimum out; for a launch, exactly one
 coin created by the wallet with the generated mint, on the chosen platform, the fee paid once and equal to the quote,

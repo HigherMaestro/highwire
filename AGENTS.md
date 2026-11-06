@@ -51,8 +51,10 @@ Streamable HTTP. An npm workspaces monorepo. Read
   goes through `finish()` in `packages/core/src/tx/envelope.ts`: the `highwire` memo, the allow-list check,
   plain-language decoding and simulation. Add any new instruction to `decode.ts` (both the description and
   `assertSafe`) before a builder may emit it; the sign page's review uses the same checks, so it will refuse it too.
-- **The sign page trusts only the bytes.** A sign link can come from anyone. Show summaries rebuilt from the
-  transaction (`reviewEnvelope`), never the envelope's own text, and never sign when the review reports a problem.
+- **The sign page trusts only the bytes.** A sign link can come from anyone. Show summaries and titles rebuilt from the
+  transaction (`reviewEnvelope`), never the envelope's own text (`label`, `kind`, `summary`), and never sign when the
+  review reports a problem. `packages/core/test/attacks.test.ts` holds hand-made links the allow-list must refuse;
+  add to it when you widen `assertSafe`.
   It may call only the Solana RPCs: nothing goes to Highwire's server, and no third-party scripts or analytics.
 - **Browser code** imports `highwire-core/browser`, never `highwire-core` (which pulls in Raydium's SDK and Node
   built-ins). Keep `browser.ts`'s import graph clean; the test fails otherwise.
@@ -62,7 +64,9 @@ Streamable HTTP. An npm workspaces monorepo. Read
   user's policy file, which no tool may write. Execute tools build through the same functions as the build tools, then
   `LocalSigner.execute()` checks the policy, simulates again, signs and sends. It's registered only on the stdio server:
   `createServer` refuses a signer with `hosted`, and `http.ts` never imports `signer-env.ts`. Refusals, dry runs and
-  sends all go in the audit log; a send is logged before it confirms. Test it with a fake connection, never a real
+  sends all go in the audit log; a send is logged, with what the simulation shows it spending, before it's sent, under
+  a lock file so two processes take turns, and only after the RPC's genesis hash matches the policy's cluster. Test it
+  with a fake connection, never a real
   cluster.
 - **Transfers** go only through the local signer, to the policy's allowlist. The sign page refuses them: a sign link
   can come from anyone.

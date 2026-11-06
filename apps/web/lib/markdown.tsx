@@ -14,7 +14,8 @@ function inline(text: string, key: string): ReactNode[] {
     const k = `${key}-${i++}`;
     if (m[1] !== undefined) out.push(<code key={k}>{m[1]}</code>);
     else if (m[2] !== undefined) out.push(<strong key={k}>{inline(m[2], k)}</strong>);
-    else out.push(<a key={k} href={m[4]}>{m[3]}</a>);
+    else if (/^(https:\/\/|\/|#)/.test(m[4]!)) out.push(<a key={k} href={m[4]}>{m[3]}</a>);
+    else out.push(m[3]);
     last = m.index + m[0].length;
   }
   if (last < text.length) out.push(text.slice(last));

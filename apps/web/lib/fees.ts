@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { PublicKey } from "@solana/web3.js";
 import { Chain, DEFAULT_API_URL, HigherApi, createHttpConfig, ecosystemFees, type EcosystemFees, type FeeMode, type Recipient } from "highwire-core";
 import type { Flow, FlowScenario, Scenario } from "../components/fees/FeeFlow.tsx";
 import { serverOptionsFromEnv } from "highwire-mcp";
@@ -76,16 +77,17 @@ export function updatedAt(iso: string): string {
   return new Date(iso).toLocaleString("en-GB", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" }) + " UTC";
 }
 
-export const isMint = (s: string) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s);
-
-// Names and tickers are written by coin creators. Slurs are shown as the mint instead, so this site doesn't repeat them.
-const SLURS = [/n+[i1!|l]+g{2,}/i, /f+[a@4]+g{1,2}[o0]+t/i, /\bk[i1]ke/i, /\bch[i1]nk/i, /\btrann(y|ie)/i];
-const hidden = (s: string | null) => s != null && SLURS.some((re) => re.test(s.replace(/[\s._-]+/g, "")));
-
-/** The ticker and name to show for a coin; both null when either would repeat a slur. */
-export function coinLabel(c: { ticker: string | null; name: string | null }): { ticker: string | null; name: string | null } {
-  return hidden(c.ticker) || hidden(c.name) ? { ticker: null, name: null } : { ticker: c.ticker, name: c.name };
+/** A real 32-byte Solana address, not just base58 of the right length. */
+export function isMint(s: string): boolean {
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s)) return false;
+  try {
+    return new PublicKey(s).toBytes().length === 32;
+  } catch {
+    return false;
+  }
 }
+
+export { coinLabel } from "./names.ts";
 
 /**
  * The fee-flow diagram's four views (curve or pool, New or Old school): each recipient's cut of one trade, from the rates

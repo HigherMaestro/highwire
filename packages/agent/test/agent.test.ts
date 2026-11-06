@@ -1,11 +1,12 @@
 import { test } from "node:test";
+import bs58 from "bs58";
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type Connection } from "@solana/web3.js";
 import { ENVELOPE_FORMAT, HOW_TO_SIGN, solToLamports, type Envelope } from "highwire-core";
-import { agentPaths, checkPolicy, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, PolicySchema, type Intent, type Policy } from "../src/index.ts";
+import { agentPaths, checkPolicy, GENESIS_HASHES, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, PolicySchema, type Intent, type Policy } from "../src/index.ts";
 
 // Unit tests only: a throwaway in-memory keypair and a fake RPC. Nothing here touches a real cluster.
 
@@ -108,12 +109,20 @@ function envelopeFor(wallet: PublicKey, lamports: bigint): Envelope {
   };
 }
 
-function fakeConnection(opts: { simulateErr?: unknown; confirmErr?: unknown } = {}) {
+const BALANCE = 2_000_000_000;
+
+/** A Solana connection for tests. `spend` is what the simulation shows leaving the wallet; `genesis` the RPC's cluster. */
+function fakeConnection(opts: { simulateErr?: unknown; confirmErr?: unknown; sendErr?: Error; spend?: number; genesis?: string } = {}) {
   const sent: VersionedTransaction[] = [];
   const connection = {
-    simulateTransaction: async () => ({ value: { err: opts.simulateErr ?? null, logs: ["Program log: test"] } }),
+    getGenesisHash: async () => opts.genesis ?? GENESIS_HASHES.devnet,
+    getBalance: async () => BALANCE,
+    simulateTransaction: async () => ({
+      value: { err: opts.simulateErr ?? null, logs: ["Program log: test"], accounts: [{ lamports: BALANCE - (opts.spend ?? 0) }] },
+    }),
     sendRawTransaction: async (bytes: Uint8Array) => {
       sent.push(VersionedTransaction.deserialize(bytes));
+      if (opts.sendErr) throw opts.sendErr;
       return `sig-${sent.length}`;
     },
     confirmTransaction: async () => ({ value: { err: opts.confirmErr ?? null } }),
@@ -148,7 +157,8 @@ test("live, it signs with the wallet's key only, sends, confirms, and logs the s
   const env = envelopeFor(signer.publicKey, solToLamports(0.3));
   const r = await signer.execute(connection, { tool: "execute_transfer", intent: send(0.3), envelope: env });
   assert.equal(r.status, "sent");
-  assert.equal(r.transactions[0]?.signature, "sig-1");
+  // The signature is read from the signed bytes, not the RPC's answer, so it's known before the send.
+  assert.equal(r.transactions[0]?.signature, bs58.encode(sent[0]!.signatures[0]!));
   assert.equal(r.transactions[0]?.confirmed, true);
   assert.equal(r.transactions[0]?.solChange, -0.100005);
   assert.equal(sent.length, 1);
@@ -158,7 +168,7 @@ test("live, it signs with the wallet's key only, sends, confirms, and logs the s
   assert.deepEqual(signer.audit.entries().map((e) => e.outcome), ["sent", "confirmed"]);
   assert.equal(signer.audit.spentSince("devnet"), solToLamports(0.3));
   const log = readFileSync(paths.audit, "utf8");
-  assert.ok(log.includes('"signature":"sig-1"'));
+  assert.ok(log.includes(`"signature":"${r.transactions[0]!.signature}"`));
 
   // The day's limit now has 0.2 SOL left.
   await assert.rejects(
@@ -205,4 +215,54 @@ test("a transaction that doesn't confirm is reported with its signature, and sti
   assert.equal(r.transactions[0]?.confirmed, false);
   assert.match(r.transactions[0]?.error ?? "", /InstructionError/);
   assert.equal(signer.audit.spentSince("devnet"), solToLamports(0.05));
+});
+
+test("a send whose answer is lost is still logged and counted, so a retry can't spend the limit again", async () => {
+  const { signer } = signerWith(policy({ live: true, max_sol_per_day: 0.1 }));
+  const { connection, sent } = fakeConnection({ sendErr: new Error("socket hang up") });
+  const r = await signer.execute(connection, { tool: "execute_transfer", intent: send(0.1), envelope: envelopeFor(signer.publicKey, solToLamports(0.1)) });
+  assert.equal(r.status, "partly_sent");
+  assert.match(r.transactions[0]!.error ?? "", /may still land/);
+  assert.equal(signer.audit.spentSince("devnet"), solToLamports(0.1));
+  await assert.rejects(
+    signer.execute(connection, { tool: "execute_transfer", intent: send(0.1), envelope: envelopeFor(signer.publicKey, solToLamports(0.1)) }),
+    (e: { code?: string }) => e.code === "policy_refused",
+  );
+  assert.equal(sent.length, 1);
+});
+
+test("what the wallet really spends counts, rent included, and an RPC on another cluster is refused", async () => {
+  const { signer } = signerWith(policy({ live: true, max_sol_per_tx: 0.05, max_sol_per_day: 0.04 }));
+  // An intent that says nothing leaves the wallet, but the simulation shows 0.03 SOL going, twice: the second is refused.
+  const zero: Intent = { ...send(0), solOut: 0n };
+  const { connection } = fakeConnection({ spend: 30_000_000 });
+  await signer.execute(connection, { tool: "execute_transfer", intent: zero, envelope: envelopeFor(signer.publicKey, 0n) });
+  assert.equal(signer.audit.spentSince("devnet"), 30_000_000n);
+  await assert.rejects(signer.execute(connection, { tool: "execute_transfer", intent: zero, envelope: envelopeFor(signer.publicKey, 0n) }), /past the policy's 0.04 SOL/);
+
+  const other = signerWith(policy({ live: true })).signer;
+  const mainnet = fakeConnection({ genesis: GENESIS_HASHES.mainnet });
+  await assert.rejects(other.execute(mainnet.connection, { tool: "execute_transfer", intent: send(0.01), envelope: envelopeFor(other.publicKey, solToLamports(0.01)) }), /different cluster/);
+  assert.equal(mainnet.sent.length, 0);
+});
+
+test("two signers sharing a home (two Highwire processes) take turns, so both can't fit under the daily limit", async () => {
+  const a = signerWith(policy({ live: true, max_sol_per_day: 0.1 }));
+  const b = new LocalSigner(a.kp, a.paths);
+  const ca = fakeConnection();
+  const cb = fakeConnection();
+  const results = await Promise.allSettled([
+    a.signer.execute(ca.connection, { tool: "execute_transfer", intent: send(0.1), envelope: envelopeFor(a.signer.publicKey, solToLamports(0.1)) }),
+    b.execute(cb.connection, { tool: "execute_transfer", intent: send(0.1), envelope: envelopeFor(b.publicKey, solToLamports(0.1)) }),
+  ]);
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  assert.equal(ca.sent.length + cb.sent.length, 1);
+});
+
+test("a torn last line in the audit log doesn't swallow the next spend", async () => {
+  const { signer, paths } = signerWith(policy({ live: true, max_sol_per_day: 0.1 }));
+  appendFileSync(paths.audit, '{"time":"2026-01-01T00:00:00.000Z","outcome":"sen');
+  const { connection } = fakeConnection();
+  await signer.execute(connection, { tool: "execute_transfer", intent: send(0.1), envelope: envelopeFor(signer.publicKey, solToLamports(0.1)) });
+  assert.equal(signer.audit.spentSince("devnet"), solToLamports(0.1));
 });

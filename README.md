@@ -183,7 +183,7 @@ you'd let an agent spend.
 | `cluster` | `mainnet` or `devnet`, required |
 | `live` | `false` by default: every execute is a dry run that signs nothing |
 | `actions` | any of `trade`, `launch`, `claim`, `transfer` |
-| `max_sol_per_tx`, `max_sol_per_day` | SOL spent on trades, launch fees and first buys, and SOL sent; the day is the last 24 hours, counted from the audit log |
+| `max_sol_per_tx`, `max_sol_per_day` | SOL spent on trades, launch fees and first buys, and SOL sent. Each transaction may also spend up to 0.03 SOL on rent and fees. Both limits count what the simulation shows actually leaving the wallet, rent and fees included, when that's more. The day is the last 24 hours, counted from the audit log |
 | `max_slippage_bps` | for trades and first buys |
 | `coins` | `allow` or `deny` lists of mints |
 | `creators` | `allow`: only coins launched by these wallets |

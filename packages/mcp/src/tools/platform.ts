@@ -45,7 +45,7 @@ export function registerPlatformTools(server: McpServer, { api }: Deps) {
     {
       title: "Check ticker",
       description: "Whether a ticker is still free to launch with on higher.fun.",
-      inputSchema: { ticker: z.string().min(1).max(10).describe("Ticker without the $") },
+      inputSchema: { ticker: z.string().regex(/^\$?[A-Za-z0-9]{1,10}$/, "letters and digits only").describe("Ticker without the $") },
       annotations: { title: "Check ticker", ...READ_ONLY },
     },
     ({ ticker }) =>

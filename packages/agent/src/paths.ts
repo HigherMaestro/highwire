@@ -12,6 +12,8 @@ export interface AgentPaths {
   audit: string;
   /** If this file exists, every execute is refused: the kill switch. */
   stop: string;
+  /** Held while an execute runs, so two Highwire processes can't both fit under the daily limit. */
+  lock: string;
 }
 
 export function agentPaths(env: Record<string, string | undefined> = process.env): AgentPaths {
@@ -21,5 +23,6 @@ export function agentPaths(env: Record<string, string | undefined> = process.env
     policy: env.HIGHWIRE_POLICY_PATH || join(home, "policy.json"),
     audit: join(home, "audit.jsonl"),
     stop: join(home, "STOP"),
+    lock: join(home, "execute.lock"),
   };
 }

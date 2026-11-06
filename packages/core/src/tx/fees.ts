@@ -183,6 +183,8 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
     }
   }
   found = found.filter((f) => f.state.mintB.equals(WSOL));
+  // Not a higher.fun coin: one read was enough to say so. A page asked about any address must stay this cheap.
+  if (opts.only && found.length === 0) return emptyFees(warnings);
 
   // The rates, on-chain: each LaunchLab config's trade fee, each platform's fees, the CPMM fee tier.
   const configIds = [...new Set(found.map((f) => f.state.configId.toBase58()))].map((k) => new PublicKey(k));
@@ -401,6 +403,33 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
         creator: pct(big(cpmm.creatorFeeRate)),
         raydiumShareOfCreator: pct(big(cpmm.creatorFeeShareRate)),
       },
+    },
+    warnings,
+  };
+}
+
+function emptyFees(warnings: string[]): EcosystemFees {
+  const zero = { "higher.fun": 0, creator: 0, Raydium: 0, liquidity: 0 };
+  return {
+    generatedAt: new Date().toISOString(),
+    solUsd: null,
+    coins: [],
+    totals: {
+      coins: 0,
+      graduated: 0,
+      volumeSol: 0,
+      curveVolumeSol: 0,
+      poolVolumeSol: 0,
+      feesSol: 0,
+      byRecipient: zero,
+      byPhase: { curve: 0, pool: 0 },
+      byMode: { rewards: { coins: 0, volumeSol: 0, feesSol: 0 }, classic: { coins: 0, volumeSol: 0, feesSol: 0 } },
+      launchFeesSol: 0,
+    },
+    waiting: { higherCurveSol: 0, creatorCurveSol: 0, creatorPoolSol: 0 },
+    rates: {
+      curve: { rewards: { raydium: 0, platform: 0, creator: 0 }, classic: { raydium: 0, platform: 0, creator: 0 } },
+      pool: { trade: 0, raydiumShareOfTrade: 0, creator: 0, raydiumShareOfCreator: 0 },
     },
     warnings,
   };

@@ -16,8 +16,8 @@ export const HOSTED_TRANSACTION_TOOLS = true;
 
 export const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Authorization, Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Mcp-Session-Id, Mcp-Protocol-Version",
   "Access-Control-Expose-Headers": "Mcp-Session-Id, Mcp-Protocol-Version",
   "Access-Control-Max-Age": "86400",
 };
@@ -40,12 +40,62 @@ export interface HttpHandlerOptions {
 }
 
 export const DEFAULT_RATE_LIMIT: RateLimit = { limit: 60, windowMs: 60_000 };
-/** What one build tool call costs against the rate limit. Every other request costs 1. */
+/** What one build tool call costs against the rate limit. Every other request costs 1, unless TOOL_COSTS says more. */
 export const BUILD_COST = 5;
+/**
+ * Read tools that do a lot of upstream work per call, weighed by it. A wallet listing reads every token account a
+ * wallet holds and prices up to dozens of coins; with `mints` it reads only those.
+ */
+export const TOOL_COSTS: Record<string, (args: Record<string, unknown>) => number> = {
+  get_wallet_positions: (args) => (Array.isArray(args.mints) && args.mints.length ? 3 : 10),
+  quote_trade: () => 2,
+  rug_check: () => 2,
+};
+/** Most JSON-RPC messages one POST may batch. An agent sends one at a time; a batch only multiplies the work. */
+export const MAX_BATCH = 10;
 
+/**
+ * The client's IP from the proxy's headers. Only trust this behind a proxy that overwrites them (Vercel does); a
+ * self-hosted server reachable directly should pass its own `clientIp`.
+ */
 function defaultClientIp(req: Request): string | undefined {
-  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const forwarded = req.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   return forwarded || req.headers.get("x-real-ip")?.trim() || undefined;
+}
+
+/** The rate-limit key for an IP: IPv6 addresses by their /64, since one client usually holds a whole /64. */
+export function rateLimitKey(ip: string): string {
+  if (!ip.includes(":")) return ip;
+  const [head = "", tail = ""] = ip.split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const groups = ip.includes("::") ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill("0"), ...right] : left;
+  return `${groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, "")).join(":")}::/64`;
+}
+
+/** The body, read up to `max` bytes: a chunked body has no Content-Length to check first. Null when it's longer. */
+async function readCapped(req: Request, max: number): Promise<string | null> {
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    all.set(c, at);
+    at += c.byteLength;
+  }
+  return new TextDecoder().decode(all);
 }
 
 /**
@@ -72,7 +122,17 @@ export function createRateLimiter({ limit, windowMs }: RateLimit, now: () => num
 
 const BUILD_TOOLS = new Set<string>(BUILD_TOOL_NAMES);
 
-/** What a JSON-RPC body costs: BUILD_COST per build tool call in it, 1 for anything else (and at least 1). */
+/** How many JSON-RPC messages a body holds (1 when it isn't JSON). */
+export function batchSize(body: string): number {
+  try {
+    const msg: unknown = JSON.parse(body);
+    return Array.isArray(msg) ? msg.length : 1;
+  } catch {
+    return 1;
+  }
+}
+
+/** What a JSON-RPC body costs: BUILD_COST per build tool call, TOOL_COSTS for heavy reads, 1 for anything else. */
 export function requestCost(body: string): number {
   let msg: unknown;
   try {
@@ -83,8 +143,10 @@ export function requestCost(body: string): number {
   const msgs = Array.isArray(msg) ? msg : [msg];
   let cost = 0;
   for (const m of msgs) {
-    const r = m as { method?: unknown; params?: { name?: unknown } } | null;
-    cost += r?.method === "tools/call" && typeof r.params?.name === "string" && BUILD_TOOLS.has(r.params.name) ? BUILD_COST : 1;
+    const r = m as { method?: unknown; params?: { name?: unknown; arguments?: unknown } } | null;
+    const name = r?.method === "tools/call" && typeof r.params?.name === "string" ? r.params.name : null;
+    const args = r?.params?.arguments && typeof r.params.arguments === "object" ? (r.params.arguments as Record<string, unknown>) : {};
+    cost += name === null ? 1 : BUILD_TOOLS.has(name) ? BUILD_COST : (TOOL_COSTS[name]?.(args) ?? 1);
   }
   return Math.max(1, cost);
 }
@@ -124,11 +186,13 @@ export function createHttpHandler(opts: HttpHandlerOptions = {}): (req: Request)
     // Read the body once, to weigh it for the rate limit, then hand the transport a copy.
     const declared = Number(req.headers.get("content-length") ?? 0);
     if (declared > maxBodyBytes) return rpcError(413, -32000, "Request body too large.");
-    const body = await req.text();
-    if (new TextEncoder().encode(body).length > maxBodyBytes) return rpcError(413, -32000, "Request body too large.");
+    const body = await readCapped(req, maxBodyBytes);
+    if (body === null) return rpcError(413, -32000, "Request body too large.");
+    if (batchSize(body) > MAX_BATCH) return rpcError(413, -32600, `At most ${MAX_BATCH} messages per request.`);
 
     if (limiter) {
-      const verdict = limiter(clientIp(req) ?? "unknown", requestCost(body));
+      const ip = clientIp(req);
+      const verdict = limiter(ip ? rateLimitKey(ip) : "unknown", requestCost(body));
       if (!verdict.ok) {
         return rpcError(429, -32000, `Rate limited. Retry in ${verdict.retryAfterSec}s.`, {
           "Retry-After": String(verdict.retryAfterSec),

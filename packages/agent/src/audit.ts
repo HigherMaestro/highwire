@@ -1,4 +1,4 @@
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, chmodSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Cluster } from "highwire-core";
 import type { Action } from "./policy.ts";
@@ -29,6 +29,19 @@ export interface AuditEntry {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+function endsWithNewline(path: string): boolean {
+  const fd = openSync(path, "r");
+  try {
+    const size = fstatSync(fd).size;
+    if (size === 0) return true;
+    const last = Buffer.alloc(1);
+    readSync(fd, last, 0, 1, size - 1);
+    return last[0] === 0x0a;
+  } finally {
+    closeSync(fd);
+  }
+}
+
 export class AuditLog {
   constructor(
     readonly path: string,
@@ -39,7 +52,9 @@ export class AuditLog {
     const full: AuditEntry = { time: this.now().toISOString(), ...entry };
     const fresh = !existsSync(this.path);
     if (fresh) mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
-    appendFileSync(this.path, JSON.stringify(full) + "\n", { mode: 0o600 });
+    // If a crash left a torn last line, start on a new one, or this entry would be lost with it.
+    const torn = !fresh && !endsWithNewline(this.path);
+    appendFileSync(this.path, (torn ? "\n" : "") + JSON.stringify(full) + "\n", { mode: 0o600 });
     if (fresh) chmodSync(this.path, 0o600);
     return full;
   }

@@ -73,3 +73,19 @@ export class TimeoutError extends HigherError {
     return true;
   }
 }
+
+/**
+ * An upstream error message made safe to pass on: URLs lose their path and query (an RPC URL's api-key), anything
+ * that looks like a key parameter is dropped, an HTML error page is summarised, and the rest is cut short. Upstream
+ * services can echo the request in their errors, and these messages reach anonymous callers of the hosted endpoint.
+ */
+export function publicMessage(message: string, max = 300): string {
+  let m = message;
+  if (/<(!doctype|html|head|body)\b/i.test(m)) m = m.replace(/<[\s\S]*$/, "(an HTML error page)");
+  m = m
+    .replace(/\bhttps?:\/\/([^\s/"'?#]+)[^\s"']*/gi, (_url, host: string) => `https://${host}`)
+    .replace(/\b(api[-_]?key|apikey|token|secret|key|auth)=([^&\s"']+)/gi, "$1=[removed]")
+    .replace(/\s+/g, " ")
+    .trim();
+  return m.length > max ? `${m.slice(0, max - 1)}…` : m;
+}

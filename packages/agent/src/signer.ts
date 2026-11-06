@@ -1,6 +1,7 @@
-import { existsSync } from "node:fs";
+import { lstatSync } from "node:fs";
 import { Buffer } from "node:buffer";
 import { VersionedTransaction, type Connection, type Keypair } from "@solana/web3.js";
+import bs58 from "bs58";
 import {
   HigherError,
   isRefreshable,
@@ -11,6 +12,7 @@ import {
   type Envelope,
 } from "highwire-core";
 import { AuditLog } from "./audit.ts";
+import { withFileLock } from "./lock.ts";
 import type { AgentPaths } from "./paths.ts";
 import { checkPolicy, loadPolicy, plural, type Action, type Intent, type Policy } from "./policy.ts";
 
@@ -65,11 +67,36 @@ export interface SignerStatus {
   dayLeftSol?: number;
 }
 
+/** Each cluster's genesis hash: the RPC must be on the cluster the policy names, not just say so. */
+export const GENESIS_HASHES: Record<Cluster, string> = {
+  mainnet: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  devnet: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+};
+
+/**
+ * What a transaction may cost beyond the policy's per-transaction amount: rent for the accounts a trade or launch
+ * opens, and network and priority fees. Everything the wallet actually spends still counts against the daily limit.
+ */
+export const RENT_AND_FEE_ALLOWANCE_LAMPORTS = 30_000_000n;
+
+/** The kill switch: a STOP file, or anything else at that path, even a dangling link. */
+function stopped(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const lamportsOf = (sol: number) => BigInt(Math.round(sol * 1e9));
+
 const refused = (rule: string, reason: string) => new HigherError(`The policy refused this: ${reason}.`, { code: "policy_refused", body: { rule } });
 
 export class LocalSigner {
   readonly audit: AuditLog;
   private queue: Promise<unknown> = Promise.resolve();
+  private readonly verifiedRpcs = new WeakSet<Connection>();
 
   constructor(
     private readonly keypair: Keypair,
@@ -89,7 +116,7 @@ export class LocalSigner {
   }
 
   status(): SignerStatus {
-    const base = { wallet: this.wallet, keypairWarning: this.keypairWarning, policyPath: this.paths.policy, auditPath: this.paths.audit, stopped: existsSync(this.paths.stop) };
+    const base = { wallet: this.wallet, keypairWarning: this.keypairWarning, policyPath: this.paths.policy, auditPath: this.paths.audit, stopped: stopped(this.paths.stop) };
     try {
       const policy = loadPolicy(this.paths.policy);
       const spent = this.audit.spentSince(policy.cluster);
@@ -114,7 +141,7 @@ export class LocalSigner {
   }
 
   private checkStatic(action: Action, cluster: Cluster): Policy {
-    if (existsSync(this.paths.stop)) {
+    if (stopped(this.paths.stop)) {
       throw new HigherError(`Stopped: ${this.paths.stop} exists, so nothing executes until the user removes it.`, { code: "signer_stopped" });
     }
     const policy = loadPolicy(this.paths.policy);
@@ -125,7 +152,8 @@ export class LocalSigner {
 
   /** Checks the built envelope against the policy, then signs and sends it, or dry-runs it. */
   execute(connection: Connection, req: ExecuteRequest): Promise<ExecuteResult> {
-    const run = this.queue.then(() => this.executeNow(connection, req));
+    // One at a time in this process, and across processes through the lock file.
+    const run = this.queue.then(() => withFileLock(this.paths.lock, () => this.executeNow(connection, req)));
     this.queue = run.catch(() => undefined);
     return run;
   }
@@ -171,48 +199,106 @@ export class LocalSigner {
       return { status: "dry_run", wallet: this.wallet, cluster: intent.cluster, transactions: [], summary, spentSol: 0, dayLeftSol: dayLeft(spent) };
     }
 
-    const sent: ExecutedTransaction[] = [];
+    await this.checkRpcCluster(connection, intent.cluster);
     for (const t of env.transactions) {
-      let tx = VersionedTransaction.deserialize(Buffer.from(t.base64, "base64"));
+      const tx = VersionedTransaction.deserialize(Buffer.from(t.base64, "base64"));
       if (!tx.message.staticAccountKeys[0]?.equals(this.publicKey)) throw new UnsafeTransactionError("a transaction isn't paid by this signer's wallet");
-      // A later transaction waited for the one before to confirm; give it a fresh blockhash when only the wallet signs.
-      let lastValidBlockHeight = t.lastValidBlockHeight;
-      if (t.index > 0 && isRefreshable(tx, this.wallet)) {
-        const latest = await connection.getLatestBlockhash("confirmed");
-        tx = withBlockhash(tx, this.wallet, latest.blockhash);
-        lastValidBlockHeight = latest.lastValidBlockHeight;
-      }
-      // Simulate again right before signing: the chain may have moved since the build, and a dependent transaction
-      // couldn't be simulated until the one before it landed.
-      const sim = await connection.simulateTransaction(tx, { sigVerify: false, replaceRecentBlockhash: true, commitment: "confirmed" });
-      if (sim.value.err) {
-        const reason = `transaction ${t.index + 1} (${t.label}) no longer simulates: ${JSON.stringify(sim.value.err)}`;
-        this.log(req, "failed", { label: t.label, reason });
-        if (sent.length === 0) throw new HigherError(`Nothing was sent: ${reason}.`, { code: "simulation_failed", body: { logs: (sim.value.logs ?? []).slice(-12) } });
-        return this.partial(intent, sent, summary, reason, dayLeft);
-      }
-      tx.sign([this.keypair]);
-      const signature = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 });
-      // Counted the moment it's sent: the whole spend goes on the first transaction.
-      this.log(req, "sent", { lamports: sent.length === 0 ? intent.solOut : 0n, label: t.label, signature });
-      const done: ExecutedTransaction = { index: t.index, label: t.label, signature, confirmed: false };
-      sent.push(done);
-      try {
-        const res = await connection.confirmTransaction({ signature, blockhash: tx.message.recentBlockhash, lastValidBlockHeight }, "confirmed");
-        if (res.value.err) throw new Error(JSON.stringify(res.value.err));
-      } catch (err) {
-        done.error = err instanceof Error ? err.message : String(err);
-        this.log(req, "failed", { label: t.label, signature, reason: done.error });
-        return this.partial(intent, sent, summary, `transaction ${t.index + 1} didn't confirm: ${done.error}`, dayLeft);
-      }
-      done.confirmed = true;
-      this.log(req, "confirmed", { label: t.label, signature });
-      Object.assign(done, await this.fills(connection, signature, intent.mint));
     }
-    return { status: "sent", wallet: this.wallet, cluster: intent.cluster, transactions: sent, summary, spentSol: lamportsNumber(intent.solOut), dayLeftSol: dayLeft(this.audit.spentSince(intent.cluster)) };
+
+    const perTx = lamportsOf(policy.max_sol_per_tx) + RENT_AND_FEE_ALLOWANCE_LAMPORTS;
+    const perDay = lamportsOf(policy.max_sol_per_day);
+    const sent: ExecutedTransaction[] = [];
+    let charged = 0n;
+    for (const t of env.transactions) {
+      try {
+        let tx = VersionedTransaction.deserialize(Buffer.from(t.base64, "base64"));
+        // A later transaction waited for the one before to confirm; give it a fresh blockhash when only the wallet signs.
+        let lastValidBlockHeight = t.lastValidBlockHeight;
+        if (t.index > 0 && isRefreshable(tx, this.wallet)) {
+          const latest = await connection.getLatestBlockhash("confirmed");
+          tx = withBlockhash(tx, this.wallet, latest.blockhash);
+          lastValidBlockHeight = latest.lastValidBlockHeight;
+        }
+        if (stopped(this.paths.stop)) throw new HigherError(`Stopped: ${this.paths.stop} appeared, so nothing more is sent.`, { code: "signer_stopped" });
+        // Simulate again right before signing: the chain may have moved since the build, and a dependent transaction
+        // couldn't be simulated until the one before it landed. The simulation also says what the wallet really spends,
+        // rent and fees included, which is what counts against the limits.
+        const [before, sim] = await Promise.all([
+          connection.getBalance(this.publicKey, "confirmed"),
+          connection.simulateTransaction(tx, {
+            sigVerify: false,
+            replaceRecentBlockhash: true,
+            commitment: "confirmed",
+            accounts: { encoding: "base64", addresses: [this.wallet] },
+          }),
+        ]);
+        if (sim.value.err) {
+          const reason = `transaction ${t.index + 1} (${t.label}) no longer simulates: ${JSON.stringify(sim.value.err)}`;
+          this.log(req, "failed", { label: t.label, reason });
+          if (sent.length === 0) throw new HigherError(`Nothing was sent: ${reason}.`, { code: "simulation_failed", body: { logs: (sim.value.logs ?? []).slice(-12) } });
+          return this.partial(intent, sent, summary, reason, dayLeft, charged);
+        }
+        const after = sim.value.accounts?.[0]?.lamports;
+        const delta = after == null ? 0n : BigInt(before) - BigInt(after);
+        const simulated = delta > 0n ? delta : 0n;
+        // What the simulation shows leaving the wallet, and never less than the intended spend on the first transaction.
+        const floor = sent.length === 0 ? intent.solOut : 0n;
+        const cost = simulated > floor ? simulated : floor;
+        if (charged + cost > perTx) {
+          throw refused("max_sol_per_tx", `it would spend ${lamportsNumber(charged + cost)} SOL, rent and fees included, past the policy's ${policy.max_sol_per_tx} SOL per transaction (plus ${lamportsNumber(RENT_AND_FEE_ALLOWANCE_LAMPORTS)} SOL for rent and fees)`);
+        }
+        if (this.audit.spentSince(intent.cluster) + cost > perDay) {
+          throw refused("max_sol_per_day", `it would take the last 24 hours past the policy's ${policy.max_sol_per_day} SOL, rent and fees included`);
+        }
+
+        tx.sign([this.keypair]);
+        const signature = bs58.encode(tx.signatures[0]!);
+        // Logged, and counted, before it's sent: if the send's answer is lost, the spend still counts.
+        this.log(req, "sent", { lamports: cost, label: t.label, signature });
+        charged += cost;
+        const done: ExecutedTransaction = { index: t.index, label: t.label, signature, confirmed: false };
+        sent.push(done);
+        try {
+          await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 });
+        } catch (err) {
+          done.error = `the RPC didn't accept it (${err instanceof Error ? err.message : String(err)}); it may still land: check ${signature} before retrying`;
+          this.log(req, "failed", { label: t.label, signature, reason: done.error });
+          return this.partial(intent, sent, summary, done.error, dayLeft, charged);
+        }
+        try {
+          const res = await connection.confirmTransaction({ signature, blockhash: tx.message.recentBlockhash, lastValidBlockHeight }, "confirmed");
+          if (res.value.err) throw new Error(JSON.stringify(res.value.err));
+        } catch (err) {
+          done.error = err instanceof Error ? err.message : String(err);
+          this.log(req, "failed", { label: t.label, signature, reason: done.error });
+          return this.partial(intent, sent, summary, `transaction ${t.index + 1} didn't confirm: ${done.error}`, dayLeft, charged);
+        }
+        done.confirmed = true;
+        this.log(req, "confirmed", { label: t.label, signature });
+        Object.assign(done, await this.fills(connection, signature, intent.mint));
+      } catch (err) {
+        // After a send, any failure still returns what was sent, so the caller can check it before retrying.
+        if (sent.length === 0) {
+          if (err instanceof HigherError && err.code === "policy_refused") this.log(req, "refused", { lamports: intent.solOut, reason: err.message });
+          throw err;
+        }
+        return this.partial(intent, sent, summary, err instanceof Error ? err.message : String(err), dayLeft, charged);
+      }
+    }
+    return { status: "sent", wallet: this.wallet, cluster: intent.cluster, transactions: sent, summary, spentSol: lamportsNumber(charged), dayLeftSol: dayLeft(this.audit.spentSince(intent.cluster)) };
   }
 
-  private partial(intent: Intent, sent: ExecutedTransaction[], summary: string[][], reason: string, dayLeft: (spent: bigint) => number): ExecuteResult {
+  /** Once per RPC: its genesis hash must be the policy's cluster's, whatever HIGHWIRE_CLUSTER says. */
+  private async checkRpcCluster(connection: Connection, cluster: Cluster): Promise<void> {
+    if (this.verifiedRpcs.has(connection)) return;
+    const genesis = await connection.getGenesisHash();
+    if (genesis !== GENESIS_HASHES[cluster]) {
+      throw refused("cluster", `the RPC is on a different cluster than ${cluster} (genesis hash ${genesis}); check SOLANA_RPC_URL`);
+    }
+    this.verifiedRpcs.add(connection);
+  }
+
+  private partial(intent: Intent, sent: ExecutedTransaction[], summary: string[][], reason: string, dayLeft: (spent: bigint) => number, charged: bigint): ExecuteResult {
     if (sent.length === 0) throw new HigherError(reason, { code: "send_failed" });
     const last = sent[sent.length - 1]!;
     last.error ??= reason;
@@ -222,7 +308,7 @@ export class LocalSigner {
       cluster: intent.cluster,
       transactions: sent,
       summary,
-      spentSol: lamportsNumber(intent.solOut),
+      spentSol: lamportsNumber(charged),
       dayLeftSol: dayLeft(this.audit.spentSince(intent.cluster)),
     };
   }

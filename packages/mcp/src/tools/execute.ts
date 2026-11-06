@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { PublicKey } from "@solana/web3.js";
-import { buildTransfer, solToLamports, summarizeQuote, tokensToBase, ValidationError, type Envelope } from "highwire-core";
+import { PublicKey, VersionedTransaction } from "@solana/web3.js";
+import { buildTransfer, describeTransaction, solToLamports, summarizeQuote, tokensToBase, ValidationError, type Envelope } from "highwire-core";
 import type { ExecuteResult, Intent } from "highwire-agent";
 import { jsonResult, run, runResult } from "../result.ts";
 import { BUILD, EXECUTE, READ_ONLY, address, mint, type Deps, type ExecutionSigner } from "./shared.ts";
@@ -17,7 +17,7 @@ import { buildClaimFor, buildLaunchFor, buildTradeFor, launchDetails, launchShap
 const solscan = (sig: string, cluster: string) => `https://solscan.io/tx/${sig}${cluster === "devnet" ? "?cluster=devnet" : ""}`;
 
 const DRY_RUN_NOTE =
-  'Dry run: nothing was signed or sent. Everything was checked and simulated, and the policy allows it. The policy has "live": false; only the user can change that, by editing their policy file.';
+  'Dry run: nothing was signed or sent. The build was checked and simulated (a transaction that waits on another can\'t be simulated until that one lands), and the policy allows it. A live execute also simulates again right before signing. The policy has "live": false; only the user can change that, by editing their policy file.';
 
 function executed(r: ExecuteResult, extra: Record<string, unknown>) {
   return {
@@ -30,6 +30,18 @@ function executed(r: ExecuteResult, extra: Record<string, unknown>) {
     policy: { spentSol: r.spentSol, dayLeftSol: r.dayLeftSol },
     ...extra,
   };
+}
+
+/** How far below `expectedOut` the trade's minimum out is, in bps, read from the transaction's own bytes. */
+function impliedSlippageBps(envelope: Envelope, cluster: Deps["chain"]["cluster"], expectedOut: bigint): number {
+  let worst = 0;
+  for (const t of envelope.transactions) {
+    const decoded = describeTransaction(VersionedTransaction.deserialize(Buffer.from(t.base64, "base64")), cluster);
+    for (const trade of decoded.trades) {
+      if (expectedOut > 0n && trade.minOut < expectedOut) worst = Math.max(worst, Number(((expectedOut - trade.minOut) * 10_000n) / expectedOut));
+    }
+  }
+  return worst;
 }
 
 const transferArgs = {
@@ -124,12 +136,16 @@ function registerExecuteTools(server: McpServer, deps: Deps, signer: ExecutionSi
       runResult(async () => {
         const policy = signer.precheck("trade", cluster, "execute_trade");
         const built = await buildTradeFor(deps, signer.publicKey, args);
-        const creator = policy.creators && cluster === "mainnet" ? await api.coin(args.mint).then((c) => c.creator, () => null) : null;
+        // The coin's creator, from its pool on-chain, not from higher.fun's API.
+        const creator = policy.creators
+          ? await chain.market(new PublicKey(args.mint)).then((m) => (m.stage === "graduated" ? m.pool.poolCreator : m.pool.creator).toBase58(), () => null)
+          : null;
         const r = await go("execute_trade", {
           action: "trade",
           cluster,
           solOut: args.side === "buy" ? built.quote.amountInUsed : 0n,
-          slippageBps: args.max_slippage_bps,
+          // The slippage the signed bytes allow, which for a pool swap can sit a little under the quote's.
+          slippageBps: Math.max(args.max_slippage_bps, impliedSlippageBps(built.envelope, cluster, built.quote.amountOut)),
           mint: args.mint,
           creator,
         }, built.envelope);

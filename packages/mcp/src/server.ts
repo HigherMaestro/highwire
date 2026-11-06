@@ -153,6 +153,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
     new ResourceTemplate("higher://coins/{mint}", { list: undefined }),
     { title: "higher.fun coin", description: "One coin's detail, by mint address", mimeType: "application/json" },
     async (uri, { mint }) => {
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(String(mint))) throw new Error("not a mint address");
       const coin = await deps.api.coin(String(mint));
       return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(summarizeCoinDetail(coin), null, 2) }] };
     },

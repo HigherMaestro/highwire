@@ -3,6 +3,7 @@ import {
   HigherError,
   NetworkError,
   NotFoundError,
+  publicMessage,
   RateLimitError,
   ServerError,
   TimeoutError,
@@ -48,6 +49,11 @@ const NEXT_STEPS: Record<string, string> = {
 };
 
 export function friendlyError(err: unknown): FriendlyError {
+  const f = classify(err);
+  return { ...f, error: publicMessage(f.error) };
+}
+
+function classify(err: unknown): FriendlyError {
   if (err instanceof HigherError && err.code && NEXT_STEPS[err.code]) {
     return { error: err.message, code: err.code, next_step: NEXT_STEPS[err.code] };
   }
@@ -74,7 +80,11 @@ export function friendlyError(err: unknown): FriendlyError {
   if (err instanceof HigherError) {
     return { error: err.message, code: err.code ?? `http_${err.status ?? "error"}` };
   }
-  return { error: err instanceof Error ? err.message : String(err), code: "internal_error" };
+  return {
+    error: err instanceof Error ? err.message : String(err),
+    code: "internal_error",
+    next_step: "Something failed reading higher.fun or Solana. Retry once; if it fails again, tell the user rather than guessing.",
+  };
 }
 
 /** Like run(), for a body that builds its own result, such as an error that carries extra detail. */

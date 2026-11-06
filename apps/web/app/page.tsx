@@ -5,6 +5,7 @@ import { Mark } from "../components/Mark.tsx";
 import { getCatalog, groupTools } from "../lib/catalog.ts";
 import { graduatingCoins, type CoinSummary } from "../lib/coins.ts";
 import { CLAUDE_CODE_COMMAND } from "../lib/connect.ts";
+import { coinLabel } from "../lib/names.ts";
 import { REPO_URL } from "../lib/site.ts";
 
 // Static, refreshed every minute for the live strip.
@@ -15,15 +16,17 @@ const fmt = (n: number | null, dp = 1) =>
 
 function CoinCard({ coin }: { coin: CoinSummary }) {
   const pct = coin.graduationProgressPct ?? 0;
+  const label = coinLabel(coin);
+  const ticker = label.ticker ?? `${coin.mint.slice(0, 4)}…`;
   return (
     <li className="coin">
       <div className="coin-top">
         <span className="coin-avatar" aria-hidden="true">
-          {coin.ticker.slice(0, 1).toUpperCase()}
+          {ticker.slice(0, 1).toUpperCase()}
         </span>
         <div className="coin-names">
-          <span className="coin-ticker">${coin.ticker}</span>
-          <span className="coin-name">{coin.name}</span>
+          <span className="coin-ticker">{label.ticker ? `$${label.ticker}` : ticker}</span>
+          {label.name ? <span className="coin-name">{label.name}</span> : null}
         </div>
         {coin.trustGrade ? (
           <span className="coin-grade" title="higher.fun safety grade">
