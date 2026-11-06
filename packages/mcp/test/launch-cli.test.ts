@@ -85,6 +85,10 @@ test("policy init --launch writes a mainnet launch policy, dry run unless --live
   assert.equal(JSON.parse(readFileSync(join(h2, "policy.json"), "utf8")).live, true);
   // --live alone would make the devnet starter live by surprise: refused
   assert.equal(runPolicyInit(["--live"], { ...capture().io, env: { HIGHWIRE_HOME: home() } }), 2);
+  // --devnet: the same launch policy, for trying it on devnet first
+  const h3 = home();
+  runPolicyInit(["--launch", "--devnet"], { ...capture().io, env: { HIGHWIRE_HOME: h3 } });
+  assert.deepEqual(JSON.parse(readFileSync(join(h3, "policy.json"), "utf8")), { ...LAUNCH_POLICY_TEMPLATE, live: false, cluster: "devnet" });
 });
 
 test("launch without a wallet says how to make one, and touches nothing", async () => {

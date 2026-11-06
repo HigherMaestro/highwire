@@ -188,19 +188,21 @@ export async function runLaunch(argv: string[], io: CliIo): Promise<number> {
   if (parsed.json) return 0;
   const b = r.body;
   const ticker = `$${String(args.ticker).toUpperCase()}`;
-  const url = `https://higher.fun/coin/${String(b.mint)}`;
+  // higher.fun's site is mainnet only; a devnet coin is shown on Solscan's devnet view.
+  const devnet = (e.HIGHWIRE_CLUSTER ?? "").trim() === "devnet" || b.cluster === "devnet";
+  const url = devnet ? `https://solscan.io/token/${String(b.mint)}?cluster=devnet` : `https://higher.fun/coin/${String(b.mint)}`;
   if (b.status === "already_launched") {
     io.out(`${ticker} was already launched with this key: ${String(b.url ?? url)}. Nothing was sent.`);
     return 0;
   }
   const fee = (b.launchFee as { sol?: number } | null | undefined)?.sol ?? 0;
-  const cost = `${fee} SOL launch fee${b.devBuySol ? ` + ${String(b.devBuySol)} SOL first buy` : ""}`;
+  const cost = `${devnet ? "no launch fee on devnet" : `${fee} SOL launch fee`}${b.devBuySol ? ` + ${String(b.devBuySol)} SOL first buy` : ""}`;
   if (b.status === "dry_run") {
     io.out(`Dry run: the policy isn't live, so nothing was signed or sent. It would launch ${ticker} at ${String(b.mint)} for ${cost}.`);
     io.out(`Set "live": true in your policy to launch for real.`);
     return 0;
   }
-  io.out(`${b.status === "sent" ? "Launched" : String(b.status)} ${ticker}: ${url}`);
+  io.out(`${b.status === "sent" ? "Launched" : String(b.status)} ${ticker}${devnet ? " on devnet" : ""}: ${url}`);
   io.out(`Cost ${cost}. The creator fees go to your wallet ${String(b.wallet)}; \`highwire claim\` collects them.`);
   for (const t of (b.transactions as Tx[] | undefined) ?? []) if (t.explorer) io.out(`  ${t.explorer}`);
   return b.status === "sent" ? 0 : 1;
@@ -259,24 +261,24 @@ export async function runWallet(argv: string[], io: CliIo): Promise<number> {
   return argv.length === 0 || argv[0] === "--help" ? 0 : 2;
 }
 
-/** `highwire policy init [--launch] [--live]`. */
+/** `highwire policy init [--launch [--devnet] [--live]]`. */
 export function runPolicyInit(argv: string[], io: CliIo): number {
-  const launch = argv.includes("--launch"), live = argv.includes("--live");
-  const unknown = argv.find((a) => a !== "--launch" && a !== "--live");
+  const launch = argv.includes("--launch"), live = argv.includes("--live"), devnet = argv.includes("--devnet");
+  const unknown = argv.find((a) => a !== "--launch" && a !== "--live" && a !== "--devnet");
   if (unknown) {
-    io.err(`highwire policy init: unknown argument ${unknown} (use --launch, --live)`);
+    io.err(`highwire policy init: unknown argument ${unknown} (use --launch, --devnet, --live)`);
     return 2;
   }
   const paths = agentPaths(io.env ?? process.env);
-  if (live && !launch) {
-    io.err("highwire policy init: --live only goes with --launch; edit the policy to make the default one live.");
+  if ((live || devnet) && !launch) {
+    io.err("highwire policy init: --live and --devnet go with --launch; edit the policy to change the default one.");
     return 2;
   }
-  const template = launch ? { ...LAUNCH_POLICY_TEMPLATE, live } : undefined;
+  const template = launch ? { ...LAUNCH_POLICY_TEMPLATE, live, ...(devnet ? { cluster: "devnet" as const } : {}) } : undefined;
   const { path, written } = initPolicy(paths, template);
   if (!written) io.out(`A policy already exists at ${path}; left it as it is. Edit it to change what it allows.`);
   else if (launch) {
-    io.out(`Wrote a launch policy to ${path}: mainnet, launches and claims, ${LAUNCH_POLICY_TEMPLATE.max_sol_per_tx} SOL a launch (fee plus first buy), ${LAUNCH_POLICY_TEMPLATE.max_sol_per_day} SOL a day, ${live ? "live: it sends." : 'dry run until you set "live": true.'}`);
+    io.out(`Wrote a launch policy to ${path}: ${devnet ? "devnet (set HIGHWIRE_CLUSTER=devnet to use it)" : "mainnet"}, launches and claims, ${LAUNCH_POLICY_TEMPLATE.max_sol_per_tx} SOL a launch (fee plus first buy), ${LAUNCH_POLICY_TEMPLATE.max_sol_per_day} SOL a day, ${live ? "live: it sends." : 'dry run until you set "live": true.'}`);
   } else {
     io.out(`Wrote a starting policy to ${path}: devnet, dry run, trades and claims, 0.1 SOL a transaction, 0.5 SOL a day.\nEdit it to change the limits; set "live": true only when you want it to send.`);
   }

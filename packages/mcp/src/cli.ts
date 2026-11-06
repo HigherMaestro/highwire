@@ -47,7 +47,7 @@ Local signer (off unless HIGHWIRE_KEYPAIR_PATH is set):
 
 Commands:
   highwire policy init     write a starting policy: devnet, dry run, small limits
-                           (--launch: mainnet launches and claims; --live to send for real)
+                           (--launch: mainnet launches and claims; --devnet to try it there first; --live to send)
   highwire wallet new      make your own wallet for launching (~/.highwire/wallet.json); wallet address prints it
   highwire launch          launch a coin from that wallet, inside your policy (highwire launch --help)
   highwire claim           collect the wallet's creator fees
