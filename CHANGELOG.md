@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.5.0 (2026-11-06)
 
 - **Live alerts.** `watch_market` waits on higher.fun's live feed for up to 50 seconds and returns launches,
   graduations, buys and sells as they land: all of higher.fun, or up to 16 coins (with each trader's wallet), and only
@@ -14,8 +14,8 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 - **A new link preview.** highwire.fun's card on X and elsewhere is now on ink, and says what Highwire does: your
   agent can trade, launch and claim on higher.fun. The page description says the same, in place of the read-only wording
   from before the transaction tools.
-- **The roadmap on the home page** moves install (npm and the MCP Registry) into Now, and lists what's next: live
-  alerts, recurring buys and stop-loss, then profit and loss and posting.
+- **The roadmap on the home page** moves install (npm and the MCP Registry) and live alerts into Now, and lists what's
+  next: recurring buys and stop-loss, then profit and loss and posting.
 
 ## 0.4.2 (2026-11-06)
 
