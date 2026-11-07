@@ -9,6 +9,10 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   sells the other, sized by SOL, with launches and graduations of their own. "How it works" is a scroll dive from the
   whole field of coins into one coin, one trade and the Highwire H. Both scenes follow the theme switcher live: on
   paper the wire deepens and the H's posts turn ink, as in the brand mark. The sign page stays plain.
+- **/ideas and each idea page, redesigned for scanning.** A wire header like the homepage's, cards that are one big
+  link with the facts that matter (difficulty, SOL to start, minutes to a first dry run), and on each idea page a
+  breadcrumb, one primary Deploy button above the fold, the facts as large stats, a section menu that marks where you
+  are, and numbered sections with half the words.
 - **Idea pages say much more.** Three ways to start (Deploy to GitHub, one `gh` command, or a prompt your coding agent
   runs end to end), a calculator anchored to real higher.fun volumes, how the agent runs day to day, the exact file
   tree, the starting policy explained line by line, and questions.

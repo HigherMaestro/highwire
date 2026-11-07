@@ -171,12 +171,15 @@ interface Pulse {
   life: number;
 }
 
-interface Scene {
+export interface Scene {
   play(item: TapeItem): void;
   dispose(): void;
 }
 
-function startScene(THREE: typeof Three, stage: HTMLDivElement): Scene | null {
+/** "hero": the homepage's full-height frame. "band": a shorter, wider page header, framed tighter on the wire. */
+export type Framing = "hero" | "band";
+
+export function startScene(THREE: typeof Three, stage: HTMLDivElement, framing: Framing = "hero"): Scene | null {
   let renderer: Three.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
@@ -369,8 +372,9 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement): Scene | null {
     const h = stage.clientHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    // Narrow screens pull back, so the wire still spans the frame.
-    camera.position.set(0, -0.6, w / h < 1 ? 26 : 17);
+    // Narrow screens pull back, so the wire still spans the frame; a band sits closer, on the wire's upper run.
+    if (framing === "band") camera.position.set(0, -1.2, w / h < 1 ? 22 : 13);
+    else camera.position.set(0, -0.6, w / h < 1 ? 26 : 17);
     camera.updateProjectionMatrix();
     pixel.value = (h * renderer.getPixelRatio()) / (2 * Math.tan((camera.fov * Math.PI) / 360));
     frames = Math.max(frames, 2);
@@ -433,9 +437,11 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement): Scene | null {
       frames = 2;
     }
     writePulses();
+    const band = framing === "band";
     camera.position.x = pointer.x * 0.9 + Math.sin(time.value * 0.07) * 0.4;
-    camera.position.y = -0.6 - pointer.y * 0.5;
-    camera.lookAt(1.5, -0.4, -2);
+    camera.position.y = (band ? -1.2 : -0.6) - pointer.y * 0.5;
+    if (band) camera.lookAt(-3.2, -1.4, -2);
+    else camera.lookAt(1.5, -0.4, -2);
     renderer.render(scene, camera);
   };
   loop();

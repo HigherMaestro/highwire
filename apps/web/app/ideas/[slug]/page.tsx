@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DEFAULT_API_URL, HigherApi, createHttpConfig } from "highwire-core";
 import { SiteFooter, SiteHeader } from "../../../components/Chrome.tsx";
+import { AmbientWire } from "../../../components/hero/AmbientWire.tsx";
+import { SectionNav } from "../../../components/ideas/SectionNav.tsx";
 import { CopyCommand } from "../../../components/CopyCommand.tsx";
 import { IdeaCalculator, type MarketContext } from "../../../components/ideas/IdeaCalculator.tsx";
 import { agentPrompt, assemble, defaultIdeasDir, deployUrl, fileTree, getIdea, listIdeas, readPrd, startCommand } from "../../../lib/ideas.ts";
@@ -65,9 +67,34 @@ function Bullets({ items }: { items: string[] }) {
   );
 }
 
+const SECTIONS = [
+  { id: "start", label: "Start" },
+  { id: "how", label: "How it works" },
+  { id: "numbers", label: "The numbers" },
+  { id: "costs", label: "Costs and risks" },
+  { id: "files", label: "What you get" },
+  { id: "policy", label: "Policy" },
+  { id: "milestones", label: "Milestones" },
+  { id: "faq", label: "Questions" },
+  { id: "prd", label: "The spec" },
+];
+
+const n = (id: string) => String(SECTIONS.findIndex((s) => s.id === id) + 1).padStart(2, "0");
+
+function H2({ id, children }: { id: string; children: string }) {
+  return (
+    <h2 id={`${id}-title`} className="sec-h">
+      <span className="sec-n">{n(id)}</span>
+      {children}
+    </h2>
+  );
+}
+
 export default async function IdeaPage({ params }: Props) {
   const idea = getIdea((await params).slug);
   if (!idea) notFound();
+  const all = listIdeas();
+  const index = all.findIndex((i) => i.slug === idea.slug);
   const market = await marketContext();
   const files = [...assemble(idea.slug, { version: VERSION(), siteUrl: SITE_URL }).keys()];
   const policy = JSON.parse(readFileSync(join(defaultIdeasDir(), idea.slug, "policy.example.json"), "utf8")) as Record<string, unknown>;
@@ -76,127 +103,142 @@ export default async function IdeaPage({ params }: Props) {
   return (
     <>
       <SiteHeader />
-      <main className="section">
-        <div className="wrap idea-page">
-          <p className="small">
-            <a href="/ideas">← All ideas</a>
-          </p>
-          <header className="docs-intro idea-intro">
-            <p className="eyebrow">Launch idea · {idea.difficulty}</p>
-            <h1>{idea.title}</h1>
+      <main>
+        <section className="page-hero idea-hero" aria-labelledby="idea-title">
+          <AmbientWire />
+          <div className="wrap page-hero-copy">
+            <nav className="crumbs" aria-label="Breadcrumb">
+              <a href="/ideas">Ideas</a>
+              <span aria-hidden="true">/</span>
+              <span aria-current="page">{idea.title}</span>
+            </nav>
+            <p className="eyebrow">
+              Launch idea · {String(index + 1).padStart(2, "0")} / {String(all.length).padStart(2, "0")} · {idea.difficulty}
+            </p>
+            <h1 id="idea-title">{idea.title}</h1>
             <p className="lead">{idea.oneLiner}</p>
-            <ul className="badges" aria-label="What it uses">
-              {idea.uses.map((u) => (
-                <li key={u} className="badge">
-                  {u}
-                </li>
-              ))}
-            </ul>
-            <dl className="idea-facts">
+            <div className="hero-actions">
+              <a className="button" href={deployUrl(idea)}>
+                Deploy to GitHub
+              </a>
+              <a className="button button-quiet" href="#start">
+                Other ways to start
+              </a>
+            </div>
+            <dl className="idea-stats">
               <div>
                 <dt>To start</dt>
-                <dd>{idea.solToStart}</dd>
+                <dd>{idea.solToStart.split(",")[0]}</dd>
               </div>
               <div>
-                <dt>To a first dry run</dt>
-                <dd>about {idea.minutesToDryRun} minutes</dd>
+                <dt>First dry run</dt>
+                <dd>~{idea.minutesToDryRun} min</dd>
               </div>
               <div>
                 <dt>Outside services</dt>
-                <dd>{idea.outside.length ? idea.outside.join("; ") : "none"}</dd>
+                <dd>{idea.outside.length ? idea.outside.length : "None"}</dd>
               </div>
               <div>
-                <dt>Costs to try</dt>
-                <dd>nothing: everything starts as a dry run</dd>
+                <dt>To try it</dt>
+                <dd>Free</dd>
               </div>
             </dl>
-          </header>
+          </div>
+        </section>
 
-          <section className="idea-block" aria-labelledby="start-title">
-            <h2 id="start-title">Start it, three ways</h2>
-            <p className="muted">
-              Each gives you the same repository: the spec, instructions for your coding agent, Highwire wired in, and a
-              policy that&apos;s a dry run. Highwire never sees it.
-            </p>
-            <div className="idea-starts">
-              <div className="card idea-start">
-                <p className="eyebrow">1 · In the browser</p>
-                <h3>Deploy to GitHub</h3>
-                <p className="muted small">GitHub&apos;s own form creates it in your account. Then clone it and set it up:</p>
-                <p>
+        <SectionNav sections={SECTIONS} />
+
+        <div className="wrap idea-page">
+          <section id="start" className="idea-block" aria-labelledby="start-title">
+            <H2 id="start">Start</H2>
+            <div className="idea-start-main card">
+              <ol className="idea-start-steps">
+                <li>
+                  <strong>Deploy.</strong> GitHub&apos;s own form creates <code>{idea.slug}</code> in your account.
                   <a className="button" href={deployUrl(idea)}>
                     Deploy to GitHub
                   </a>
-                </p>
-                <CopyCommand code={steps} label="Clone and set up" multiline />
-              </div>
+                </li>
+                <li>
+                  <strong>Set it up</strong> in a terminal. This makes the agent&apos;s wallet outside the repository and a policy
+                  that&apos;s a dry run.
+                  <CopyCommand code={steps} label="Clone and set up" multiline />
+                </li>
+                <li>
+                  <strong>Build.</strong> Open it in Claude Code or any coding agent, and say:
+                  <CopyCommand code={idea.prompt} label="Prompt for your coding agent" multiline />
+                </li>
+              </ol>
+            </div>
+            <h3 className="idea-other-h">Other ways to start</h3>
+            <div className="idea-starts">
               <div className="card idea-start">
-                <p className="eyebrow">2 · One command</p>
-                <h3>With GitHub&apos;s CLI</h3>
+                <h4>One command</h4>
                 <p className="muted small">
-                  Creates the repository, clones it and sets it up, if you have <a href="https://cli.github.com">gh</a> signed
-                  in and Node 20 or later.
+                  Creates, clones and sets it up, with <a href="https://cli.github.com">GitHub&apos;s CLI</a> signed in.
                 </p>
                 <CopyCommand code={startCommand(idea.slug)} label="Create, clone and set up" multiline />
               </div>
               <div className="card idea-start">
-                <p className="eyebrow">3 · Hand it to your agent</p>
-                <h3>Paste this</h3>
-                <p className="muted small">Claude Code, or any coding agent with a shell, does every step and stops after milestone 1.</p>
-                <CopyCommand code={agentPrompt(idea)} label="Prompt for your coding agent" multiline />
+                <h4>Hand it to your agent</h4>
+                <p className="muted small">A coding agent with a shell does every step, and stops after milestone 1.</p>
+                <CopyCommand code={agentPrompt(idea)} label="Prompt that does every step" multiline />
               </div>
             </div>
-            <p className="muted small">
-              Already have the repository? Open it in your coding agent and say: <q>{idea.prompt}</q>
-            </p>
           </section>
 
-          <div className="idea-grid">
-            <section aria-labelledby="how-title">
-              <h2 id="how-title">How it works</h2>
-              <ol className="steps">
-                {idea.howItWorks.map((t) => (
-                  <li key={t}>{t}</li>
-                ))}
-              </ol>
-            </section>
-            <section aria-labelledby="day-title">
-              <h2 id="day-title">How it runs</h2>
-              <ol className="idea-timeline">
-                {idea.day.map((d) => (
-                  <li key={d.at}>
-                    <span className="idea-timeline-at">{d.at}</span>
-                    <span>{d.text}</span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          </div>
+          <section id="how" className="idea-block" aria-labelledby="how-title">
+            <H2 id="how">How it works</H2>
+            <div className="idea-grid">
+              <div>
+                <h3>The loop</h3>
+                <ol className="steps">
+                  {idea.howItWorks.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ol>
+              </div>
+              <div>
+                <h3>How it runs</h3>
+                <ol className="idea-timeline">
+                  {idea.day.map((d) => (
+                    <li key={d.at}>
+                      <span className="idea-timeline-at">{d.at}</span>
+                      <span>{d.text}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          </section>
 
-          <section className="idea-block" aria-labelledby="numbers-title">
-            <h2 id="numbers-title">The numbers</h2>
+          <section id="numbers" className="idea-block" aria-labelledby="numbers-title">
+            <H2 id="numbers">The numbers</H2>
             <p className="muted">{idea.earns}</p>
             <IdeaCalculator kind={idea.calculator} market={market} />
           </section>
 
-          <div className="idea-grid">
-            <section aria-labelledby="costs-title">
-              <h2 id="costs-title">What it costs</h2>
-              <Bullets items={idea.costs} />
-            </section>
-            <section aria-labelledby="needs-title">
-              <h2 id="needs-title">What you need</h2>
-              <Bullets items={[...idea.needs, ...idea.outside]} />
-            </section>
-            <section aria-labelledby="risks-title">
-              <h2 id="risks-title">Risks and limits</h2>
-              <Bullets items={idea.risks} />
-            </section>
-          </div>
+          <section id="costs" className="idea-block" aria-labelledby="costs-title">
+            <H2 id="costs">Costs and risks</H2>
+            <div className="idea-grid idea-grid-3">
+              <div>
+                <h3>What it costs</h3>
+                <Bullets items={idea.costs} />
+              </div>
+              <div>
+                <h3>What you need</h3>
+                <Bullets items={[...idea.needs, ...idea.outside]} />
+              </div>
+              <div>
+                <h3>Risks and limits</h3>
+                <Bullets items={idea.risks} />
+              </div>
+            </div>
+          </section>
 
-          <div className="idea-grid">
-            <section aria-labelledby="files-title">
-              <h2 id="files-title">What you get</h2>
+          <section id="files" className="idea-block" aria-labelledby="files-title">
+            <H2 id="files">What you get</H2>
+            <div className="idea-grid">
               <pre className="idea-tree" aria-label="The repository's files">{`${idea.slug}/\n${fileTree(files)}`}</pre>
               <ul className="plain idea-list">
                 {FILE_NOTES.filter(([f]) => files.includes(f)).map(([f, note]) => (
@@ -205,30 +247,31 @@ export default async function IdeaPage({ params }: Props) {
                   </li>
                 ))}
               </ul>
-            </section>
-            <section aria-labelledby="policy-title">
-              <h2 id="policy-title">The starting policy</h2>
-              <p className="muted small">
-                Copied to <code>~/.highwire/{idea.slug}/policy.json</code> by setup. Nothing is signed while{" "}
-                <code>live</code> is false, and only you can change it.
-              </p>
-              <dl className="idea-policy">
-                {Object.entries(policy)
-                  .filter(([k]) => idea.policyNotes[k])
-                  .map(([k, v]) => (
-                    <div key={k}>
-                      <dt>
-                        <code>{k}</code> <span className="mono-wrap muted small">{JSON.stringify(v)}</span>
-                      </dt>
-                      <dd>{idea.policyNotes[k]}</dd>
-                    </div>
-                  ))}
-              </dl>
-            </section>
-          </div>
+            </div>
+          </section>
 
-          <section className="idea-block" aria-labelledby="milestones-title">
-            <h2 id="milestones-title">Milestones</h2>
+          <section id="policy" className="idea-block" aria-labelledby="policy-title">
+            <H2 id="policy">The starting policy</H2>
+            <p className="muted">
+              Setup copies it to <code>~/.highwire/{idea.slug}/policy.json</code>. Nothing is signed while <code>live</code> is
+              false, and only you can change it.
+            </p>
+            <dl className="idea-policy">
+              {Object.entries(policy)
+                .filter(([k]) => idea.policyNotes[k])
+                .map(([k, v]) => (
+                  <div key={k}>
+                    <dt>
+                      <code>{k}</code> <span className="mono-wrap muted small">{JSON.stringify(v)}</span>
+                    </dt>
+                    <dd>{idea.policyNotes[k]}</dd>
+                  </div>
+                ))}
+            </dl>
+          </section>
+
+          <section id="milestones" className="idea-block" aria-labelledby="milestones-title">
+            <H2 id="milestones">Milestones</H2>
             <ol className="idea-milestones">
               {idea.milestones.map((m) => (
                 <li key={m.title} className="card">
@@ -239,8 +282,8 @@ export default async function IdeaPage({ params }: Props) {
             </ol>
           </section>
 
-          <section className="idea-block" aria-labelledby="faq-title">
-            <h2 id="faq-title">Questions</h2>
+          <section id="faq" className="idea-block" aria-labelledby="faq-title">
+            <H2 id="faq">Questions</H2>
             <div className="idea-faq">
               {idea.faq.map((f) => (
                 <details key={f.q}>
@@ -251,16 +294,18 @@ export default async function IdeaPage({ params }: Props) {
             </div>
           </section>
 
-          <article className="prose idea-prd" id="prd" aria-labelledby="prd-title">
-            <p className="eyebrow">
-              PRD.md · <a href={`/ideas/${idea.slug}/prd.md`}>raw markdown</a>
+          <section id="prd" className="idea-block idea-prd" aria-labelledby="prd-title">
+            <H2 id="prd">The full spec</H2>
+            <p className="muted small">
+              PRD.md, as your coding agent reads it. <a href={`/ideas/${idea.slug}/prd.md`}>Raw markdown</a>
             </p>
-            <h2 id="prd-title">The full spec</h2>
-            <Markdown source={readPrd(idea.slug)} />
-          </article>
+            <article className="prose">
+              <Markdown source={readPrd(idea.slug)} />
+            </article>
+          </section>
 
-          <p className="muted small">
-            This idea is an example, not financial advice. You run the agent and you&apos;re responsible for what it does.
+          <p className="muted small idea-fine">
+            An example, not financial advice. You run the agent and you&apos;re responsible for what it does.
           </p>
         </div>
       </main>
