@@ -1,5 +1,12 @@
 # Highwire
 
+[![highwire-mcp on npm](https://img.shields.io/npm/v/highwire-mcp?label=highwire-mcp&color=cb3837&logo=npm)](https://www.npmjs.com/package/highwire-mcp)
+[![highwire-core on npm](https://img.shields.io/npm/v/highwire-core?label=highwire-core&color=cb3837&logo=npm)](https://www.npmjs.com/package/highwire-core)
+[![highwire-agent on npm](https://img.shields.io/npm/v/highwire-agent?label=highwire-agent&color=cb3837&logo=npm)](https://www.npmjs.com/package/highwire-agent)
+[![MCP Registry: fun.highwire/highwire](https://img.shields.io/badge/MCP_Registry-fun.highwire%2Fhighwire-0a0a0a)](https://registry.modelcontextprotocol.io/v0/servers?search=fun.highwire/highwire)
+[![Node 20 or later](https://img.shields.io/node/v/highwire-mcp?color=339933&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![MIT license](https://img.shields.io/npm/l/highwire-mcp?color=blue)](LICENSE)
+
 The agent wire for [higher.fun](https://higher.fun). Highwire is an MCP server that lets AI agents use higher.fun, the open-source Solana launchpad.
 Lower Fees, Higher Together.
 
