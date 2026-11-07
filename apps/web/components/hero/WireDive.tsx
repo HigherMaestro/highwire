@@ -5,7 +5,8 @@ import type * as Three from "three";
 
 // "How it works", as a dive through scales: scrolling flies the camera from higher.fun's whole field of coins, into one
 // coin and its holders, into one trade on a wire, and out to the Highwire H. One pinned three.js scene; the captions
-// are plain text beside it, and reduced motion cuts between the four frames instead of flying.
+// are plain text beside it, and reduced motion cuts between the four frames instead of flying. It follows the site's
+// theme: on paper the points and the wire deepen and blend normally, and the H's posts are ink, as in the brand mark.
 
 export interface DiveStage {
   title: string;
@@ -43,6 +44,7 @@ const POINT_VERT = /* glsl */ `
 const POINT_FRAG = /* glsl */ `
   ${GRADIENT_GLSL}
   uniform float uOpacity;
+  uniform float uLight;
   varying float vHue;
   varying float vDepth;
   void main() {
@@ -50,7 +52,8 @@ const POINT_FRAG = /* glsl */ `
     if (d > 1.0) discard;
     float core = smoothstep(0.45, 0.0, d);
     float halo = pow(1.0 - d, 2.0) * 0.4;
-    vec3 c = mix(wireGradient(vHue), vec3(1.0), core * 0.6);
+    vec3 g = wireGradient(vHue);
+    vec3 c = mix(mix(g, vec3(1.0), core * 0.6), mix(g * 0.8, vec3(0.055, 0.067, 0.086), core * 0.22), uLight);
     gl_FragColor = vec4(c, (core + halo) * uOpacity);
   }
 `;
@@ -69,12 +72,13 @@ const WIRE_VERT = /* glsl */ `
 const WIRE_FRAG = /* glsl */ `
   ${GRADIENT_GLSL}
   uniform float uOpacity;
+  uniform float uLight;
   uniform float uGlow;
   uniform float uPulse;
   varying vec2 vUv;
   varying float vFacing;
   void main() {
-    vec3 col = wireGradient(vUv.x);
+    vec3 col = mix(wireGradient(vUv.x), wireGradient(vUv.x) * 0.82, uLight);
     float lit = uPulse >= 0.0 ? exp(-abs(vUv.x - uPulse) * 30.0) : 0.0;
     if (uGlow > 0.5) {
       gl_FragColor = vec4(col, pow(vFacing, 2.4) * (0.12 + 0.5 * lit) * uOpacity);
@@ -111,6 +115,9 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement, reduced: boolean
   const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 600);
   const pixel = { value: 300 };
   const time = { value: 0 };
+  const light = { value: 0 };
+  // Materials that glow by adding light on ink, and blend normally on paper.
+  const glowing: Three.ShaderMaterial[] = [];
   const target = new THREE.Vector3(6, 1.2, 2);
 
   const points = (positions: Float32Array, sizes: Float32Array, hues: Float32Array) => {
@@ -119,7 +126,8 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement, reduced: boolean
     geo.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
     geo.setAttribute("aHue", new THREE.BufferAttribute(hues, 1));
     const opacity = { value: 1 };
-    const mat = keep(new THREE.ShaderMaterial({ vertexShader: POINT_VERT, fragmentShader: POINT_FRAG, uniforms: { uPixel: pixel, uTime: time, uOpacity: opacity }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    const mat = keep(new THREE.ShaderMaterial({ vertexShader: POINT_VERT, fragmentShader: POINT_FRAG, uniforms: { uPixel: pixel, uTime: time, uOpacity: opacity, uLight: light }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glowing.push(mat);
     const p = new THREE.Points(geo, mat);
     scene.add(p);
     return { p, opacity };
@@ -160,8 +168,11 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement, reduced: boolean
   const wireCurve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(4.2, 1.8, 2), new THREE.Vector3(6, -0.2, 2), new THREE.Vector3(7.8, 1.8, 2));
   const wireOpacity = { value: 0 };
   const pulse = { value: -1 };
-  const wireMat = (glow: boolean) =>
-    keep(new THREE.ShaderMaterial({ vertexShader: WIRE_VERT, fragmentShader: WIRE_FRAG, uniforms: { uOpacity: wireOpacity, uGlow: { value: glow ? 1 : 0 }, uPulse: pulse }, transparent: true, depthWrite: false, blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending }));
+  const wireMat = (glow: boolean) => {
+    const m = keep(new THREE.ShaderMaterial({ vertexShader: WIRE_VERT, fragmentShader: WIRE_FRAG, uniforms: { uOpacity: wireOpacity, uGlow: { value: glow ? 1 : 0 }, uPulse: pulse, uLight: light }, transparent: true, depthWrite: false, blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending }));
+    if (glow) glowing.push(m);
+    return m;
+  };
   scene.add(new THREE.Mesh(keep(new THREE.TubeGeometry(wireCurve, 200, 0.045, 12, false)), wireMat(false)));
   scene.add(new THREE.Mesh(keep(new THREE.TubeGeometry(wireCurve, 200, 0.26, 12, false)), wireMat(true)));
   const postMat = keep(new THREE.MeshBasicMaterial({ color: 0xf6f4ee, transparent: true, opacity: 0 }));
@@ -242,6 +253,20 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement, reduced: boolean
   let visible = false;
   const vis = new IntersectionObserver((es) => (visible = es.some((e) => e.isIntersecting)));
   vis.observe(stage);
+
+  // Follow the theme toggle as it changes.
+  const applyTheme = () => {
+    const isLight = document.documentElement.dataset.theme === "light";
+    light.value = isLight ? 1 : 0;
+    for (const m of glowing) {
+      m.blending = isLight ? THREE.NormalBlending : THREE.AdditiveBlending;
+      m.needsUpdate = true;
+    }
+    postMat.color.set(isLight ? 0x0e1116 : 0xf6f4ee);
+  };
+  const themeWatch = new MutationObserver(applyTheme);
+  themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  applyTheme();
   let progress = 0;
   const clock = new THREE.Clock();
   let raf = 0;
@@ -262,6 +287,7 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement, reduced: boolean
       cancelAnimationFrame(raf);
       ro.disconnect();
       vis.disconnect();
+      themeWatch.disconnect();
       for (const d of disposables) d.dispose();
       renderer.dispose();
       renderer.domElement.remove();

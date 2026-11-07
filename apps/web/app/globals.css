@@ -2286,7 +2286,7 @@ a.card:hover,
   }
 }
 
-/* The live wire hero: always ink, so it reads as a cinematic band in either theme. */
+/* The live wire hero: ink by default, paper when the visitor picks Light (the scene follows the theme too). */
 .hero-live {
   --bg: #07090C;
   --fg: #F1F0EC;
@@ -2465,7 +2465,7 @@ a.card:hover,
   }
 }
 
-/* How it works: the pinned dive. Always ink, like the hero. */
+/* How it works: the pinned dive. Follows the theme, like the hero. */
 .dive {
   --fg: #F1F0EC;
   --muted: #A3A9B2;
@@ -2569,5 +2569,68 @@ a.card:hover,
 @media (max-width: 760px) {
   .site-header {
     position: static;
+  }
+}
+
+/* Paper versions of the hero and the dive. */
+:root[data-theme="light"] .hero-live {
+  --bg: #F6F4EE;
+  --fg: #0E1116;
+  --muted: #4A4F57;
+  --line: #D9D6CE;
+  --link: #1F5FA8;
+  background: radial-gradient(120% 90% at 70% 70%, #FFFFFF 0%, #F6F4EE 55%, #EFECE4 100%);
+}
+
+:root[data-theme="light"] .hero-live .lead {
+  color: #3A3F47;
+}
+
+:root[data-theme="light"] .livewire-vignette {
+  background:
+    linear-gradient(90deg, rgba(246, 244, 238, 0.92) 0%, rgba(246, 244, 238, 0.6) 38%, rgba(246, 244, 238, 0) 68%),
+    linear-gradient(180deg, rgba(246, 244, 238, 0) 72%, #F6F4EE 100%);
+}
+
+:root[data-theme="light"] .livewire-corner {
+  color: rgba(14, 17, 22, 0.62);
+}
+
+:root[data-theme="light"] .livewire-bl li[data-kind="buy"] .livewire-kind {
+  color: #8A5A12;
+}
+
+:root[data-theme="light"] .livewire-bl li[data-kind="sell"] .livewire-kind {
+  color: #1F5FA8;
+}
+
+:root[data-theme="light"] .livewire-bl li[data-kind="launch"] .livewire-kind,
+:root[data-theme="light"] .livewire-bl li[data-kind="graduation"] .livewire-kind {
+  color: #1E6B3A;
+}
+
+:root[data-theme="light"] .dive {
+  --fg: #0E1116;
+  --muted: #4A4F57;
+  background: #F6F4EE;
+}
+
+:root[data-theme="light"] .dive-vignette {
+  background:
+    linear-gradient(90deg, rgba(246, 244, 238, 0.9) 0%, rgba(246, 244, 238, 0.35) 45%, rgba(246, 244, 238, 0) 70%),
+    linear-gradient(180deg, #F6F4EE 0%, rgba(246, 244, 238, 0) 14%, rgba(246, 244, 238, 0) 80%, #F6F4EE 100%);
+}
+
+:root[data-theme="light"] .dive-stages p {
+  color: #3A3F47;
+}
+
+:root[data-theme="light"] .dive-index {
+  color: #1F5FA8;
+}
+
+@media (max-width: 760px) {
+  :root[data-theme="light"] .dive-vignette {
+    background: linear-gradient(180deg, #F6F4EE 0%, rgba(246, 244, 238, 0) 20%, rgba(246, 244, 238, 0.2) 50%, rgba(246, 244, 238, 0.94) 85%);
   }
 }

@@ -7,8 +7,9 @@ import type { TapeItem } from "../../lib/tape.ts";
 // The homepage's live wire: higher.fun's real trades riding the Highwire wire. Buys run left to right, sells right to
 // left, each pulse sized by its SOL; a launch ripples out from the wire and a graduation lights the whole of it. The
 // tape comes from /api/tape every few seconds, and each event plays at its real spacing. Behind it, two wires out of
-// focus and drifting bokeh give the depth. three.js loads only when the hero is on screen; reduced motion gets a still
-// frame, and no WebGL gets a plain wire.
+// focus and drifting bokeh give the depth. It follows the site's theme as it changes: on paper the wire deepens and the
+// glow and bokeh blend normally, since light added to cream disappears. three.js loads only when the hero is on screen;
+// reduced motion gets a still frame, and no WebGL gets a plain wire.
 
 const POLL_MS = 5_000;
 /** The feed counts as live while its newest event is this recent. */
@@ -72,6 +73,7 @@ const WIRE_FRAG = /* glsl */ `
   uniform float uGlow;
   uniform float uDim;
   uniform float uDesat;
+  uniform float uLight;
   uniform float uPulses[${MAX_PULSES}];
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -80,6 +82,8 @@ const WIRE_FRAG = /* glsl */ `
     float t = vUv.x;
     vec3 col = wireGradient(t);
     col = mix(col, vec3(dot(col, vec3(0.333))), uDesat);
+    // On paper the pastel gradient needs depth to read.
+    col = mix(col, col * 0.82, uLight);
     float lit = 0.0;
     for (int i = 0; i < ${MAX_PULSES}; i++) {
       float p = uPulses[i];
@@ -89,7 +93,7 @@ const WIRE_FRAG = /* glsl */ `
     float facing = abs(dot(normalize(vNormal), normalize(vView)));
     float shimmer = 0.92 + 0.08 * sin(t * 40.0 - uTime * 1.6);
     if (uGlow > 0.5) {
-      float a = pow(facing, 2.4) * (0.1 + 0.22 * min(lit, 1.0) + 0.35 * uFlash) * uDim;
+      float a = pow(facing, 2.4) * (0.1 + 0.22 * min(lit, 1.0) + 0.35 * uFlash) * uDim * mix(1.0, 0.6, uLight);
       gl_FragColor = vec4(col, a);
     } else {
       vec3 c = col * (0.8 + 0.3 * facing) * shimmer + col * min(lit, 1.0) * 0.45 + vec3(uFlash * 0.4);
@@ -114,8 +118,9 @@ const POINT_VERT = /* glsl */ `
   }
 `;
 
-// A pulse: a hot core and a soft halo.
+// A pulse: a hot core and a soft halo; on paper, a deep core instead of a white one.
 const PULSE_FRAG = /* glsl */ `
+  uniform float uLight;
   varying float vAlpha;
   varying vec3 vColor;
   void main() {
@@ -123,13 +128,15 @@ const PULSE_FRAG = /* glsl */ `
     if (d > 1.0) discard;
     float core = smoothstep(0.32, 0.0, d);
     float halo = pow(1.0 - d, 2.2) * 0.55;
-    vec3 c = mix(vColor, vec3(1.0), core * 0.85);
-    gl_FragColor = vec4(c, (core + halo) * vAlpha);
+    vec3 dark = mix(vColor, vec3(1.0), core * 0.85);
+    vec3 light = mix(vColor * 0.8, vec3(0.055, 0.067, 0.086), core * 0.3);
+    gl_FragColor = vec4(mix(dark, light, uLight), (core + halo) * vAlpha);
   }
 `;
 
 // Bokeh: soft discs with a brighter rim, as an out-of-focus lens draws them.
 const BOKEH_FRAG = /* glsl */ `
+  uniform float uLight;
   varying float vAlpha;
   varying vec3 vColor;
   void main() {
@@ -137,20 +144,22 @@ const BOKEH_FRAG = /* glsl */ `
     if (d > 1.0) discard;
     float disc = smoothstep(1.0, 0.82, d);
     float rim = smoothstep(0.7, 0.95, d) * disc;
-    gl_FragColor = vec4(vColor, (disc * 0.55 + rim * 0.5) * vAlpha);
+    vec3 c = mix(vColor, vColor * 0.45 + vec3(0.12, 0.14, 0.18), uLight);
+    gl_FragColor = vec4(c, (disc * 0.55 + rim * 0.5) * vAlpha * mix(1.0, 0.75, uLight));
   }
 `;
 
 // A launch: a ring expanding out of the wire.
 const RING_FRAG = /* glsl */ `
   uniform float uProgress;
+  uniform float uLight;
   varying float vAlpha;
   varying vec3 vColor;
   void main() {
     float d = length(gl_PointCoord - 0.5) * 2.0;
     float r = uProgress;
     float ring = smoothstep(0.08, 0.0, abs(d - r)) * (1.0 - uProgress);
-    gl_FragColor = vec4(vColor, ring * vAlpha);
+    gl_FragColor = vec4(mix(vColor, vColor * 0.65, uLight), ring * vAlpha);
   }
 `;
 
@@ -186,6 +195,10 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement): Scene | null {
   const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 200);
   const time = { value: 0 };
   const pixel = { value: 300 };
+  const light = { value: 0 };
+  // Materials that glow by adding light on ink, and blend normally on paper.
+  const glowing: Three.ShaderMaterial[] = [];
+  const glows = (m: Three.ShaderMaterial) => (glowing.push(m), m);
 
   // A wire hung between two heights, sagging between them, from z0 at its left end to z1 at its right. The main one
   // sweeps up across the frame from near the camera to deep behind it; two more hang far behind, out of focus.
@@ -207,26 +220,27 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement): Scene | null {
       new THREE.ShaderMaterial({
         vertexShader: WIRE_VERT,
         fragmentShader: WIRE_FRAG,
-        uniforms: { uTime: time, uFlash: flash, uGlow: { value: glow ? 1 : 0 }, uDim: { value: dim }, uDesat: { value: desat }, uPulses: { value: pulseSlots } },
+        uniforms: { uTime: time, uFlash: flash, uGlow: { value: glow ? 1 : 0 }, uDim: { value: dim }, uDesat: { value: desat }, uLight: light, uPulses: { value: pulseSlots } },
         transparent: true,
         depthWrite: false,
         blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending,
       }),
     );
+  const glowMat = (dim: number, desat: number) => glows(wireMat(true, dim, desat));
   const tube = (curve: Three.Curve<Three.Vector3>, r: number, mat: Three.Material) => {
     const m = new THREE.Mesh(keep(new THREE.TubeGeometry(curve, 400, r, 12, false)), mat);
     scene.add(m);
     return m;
   };
   tube(main, 0.06, wireMat(false, 1, 0));
-  tube(main, 0.3, wireMat(true, 1.6, 0));
+  tube(main, 0.3, glowMat(1.6, 0));
   for (const [y0, y1, sag, z, dim] of [
     [4.2, 2.6, 1.2, -12, 0.45],
     [-2.2, 0.4, 1.6, -18, 0.3],
   ] as const) {
     const back = wireCurve(y0, y1, sag, z, z, 56);
     tube(back, 0.06, wireMat(false, dim * 0.35, 0.35));
-    tube(back, 0.55, wireMat(true, dim, 0.35));
+    tube(back, 0.55, glowMat(dim, 0.35));
   }
 
   // Bokeh: specks at many depths; the farther from the focal plane, the bigger and dimmer.
@@ -252,7 +266,7 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement): Scene | null {
   bGeo.setAttribute("aSize", new THREE.BufferAttribute(bSize, 1));
   bGeo.setAttribute("aAlpha", new THREE.BufferAttribute(bAlpha, 1));
   bGeo.setAttribute("aColor", new THREE.BufferAttribute(bColor, 3));
-  const bokeh = new THREE.Points(bGeo, keep(new THREE.ShaderMaterial({ vertexShader: POINT_VERT, fragmentShader: BOKEH_FRAG, uniforms: { uPixel: pixel }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })));
+  const bokeh = new THREE.Points(bGeo, glows(keep(new THREE.ShaderMaterial({ vertexShader: POINT_VERT, fragmentShader: BOKEH_FRAG, uniforms: { uPixel: pixel, uLight: light }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }))));
   scene.add(bokeh);
 
   // Pulses and their trails: one point per trail step, positions written each frame.
@@ -266,7 +280,7 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement): Scene | null {
   pGeo.setAttribute("aSize", new THREE.BufferAttribute(pSize, 1));
   pGeo.setAttribute("aAlpha", new THREE.BufferAttribute(pAlpha, 1));
   pGeo.setAttribute("aColor", new THREE.BufferAttribute(pColor, 3));
-  const points = new THREE.Points(pGeo, keep(new THREE.ShaderMaterial({ vertexShader: POINT_VERT, fragmentShader: PULSE_FRAG, uniforms: { uPixel: pixel }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })));
+  const points = new THREE.Points(pGeo, glows(keep(new THREE.ShaderMaterial({ vertexShader: POINT_VERT, fragmentShader: PULSE_FRAG, uniforms: { uPixel: pixel, uLight: light }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }))));
   points.frustumCulled = false;
   scene.add(points);
   const pulses: (Pulse | null)[] = new Array(MAX_PULSES).fill(null);
@@ -281,7 +295,7 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement): Scene | null {
     geo.setAttribute("aAlpha", new THREE.BufferAttribute(new Float32Array([0.9]), 1));
     geo.setAttribute("aColor", new THREE.BufferAttribute(new Float32Array(wireColor(t)), 3));
     const progress = { value: 0 };
-    const mesh = new THREE.Points(geo, keep(new THREE.ShaderMaterial({ vertexShader: POINT_VERT, fragmentShader: RING_FRAG, uniforms: { uPixel: pixel, uProgress: progress }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })));
+    const mesh = new THREE.Points(geo, keep(new THREE.ShaderMaterial({ vertexShader: POINT_VERT, fragmentShader: RING_FRAG, uniforms: { uPixel: pixel, uProgress: progress, uLight: light }, transparent: true, depthWrite: false, blending: light.value ? THREE.NormalBlending : THREE.AdditiveBlending })));
     scene.add(mesh);
     rings.push({ mesh, progress });
   }
@@ -368,6 +382,20 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement): Scene | null {
   const vis = new IntersectionObserver((es) => (visible = es.some((e) => e.isIntersecting)));
   vis.observe(stage);
 
+  // Follow the theme toggle as it changes.
+  const applyTheme = () => {
+    const isLight = document.documentElement.dataset.theme === "light";
+    light.value = isLight ? 1 : 0;
+    for (const m of glowing) {
+      m.blending = isLight ? THREE.NormalBlending : THREE.AdditiveBlending;
+      m.needsUpdate = true;
+    }
+    frames = Math.max(frames, 2);
+  };
+  const themeWatch = new MutationObserver(applyTheme);
+  themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  applyTheme();
+
   const clock = new THREE.Clock();
   let raf = 0;
   const loop = () => {
@@ -418,6 +446,7 @@ function startScene(THREE: typeof Three, stage: HTMLDivElement): Scene | null {
       cancelAnimationFrame(raf);
       ro.disconnect();
       vis.disconnect();
+      themeWatch.disconnect();
       window.removeEventListener("pointermove", onPointer);
       for (const d of disposables) d.dispose();
       renderer.dispose();

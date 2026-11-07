@@ -7,7 +7,8 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 - **highwire.fun, redesigned.** Ink by default (paper is one click away), with film grain, a glass header and new
   type. The homepage hero is a live three.js wire: higher.fun's real trades ride it as they happen, buys one way and
   sells the other, sized by SOL, with launches and graduations of their own. "How it works" is a scroll dive from the
-  whole field of coins into one coin, one trade and the Highwire H. The sign page stays plain.
+  whole field of coins into one coin, one trade and the Highwire H. Both scenes follow the theme switcher live: on
+  paper the wire deepens and the H's posts turn ink, as in the brand mark. The sign page stays plain.
 - **Idea pages say much more.** Three ways to start (Deploy to GitHub, one `gh` command, or a prompt your coding agent
   runs end to end), a calculator anchored to real higher.fun volumes, how the agent runs day to day, the exact file
   tree, the starting policy explained line by line, and questions.
