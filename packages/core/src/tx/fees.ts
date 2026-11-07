@@ -8,8 +8,8 @@ import {
   PlatformConfig,
 } from "@raydium-io/raydium-sdk-v2";
 import { PublicKey } from "@solana/web3.js";
-import type { Coin, HigherApi } from "../higher/api.ts";
-import { feeModeOfPlatform, type FeeMode } from "../higher/constants.ts";
+import type { Coin, CoinAirdrops, HigherApi } from "../higher/api.ts";
+import { feeModeOfPlatform, HOLDER_AIRDROPS, type FeeMode } from "../higher/constants.ts";
 import { pooled } from "../lib/pool.ts";
 import { WSOL, type Chain } from "./chain.ts";
 import { lamportsNumber } from "./units.ts";
@@ -25,8 +25,12 @@ import { lamportsNumber } from "./units.ts";
 // platform fee and the creator fee are fixed multiples of it. In the CPMM pool,
 // the counters reset whenever someone collects, so the pool's fees are computed
 // from volume, and the collectable amounts are read as they stand.
+//
+// Holder airdrops (New school) aren't a fee of their own: higher.fun passes part of its platform fee to each coin's
+// airdrop wallet, and a creator can give theirs too. What holders got is what that wallet has paid out (higher.fun's
+// API) plus what's waiting in it (on-chain), carved out of higher.fun's lines, or the creator's when they gave them.
 
-export type Recipient = "higher.fun" | "creator" | "Raydium" | "liquidity";
+export type Recipient = "higher.fun" | "creator" | "holders" | "Raydium" | "liquidity";
 export type Basis = "measured" | "computed";
 
 export interface FeeFlow {
@@ -55,6 +59,8 @@ export interface CoinFees {
   totalFeesSol: number;
   byRecipient: Record<Recipient, number>;
   lines: FeeFlow[];
+  /** New school coins in holder airdrops: their airdrop wallet, and what it has paid and holds. */
+  holders: { wallet: string; creatorAdds: boolean; paidSol: number; waitingSol: number } | null;
   /** Graduated coins only. */
   pool: {
     poolId: string;
@@ -87,6 +93,8 @@ export interface EcosystemFees {
     higherCurveSol: number;
     creatorCurveSol: number;
     creatorPoolSol: number;
+    /** In coins' holder-airdrop wallets, not yet paid out. */
+    holdersSol: number;
   };
   /** The rates the computed lines use, as read on-chain, in percent. */
   rates: {
@@ -100,6 +108,8 @@ const PPM = 1_000_000n;
 const big = (v: { toString(): string }) => BigInt(v.toString());
 const pct = (ppm: bigint) => Number(ppm) / 10_000;
 const LAUNCH_FEE_SOL = 0.02;
+/** Coin records read for holder airdrops on a full read: each is a request to higher.fun's API. */
+const MAX_AIRDROP_READS = 150;
 
 /** A token account's amount: the u64 at byte 64. */
 const tokenAmount = (data: Buffer | undefined) => (data && data.length >= 72 ? data.readBigUInt64LE(64) : 0n);
@@ -191,12 +201,36 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
   });
 
   const listed = opts.only ? new Map<string, Coin>() : await listedCoins(api, warnings);
+  const airdrops = new Map<string, CoinAirdrops>();
   if (opts.only) {
     for (const m of opts.only) {
       const c = await api.coin(m).catch(() => null);
       if (c) listed.set(m, c);
+      if (c?.airdrops?.wallet) airdrops.set(m, c.airdrops);
     }
+  } else {
+    // Only a coin's own record says where its airdrops go, one request each, and higher.fun's API limits bursts. So:
+    // New school coins that have traded since airdrops began, most recently traded first, at most MAX_AIRDROP_READS.
+    let unread = 0;
+    const tradedSince = (f: Found) => listed.get(f.mint.toBase58())?.lastTradeAt ?? "";
+    const candidates = found
+      .filter((f) => feeModeOfPlatform(chain.cluster, f.state.platformId.toBase58()) === "rewards" && tradedSince(f) >= HOLDER_AIRDROPS.since)
+      .sort((a, b) => tradedSince(b).localeCompare(tradedSince(a)));
+    const inAirdrops = candidates.slice(0, MAX_AIRDROP_READS);
+    if (candidates.length > inAirdrops.length) {
+      warnings.push(`Holder airdrops are read for the ${MAX_AIRDROP_READS} most recently traded New school coins; the other ${candidates.length - inAirdrops.length} count as higher.fun's.`);
+    }
+    await pooled(inAirdrops, 6, async (f) => {
+      const mint = f.mint.toBase58();
+      const c = await api.coin(mint).catch(() => null);
+      if (!c) unread++;
+      else if (c.airdrops?.wallet) airdrops.set(mint, c.airdrops);
+    });
+    if (unread) warnings.push(`Holder airdrops for ${unread} coin${unread === 1 ? "" : "s"} couldn't be read from higher.fun, so they count as higher.fun's.`);
   }
+  const airdropWallets = [...new Set([...airdrops.values()].map((a) => a.wallet!))];
+  const walletInfos = await inChunks(airdropWallets.map((w) => new PublicKey(w)), 99, (ids) => chain.connection.getMultipleAccountsInfo(ids));
+  const walletLamports = new Map<string, bigint>(airdropWallets.map((w, i) => [w, BigInt(walletInfos[i]?.lamports ?? 0)]));
 
   // Graduated coins: their CPMM pools, the pools' SOL vaults, lifetime volume and, for New school, the LP lock.
   const graduated = found.filter((f) => f.state.status === 2);
@@ -321,7 +355,44 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
       };
     }
 
-    const byRecipient: Record<Recipient, number> = { "higher.fun": 0, creator: 0, Raydium: 0, liquidity: 0 };
+    // Holder airdrops: the creator's fees when they gave them, and what higher.fun passed on, out of its own lines.
+    let holders: CoinFees["holders"] = null;
+    const air = airdrops.get(mint);
+    if (air?.wallet) {
+      const floor = air.creatorAdds ? HOLDER_AIRDROPS.floorLamports : HOLDER_AIRDROPS.platformFloorLamports;
+      const balance = walletLamports.get(air.wallet) ?? 0n;
+      const waiting = balance > floor ? balance - floor : 0n;
+      const paid = BigInt(air.airdroppedLamports.split(".")[0] || "0");
+      let fromCreator = 0;
+      if (air.creatorAdds) {
+        for (const l of lines) {
+          if (l.to !== "creator") continue;
+          l.to = "holders";
+          l.label = `${l.label}, given to holders`;
+          fromCreator += l.sol;
+        }
+      }
+      const higherLines = lines.filter((l) => l.to === "higher.fun");
+      // What reached holders beyond the creator's fees came from higher.fun, and never more than higher.fun's lines.
+      const fromHigher = Math.min(Math.max(0, lamportsNumber(paid + waiting) - fromCreator), higherLines.reduce((n, l) => n + l.sol, 0));
+      if (fromHigher > 0) {
+        let left = fromHigher;
+        for (const l of higherLines) {
+          const take = Math.min(l.sol, left);
+          l.sol -= take;
+          left -= take;
+        }
+        const platformLine = higherLines.find((l) => l.phase === "curve");
+        if (platformLine) {
+          platformLine.label = "higher.fun's platform fee, less holder airdrops";
+          platformLine.ratePct = Math.max(0, platformLine.ratePct - HOLDER_AIRDROPS.platformBps / 100);
+        }
+        lines.push({ phase: "curve", label: "Airdropped to holders from higher.fun's fee", to: "holders", ratePct: HOLDER_AIRDROPS.platformBps / 100, sol: fromHigher, basis: "measured" });
+      }
+      holders = { wallet: air.wallet, creatorAdds: air.creatorAdds, paidSol: lamportsNumber(paid), waitingSol: lamportsNumber(waiting) };
+    }
+
+    const byRecipient: Record<Recipient, number> = { "higher.fun": 0, creator: 0, holders: 0, Raydium: 0, liquidity: 0 };
     for (const l of lines) byRecipient[l.to] += l.sol;
     const totalFees = lines.reduce((n, l) => n + l.sol, 0);
     return {
@@ -339,6 +410,7 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
       totalFeesSol: round9(totalFees),
       byRecipient: mapValues(byRecipient, round9),
       lines: lines.map((l) => ({ ...l, sol: round9(l.sol), ratePct: Math.round(l.ratePct * 1e6) / 1e6 })),
+      holders,
       pool,
     };
   });
@@ -368,6 +440,7 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
       byRecipient: {
         "higher.fun": sum((c) => c.byRecipient["higher.fun"]),
         creator: sum((c) => c.byRecipient.creator),
+        holders: sum((c) => c.byRecipient.holders),
         Raydium: sum((c) => c.byRecipient.Raydium),
         liquidity: sum((c) => c.byRecipient.liquidity),
       },
@@ -382,6 +455,7 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
       higherCurveSol: lamportsNumber(higherCurveWaiting),
       creatorCurveSol: lamportsNumber(creatorCurveWaiting),
       creatorPoolSol: sum((c) => c.pool?.creatorWaitingSol ?? 0),
+      holdersSol: sum((c) => c.holders?.waitingSol ?? 0),
     },
     rates: {
       curve: { rewards: curveRates("rewards"), classic: curveRates("classic") },
@@ -397,7 +471,7 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
 }
 
 function emptyFees(warnings: string[]): EcosystemFees {
-  const zero = { "higher.fun": 0, creator: 0, Raydium: 0, liquidity: 0 };
+  const zero = { "higher.fun": 0, creator: 0, holders: 0, Raydium: 0, liquidity: 0 };
   return {
     generatedAt: new Date().toISOString(),
     solUsd: null,
@@ -414,7 +488,7 @@ function emptyFees(warnings: string[]): EcosystemFees {
       byMode: { rewards: { coins: 0, volumeSol: 0, feesSol: 0 }, classic: { coins: 0, volumeSol: 0, feesSol: 0 } },
       launchFeesSol: 0,
     },
-    waiting: { higherCurveSol: 0, creatorCurveSol: 0, creatorPoolSol: 0 },
+    waiting: { higherCurveSol: 0, creatorCurveSol: 0, creatorPoolSol: 0, holdersSol: 0 },
     rates: {
       curve: { rewards: { raydium: 0, platform: 0, creator: 0 }, classic: { raydium: 0, platform: 0, creator: 0 } },
       pool: { trade: 0, raydiumShareOfTrade: 0, creator: 0, raydiumShareOfCreator: 0 },

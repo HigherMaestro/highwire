@@ -4,6 +4,11 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **/fees counts holder airdrops.** higher.fun now passes 0.25% of every New school trade, out of its platform fee, to
+  the coin's holders as SOL airdrops, and creators can give theirs too. /fees, each coin's page, `get_ecosystem_fees`
+  and `get_coin_fees` have a Holders recipient: what each coin's airdrop wallet has paid out plus what's waiting in it,
+  taken out of higher.fun's share (or the creator's, when they gave theirs). The fee diagram shows the split, and each
+  New school coin's page shows its airdrop wallet. No fee mode or rate changed.
 - **Launch ideas, deployed in one click.** highwire.fun/ideas lists ideas for agents that launch and run coins on
   higher.fun, starting with a buyback coin and fee-funded compute. Each has a page (how it works, how it earns, what it
   costs, what you need, risks, milestones) and its full PRD, also as raw markdown for agents. **Deploy to GitHub** opens

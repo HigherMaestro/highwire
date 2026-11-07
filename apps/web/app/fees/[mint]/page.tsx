@@ -73,6 +73,12 @@ export default async function CoinFeesPage({ params }: Props) {
                   <span className="stat-n">{sol(c.byRecipient.creator)} SOL</span>
                   <span className="stat-label">to the creator</span>
                 </li>
+                {c.holders ? (
+                  <li>
+                    <span className="stat-n">{sol(c.byRecipient.holders)} SOL</span>
+                    <span className="stat-label">to holders, as airdrops</span>
+                  </li>
+                ) : null}
                 {c.volume24hSol != null ? (
                   <li>
                     <span className="stat-n">{sol(c.volume24hSol)} SOL</span>
@@ -170,6 +176,31 @@ export default async function CoinFeesPage({ params }: Props) {
                       <span className="stat-label">curve creator fees in the creator's vault (all their coins)</span>
                     </li>
                   </ul>
+                </section>
+              ) : null}
+
+              {c.holders ? (
+                <section className="fee-section" aria-labelledby="airdrops">
+                  <h2 id="airdrops">Holder airdrops</h2>
+                  <ul className="stats">
+                    <li>
+                      <span className="stat-n">{sol(c.holders.paidSol)} SOL</span>
+                      <span className="stat-label">airdropped to holders so far</span>
+                    </li>
+                    <li>
+                      <span className="stat-n">{sol(c.holders.waitingSol)} SOL</span>
+                      <span className="stat-label">waiting in the airdrop wallet</span>
+                    </li>
+                  </ul>
+                  <p className="muted small">
+                    higher.fun passes part of its fee on each trade to this coin's holders as SOL
+                    {c.holders.creatorAdds ? ", and the creator gave their fees to holders too: the airdrop wallet is the coin's creator, so the creator fees above are theirs" : ""}.
+                    Holders claim on the coin's page on higher.fun. Airdrop wallet:{" "}
+                    <a className="mono-wrap" href={`https://solscan.io/account/${c.holders.wallet}`}>
+                      {c.holders.wallet}
+                    </a>
+                    .
+                  </p>
                 </section>
               ) : null}
 

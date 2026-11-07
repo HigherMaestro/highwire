@@ -10,7 +10,7 @@ import type * as Three from "three";
 // the list under it says the same thing in text, and stands in when WebGL can't
 // run.
 
-export type FlowKey = "creator" | "higher.fun" | "Raydium" | "liquidity";
+export type FlowKey = "creator" | "higher.fun" | "holders" | "Raydium" | "liquidity";
 export type Scenario = "curve-rewards" | "curve-classic" | "pool-rewards" | "pool-classic";
 
 export interface Flow {
@@ -34,10 +34,11 @@ export interface FlowScenario {
 }
 
 const NODES: Record<FlowKey, [number, number, number]> = {
-  creator: [2.7, 1.95, -0.7],
-  "higher.fun": [3.55, 0.65, 0.9],
-  Raydium: [3.35, -0.75, -1.0],
-  liquidity: [2.55, -2.05, 0.45],
+  creator: [2.7, 2.35, -0.7],
+  holders: [3.45, 1.2, 0.5],
+  "higher.fun": [3.55, 0.05, 0.9],
+  Raydium: [3.35, -1.1, -1.0],
+  liquidity: [2.55, -2.3, 0.45],
 };
 const CORE: [number, number, number] = [-2.4, 0, 0];
 const SOURCE: [number, number, number] = [-7.5, -0.5, 0.4];
@@ -329,7 +330,7 @@ export function FeeFlow({ scenarios }: { scenarios: Record<Scenario, FlowScenari
         <p className="flow-caption">
           {phase === "curve"
             ? mode === "rewards"
-              ? "On the curve, a New school trade pays 1%: half to higher.fun, a quarter to the creator and a quarter to Raydium."
+              ? "On the curve, a New school trade pays 1%: half to higher.fun, a quarter to the creator and a quarter to Raydium. higher.fun passes half of its share on to the coin's holders, as SOL airdrops."
               : "On the curve, an Old school trade pays only Raydium's 0.25%. higher.fun takes 1% of the supply at graduation instead."
             : mode === "rewards"
               ? `In the pool, every trade pays ${fmtPct(scenario.totalPct)}. Most is LP fees: the burned ${100 - (scenario.lockedPct ?? 30)}% of the liquidity keeps its share in the pool, and the locked ${scenario.lockedPct ?? 30}%'s share goes to higher.fun's Fee Key, which passes a third to the creator.`

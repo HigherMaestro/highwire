@@ -38,6 +38,7 @@ calls them Old school and New school. The coin API returns `feeMode`.
 | Locked LP fees | none | 10 parts creator, 20 parts higher.fun (paid off-chain; see below) |
 | Optional creator lock | no | 1–10% of supply: 7-day cliff after graduation, then linear over 30 days |
 | Launch for an X or GitHub account | no | yes (Privy holds the wallet; the owner claims at `/claim`) |
+| Holder airdrops | no | yes: 0.25% of each trade from higher.fun's fee, and the creator's fees too if they choose (see below) |
 | LaunchLab platform config (mainnet) | `7mT6fb3m6W2886ymKsShBBcnX3TYb9ZsnkDJtACsVt8V` | `6ngXxsSPUxp9YEX2QBXQP1DEdNud12tobUmnJVN74D5v` (`rallyPlatform` in the bundle) |
 
 The bundle also enforces caps: platform fee ≤ 100 bps and creator fee ≤ 50 bps.
@@ -64,6 +65,18 @@ to the platform's `platformLockNftWallet`, which is higher.fun's wallet, not the
 higher.fun harvests the fees and pays the creator their 10/30 share off-chain; the payouts show in
 `GET /users/:wallet/earnings` (`paidOut`, `pendingPayout`). There is nothing for the creator to sign.
 
+**Holder airdrops (New school, from 2026-11-06).** Not a new fee mode or rate: higher.fun passes part of its platform
+fee on to a coin's holders. The create page says "Holders get 0.25% of every trade as SOL airdrops", and the site's
+code has `platformBps: 25` with a 1-day ramp (`rampMs`), a 7-day `soldOutGraceMs`, and minimums for pots, payouts and
+claims (`minPotLamports` 0.01 SOL, `minPayoutLamports` 0.002, `minHolderClaimLamports` 0.001). Each New school coin has
+an airdrop wallet: `GET /coins/:mint` returns `airdrops: {wallet, creatorAdds, airdroppedLamports}` (every New school
+coin had one on 2026-11-06, back to the first days; none had paid out yet). A creator who ticks "Give my fees to holders
+too" at launch makes the coin's creator a wallet reserved with `POST /holders-wallets/reserve` (signed in), funds it
+with 0.008 SOL in the create transaction (`floorLamports`), and gets `creatorAdds: true`: the creator fees then belong to
+holders. `GET /holders-wallets/status` says whether the option is available. Holders see and claim theirs through
+`/coins/:mint/airdrops/:wallet`, `/airdrops/:wallet` and their `/claim` routes. Highwire's launches don't offer the
+option yet.
+
 **Measuring fees** (what /fees does). A LaunchLab pool's `protocolFee` is Raydium's curve fee, accumulated and not reset,
 so `protocolFee / tradeFeeRate` is the coin's exact curve volume (it matched higher.fun's candles to within 0.4% on
 2026-11-05); `platformFee` reads 0 because platform fees go to the platform's vault as they're charged. A CPMM pool's
@@ -71,7 +84,13 @@ so `protocolFee / tradeFeeRate` is the coin's exact curve volume (it matched hig
 `lpAmount` doesn't drop when LP is burned, so the LP lock's share is `(locked_lp + claimed_lp) / lpAmount` (about 31%
 for a New school coin). A Raydium LP lock account (program `LockrWmn…`, 256 bytes) is the discriminator, then
 `locked_lp`, `claimed_lp`, `unclaimed_lp`, `last_lp` (u64s), `last_k` (u128), `recent_epoch`, then the pool id at
-byte 64, the Fee Key mint, the locked owner and the LP mint. Fees are harvested as LP tokens (`claimed_lp`).
+byte 64, the Fee Key mint, the locked owner and the LP mint. Fees are harvested as LP tokens (`claimed_lp`). Holder
+airdrops are counted as what each coin's airdrop wallet has paid out (`airdroppedLamports`) plus its balance above the
+starting floor (0.002 SOL for higher.fun's wallets, 0.008 SOL for a creator's), taken out of higher.fun's lines; on a
+`creatorAdds` coin the creator lines are the holders' too. Only a coin's own record (`GET /coins/:mint`) names its airdrop
+wallet, and the API rate-limits bursts (8 of 200 back-to-back reads came back `rate_limited` at 4 at a time), so a
+full read fetches only New school coins that traded since 2026-11-06, most recent first, at most 150 (58 on
+2026-11-06, in under 4 seconds).
 
 ## Mainnet addresses (from the web bundle)
 
@@ -183,7 +202,7 @@ token for prices. Lists return `{items, nextCursor}`. On 2026-11-05 `/coins/:min
 |---|---|
 | `GET /coins?sort=&limit=&cursor=` | sort ∈ `new` `trending` `mcap` `graduating` |
 | `GET /search?q=` | name, ticker or mint |
-| `GET /coins/:mint` | adds `description`, links, `poolId`, `creatorHoldingBps`, `top10HoldingBps`, `tickerFlagged`, `feeMode`, and `safety` (grade, score, reasons, lock, snipers, bundles, dev) |
+| `GET /coins/:mint` | adds `description`, links, `poolId`, `creatorHoldingBps`, `top10HoldingBps`, `tickerFlagged`, `feeMode`, `airdrops` (New school: `{wallet, creatorAdds, airdroppedLamports}`), and `safety` (grade, score, reasons, lock, snipers, bundles, dev) |
 | `GET /coins/:mint/trades?cursor=` | `side`, `quoteAmount`, `tokenAmount`, `price`, `blockTime` |
 | `GET /coins/:mint/holders` | `shareBps`, `isCreator`, `isCurve` |
 | `GET /coins/:mint/candles?interval=` | interval ∈ `1m` `5m` `1h` `1d`; `time` is unix seconds |

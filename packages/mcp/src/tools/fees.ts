@@ -45,7 +45,7 @@ export function registerFeeTools(server: McpServer, deps: Deps) {
     {
       title: "Get ecosystem fees",
       description:
-        "Every fee higher.fun's coins have paid and who got it: totals for creators, higher.fun, Raydium and the pools, by " +
+        "Every fee higher.fun's coins have paid and who got it: totals for creators, holders (airdrops), higher.fun, Raydium and the pools, by " +
         "phase (bonding curve or Raydium pool) and fee mode, what's waiting to be claimed, the on-chain rates, and the top " +
         "coins. The same numbers as highwire.fun/fees. Curve fees are measured on-chain; pool fees are computed from volume.",
       inputSchema: {
@@ -77,7 +77,8 @@ export function registerFeeTools(server: McpServer, deps: Deps) {
           method:
             "Curve: Raydium's fee counter in each coin's LaunchLab pool gives its exact curve volume; the platform and creator " +
             "fees are fixed multiples. Pool: lifetime volume from higher.fun's daily candles, less the curve's, times the CPMM " +
-            "fee tier's rates. Locked LP: the LP lock's share, from the lock account. Launch fees aren't included.",
+            "fee tier's rates. Locked LP: the LP lock's share, from the lock account. Holders: what each New school coin's " +
+            "airdrop wallet has paid out (higher.fun's API) and holds, taken out of higher.fun's share. Launch fees aren't included.",
           ...(r.warnings.length ? { warnings: r.warnings } : {}),
         };
       }),
@@ -88,9 +89,9 @@ export function registerFeeTools(server: McpServer, deps: Deps) {
     {
       title: "Get coin fees",
       description:
-        "One higher.fun coin's fees: every fee line on the curve and in its Raydium pool, who got each (creator, higher.fun, " +
-        "Raydium, the pool), whether it was measured on-chain or computed from volume, its volume, and what's waiting to be " +
-        "claimed (pool creator fees, the locked-LP harvest, and the creator's curve vault).",
+        "One higher.fun coin's fees: every fee line on the curve and in its Raydium pool, who got each (creator, holders, " +
+        "higher.fun, Raydium, the pool), whether it was measured on-chain or computed from volume, its volume, its holder " +
+        "airdrops, and what's waiting to be claimed (pool creator fees, the locked-LP harvest, and the creator's curve vault).",
       inputSchema: { mint },
       annotations: { title: "Get coin fees", ...READ_ONLY },
     },
@@ -108,6 +109,7 @@ export function registerFeeTools(server: McpServer, deps: Deps) {
           volume24hSol: c.volume24hSol,
           lines: c.lines,
           pool: c.pool,
+          holderAirdrops: c.holders,
           ...(c.feeMode === "rewards" ? { creatorCurveVaultSol: r.waiting.creatorCurveSol } : {}),
           ...(r.warnings.length ? { warnings: r.warnings } : {}),
         };

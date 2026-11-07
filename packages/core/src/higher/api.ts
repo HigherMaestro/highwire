@@ -74,6 +74,17 @@ export interface CoinDetail extends Coin {
   indexedSlot: string | null;
   safety: CoinSafety | null;
   feeMode: FeeMode | null;
+  /** New school: the coin's holder-airdrop wallet. Absent on Old school coins. */
+  airdrops?: CoinAirdrops | null;
+}
+
+/** A coin's holder airdrops: SOL higher.fun (and, if they chose, the creator) passes to holders. */
+export interface CoinAirdrops {
+  wallet: string | null;
+  /** The creator gave their own fees to holders too: the wallet is the coin's creator on-chain. */
+  creatorAdds: boolean;
+  /** Paid out to holders so far, in lamports. */
+  airdroppedLamports: string;
 }
 
 export interface Trade {

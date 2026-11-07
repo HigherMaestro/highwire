@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { HOLDER_AIRDROPS } from "highwire-core";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { FeeTable, type FeeRow } from "../../components/fees/FeeTable.tsx";
 import { FeeFlow } from "../../components/fees/FeeFlow.tsx";
@@ -9,7 +10,7 @@ export const revalidate = 600;
 
 export const metadata: Metadata = {
   title: "Ecosystem fees",
-  description: "Every fee higher.fun's coins have paid, and who got it: creators, higher.fun, Raydium and the pools. Read from Solana.",
+  description: "Every fee higher.fun's coins have paid, and who got it: creators, holders, higher.fun, Raydium and the pools. Read from Solana.",
   alternates: { canonical: "/fees" },
 };
 
@@ -113,7 +114,7 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
               <p className="muted">
                 {t.byMode[m].coins.toLocaleString("en-US")} coins, {sol(t.byMode[m].volumeSol)} SOL traded.{" "}
                 {m === "rewards"
-                  ? `${rate.curve.rewards.platform}% to higher.fun and ${rate.curve.rewards.creator}% to the creator on each curve trade.`
+                  ? `${rate.curve.rewards.platform}% to higher.fun (it airdrops ${HOLDER_AIRDROPS.platformBps / 100}% of each trade to holders) and ${rate.curve.rewards.creator}% to the creator on each curve trade.`
                   : "No platform or creator fee on the curve; higher.fun takes 1% of supply at graduation instead."}
               </p>
             </div>
@@ -136,6 +137,10 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
           <li>
             <span className="stat-n">{sol(w.higherCurveSol)} SOL</span>
             <span className="stat-label">higher.fun's curve fees, in its platform vaults</span>
+          </li>
+          <li>
+            <span className="stat-n">{sol(w.holdersSol)} SOL</span>
+            <span className="stat-label">for holders, in coins' airdrop wallets</span>
           </li>
         </ul>
         <p className="muted small">
@@ -167,6 +172,12 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
             <strong>Locked liquidity.</strong> At graduation a New school coin's pool locks about 30% of its liquidity, with
             the Fee Key held by higher.fun, which pays creators a third of what it earns off-chain. That share of the LP fees
             is read from the lock; the rest of the liquidity is burned, and its fees stay in the pool.
+          </li>
+          <li>
+            <strong>Holder airdrops.</strong> On New school coins, higher.fun passes {HOLDER_AIRDROPS.platformBps / 100}% of
+            each trade, out of its platform fee, to the coin's holders as SOL, through an airdrop wallet per coin; a creator
+            can give their fees to holders too. What holders got is what each wallet has paid out (from higher.fun's API) and
+            what's waiting in it (on-chain), taken out of higher.fun's share, or the creator's when they gave theirs.
           </li>
           <li>
             <strong>Not counted:</strong> launch fees (about {sol(t.launchFeesSol)} SOL at today's 0.02 SOL each), higher.fun's

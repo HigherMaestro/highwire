@@ -146,6 +146,19 @@ export function highwireFeeLamports(lamports: bigint): bigint {
 export const DEFAULT_SLIPPAGE_BPS = 200;
 /** A creator lock on a New school coin: 1-10% of supply, a 7-day cliff after graduation, then 30 days linear. */
 export const CREATOR_LOCK = { minPct: 1, maxPct: 10, cliffSeconds: 604_800, unlockSeconds: 2_592_000 } as const;
+/**
+ * Holder airdrops on New school coins: higher.fun passes `platformBps` of every trade, out of its platform fee, to the
+ * coin's holders as SOL, through an airdrop wallet per coin. A creator who ticks "Give my fees to holders too" makes that
+ * wallet the coin's creator, so the creator fees go to holders as well, and funds it with `floorLamports` at launch;
+ * higher.fun's own wallets start with `platformFloorLamports`. Read from higher.fun's site code on 2026-11-06.
+ */
+export const HOLDER_AIRDROPS = {
+  platformBps: 25,
+  floorLamports: 8_000_000n,
+  platformFloorLamports: 2_000_000n,
+  /** When they started: a coin that hasn't traded since can't have any. */
+  since: "2026-11-06T00:00:00.000Z",
+} as const;
 /** An Old school coin locks 1% of supply for higher.fun: a 1-day cliff after graduation, then 30 days linear. */
 export const CLASSIC_RESERVE = { pct: 1, cliffSeconds: 86_400, unlockSeconds: 2_592_000 } as const;
 

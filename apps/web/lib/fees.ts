@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { PublicKey } from "@solana/web3.js";
-import { Chain, DEFAULT_API_URL, HigherApi, createHttpConfig, ecosystemFees, type EcosystemFees, type FeeMode, type Recipient } from "highwire-core";
+import { Chain, DEFAULT_API_URL, HOLDER_AIRDROPS, HigherApi, createHttpConfig, ecosystemFees, type EcosystemFees, type FeeMode, type Recipient } from "highwire-core";
 import type { Flow, FlowScenario, Scenario } from "../components/fees/FeeFlow.tsx";
 import { serverOptionsFromEnv } from "highwire-mcp";
 
@@ -47,7 +47,8 @@ export const coinFees = cache(async (mint: string): Promise<EcosystemFees | null
 
 export const RECIPIENTS: { key: Recipient; label: string; color: string; note: string }[] = [
   { key: "creator", label: "Creators", color: "#F6A9C4", note: "Curve and pool creator fees, and New school creators' third of the locked-LP fees" },
-  { key: "higher.fun", label: "higher.fun", color: "#F7C84C", note: "New school platform fees and two thirds of the locked-LP fees" },
+  { key: "higher.fun", label: "higher.fun", color: "#F7C84C", note: "New school platform fees, less what it airdrops to holders, and two thirds of the locked-LP fees" },
+  { key: "holders", label: "Holders", color: "#C9B8F5", note: "SOL airdropped to New school coins' holders, or waiting in their airdrop wallets: part of higher.fun's fee, and the creator fees of creators who gave theirs" },
   { key: "Raydium", label: "Raydium", color: "#93E2FB", note: "LaunchLab's fee on the curve, the pool's protocol and fund fees, and 5% of pool creator fees" },
   { key: "liquidity", label: "Stays in the pool", color: "#A6EFCB", note: "LP fees earned by burned liquidity, which no one can withdraw" },
 ];
@@ -113,13 +114,16 @@ export function flowScenarios(data: EcosystemFees): Record<Scenario, FlowScenari
   });
   const curve = (mode: FeeMode): FlowScenario => {
     const c = r.curve[mode];
+    // New school: higher.fun passes part of its platform fee to holders as airdrops.
+    const toHolders = c.platform > 0 ? Math.min(c.platform, HOLDER_AIRDROPS.platformBps / 100) : 0;
     return {
       totalPct: c.raydium + c.platform + c.creator,
       hopPct: null,
       lockedPct: null,
       flows: [
         flow("creator", c.creator, "curve", mode, c.creator ? "The creator fee, collected in the creator's LaunchLab vault." : "Old school creators earn nothing on the curve."),
-        flow("higher.fun", c.platform, "curve", mode, c.platform ? "higher.fun's platform fee, into its platform vault." : "Old school charges no platform fee."),
+        flow("holders", toHolders, "curve", mode, toHolders ? "Airdropped to the coin's holders as SOL, out of higher.fun's platform fee." : "Old school coins have no holder airdrops."),
+        flow("higher.fun", c.platform - toHolders, "curve", mode, c.platform ? "higher.fun's platform fee, into its platform vault, less what it airdrops to holders." : "Old school charges no platform fee."),
         flow("Raydium", c.raydium, "curve", mode, "LaunchLab's own fee."),
         flow("liquidity", 0, "curve", mode, "The curve has no liquidity providers."),
       ],
@@ -134,6 +138,7 @@ export function flowScenarios(data: EcosystemFees): Record<Scenario, FlowScenari
       lockedPct: mode === "rewards" ? pct : null,
       flows: [
         flow("creator", creatorPool + (lp * share) / 3, "pool", mode, mode === "rewards" ? `The pool creator fee, plus a third of the locked ${pct}%'s LP fees, paid by higher.fun.` : "The pool creator fee, on the SOL side."),
+        flow("holders", 0, "pool", mode, "Holder airdrops come out of higher.fun's curve fee."),
         flow("higher.fun", (lp * share * 2) / 3, "pool", mode, mode === "rewards" ? `Two thirds of the LP fees earned by the locked ${pct}% of the liquidity.` : "Nothing in the pool; Old school pays higher.fun in supply."),
         flow("Raydium", raydiumPool, "pool", mode, `${r.pool.raydiumShareOfTrade}% of the trade fee, and ${r.pool.raydiumShareOfCreator}% of the creator fee.`),
         flow("liquidity", lp * (1 - share), "pool", mode, mode === "rewards" ? `LP fees earned by the burned ${100 - pct}%: no one can withdraw them.` : "LP fees on burned liquidity: no one can withdraw them."),
