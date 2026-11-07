@@ -2,6 +2,12 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- **Reinstalling an idea's service works first time.** `npm run service -- install` on a service that was already
+  running failed with launchd's "Bootstrap failed: 5", because launchd hadn't let go of the stopped copy yet. It now
+  waits for that, and retries for a few seconds. The launch-idea templates have the fix now; no new npm release needed.
+
 ## 0.11.1 (2026-11-07)
 
 - **Every launch idea runs with one command.** `npm start` runs the whole agent in one process: Highwire's order
