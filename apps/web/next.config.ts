@@ -32,6 +32,7 @@ const config: NextConfig = {
       "highwire-core": "../../packages/core/src/index.ts",
       // The local signer's order tools are listed in the catalog; the hosted endpoint never registers them.
       "highwire-agent": "../../packages/agent/src/index.ts",
+      "highwire-mcp/ideas": "../../packages/mcp/src/ideas.ts",
       "highwire-mcp": "../../packages/mcp/src/index.ts",
     },
   },

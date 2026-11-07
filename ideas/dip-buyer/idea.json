@@ -1,0 +1,120 @@
+{
+  "slug": "dip-buyer",
+  "title": "Dip buyer",
+  "oneLiner": "An agent that waits for coins you picked to fall to a price you set, buys a small amount, then guards each position with a stop-loss and a take-profit.",
+  "difficulty": "easy",
+  "solToStart": "about 0.3 SOL, the budget you give it",
+  "uses": [
+    "limit buys",
+    "stop-losses",
+    "take-profits",
+    "rug checks"
+  ],
+  "outside": [],
+  "howItWorks": [
+    "You list the coins it may buy in watchlist.json, and put the same mints in the policy's coins.allow. It never picks coins from chat, comments or trending lists.",
+    "For each coin it runs a rug check first, and skips any that fails.",
+    "It places a limit buy: a set amount of SOL, filled only once the on-chain price falls a set share below today's (20% to start), and closed after 7 days if it never does.",
+    "When a buy fills, it places a stop-loss and a take-profit on what it bought. When one of them fills, it cancels the other.",
+    "After a cooldown it re-arms that coin, at most a few rounds per coin, and never past the policy's daily cap."
+  ],
+  "earns": "Nothing by itself. It buys after a fall and sells after a rise or a further fall, and any round can lose. Each round pays the coin's trading fee both ways (1% on a New school curve) and Highwire's 0.3% both ways, so a take-profit has to clear them. The calculator shows what a win and a loss come to.",
+  "costs": [
+    "No launch, so no launch fee.",
+    "Each buy and sell: the coin's trading fee (1% on a New school curve, 0.25% on Old school, about 0.3% after graduation), Solana network fees, and Highwire's 0.3%.",
+    "Limit buys, stop-losses and take-profits cost nothing until they fill."
+  ],
+  "needs": [
+    "Node 20 or later",
+    "A GitHub account",
+    "A machine that stays on to run the order runner",
+    "A few coins you chose yourself, by mint address"
+  ],
+  "risks": [
+    "A coin that falls 20% can keep falling. The stop-loss limits the loss, but sells at the price when it triggers, within the slippage cap.",
+    "Thin coins can move straight past a trigger; with a tight slippage cap the order waits while the price runs away.",
+    "Orders fill only while the order runner is running.",
+    "Fees on both sides mean small moves lose money."
+  ],
+  "milestones": [
+    {
+      "title": "M1 · The watchlist and dry-run buys",
+      "summary": "watchlist.json, a rug check for each coin, and one limit buy per coin placed against a dry-run policy."
+    },
+    {
+      "title": "M2 · Guarding the positions",
+      "summary": "After each fill, a stop-loss and a take-profit; when one fills, the other is cancelled."
+    },
+    {
+      "title": "M3 · Going live (you)",
+      "summary": "Fund the wallet with the budget, check coins.allow, and set live."
+    },
+    {
+      "title": "M4 · Rounds and a daily summary",
+      "summary": "Cooldowns, a cap on rounds per coin, and a plain summary of profit and loss each day."
+    }
+  ],
+  "prompt": "Read PRD.md and AGENTS.md, then build milestone 1. Keep the policy a dry run: never set \"live\" yourself.",
+  "calculator": "trading",
+  "minutesToDryRun": 10,
+  "day": [
+    {
+      "at": "Day 0",
+      "text": "You deploy the template, run setup, and write watchlist.json with two or three coins you chose. You add the same mints to the policy's coins.allow."
+    },
+    {
+      "at": "First run",
+      "text": "The agent rug-checks each coin and places one limit buy for each: 0.05 SOL, if the price falls 20%. As a dry run, a trigger is checked and simulated, and nothing is sent."
+    },
+    {
+      "at": "A coin dips",
+      "text": "The order runner sees the price at the trigger on-chain and buys. The agent then places a stop-loss 15% below the fill and a take-profit 40% above it."
+    },
+    {
+      "at": "It moves",
+      "text": "One of the two fills and sells the position. The agent cancels the other, waits a day, and re-arms the coin if it has rounds left."
+    },
+    {
+      "at": "Every evening",
+      "text": "It prints a summary: rounds done, profit and loss per coin from get_wallet_pnl, and what's still waiting."
+    },
+    {
+      "at": "Any time",
+      "text": "Create the STOP file and nothing more is signed. Every order, fill and refusal is in the audit log."
+    }
+  ],
+  "policyNotes": {
+    "actions": "Trades only: no launches, claims or transfers.",
+    "max_sol_per_tx": "The most one buy can spend. Keep it at or above the watchlist's buy size.",
+    "max_sol_per_day": "The most a day of buys can ever spend, whatever triggers.",
+    "max_slippage_bps": "5%: dips are when coins move fastest.",
+    "coins": "Empty to start, so nothing can be bought. You add the watchlist's mints yourself.",
+    "orders": "Limit buys, stop-losses and take-profits, at most nine open: three for each of three coins."
+  },
+  "faq": [
+    {
+      "q": "Does it pick coins for me?",
+      "a": "No. You choose the coins, and the policy's coins.allow is the only list it can buy from. It never takes a coin from chat, comments, names or trending lists."
+    },
+    {
+      "q": "Is this a way to make money?",
+      "a": "It's a way to automate a rule you already want to follow. Buying dips loses money when coins keep falling, and fees take a share of every round. Run it as a dry run first, and with a budget you can lose."
+    },
+    {
+      "q": "What happens if the order runner is off when the price dips?",
+      "a": "Nothing fills while it's off. When it starts again it checks prices fresh and fills only orders whose trigger is met then."
+    },
+    {
+      "q": "Can it spend more than the budget?",
+      "a": "No. Each buy is checked against max_sol_per_tx and max_sol_per_day, from the audit log, and refused past them, even when an order triggers."
+    },
+    {
+      "q": "Why does a dry run need the coins in the policy?",
+      "a": "A dry run checks the policy exactly as a live run does, so it tells you the truth about what would happen. Until a mint is in coins.allow, Highwire refuses it."
+    },
+    {
+      "q": "How do I stop it?",
+      "a": "Create the STOP file (~/.highwire/dip-buyer/STOP), or set the policy back to a dry run. Cancel orders with npm run highwire -- orders cancel <id>."
+    }
+  ]
+}

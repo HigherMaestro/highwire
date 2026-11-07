@@ -11,6 +11,7 @@ next-env.d.ts
 *.tsbuildinfo
 # copied in by prepack
 packages/*/LICENSE
+packages/mcp/ideas/
 .vercel
 
 # never commit keypairs

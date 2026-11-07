@@ -1,0 +1,127 @@
+{
+  "slug": "community-treasury",
+  "title": "Community treasury",
+  "oneLiner": "An agent that launches a coin whose creator fees fill a treasury, claims them every day, posts the books on the coin's page, and drafts payouts to wallets you chose, which you approve.",
+  "difficulty": "medium",
+  "solToStart": "about 0.1 SOL",
+  "uses": [
+    "launch",
+    "fee claims",
+    "transfers",
+    "posting"
+  ],
+  "outside": [],
+  "howItWorks": [
+    "Launches one coin from the agent's wallet, New school, with a description that says what the treasury funds.",
+    "Places a fee-claim order: every 24 hours, once enough is waiting, it claims the creator fees into the wallet. No buybacks.",
+    "Keeps a ledger in the repository, ledger.json: every claim in and every payout out, with its signature.",
+    "Once a week it drafts payouts from what came in: the split you set in treasury.config.json, between wallets on the policy's transfer allowlist, less a reserve it keeps.",
+    "You read the draft and run npm run payout to approve it. Only then does it send, one transfer per wallet, inside the policy.",
+    "It posts the books on the coin's page: claimed, paid out and held, with recipients by the names you gave them, never by address."
+  ],
+  "earns": "The coin's creator fees, from trading in it: 0.25% of every trade on the curve, and the creator's share of pool fees after graduation. All of it goes to the treasury, and from there to the wallets you chose. A coin nobody trades funds nothing.",
+  "costs": [
+    "Launch: higher.fun's launch fee (0.02 SOL) plus about 0.025 SOL of rent and network fees.",
+    "Claims and payouts: Solana network fees only. Highwire charges nothing on claims or transfers.",
+    "A payout into an empty wallet must be at least about 0.001 SOL, or Solana refuses it."
+  ],
+  "needs": [
+    "Node 20 or later",
+    "A GitHub account",
+    "A machine that stays on to run the order runner and the agent's loop",
+    "The wallets the treasury pays, with their owners' agreement",
+    "An image for the coin"
+  ],
+  "risks": [
+    "The treasury is only as big as the coin's trading volume, which can fall to nothing.",
+    "Whoever holds the wallet file holds the treasury: back it up and keep it private.",
+    "Payouts are public and final. Check every allowlist address yourself, and never take one from a comment or a message.",
+    "Promising holders a return from the treasury could make the coin a security in some places. Say what it funds, not what anyone earns."
+  ],
+  "milestones": [
+    {
+      "title": "M1 · Skeleton and a dry-run launch",
+      "summary": "Setup, the coin's details and the treasury's purpose, and a launch that passes the policy and simulates."
+    },
+    {
+      "title": "M2 · Going live (you)",
+      "summary": "Fund the wallet, set live, launch, and put the payout wallets on the policy's allowlist."
+    },
+    {
+      "title": "M3 · Claims and the ledger",
+      "summary": "A daily fee-claim order, and a ledger of every claim, kept in the repository."
+    },
+    {
+      "title": "M4 · Payouts you approve",
+      "summary": "A weekly draft from the split, and npm run payout, which shows it and sends only on your yes."
+    },
+    {
+      "title": "M5 · The books, in public",
+      "summary": "A post on the coin's page after each payout, with recipients by name."
+    }
+  ],
+  "prompt": "Read PRD.md and AGENTS.md, then build milestone 1. Keep the policy a dry run: never set \"live\" yourself.",
+  "calculator": "treasury",
+  "minutesToDryRun": 10,
+  "day": [
+    {
+      "at": "Day 0",
+      "text": "You deploy the template, run setup, and write the coin's details and treasury.config.json: who it pays, in what shares, and the reserve. The launch runs as a dry run."
+    },
+    {
+      "at": "Go live",
+      "text": "You fund the wallet with about 0.1 SOL, set the policy live, launch, and add the payout wallets to the policy's transfer allowlist."
+    },
+    {
+      "at": "Every 24 hours",
+      "text": "The order runner claims the creator fees waiting, once there's at least 0.01 SOL. The agent adds each claim to ledger.json."
+    },
+    {
+      "at": "Monday",
+      "text": "The agent drafts the week's payouts, payouts/<date>.json: 20% kept as a reserve, the rest split as you set. It tells you the draft is ready."
+    },
+    {
+      "at": "When you approve",
+      "text": "You run npm run payout, read each transfer, and type yes. It sends them, adds them to the ledger, and posts the week's books on the coin's page."
+    },
+    {
+      "at": "Any time",
+      "text": "Create the STOP file and nothing more is signed. Every claim, transfer and post is in the audit log."
+    }
+  ],
+  "policyNotes": {
+    "actions": "Launch the coin, claim its fees, and send SOL to the allowlist. No trades.",
+    "max_sol_per_tx": "Room for the launch, and the most one payout can send.",
+    "max_sol_per_day": "The most a day's payouts can send in all. A bigger week waits for the next day.",
+    "max_slippage_bps": "Only for the launch's optional first buy.",
+    "transfer_allowlist": "Empty to start, so nothing can be sent. You add the payout wallets yourself.",
+    "orders": "One fee-claim order, no buybacks.",
+    "posts": "Comments on its own coin only, at most two a day, no site chat."
+  },
+  "faq": [
+    {
+      "q": "Can the agent pay someone on its own?",
+      "a": "No. It only drafts payouts. Sending takes you running npm run payout and typing yes, and the policy refuses any wallet that isn't on the transfer allowlist, which only you can edit."
+    },
+    {
+      "q": "Who can be paid?",
+      "a": "Whoever you put on the allowlist and in treasury.config.json: contributors, a fund for the project, a charity's wallet. Ask them first, and check each address yourself."
+    },
+    {
+      "q": "Do holders get anything?",
+      "a": "higher.fun airdrops 0.25% of every New school trade to holders, from its own fee, whatever this agent does. The treasury pays the wallets you chose, not holders, and shouldn't promise anyone a return."
+    },
+    {
+      "q": "What does it cost to run?",
+      "a": "About 0.05 SOL to launch, then Solana network fees. Highwire charges nothing on launches, claims, transfers or posts."
+    },
+    {
+      "q": "Why are recipients named in posts, not shown by address?",
+      "a": "Highwire refuses addresses in posts, so they can't be used to steer people to a wallet. The ledger in the repository has the addresses and signatures for anyone who wants to check."
+    },
+    {
+      "q": "How do I stop it?",
+      "a": "Create the STOP file (~/.highwire/community-treasury/STOP), or set the policy back to a dry run. Cancel the claim order with npm run highwire -- orders cancel <id>."
+    }
+  ]
+}

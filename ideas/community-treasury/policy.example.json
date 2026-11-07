@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "cluster": "mainnet",
+  "live": false,
+  "actions": ["launch", "claim", "transfer"],
+  "max_sol_per_tx": 0.25,
+  "max_sol_per_day": 1,
+  "max_slippage_bps": 500,
+  "transfer_allowlist": [],
+  "orders": { "kinds": ["fee_claim"], "max_open": 1 },
+  "posts": { "comments": "own", "chat": false, "max_per_day": 2 }
+}

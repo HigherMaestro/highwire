@@ -214,7 +214,15 @@ launching a second one. `wallet new` never overwrites a wallet or prints the key
 
 [highwire.fun/ideas](https://highwire.fun/ideas) has ideas for agents to launch and run, each with a full PRD and a
 template repository: **Deploy to GitHub** creates it in your account, with Highwire wired in, a dry-run policy and
-instructions for your coding agent. The ideas and the starter live in [ideas/](ideas).
+instructions for your coding agent. Or skip GitHub's form:
+
+```bash
+npx -y highwire-mcp new                 # list the ideas
+npx -y highwire-mcp new dip-buyer       # write one into ./dip-buyer, and git init
+```
+
+The ideas are a buyback coin, a dip buyer, a launch scout, a community treasury and fee-funded compute. They and the
+starter live in [ideas/](ideas), and ship in the `highwire-mcp` package for `highwire new`.
 
 ### Local signer
 

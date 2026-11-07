@@ -101,6 +101,22 @@ any MCP client to research coins, rug-check them, watch the market live (Node 22
 your policy allows it (add `"trade"` to its `actions`, and an `orders` section for standing orders), trade and place
 stop-loss, take-profit, limit-buy and recurring-buy orders. `npx -y highwire-mcp --help` lists the commands.
 
+### Build something that runs on its own
+
+[highwire.fun/ideas](https://highwire.fun/ideas) has ideas for agents that run on higher.fun: a buyback coin, a dip
+buyer, a launch scout, a community treasury, fee-funded compute. Each is a project with a full spec, a dry-run policy
+and Highwire wired in. Start one in a new folder:
+
+```bash
+npx -y highwire-mcp new                  # list the ideas
+npx -y highwire-mcp new buyback-coin     # write one into ./buyback-coin
+cd buyback-coin && npm install && npm run setup
+```
+
+Then read `PRD.md` and `AGENTS.md` in it and build milestone 1. Each idea has its own wallet and policy, in
+`~/.highwire/<idea>/`, and stays a dry run until a person sets it live. Every spec is also at
+`https://highwire.fun/ideas/<idea>/prd.md`.
+
 ## Launch with a person
 
 If someone with a Solana wallet is in the chat, add Highwire's hosted MCP server, `https://highwire.fun/mcp`, which

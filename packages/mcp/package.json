@@ -17,11 +17,17 @@
       "highwire-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./ideas": {
+      "highwire-source": "./src/ideas.ts",
+      "types": "./dist/ideas.d.ts",
+      "default": "./dist/ideas.js"
     }
   },
   "files": [
     "dist",
     "skills",
+    "ideas",
     "README.md",
     "LICENSE"
   ],
@@ -35,7 +41,8 @@
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "smoke": "tsx --conditions=highwire-source scripts/smoke.ts",
     "simulate": "tsx --conditions=highwire-source scripts/simulate.ts",
-    "prepack": "npm run build && cp ../../LICENSE .",
+    "prepack": "npm run build && cp ../../LICENSE . && rm -rf ideas && cp -R ../../ideas ideas",
+    "postpack": "rm -rf ideas",
     "rehearse": "tsx --conditions=highwire-source scripts/rehearse.ts"
   },
   "dependencies": {

@@ -43,9 +43,10 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/mcp/scripts/simulate.ts` | `npm run simulate`: builds and simulates trades, launches and claims on mainnet and devnet |
 | `packages/mcp/scripts/rehearse.ts` | `npm run rehearse`: the execute tools, live, for a public wallet on mainnet and devnet, with the send replaced by a simulation of the signed bytes |
 | `packages/core/test/fixtures/` | recorded mainnet responses the transaction tests replay; re-record with `npm run record-fixtures -w highwire-core` |
-| `ideas/` | launch ideas: `starter/` (the skeleton every template gets) and one folder per idea (`idea.json`, `PRD.md`, `policy.example.json`). `docs/ideas-prd.md` is the spec |
+| `ideas/` | launch ideas: `starter/` (the skeleton every template gets; its `.gitignore` is kept as `gitignore`, since npm drops dotfiles of that name) and one folder per idea (`idea.json`, `PRD.md`, `policy.example.json`). `docs/ideas-prd.md` is the spec |
+| `packages/mcp/src/ideas.ts`, `new-cli.ts` | loading, checking and assembling ideas (`highwire-mcp/ideas`, which the site imports too), and `highwire new <idea> [dir]`. prepack copies `ideas/` into the package |
 | `apps/web/components/hero/`, `apps/web/lib/tape.ts`, `apps/web/app/api/tape/` | the homepage's three.js scenes: `LiveWire` (higher.fun's real trades on the wire, polled from `/api/tape`, which the CDN caches for five seconds because higher.fun's socket and API refuse other origins) and `WireDive` (the scroll dive). Both load three.js only when on screen, and honour reduced motion |
-| `apps/web/lib/ideas.ts`, `apps/web/app/ideas/`, `apps/web/scripts/ideas.ts` | reading and assembling ideas, `/ideas` and `/ideas/<slug>` (plus `prd.md`), and `npm run ideas -w highwire-web -- assemble\|check\|sync` |
+| `apps/web/lib/ideas.ts`, `apps/web/app/ideas/`, `apps/web/scripts/ideas.ts` | the site's links for ideas (Deploy, the `gh` command), the calculators' arithmetic in `lib/idea-math.ts`, `/ideas` and `/ideas/<slug>` (plus `prd.md`), and `npm run ideas -w highwire-web -- assemble\|check\|sync` |
 | `brand/` | logo, icons, social images and colour tokens. `brand/README.md` says which file goes where; regenerate with `brand/scripts/build.py`, never by hand-editing the exports |
 
 ## Conventions
@@ -120,7 +121,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
   `next/font` "Module not found" error, stop it, delete `apps/web/.next` and start it again.
 - **Dependencies:** pin exact versions, at least two weeks old.
 - **Launch ideas** are templates other people run with real money. Every idea's starting policy is a mainnet dry run
-  with only the actions it needs and no transfers; every PRD has the shared sections (`PRD_SECTIONS`) and shows its
+  with only the actions it needs and an empty transfer allowlist (only the user adds wallets); every PRD has the shared sections (`PRD_SECTIONS`) and shows its
   policy; templates never ship a key or a placeholder left unfilled, and pin the current Highwire. Keys live outside
   the generated repository. `apps/web/test/ideas.test.ts` checks all of this.
 - **Original code only:** write it yourself rather than porting another project's code, and don't name or credit

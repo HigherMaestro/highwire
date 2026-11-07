@@ -1,6 +1,6 @@
 # PRD: Launch ideas, one-click deploys
 
-Status: M1 built, 2026-11-06. Owner: HigherMaestro.
+Status: M1 and M2 built, 2026-11-06. Owner: HigherMaestro.
 
 ## Summary
 
@@ -64,7 +64,9 @@ It's free. Highwire earns from what these agents do afterwards: the 0.3% fee on 
    themselves. Nothing in the template or the site does that for them.
 
 **Shell route:** `npx highwire-mcp new <slug> [dir]` writes the same files into a new folder and runs `git init`, for
-agents and people who'd rather not use the GitHub form. (Milestone 2.)
+agents and people who'd rather not use the GitHub form. It refuses a folder that isn't empty, and never makes a
+wallet: `npm run setup` does that. The ideas ship inside the `highwire-mcp` package (prepack copies them), so it works
+offline and at the installed version.
 
 ## The idea page
 

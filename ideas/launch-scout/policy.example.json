@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "cluster": "mainnet",
+  "live": false,
+  "actions": ["trade"],
+  "max_sol_per_tx": 0.05,
+  "max_sol_per_day": 0.15,
+  "max_slippage_bps": 800,
+  "transfer_allowlist": [],
+  "orders": { "kinds": ["stop_loss", "take_profit"], "max_open": 6 }
+}

@@ -1,0 +1,118 @@
+{
+  "slug": "launch-scout",
+  "title": "Launch scout",
+  "oneLiner": "An agent that watches every new launch on higher.fun, rug-checks each one, writes a daily report of the few worth a look, and can make small capped buys in the ones that pass.",
+  "difficulty": "medium",
+  "solToStart": "0 SOL, or about 0.3 SOL if it buys",
+  "uses": [
+    "live feed",
+    "rug checks",
+    "small buys",
+    "stop-losses"
+  ],
+  "outside": [],
+  "howItWorks": [
+    "Watches higher.fun's live feed for new launches, and lists the newest coins every few minutes in case the feed drops.",
+    "Waits an hour after each launch, then reads the coin: its rug check, holders, trades so far and the creator's other coins.",
+    "Scores it against rules you set in scout.config.json: the safety verdict, the creator's and top 10 holders' shares, how many wallets bought, and volume.",
+    "Writes a daily report, reports/<date>.md: the coins that passed and why, and the near misses.",
+    "If you turn buying on, it makes one small buy in a coin that passes (0.05 SOL to start), guards it with a stop-loss and a take-profit, and buys at most three a day."
+  ],
+  "earns": "Reporting earns nothing and costs nothing on-chain. Buying can win or lose, and most new coins fall: a scout that buys a few a day will lose on most of them, and needs the rare big winner to come out ahead. Treat buying as a small, capped experiment, and read the calculator first.",
+  "costs": [
+    "Reporting: nothing on-chain. It reads higher.fun's API and live feed.",
+    "Each buy and sell: the coin's trading fee (1% on a New school curve), Solana network fees, and Highwire's 0.3%.",
+    "Stop-losses and take-profits cost nothing until they fill."
+  ],
+  "needs": [
+    "Node 20 or later",
+    "A GitHub account",
+    "A machine that stays on, for the feed and the order runner"
+  ],
+  "risks": [
+    "New coins are the riskiest on higher.fun. Rug checks catch some bad launches, not all.",
+    "Coin names and descriptions are written by their creators and can be bait. The scout treats them as data and never follows them.",
+    "The policy can't allow-list coins that don't exist yet, so its caps per buy and per day are what limit the scout. Keep them small.",
+    "higher.fun's API refuses bursts of requests. The scout reads slowly and backs off."
+  ],
+  "milestones": [
+    {
+      "title": "M1 · Watching and scoring",
+      "summary": "The live feed with a fallback, an hour's wait, and a score for each new coin, printed as it goes."
+    },
+    {
+      "title": "M2 · The daily report",
+      "summary": "reports/<date>.md with the passes, the near misses and why, and unit tests for the scoring."
+    },
+    {
+      "title": "M3 · Buying, as a dry run",
+      "summary": "With buying on: one capped buy per passing coin, then a stop-loss and a take-profit, all dry runs."
+    },
+    {
+      "title": "M4 · Going live (you)",
+      "summary": "Read a week of reports, fund the wallet, and set live only if you still want it to buy."
+    }
+  ],
+  "prompt": "Read PRD.md and AGENTS.md, then build milestone 1. Keep the policy a dry run: never set \"live\" yourself.",
+  "calculator": "trading",
+  "minutesToDryRun": 15,
+  "day": [
+    {
+      "at": "Day 0",
+      "text": "You deploy the template, run setup, and set your rules in scout.config.json. Buying is off."
+    },
+    {
+      "at": "All day",
+      "text": "The scout follows higher.fun's live feed. Each new launch goes on a list, to be read once it's an hour old."
+    },
+    {
+      "at": "An hour in",
+      "text": "It reads the coin: rug check, holders, trades. A coin with the creator holding 30% or a HIGH_RISK verdict fails; the score and the reasons go in the day's report."
+    },
+    {
+      "at": "Midnight UTC",
+      "text": "reports/<date>.md is complete: every launch it saw, the few that passed, and why."
+    },
+    {
+      "at": "With buying on",
+      "text": "A coin that passes gets one 0.05 SOL buy, a stop-loss 30% below and a take-profit 100% above. At most three a day, as dry runs until you set the policy live."
+    },
+    {
+      "at": "Any time",
+      "text": "Create the STOP file and nothing more is signed. Every buy, sell and refusal is in the audit log."
+    }
+  ],
+  "policyNotes": {
+    "actions": "Trades only: no launches, claims, posts or transfers.",
+    "max_sol_per_tx": "The most one buy can spend: small, since every coin it buys is new.",
+    "max_sol_per_day": "Three buys a day at most, whatever passes.",
+    "max_slippage_bps": "8%: new coins move fast in their first hours.",
+    "orders": "Stop-losses and take-profits for the coins it bought, at most six open."
+  },
+  "faq": [
+    {
+      "q": "Does it have to buy anything?",
+      "a": "No. Buying is off in scout.config.json, and the first two milestones only read and report. Many people will only ever run the report."
+    },
+    {
+      "q": "Why wait an hour after a launch?",
+      "a": "A coin's first minutes say little: snipers, bundles and a creator selling show up in its holders and trades soon after. Waiting costs the very first moves, and avoids many of the worst."
+    },
+    {
+      "q": "Can someone trick it into buying?",
+      "a": "It never reads instructions from a coin's name, description, comments or chat, and scores only on-chain facts and higher.fun's numbers. A creator can still game those, so the caps stay small."
+    },
+    {
+      "q": "Why is there no allow-list in the policy?",
+      "a": "It buys coins that didn't exist when you wrote the policy. Highwire warns about a live policy that trades with no allow-list; here, the per-buy and per-day caps are the limit, so keep them small."
+    },
+    {
+      "q": "Will it hit higher.fun's rate limits?",
+      "a": "It reads one coin at a time, a few seconds apart, and backs off when higher.fun refuses. The live feed does most of the watching."
+    },
+    {
+      "q": "How do I stop it?",
+      "a": "Turn buying off in scout.config.json, create the STOP file (~/.highwire/launch-scout/STOP), or set the policy back to a dry run."
+    }
+  ]
+}

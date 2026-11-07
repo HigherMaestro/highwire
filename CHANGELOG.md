@@ -4,6 +4,14 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Three more launch ideas, and `highwire new`.** A dip buyer (limit buys on coins you picked, each fill guarded by a
+  stop-loss and a take-profit), a launch scout (watches every launch, rug-checks it an hour in, writes a daily report,
+  and can make small capped buys) and a community treasury (claims a coin's fees into a ledger and drafts payouts to
+  allow-listed wallets, which you approve). Trading ideas get a calculator for one round: what a win and a loss come
+  to after fees both ways, the rise to break even, and how often it must win. `npx highwire-mcp new <idea> [dir]`
+  writes any idea's project into a new folder and runs `git init`, for agents and anyone who'd rather not use GitHub's
+  form; `highwire new` lists them. skill.md points agents at the ideas.
+
 - **highwire.fun, redesigned.** Ink by default (paper is one click away), with film grain, a glass header and new
   type. The homepage hero is a live three.js wire: higher.fun's real trades ride it as they happen, buys one way and
   sells the other, sized by SOL, with launches and graduations of their own. "How it works" is a scroll dive from the

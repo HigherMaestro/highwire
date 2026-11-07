@@ -8,7 +8,7 @@ import { AmbientWire } from "../../../components/hero/AmbientWire.tsx";
 import { SectionNav } from "../../../components/ideas/SectionNav.tsx";
 import { CopyCommand } from "../../../components/CopyCommand.tsx";
 import { IdeaCalculator, type MarketContext } from "../../../components/ideas/IdeaCalculator.tsx";
-import { agentPrompt, assemble, defaultIdeasDir, deployUrl, fileTree, getIdea, listIdeas, readPrd, startCommand } from "../../../lib/ideas.ts";
+import { agentPrompt, assemble, defaultIdeasDir, deployUrl, fileTree, getIdea, listIdeas, newCommand, readPrd, startCommand } from "../../../lib/ideas.ts";
 import { Markdown } from "../../../lib/markdown.tsx";
 import { SITE_URL } from "../../../lib/site.ts";
 
@@ -178,6 +178,11 @@ export default async function IdeaPage({ params }: Props) {
                   Creates, clones and sets it up, with <a href="https://cli.github.com">GitHub&apos;s CLI</a> signed in.
                 </p>
                 <CopyCommand code={startCommand(idea.slug)} label="Create, clone and set up" multiline />
+              </div>
+              <div className="card idea-start">
+                <h4>Without GitHub</h4>
+                <p className="muted small">Highwire&apos;s command line writes the same project into a new folder, as a fresh git repository.</p>
+                <CopyCommand code={newCommand(idea.slug)} label="Write it here and set up" multiline />
               </div>
               <div className="card idea-start">
                 <h4>Hand it to your agent</h4>

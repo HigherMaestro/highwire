@@ -20,6 +20,14 @@ Or in any stdio client's config:
 }
 ```
 
+To start an agent project from one of [highwire.fun's launch ideas](https://highwire.fun/ideas), with its spec, a
+dry-run policy and Highwire wired in:
+
+```bash
+npx -y highwire-mcp new              # list them
+npx -y highwire-mcp new dip-buyer    # write one into ./dip-buyer
+```
+
 As a library, it exports `createServer()` and `createHttpHandler()`, a stateless Streamable HTTP handler with the
 signature `(Request) => Promise<Response>`, for hosting the server yourself.
 

@@ -1,9 +1,11 @@
 "use client";
 
 import { useId, useState } from "react";
+import { breakEvenPct, CREATOR_PCT, HIGHWIRE_PCT, HOLDERS_PCT, roundTrip, winsToBreakEven } from "../../lib/idea-math.ts";
 
-// What an idea's numbers come to at a given trading volume. Rates are higher.fun's New school curve rates and
-// Highwire's trade fee; volume is the visitor's guess, anchored by real higher.fun volumes read when the page was built.
+// What an idea's numbers come to. The fee ideas (buyback, compute, treasury) work from a daily trading volume, the
+// visitor's guess anchored by real higher.fun volumes read when the page was built, at New school curve rates. The
+// trading ideas work out one round, a buy and a sale, with the coin's trading fee and Highwire's 0.3% both ways.
 
 export interface MarketContext {
   /** SOL traded in the last 24 hours by the busiest of higher.fun's 100 trending coins, and by their median. */
@@ -12,12 +14,11 @@ export interface MarketContext {
   solUsd: number | null;
 }
 
-const CREATOR_PCT = 0.25;
-const HOLDERS_PCT = 0.25;
-const HIGHWIRE_PCT = 0.3;
+export type CalculatorKind = "buyback" | "compute" | "trading" | "treasury";
 
 const fmt = (n: number, d = n >= 100 ? 0 : n >= 10 ? 1 : n >= 1 ? 2 : 3) =>
   n > 0 && n < Math.pow(10, -d) ? `<${Math.pow(10, -d).toFixed(d)}` : n.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: 0 });
+const signed = (n: number, d?: number) => `${n >= 0 ? "+" : "−"}${fmt(Math.abs(n), d)}`;
 
 function Field({ label, value, onChange, min, max, step, suffix, hint }: { label: string; value: number; onChange: (n: number) => void; min: number; max: number; step: number; suffix: string; hint?: string }) {
   const id = useId();
@@ -34,13 +35,73 @@ function Field({ label, value, onChange, min, max, step, suffix, hint }: { label
   );
 }
 
-export function IdeaCalculator({ kind, market }: { kind: "buyback" | "compute"; market: MarketContext }) {
+function Out({ rows, note }: { rows: [string, string][]; note: React.ReactNode }) {
+  return (
+    <>
+      <dl className="calc-out" aria-live="polite">
+        {rows.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="muted small calc-note">{note}</p>
+    </>
+  );
+}
+
+function TradingCalculator() {
+  const [buySol, setBuySol] = useState(0.05);
+  const [takePct, setTakePct] = useState(40);
+  const [stopPct, setStopPct] = useState(15);
+  const [feePct, setFeePct] = useState(1);
+
+  const win = roundTrip(buySol, takePct, feePct);
+  const loss = roundTrip(buySol, -stopPct, feePct);
+  const flat = roundTrip(buySol, 0, feePct);
+  const wins = winsToBreakEven(win.net, loss.net);
+  const rows: [string, string][] = [
+    ["A take-profit round", `${signed(win.net, 4)} SOL`],
+    ["A stop-loss round", `${signed(loss.net, 4)} SOL`],
+    ["Fees on a round, price unchanged", `${fmt(-flat.net, 4)} SOL`],
+    ["Rise needed to break even", `${fmt(breakEvenPct(feePct), 2)}%`],
+    ["Rounds that must win to break even", wins === null ? "none can win at these levels" : `${fmt(wins * 100, 0)}%`],
+    ["Highwire's 0.3% on a round", `${fmt(flat.highwire, 5)} SOL`],
+  ];
+  return (
+    <div className="calc">
+      <div className="calc-fields">
+        <Field label="SOL per buy" value={buySol} onChange={setBuySol} min={0.01} max={1} step={0.01} suffix="SOL" />
+        <Field label="Take-profit, above the buy" value={takePct} onChange={setTakePct} min={1} max={500} step={1} suffix="%" />
+        <Field label="Stop-loss, below the buy" value={stopPct} onChange={setStopPct} min={1} max={90} step={1} suffix="%" />
+        <Field label="The coin's trading fee" value={feePct} onChange={setFeePct} min={0} max={2} step={0.05} suffix="%" hint="1% on a New school curve, 0.25% on Old school, about 0.3% after a coin graduates." />
+      </div>
+      <Out
+        rows={rows}
+        note={
+          <>
+            The trading fee and Highwire&apos;s {HIGHWIRE_PCT}% are paid on the buy and again on the sale. Slippage, price
+            impact and network fees aside, so real rounds come out a little worse. Arithmetic at levels you choose, not a
+            forecast: most rounds in new coins hit the stop.
+          </>
+        }
+      />
+    </div>
+  );
+}
+
+export function IdeaCalculator({ kind, market }: { kind: CalculatorKind; market: MarketContext }) {
   const start = Math.round(Math.min(500, Math.max(10, market.medianVolumeSol ?? 50)));
   const [volume, setVolume] = useState(start);
   const [buybackPct, setBuybackPct] = useState(50);
   const [solUsd, setSolUsd] = useState(Math.round(market.solUsd ?? 150));
   const [gpuUsd, setGpuUsd] = useState(2);
   const [budgetPct, setBudgetPct] = useState(80);
+  const [reservePct, setReservePct] = useState(20);
+  const [recipients, setRecipients] = useState(2);
+
+  if (kind === "trading") return <TradingCalculator />;
 
   const creator = (volume * CREATOR_PCT) / 100;
   const holders = (volume * HOLDERS_PCT) / 100;
@@ -61,6 +122,17 @@ export function IdeaCalculator({ kind, market }: { kind: "buyback" | "compute"; 
       ["Over 30 days, bought back", `${fmt(bought * 30)} SOL`],
       ["Holders also get, from higher.fun", `${fmt(holders)} SOL a day in airdrops`],
     ];
+  } else if (kind === "treasury") {
+    const week = creator * 7;
+    const paid = (week * (100 - reservePct)) / 100;
+    rows = [
+      ["Creator fees claimed", `${fmt(creator)} SOL a day`],
+      ["Claimed in a week", `${fmt(week)} SOL`],
+      [`Kept as the reserve (${reservePct}%)`, `${fmt(week - paid)} SOL a week`],
+      ["Paid out", `${fmt(paid)} SOL a week`],
+      [`Each of ${recipients} equal shares`, `${fmt(paid / recipients)} SOL a week`],
+      ["Holders also get, from higher.fun", `${fmt(holders)} SOL a day in airdrops`],
+    ];
   } else {
     const budgetUsd = (creator * solUsd * budgetPct) / 100;
     const hours = gpuUsd > 0 ? budgetUsd / gpuUsd : 0;
@@ -79,6 +151,11 @@ export function IdeaCalculator({ kind, market }: { kind: "buyback" | "compute"; 
         <Field label="Daily trading volume in the coin" value={volume} onChange={setVolume} min={0} max={5000} step={5} suffix="SOL" hint={anchor} />
         {kind === "buyback" ? (
           <Field label="Share of each claim spent buying back" value={buybackPct} onChange={setBuybackPct} min={0} max={100} step={5} suffix="%" />
+        ) : kind === "treasury" ? (
+          <>
+            <Field label="Reserve kept from each week" value={reservePct} onChange={setReservePct} min={0} max={90} step={5} suffix="%" />
+            <Field label="Wallets it pays" value={recipients} onChange={setRecipients} min={1} max={10} step={1} suffix="wallets" />
+          </>
         ) : (
           <>
             <Field label="GPU price" value={gpuUsd} onChange={setGpuUsd} min={0.1} max={20} step={0.1} suffix="$ / hour" hint="What your provider charges for the GPU you pick." />
@@ -87,19 +164,16 @@ export function IdeaCalculator({ kind, market }: { kind: "buyback" | "compute"; 
           </>
         )}
       </div>
-      <dl className="calc-out" aria-live="polite">
-        {rows.map(([k, v]) => (
-          <div key={k}>
-            <dt>{k}</dt>
-            <dd>{v}</dd>
-          </div>
-        ))}
-      </dl>
-      <p className="muted small calc-note">
-        New school curve rates: the creator earns {CREATOR_PCT}% of every trade, and higher.fun airdrops {HOLDERS_PCT}% to
-        holders. After graduation the creator&apos;s pool fee is smaller. Network fees aside. An estimate at a volume you
-        choose, not a forecast.
-      </p>
+      <Out
+        rows={rows}
+        note={
+          <>
+            New school curve rates: the creator earns {CREATOR_PCT}% of every trade, and higher.fun airdrops {HOLDERS_PCT}% to
+            holders. After graduation the creator&apos;s pool fee is smaller. Network fees aside. An estimate at a volume you
+            choose, not a forecast.
+          </>
+        }
+      />
     </div>
   );
 }
