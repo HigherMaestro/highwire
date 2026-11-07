@@ -2,11 +2,11 @@ import {
   CLAUDE_CODE_COMMAND,
   CLAUDE_CONNECTOR_LINK,
   CURSOR_LINK,
-  LOCAL_BUILD,
+  LOCAL_COMMAND,
   REMOTE_CONFIG,
   VSCODE_LINK,
 } from "../lib/connect.ts";
-import { MCP_URL, REPO_URL } from "../lib/site.ts";
+import { MCP_URL } from "../lib/site.ts";
 import { CopyCommand } from "./CopyCommand.tsx";
 
 export function Connect() {
@@ -71,10 +71,11 @@ export function Connect() {
         <div className="card">
           <h3>Run it locally</h3>
           <p className="muted small">
-            The same tools on your own computer, with your own RPC and no shared rate limit. The npm package is on its
-            way; until then, build from source:
+            The same tools on your own computer, from npm, with your own RPC and no shared rate limit. Set{" "}
+            <code>HIGHWIRE_KEYPAIR_PATH</code> to let an agent act inside a policy you write; see{" "}
+            <a href="/docs#local-signer">the local signer</a>.
           </p>
-          <CopyCommand label="Build and add the local server" code={LOCAL_BUILD(REPO_URL)} multiline />
+          <CopyCommand label="Add the local server to Claude Code" code={LOCAL_COMMAND} multiline />
         </div>
       </div>
     </div>

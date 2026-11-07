@@ -44,6 +44,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/mcp/scripts/rehearse.ts` | `npm run rehearse`: the execute tools, live, for a public wallet on mainnet and devnet, with the send replaced by a simulation of the signed bytes |
 | `packages/core/test/fixtures/` | recorded mainnet responses the transaction tests replay; re-record with `npm run record-fixtures -w highwire-core` |
 | `ideas/` | launch ideas: `starter/` (the skeleton every template gets) and one folder per idea (`idea.json`, `PRD.md`, `policy.example.json`). `docs/ideas-prd.md` is the spec |
+| `apps/web/components/hero/`, `apps/web/lib/tape.ts`, `apps/web/app/api/tape/` | the homepage's three.js scenes: `LiveWire` (higher.fun's real trades on the wire, polled from `/api/tape`, which the CDN caches for five seconds because higher.fun's socket and API refuse other origins) and `WireDive` (the scroll dive). Both load three.js only when on screen, and honour reduced motion |
 | `apps/web/lib/ideas.ts`, `apps/web/app/ideas/`, `apps/web/scripts/ideas.ts` | reading and assembling ideas, `/ideas` and `/ideas/<slug>` (plus `prd.md`), and `npm run ideas -w highwire-web -- assemble\|check\|sync` |
 | `brand/` | logo, icons, social images and colour tokens. `brand/README.md` says which file goes where; regenerate with `brand/scripts/build.py`, never by hand-editing the exports |
 

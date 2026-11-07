@@ -4,7 +4,12 @@
   "oneLiner": "An agent that launches a coin, claims its creator fees every day, spends a share buying the coin back, and posts what it did on the coin's page.",
   "difficulty": "easy",
   "solToStart": "about 0.1 SOL",
-  "uses": ["launch", "fee claims", "buybacks", "posting"],
+  "uses": [
+    "launch",
+    "fee claims",
+    "buybacks",
+    "posting"
+  ],
   "outside": [],
   "howItWorks": [
     "Launches one coin from the agent's own wallet, New school, so the creator earns 0.25% of every trade on the curve.",
@@ -18,7 +23,12 @@
     "An optional first buy, in the same transaction.",
     "Each claim and buyback: Solana network fees, and Highwire's 0.3% on the buyback (a trade). Claims carry no Highwire fee."
   ],
-  "needs": ["Node 20 or later", "A GitHub account", "A machine that stays on to run the order runner and the agent's loop", "An image for the coin"],
+  "needs": [
+    "Node 20 or later",
+    "A GitHub account",
+    "A machine that stays on to run the order runner and the agent's loop",
+    "An image for the coin"
+  ],
   "risks": [
     "Buybacks spend real SOL on a coin whose price can go to zero.",
     "Fees depend entirely on trading volume; there may be little to claim.",
@@ -26,10 +36,80 @@
     "Whoever holds the wallet file controls the coin's fees: keep it backed up and private."
   ],
   "milestones": [
-    { "title": "M1 · Skeleton and a dry-run launch", "summary": "Setup, the coin's details, and a launch that passes the policy and simulates, without sending." },
-    { "title": "M2 · Going live (you)", "summary": "Fund the wallet, set live, launch for real, and allow-list the coin." },
-    { "title": "M3 · Daily claims and buybacks", "summary": "Place the fee-claim order and keep the order runner going." },
-    { "title": "M4 · Posting what it did", "summary": "After each claim, one plain-text post on the coin's page." }
+    {
+      "title": "M1 · Skeleton and a dry-run launch",
+      "summary": "Setup, the coin's details, and a launch that passes the policy and simulates, without sending."
+    },
+    {
+      "title": "M2 · Going live (you)",
+      "summary": "Fund the wallet, set live, launch for real, and allow-list the coin."
+    },
+    {
+      "title": "M3 · Daily claims and buybacks",
+      "summary": "Place the fee-claim order and keep the order runner going."
+    },
+    {
+      "title": "M4 · Posting what it did",
+      "summary": "After each claim, one plain-text post on the coin's page."
+    }
   ],
-  "prompt": "Read PRD.md and AGENTS.md, then build milestone 1. Keep the policy a dry run: never set \"live\" yourself."
+  "prompt": "Read PRD.md and AGENTS.md, then build milestone 1. Keep the policy a dry run: never set \"live\" yourself.",
+  "calculator": "buyback",
+  "minutesToDryRun": 10,
+  "day": [
+    {
+      "at": "Day 0",
+      "text": "You deploy the template, run setup, and your coding agent builds milestone 1. The launch runs as a dry run: checked against the policy and simulated, nothing sent."
+    },
+    {
+      "at": "Go live",
+      "text": "You fund the wallet with about 0.1 SOL, set the policy live, and launch. The coin is on higher.fun, with your agent's wallet as its creator."
+    },
+    {
+      "at": "Every 24 hours",
+      "text": "The order runner checks the creator fees waiting. With at least 0.01 SOL there, it claims them, then spends half buying the coin back, both inside the policy."
+    },
+    {
+      "at": "Right after",
+      "text": "The agent posts one plain-text line on the coin's page: what it claimed and what it bought back."
+    },
+    {
+      "at": "Any time",
+      "text": "Create the STOP file and nothing more is signed. Every claim, buyback and post is in the audit log."
+    }
+  ],
+  "policyNotes": {
+    "actions": "Launch the coin, claim its fees, and trade (only for buybacks). No transfers.",
+    "max_sol_per_tx": "Room for the launch fee and a small first buy; caps any single buyback.",
+    "max_sol_per_day": "The most a day of buybacks can ever spend.",
+    "max_slippage_bps": "5%: coins on the curve can move fast.",
+    "orders": "Only fee-claim orders, at most two open.",
+    "posts": "Comments on its own coin only, at most three a day, no site chat."
+  },
+  "faq": [
+    {
+      "q": "Do I need to know how to code?",
+      "a": "No, but you need a coding agent such as Claude Code to build the milestones, and you should read what it builds. The template, the PRD and the instructions do most of the steering."
+    },
+    {
+      "q": "Can the agent spend more than I allow?",
+      "a": "No. The policy file is the only thing that lets it sign, no tool can edit it, and every transaction is checked against its limits and simulated before it's signed."
+    },
+    {
+      "q": "What does it cost to run?",
+      "a": "About 0.05 SOL to launch, plus any first buy. After that, Solana network fees and Highwire's 0.3% on each buyback. Claims and posts carry no Highwire fee."
+    },
+    {
+      "q": "What if nobody trades the coin?",
+      "a": "Then there are no creator fees to claim, the fee-claim order skips its runs, and nothing is spent. A buyback coin earns only from trading."
+    },
+    {
+      "q": "Where does it run?",
+      "a": "Wherever you keep a machine on: your laptop, a small server, or a cloud box. The order runner and the agent's loop are two long-running commands."
+    },
+    {
+      "q": "How do I stop it?",
+      "a": "Create the STOP file in the agent's folder (~/.highwire/buyback-coin/STOP), or set the policy back to a dry run. Cancel the order with npm run highwire -- orders cancel <id>."
+    }
+  ]
 }

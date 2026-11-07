@@ -17,5 +17,5 @@ export const VSCODE_LINK = `vscode:mcp/install?${encodeURIComponent(JSON.stringi
 
 export const REMOTE_CONFIG = JSON.stringify({ mcpServers: { highwire: { url: MCP_URL } } }, null, 2);
 
-export const LOCAL_BUILD = (repo: string) =>
-  `git clone ${repo}.git\ncd highwire && npm install && npm run build\nclaude mcp add highwire -- node "$PWD/packages/mcp/dist/cli.js"`;
+/** The local server from npm, with the local signer's tools available once HIGHWIRE_KEYPAIR_PATH is set. */
+export const LOCAL_COMMAND = "claude mcp add highwire -- npx -y highwire-mcp";

@@ -3,28 +3,28 @@
 import { useEffect, useState } from "react";
 import { THEME_KEY } from "../lib/theme.ts";
 
-type Theme = "system" | "light" | "dark";
+// Ink is the site's default; paper is the visitor's choice, kept in localStorage.
+type Theme = "dark" | "light";
 
-const ORDER: Theme[] = ["system", "light", "dark"];
-const LABEL: Record<Theme, string> = { system: "Auto", light: "Light", dark: "Dark" };
+const ORDER: Theme[] = ["dark", "light"];
+const LABEL: Record<Theme, string> = { dark: "Dark", light: "Light" };
 
 function apply(theme: Theme) {
   const root = document.documentElement;
-  if (theme === "system") delete root.dataset.theme;
+  if (theme === "dark") delete root.dataset.theme;
   else root.dataset.theme = theme;
 }
 
 function read(): Theme {
   try {
-    const v = localStorage.getItem(THEME_KEY);
-    return v === "light" || v === "dark" ? v : "system";
+    return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
   } catch {
-    return "system";
+    return "dark";
   }
 }
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("system");
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => setTheme(read()), []);
 
@@ -33,7 +33,7 @@ export function ThemeToggle() {
     setTheme(t);
     apply(t);
     try {
-      if (t === "system") localStorage.removeItem(THEME_KEY);
+      if (t === "dark") localStorage.removeItem(THEME_KEY);
       else localStorage.setItem(THEME_KEY, t);
     } catch {
       // Private mode or blocked storage: the choice just won't persist.
@@ -45,7 +45,6 @@ export function ThemeToggle() {
     <button type="button" className="theme-toggle" onClick={next} aria-label={`Theme: ${LABEL[theme]}. Switch to ${LABEL[upcoming]}`}>
       <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
         <circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-        {theme === "light" ? null : <path d="M10 2.5 A7.5 7.5 0 0 1 10 17.5 Z" fill="currentColor" />}
         {theme === "dark" ? <circle cx="10" cy="10" r="7.5" fill="currentColor" /> : null}
       </svg>
       <span>{LABEL[theme]}</span>

@@ -26,7 +26,18 @@ export interface Idea {
   milestones: { title: string; summary: string }[];
   /** What to paste into a coding agent in the new repository. */
   prompt: string;
+  /** Which calculator the page shows. */
+  calculator: "buyback" | "compute";
+  /** Roughly how long from Deploy to a first dry run, for someone following the steps. */
+  minutesToDryRun: number;
+  /** A sample of how the agent runs, step by step. */
+  day: { at: string; text: string }[];
+  /** One line on each top-level key of policy.example.json. */
+  policyNotes: Record<string, string>;
+  faq: { q: string; a: string }[];
 }
+
+export const CALCULATORS = ["buyback", "compute"] as const;
 
 /** The PRD sections every idea has, in this order, so coding agents learn the shape once. */
 export const PRD_SECTIONS = ["Summary", "The loop", "Policy", "Milestones", "Outside services", "Rules", "Out of scope"];
@@ -77,6 +88,34 @@ export function validateIdea(raw: unknown, dirName: string): Idea {
       risks: strs(o.risks, "risks", 1),
       milestones,
       prompt: str(o.prompt, "prompt", 400),
+      calculator: ((): Idea["calculator"] => {
+        if (!CALCULATORS.includes(o.calculator as Idea["calculator"])) throw new Error(`calculator must be ${CALCULATORS.join(" or ")}`);
+        return o.calculator as Idea["calculator"];
+      })(),
+      minutesToDryRun: ((): number => {
+        const n = o.minutesToDryRun;
+        if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > 240) throw new Error("minutesToDryRun must be whole minutes");
+        return n;
+      })(),
+      day: ((): Idea["day"] => {
+        if (!Array.isArray(o.day) || o.day.length < 1) throw new Error("day must be a list");
+        return o.day.map((d: unknown, i) => {
+          const dd = (d ?? {}) as Record<string, unknown>;
+          return { at: str(dd.at, `day[${i}].at`, 40), text: str(dd.text, `day[${i}].text`) };
+        });
+      })(),
+      policyNotes: ((): Record<string, string> => {
+        const n = o.policyNotes;
+        if (!n || typeof n !== "object" || Array.isArray(n)) throw new Error("policyNotes must be an object");
+        return Object.fromEntries(Object.entries(n).map(([k, v]) => [k, str(v, `policyNotes.${k}`, 300)]));
+      })(),
+      faq: ((): Idea["faq"] => {
+        if (!Array.isArray(o.faq) || o.faq.length < 1) throw new Error("faq must be a list");
+        return o.faq.map((f: unknown, i) => {
+          const ff = (f ?? {}) as Record<string, unknown>;
+          return { q: str(ff.q, `faq[${i}].q`, 200), a: str(ff.a, `faq[${i}].a`) };
+        });
+      })(),
     };
   } catch (err) {
     throw new Error(`ideas/${dirName}/idea.json: ${(err as Error).message}`);
@@ -102,6 +141,37 @@ export function readPrd(slug: string, dir = defaultIdeasDir()): string {
 }
 
 export const ideaUrl = (siteUrl: string, slug: string) => `${siteUrl}/ideas/${slug}`;
+
+/** The one-command start, with GitHub's CLI: create the repository from the template, clone it, set it up. */
+export function startCommand(slug: string): string {
+  return `gh repo create ${slug} --template ${TEMPLATE_OWNER}/${templateRepo(slug)} --public --clone && cd ${slug} && npm install && npm run setup`;
+}
+
+/** What to tell a coding agent that has a shell, so it does every step itself. */
+export function agentPrompt(idea: Pick<Idea, "slug" | "title">): string {
+  return `Start the Highwire "${idea.title}" idea for me: run \`${startCommand(idea.slug)}\`, then read PRD.md and AGENTS.md and build milestone 1. Keep the policy a dry run: never set "live" yourself, and stop when milestone 1 is done.`;
+}
+
+/** The template's files as an indented tree, for the page: directories first, then files, alphabetically. */
+export function fileTree(paths: string[]): string {
+  type Node = Map<string, Node>;
+  const root: Node = new Map();
+  for (const p of paths) {
+    let n = root;
+    for (const part of p.split("/")) n = n.get(part) ?? n.set(part, new Map()).get(part)!;
+  }
+  const lines: string[] = [];
+  const walkTree = (n: Node, prefix: string) => {
+    const entries = [...n.entries()].sort(([a, an], [b, bn]) => Number(bn.size > 0) - Number(an.size > 0) || a.localeCompare(b));
+    entries.forEach(([name, child], i) => {
+      const last = i === entries.length - 1;
+      lines.push(`${prefix}${last ? "└── " : "├── "}${name}${child.size ? "/" : ""}`);
+      if (child.size) walkTree(child, `${prefix}${last ? "    " : "│   "}`);
+    });
+  };
+  walkTree(root, "");
+  return lines.join("\n");
+}
 
 /**
  * GitHub's own "create a repository from a template" form, pre-filled for whoever is signed in: Highwire never sees

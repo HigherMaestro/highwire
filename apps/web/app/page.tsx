@@ -1,15 +1,36 @@
 import { SiteFooter, SiteHeader } from "../components/Chrome.tsx";
 import { Connect } from "../components/Connect.tsx";
 import { CopyCommand } from "../components/CopyCommand.tsx";
-import { Mark } from "../components/Mark.tsx";
+import { LiveWire } from "../components/hero/LiveWire.tsx";
+import { WireDive, type DiveStage } from "../components/hero/WireDive.tsx";
 import { getCatalog, groupTools } from "../lib/catalog.ts";
 import { graduatingCoins, type CoinSummary } from "../lib/coins.ts";
 import { CLAUDE_CODE_COMMAND } from "../lib/connect.ts";
 import { coinLabel } from "../lib/names.ts";
 import { DONATION_URL, DONATION_WALLET, REPO_URL } from "../lib/site.ts";
+import { readTape } from "../lib/tape.ts";
 
 // Static, refreshed every minute for the live strip.
 export const revalidate = 60;
+
+const DIVE: DiveStage[] = [
+  {
+    title: "The launchpad",
+    body: "higher.fun: hundreds of coins, each on its own bonding curve, every trade on Solana. Highwire reads all of it, from higher.fun's API and the chain itself.",
+  },
+  {
+    title: "One coin",
+    body: "Ask about any coin and your agent sees what an analyst would: its holders and creator, its safety grade, its fees, a rug check, and the market moving live.",
+  },
+  {
+    title: "One trade",
+    body: "Every trade, launch and claim Highwire builds is decoded and simulated before you sign. The sign page rebuilds it from its own bytes, so you see exactly what it does.",
+  },
+  {
+    title: "The wire",
+    body: "Or let your agent walk it alone, inside limits only you can write: SOL caps, coin allowlists, slippage, a daily budget and a kill switch. Every step is logged.",
+  },
+];
 
 const fmt = (n: number | null, dp = 1) =>
   n === null ? "–" : n.toLocaleString("en-US", { maximumFractionDigits: dp, minimumFractionDigits: 0 });
@@ -49,7 +70,7 @@ function CoinCard({ coin }: { coin: CoinSummary }) {
 }
 
 export default async function Home() {
-  const [catalog, coins] = await Promise.all([getCatalog(), graduatingCoins(6)]);
+  const [catalog, coins, tape] = await Promise.all([getCatalog(), graduatingCoins(6), readTape()]);
   const groups = groupTools(catalog.tools);
   const hostedCount = catalog.tools.filter((t) => t.hosted).length;
   const localOnly = catalog.tools.length - hostedCount;
@@ -67,7 +88,8 @@ export default async function Home() {
       <SiteHeader />
 
       <main>
-        <section className="hero">
+        <section className="hero hero-live">
+          <LiveWire initial={tape ?? []} />
           <div className="wrap hero-grid">
             <div className="hero-copy">
               <p className="eyebrow">MCP server · open source · no keys</p>
@@ -95,9 +117,6 @@ export default async function Home() {
                 ))}
               </ul>
             </div>
-            <div className="hero-art">
-              <Mark id="hero" size={360} animated label="The Highwire H: two posts with a wire between them" />
-            </div>
           </div>
         </section>
 
@@ -119,6 +138,8 @@ export default async function Home() {
             </div>
           </section>
         ) : null}
+
+        <WireDive stages={DIVE} />
 
         <section id="connect" className="section" aria-labelledby="connect-title">
           <div className="wrap">

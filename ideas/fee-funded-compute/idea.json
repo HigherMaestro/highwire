@@ -4,8 +4,14 @@
   "oneLiner": "An agent whose coin's creator fees pay for GPU time: it claims the fees, rents compute within a budget they cover, runs a workload in public, and posts the books on the coin's page.",
   "difficulty": "hard",
   "solToStart": "about 0.1 SOL, plus a funded account with a GPU provider",
-  "uses": ["launch", "fee claims", "posting"],
-  "outside": ["A GPU rental provider with an API (you pick it, and fund it yourself)"],
+  "uses": [
+    "launch",
+    "fee claims",
+    "posting"
+  ],
+  "outside": [
+    "A GPU rental provider with an API (you pick it, and fund it yourself)"
+  ],
   "howItWorks": [
     "Launches one coin from the agent's own wallet. The coin's story is the compute it pays for.",
     "Places a fee-claim order that collects the creator fees every day.",
@@ -19,7 +25,13 @@
     "GPU time, at the provider's prices, paid from an account you fund (usually by card or stablecoin). Highwire can't pay the provider for you.",
     "Claims: Solana network fees only; Highwire charges nothing on claims."
   ],
-  "needs": ["Node 20 or later", "A GitHub account", "An account and API key with a GPU rental provider", "A machine that stays on for the order runner and the agent's loop", "An image for the coin"],
+  "needs": [
+    "Node 20 or later",
+    "A GitHub account",
+    "An account and API key with a GPU rental provider",
+    "A machine that stays on for the order runner and the agent's loop",
+    "An image for the coin"
+  ],
   "risks": [
     "This is the hardest idea: real infrastructure, a real provider bill, and moving money between the wallet and the provider is your job.",
     "Creator fees may be far smaller than GPU prices. The budget rule keeps spending within what came in, which may be very little.",
@@ -27,11 +39,80 @@
     "Keep the provider's API key in .env, never in the repository."
   ],
   "milestones": [
-    { "title": "M1 · Skeleton and a dry-run launch", "summary": "Setup, the coin's details, and a launch that passes the policy and simulates, without sending." },
-    { "title": "M2 · The ledger and a fake provider", "summary": "The provider interface, the budget rule and the books, all tested without spending anything." },
-    { "title": "M3 · Going live and claiming (you, then the agent)", "summary": "Launch for real, then a daily fee-claim order feeding the ledger." },
-    { "title": "M4 · A real provider", "summary": "One adapter for the provider you chose, quote-only until you allow spending." },
-    { "title": "M5 · The workload and the books", "summary": "Rent, run, stop, and post the numbers on the coin's page." }
+    {
+      "title": "M1 · Skeleton and a dry-run launch",
+      "summary": "Setup, the coin's details, and a launch that passes the policy and simulates, without sending."
+    },
+    {
+      "title": "M2 · The ledger and a fake provider",
+      "summary": "The provider interface, the budget rule and the books, all tested without spending anything."
+    },
+    {
+      "title": "M3 · Going live and claiming (you, then the agent)",
+      "summary": "Launch for real, then a daily fee-claim order feeding the ledger."
+    },
+    {
+      "title": "M4 · A real provider",
+      "summary": "One adapter for the provider you chose, quote-only until you allow spending."
+    },
+    {
+      "title": "M5 · The workload and the books",
+      "summary": "Rent, run, stop, and post the numbers on the coin's page."
+    }
   ],
-  "prompt": "Read PRD.md and AGENTS.md, then build milestone 1. Keep the policy a dry run: never set \"live\" yourself, and never spend money with a provider without my go-ahead."
+  "prompt": "Read PRD.md and AGENTS.md, then build milestone 1. Keep the policy a dry run: never set \"live\" yourself, and never spend money with a provider without my go-ahead.",
+  "calculator": "compute",
+  "minutesToDryRun": 15,
+  "day": [
+    {
+      "at": "Day 0",
+      "text": "You deploy the template, run setup, and your coding agent builds milestone 1 and the ledger with a fake provider. Nothing is spent anywhere."
+    },
+    {
+      "at": "Go live",
+      "text": "You launch the coin for real, pick a GPU provider, fund its account, and put its API key in .env. Spending stays off until you allow it."
+    },
+    {
+      "at": "Every 24 hours",
+      "text": "A fee-claim order collects the creator fees. The agent books each claim in its ledger as income."
+    },
+    {
+      "at": "When it covers an hour",
+      "text": "The agent rents GPU time within what the fees have earned, runs the workload, stops the rental, and books the spend."
+    },
+    {
+      "at": "After each run",
+      "text": "It posts the books on the coin's page: fees claimed, GPU hours bought, what they ran."
+    }
+  ],
+  "policyNotes": {
+    "actions": "Launch and claim only: no trading and no transfers, so SOL leaves the wallet only by your hand.",
+    "max_sol_per_tx": "Room for the launch fee and a small first buy.",
+    "max_sol_per_day": "A daily cap on anything the wallet spends.",
+    "max_slippage_bps": "Only matters for the first buy at launch.",
+    "orders": "Only fee-claim orders, at most two open.",
+    "posts": "Comments on its own coin only, at most three a day, no site chat."
+  },
+  "faq": [
+    {
+      "q": "How does SOL become GPU time?",
+      "a": "Not through Highwire. Providers bill a card or stablecoin account, so you fund the provider; the agent only rents within what the coin's fees have earned, and shows the books."
+    },
+    {
+      "q": "Which GPU provider?",
+      "a": "Any with an API. The PRD keeps every call behind one small interface, so you can pick one and swap it later."
+    },
+    {
+      "q": "Can a rental run away with my money?",
+      "a": "The agent stops every rental it starts, never rents past its allowance, daily cap or hours per run, and only spends at all once you set allow_spend. Still, check the provider's dashboard."
+    },
+    {
+      "q": "What should the GPU run?",
+      "a": "That's the project's story: an open model serving a community, a nightly batch job, generated art for the coin. The PRD leaves it to you, in src/workload.ts."
+    },
+    {
+      "q": "Is this realistic?",
+      "a": "It's the hardest idea here. Creator fees may be far smaller than GPU prices; the calculator above shows what a given volume would pay for."
+    }
+  ]
 }

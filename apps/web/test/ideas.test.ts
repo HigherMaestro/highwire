@@ -78,3 +78,19 @@ test("Deploy opens GitHub's own template form for the signed-in user", () => {
   assert.equal(url.searchParams.get("owner"), "@me");
   assert.equal(url.searchParams.get("name"), ideas[0]!.slug);
 });
+
+test("every policy key an idea can change has a note on its page, and every note names a real key", () => {
+  for (const idea of ideas) {
+    const policy = JSON.parse(readFileSync(join(process.cwd(), "../../ideas", idea.slug, "policy.example.json"), "utf8"));
+    const keys = Object.keys(policy).filter((k) => !["version", "cluster", "live", "transfer_allowlist"].includes(k));
+    assert.deepEqual(Object.keys(idea.policyNotes).sort(), keys.sort(), idea.slug);
+  }
+});
+
+test("the one-command start and the agent prompt name the idea's template", async () => {
+  const { startCommand, agentPrompt, fileTree } = await import("../lib/ideas.ts");
+  const cmd = startCommand("buyback-coin");
+  assert.equal(cmd, "gh repo create buyback-coin --template HigherMaestro/highwire-idea-buyback-coin --public --clone && cd buyback-coin && npm install && npm run setup");
+  assert.ok(agentPrompt({ slug: "buyback-coin", title: "Buyback coin" }).includes(cmd));
+  assert.equal(fileTree(["b.md", "src/x.ts", "a.md"]), "├── src/\n│   └── x.ts\n├── a.md\n└── b.md");
+});
