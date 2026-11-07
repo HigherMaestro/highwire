@@ -138,7 +138,9 @@ root `server.json` (both places) and, once npm shows it, log in and publish in o
 version the registry answers 400, and after the login expires 401: the registry listing is `fun.highwire/highwire`, proved by
 `apps/web/public/.well-known/mcp-registry-auth`. The domain key's private half stays with the maintainer, never in the repo.
 Once npm shows the release, sync the launch-idea templates so they pin it:
-`GH_TOKEN=… npm run ideas -w highwire-web -- sync` (with `--dry-run` first to see what changes).
+`GH_TOKEN=… npm run ideas -w highwire-web -- sync` (with `--dry-run` first to see what changes). Its commits are by
+HigherMaestro whatever this machine's global git identity is, and it refuses to push one that isn't: every commit on
+Highwire's repositories, here or in a temporary clone, is HigherMaestro's.
 
 ## Before you say it's done
 

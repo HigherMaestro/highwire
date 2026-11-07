@@ -92,12 +92,27 @@ async function check(only?: string) {
   }
 }
 
+/**
+ * Who the templates' commits are by. The clone is a temporary folder, outside this repository's own git config, so
+ * without this git would sign them with whatever global identity this machine has.
+ */
+const TEMPLATE_AUTHOR = { name: "HigherMaestro", email: "352895193+HigherMaestro@users.noreply.github.com" };
+
 function sync(dryRun: boolean, message: string) {
   const token = process.env.GH_TOKEN;
   if (!token) throw new Error("Set GH_TOKEN to a token for HigherMaestro (gh auth token --user HigherMaestro). This never switches gh's account.");
   // The token reaches git through the environment, never the command line.
   const git = (args: string[], cwd?: string) =>
-    sh("git", ["-c", "credential.helper=", "-c", `credential.helper=!f() { echo username=${TEMPLATE_OWNER}; echo "password=$GH_TOKEN"; }; f`, ...args], { cwd, env: process.env });
+    sh("git", ["-c", "credential.helper=", "-c", `credential.helper=!f() { echo username=${TEMPLATE_OWNER}; echo "password=$GH_TOKEN"; }; f`, ...args], {
+      cwd,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: TEMPLATE_AUTHOR.name,
+        GIT_AUTHOR_EMAIL: TEMPLATE_AUTHOR.email,
+        GIT_COMMITTER_NAME: TEMPLATE_AUTHOR.name,
+        GIT_COMMITTER_EMAIL: TEMPLATE_AUTHOR.email,
+      },
+    });
   for (const idea of listIdeas()) {
     const name = templateRepo(idea.slug);
     const full = `${TEMPLATE_OWNER}/${name}`;
@@ -125,6 +140,9 @@ function sync(dryRun: boolean, message: string) {
       console.log(`${full}: ${changed.split("\n").length} file(s) changed${dryRun ? " (dry run: not pushed)" : ""}`);
       if (dryRun) continue;
       must("git commit", git(["commit", "--quiet", "-m", message.replace("{version}", VERSION)], work));
+      const who = git(["log", "-1", "--format=%an <%ae> / %cn <%ce>"], work).out;
+      const expected = `${TEMPLATE_AUTHOR.name} <${TEMPLATE_AUTHOR.email}>`;
+      if (who !== `${expected} / ${expected}`) throw new Error(`${full}: the commit is by ${who}, not ${expected}, so nothing was pushed`);
       must("git push", git(["push", "--quiet", url, "HEAD:main"], work));
       console.log(`${full}: pushed`);
     } finally {
