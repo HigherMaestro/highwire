@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.11.0 (2026-11-06)
 
 - **Three more launch ideas, and `highwire new`.** A dip buyer (limit buys on coins you picked, each fill guarded by a
   stop-loss and a take-profit), a launch scout (watches every launch, rug-checks it an hour in, writes a daily report,
