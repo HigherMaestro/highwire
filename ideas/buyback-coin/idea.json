@@ -8,6 +8,7 @@
     "launch",
     "fee claims",
     "buybacks",
+    "limit buys",
     "posting"
   ],
   "outside": [],
@@ -15,7 +16,8 @@
     "Launches one coin from the agent's own wallet, New school, so the creator earns 0.25% of every trade on the curve.",
     "Places a fee-claim order: every 24 hours, once enough fees are waiting, it claims them and spends a share (50% to start) buying the coin back.",
     "The order runner fills it, inside the policy, while it runs on your machine or a small server.",
-    "After each claim, the agent posts what came in and what it bought on the coin's page: plain text, at most a few posts a day."
+    "With the half it keeps, it holds one small limit buy of the coin: when the price dips a set share, it buys, then sets the next buy lower; if the price rises instead, it moves the buy up. It never spends below a reserve.",
+    "After each claim and each dip buy, the agent posts what it did on the coin's page: plain text, at most a few posts a day."
   ],
   "loop": [
     "Launches a coin",
@@ -27,7 +29,7 @@
   "costs": [
     "Launch: higher.fun's launch fee (0.02 SOL) plus about 0.025 SOL of rent and network fees.",
     "An optional first buy, in the same transaction.",
-    "Each claim and buyback: Solana network fees, and Highwire's 0.3% on the buyback (a trade). Claims carry no Highwire fee."
+    "Each claim, buyback and dip buy: Solana network fees, and Highwire's 0.3% on the buybacks and dip buys (trades). Claims carry no Highwire fee."
   ],
   "needs": [
     "Node 20 or later",
@@ -36,7 +38,7 @@
     "An image for the coin"
   ],
   "risks": [
-    "Buybacks spend real SOL on a coin whose price can go to zero.",
+    "Buybacks and dip buys spend real SOL on a coin whose price can go to zero.",
     "Fees depend entirely on trading volume; there may be little to claim.",
     "Posting too often, or hyping, reads as spam. The policy caps posts per day.",
     "Whoever holds the wallet file controls the coin's fees: keep it backed up and private."
@@ -57,6 +59,10 @@
     {
       "title": "M4 · Posting what it did",
       "summary": "After each claim, one plain-text post on the coin's page."
+    },
+    {
+      "title": "M5 · Buying the dips with what it keeps",
+      "summary": "One limit buy at a time, set under the price, moved up when the price rises, and posted when it fills."
     }
   ],
   "prompt": "Read PRD.md and AGENTS.md, then build milestone 1. Keep the policy a dry run: never set \"live\" yourself.",
@@ -80,16 +86,20 @@
       "text": "The agent posts one plain-text line on the coin's page: what it claimed and what it bought back."
     },
     {
+      "at": "On a dip",
+      "text": "If the price falls 15% under where the agent set its buy, the order runner buys 0.1 SOL of the coin with fees it kept, and the agent posts it. The next buy waits 12 hours and sits under the new price."
+    },
+    {
       "at": "Any time",
       "text": "Create the STOP file and nothing more is signed. Every claim, buyback and post is in the audit log."
     }
   ],
   "policyNotes": {
-    "actions": "Launch the coin, claim its fees, and trade (only for buybacks). No transfers.",
+    "actions": "Launch the coin, claim its fees, and trade (only the coin itself: buybacks and dip buys). No transfers.",
     "max_sol_per_tx": "Room for the launch fee and a small first buy; caps any single buyback.",
     "max_sol_per_day": "The most a day of buybacks can ever spend.",
     "max_slippage_bps": "5%: coins on the curve can move fast.",
-    "orders": "Only fee-claim orders, at most two open.",
+    "orders": "The fee-claim order and one dip buy (a limit buy): at most two open.",
     "posts": "Comments on its own coin only, at most three a day, no site chat."
   },
   "faq": [

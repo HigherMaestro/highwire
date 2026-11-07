@@ -4,6 +4,12 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **The buyback coin buys the dips.** A new milestone, M5, for the buyback-coin idea: with the half of each claim it
+  keeps, the agent holds one limit buy of its coin at a time, set a share under the price. After a fill it waits, then
+  sets the next one under the new price; if the price rises well past where the buy was set, it moves the buy up. It
+  never spends below a reserve, and posts each fill. The idea's starting policy allows one limit buy alongside the
+  fee-claim order.
+- **`highwire orders limit-buy` prints the price as a plain decimal**, 0.0000000799 rather than 7.99e-8.
 - **Reinstalling an idea's service works first time.** `npm run service -- install` on a service that was already
   running failed with launchd's "Bootstrap failed: 5", because launchd hadn't let go of the stopped copy yet. It now
   waits for that, and retries for a few seconds. The launch-idea templates have the fix now; no new npm release needed.

@@ -7,6 +7,6 @@
   "max_sol_per_day": 0.5,
   "max_slippage_bps": 500,
   "transfer_allowlist": [],
-  "orders": { "kinds": ["fee_claim"], "max_open": 2 },
+  "orders": { "kinds": ["fee_claim", "limit_buy"], "max_open": 2 },
   "posts": { "comments": "own", "chat": false, "max_per_day": 3 }
 }

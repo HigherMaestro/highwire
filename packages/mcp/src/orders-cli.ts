@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 import { lstatSync } from "node:fs";
-import { agentPaths, AuditLog, describeOrder, holdProcessLock, lockHolder, loadPolicy, OrderBook, OrderRunner, type Order } from "highwire-agent";
+import { agentPaths, AuditLog, describeOrder, formatPrice, holdProcessLock, lockHolder, loadPolicy, OrderBook, OrderRunner, type Order } from "highwire-agent";
 import { serverOptionsFromEnv } from "./env.ts";
 import { createDeps } from "./server.ts";
 import { signerFromEnv } from "./signer-env.ts";
@@ -147,7 +147,7 @@ async function placeLimitBuy(argv: string[], env: Env, io: OrdersIo): Promise<nu
   else if (!r.ok) io.err(`highwire orders limit-buy: ${String(r.body.error)}${r.body.next_step ? `\n${String(r.body.next_step)}` : ""}`);
   else {
     const o = r.body.order as Order & { description: string };
-    io.out(`${o.id}  ${o.description}. Now: ${String((r.body.now as { spotPriceSol?: number })?.spotPriceSol ?? "?")} SOL.`);
+    io.out(`${o.id}  ${o.description}. Now: ${formatPrice((r.body.now as { spotPriceSol?: number } | undefined)?.spotPriceSol)} SOL.`);
     io.out((r.body.runner as { running: boolean }).running ? "A runner is filling orders." : "It fills while `highwire orders run` is running.");
   }
   return r.ok ? 0 : 1;
