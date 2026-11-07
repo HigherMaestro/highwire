@@ -12,9 +12,10 @@ starts as a dry run.
 1. **Launch, once.** `npm run launch` reads `coin.config.json` (name, ticker, description, image, links, first buy) and
    runs `highwire launch … --json`. The description says what the treasury funds. A live launch writes `coin.json`
    (mint, ticker, signature, time).
-2. **Claim every day.** `npm run schedule` places one fee-claim order with no buyback:
-   `highwire orders claim --every-hours 24 --min-sol 0.01`. `npm run orders` (Highwire's order runner) fills it.
-3. **Keep the ledger.** `npm run agent -- --loop` wakes every 6 hours, reads the order's history (`OrderBook` from
+2. **Claim every day.** Once `coin.json` exists, the agent's loop places one fee-claim order with no buyback whenever
+   none is open: `highwire orders claim --every-hours 24 --min-sol 0.01` (`npm run schedule` does the same by hand).
+   Highwire's order runner, which `npm start` runs alongside the loop, fills it.
+3. **Keep the ledger.** The agent's loop (`src/agent.ts --loop`, in `npm start`) wakes every 6 hours, reads the order's history (`OrderBook` from
    `highwire-agent`) and adds each sent claim to `ledger.json`: time, SOL (from the reason, `claimed about <X> SOL`)
    and signatures. The ledger is public information and is committed with the repository.
 4. **Draft payouts, weekly.** On the configured day, the agent turns the SOL claimed since the last payout into a draft,
@@ -88,10 +89,13 @@ The user does this; the agent only explains it:
 1. Fund the wallet with about 0.1 SOL.
 2. Set `"live": true` in the policy and run `npm run launch`. Check `coin.json` and the coin's page.
 3. Add each recipient's address to the policy's `transfer_allowlist`, checking each one with its owner.
+4. Leave `npm start` running, or run `npm run service -- install` on a Mac. Claims and drafts are automatic from
+   here; payouts still wait for `npm run payout`.
 
 ### M3 · Claims and the ledger
 
-- `src/schedule.ts`, run by `npm run schedule`: one fee-claim order, refusing to place a second.
+- `src/order.ts`: one fee-claim order, refusing to place a second. The loop calls it on every wake once `coin.json`
+  exists; `src/schedule.ts` (`npm run schedule`) calls it by hand.
 - `src/ledger.ts`: adds sent claims from the order's history to `ledger.json`, once each (keyed by signature), and
   works out the balance claimed since the last payout. Pure where it can be, with tests: a sent claim, a skipped run,
   a dry run (not added), a repeat (not added twice), an unreadable reason (not added, and a message).

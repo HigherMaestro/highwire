@@ -4,9 +4,11 @@
   "type": "module",
   "description": "{{oneLiner}}",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.12"
   },
   "scripts": {
+    "start": "tsx src/start.ts",
+    "service": "node scripts/service.mjs",
     "setup": "node scripts/setup.mjs",
     "highwire": "node scripts/highwire.mjs",
     "orders": "node scripts/highwire.mjs orders run",

@@ -33,6 +33,8 @@ export interface RunnerOptions {
   feed?: LiveFeed;
   /** The kill switch: while it's on, nothing is tried. */
   stopped?: () => boolean;
+  /** Whether the policy is live now. A timed order whose last run was only a dry run runs again once it is. */
+  live?: () => boolean;
   now?: () => Date;
   log?: (line: string) => void;
   /** How often each order's coin is checked without a hint. Default a minute. */
@@ -49,6 +51,12 @@ export const MAX_ORDER_FAILURES = 5;
 export const MIN_BUYBACK_LAMPORTS = 1_000_000n;
 
 const isPriceOrder = (o: Order) => o.kind === "stop_loss" || o.kind === "take_profit" || o.kind === "limit_buy";
+
+/** A timed order's latest run (a fee claim's claim and buyback share its time) was a dry run. */
+function lastRunWasDry(o: Order): boolean {
+  const at = o.history.at(-1)?.at;
+  return at !== undefined && o.history.some((h) => h.at === at && h.outcome === "dry_run");
+}
 /** The live feed's per-socket channel budget, less room for nothing else. */
 const MAX_HINTED_MINTS = 16;
 
@@ -104,13 +112,15 @@ export class OrderRunner {
     this.wasStopped = false;
 
     const checked = new Set<string>();
+    const live = this.o.live?.() ?? false;
     for (const order of this.open()) {
       if (order.expiresAt && Date.parse(order.expiresAt) <= now.getTime()) {
         await this.o.book.update(order.id, (x) => x.status === "open" && close(x, "expired", "reached its expiry without triggering", now));
         this.log(`order ${order.id} expired: ${describeOrder(order)}`);
         continue;
       }
-      const due = order.nextRunAt !== undefined && Date.parse(order.nextRunAt) <= now.getTime();
+      // Going live shouldn't wait out a day-long interval that a dry run started.
+      const due = (order.nextRunAt !== undefined && Date.parse(order.nextRunAt) <= now.getTime()) || (live && lastRunWasDry(order));
       if (order.kind === "recurring_buy") {
         if (due) await this.fill(order, "buy", solToLamports(order.sol!), undefined);
       } else if (order.kind === "fee_claim") {

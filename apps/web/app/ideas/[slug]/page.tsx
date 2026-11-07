@@ -169,6 +169,11 @@ export default async function IdeaPage({ params }: Props) {
                   <strong>Build.</strong> Open it in Claude Code or any coding agent, and say:
                   <CopyCommand code={idea.prompt} label="Prompt for your coding agent" multiline />
                 </li>
+                <li>
+                  <strong>Run it.</strong> One command runs the whole agent, as a dry run until you set its policy live. On a Mac,{" "}
+                  <code>npm run service -- install</code> keeps it running in the background.
+                  <CopyCommand code="npm start" label="Run the agent" />
+                </li>
               </ol>
             </div>
             <h3 className="idea-other-h">Other ways to start</h3>

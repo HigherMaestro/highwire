@@ -15,9 +15,10 @@ to spend no more compute than the fees have earned, and to show its books.
 
 1. **Launch, once.** As in every Highwire idea: `npm run launch` reads `coin.config.json` and runs
    `highwire launch … --json`; a live launch writes `coin.json` (mint, ticker, signature, time).
-2. **Claim, every day.** `npm run schedule` places a fee-claim order with no buyback:
-   `highwire orders claim --every-hours 24 --min-sol 0.01`. `npm run orders` fills it.
-3. **Book the income.** `npm run agent -- --loop` reads the fee-claim order's history (`OrderBook` from
+2. **Claim, every day.** Once `coin.json` exists, the agent's loop places a fee-claim order with no buyback whenever
+   none is open: `highwire orders claim --every-hours 24 --min-sol 0.01` (`npm run schedule` does it by hand).
+   Highwire's order runner, which `npm start` runs alongside the loop, fills it.
+3. **Book the income.** The agent's loop (`src/agent.ts --loop`, in `npm start`) reads the fee-claim order's history (`OrderBook` from
    `highwire-agent`). Each sent claim's reason is `claimed about <X> SOL`; each one becomes a ledger entry, once.
 4. **Spend within budget.** The ledger converts SOL to the provider's currency at a price the user sets in
    `compute.config.json` (or from a price source the user picks), and allows spending up to `budget_pct` of what came
@@ -84,10 +85,11 @@ Done when: the tests pass and `npm run agent` with the fake provider prints what
 
 ### M3 · Going live and claiming
 
-The user funds the wallet, sets `"live": true` and runs `npm run launch`. Then:
+The user funds the wallet, sets `"live": true`, runs `npm run launch`, and leaves `npm start` running (or runs
+`npm run service -- install` on a Mac). Then:
 
-- `src/schedule.ts`, run by `npm run schedule`: places the fee-claim order (24 hours, 0.01 SOL minimum, no buyback)
-  unless one is already open.
+- `src/order.ts`: places the fee-claim order (24 hours, 0.01 SOL minimum, no buyback) unless one is already open. The
+  loop calls it on every wake once `coin.json` exists; `src/schedule.ts` (`npm run schedule`) calls it by hand.
 - The agent books each sent claim as income.
 
 Done when: in a dry run, `npm run schedule` places one order and refuses a second; booking from a made-up history adds

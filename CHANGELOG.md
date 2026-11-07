@@ -4,6 +4,15 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Every launch idea runs with one command.** `npm start` runs the whole agent in one process: Highwire's order
+  runner and the agent's own loop, stopping and restarting together. `npm run service -- install` keeps it running in
+  the background on a Mac, starting at login. While the policy is a dry run everything is simulated; once a person sets
+  it live, the running agent acts without a restart. Ideas place their standing orders from the loop when none is open,
+  so a person's only steps are setup, going live and any one-off launch. Templates read an optional `.env`, for a
+  `SOLANA_RPC_URL` that won't rate-limit an agent running all day (`.env.example` explains it), and need Node 20.12.
+- **Going live doesn't wait out a dry run.** A fee claim or recurring buy whose last run was a dry run used to wait its
+  whole interval, often a day, after the policy went live. `highwire orders run` now runs it straight away.
+
 - **Link previews of their own.** Every page on highwire.fun used to hand X and other apps the homepage's title,
   description, address and card, so a link to an idea previewed as the homepage. Each page now has its own, and each
   idea gets a card drawn from its idea.json on the wire: its name and difficulty, what the agent does in three or four

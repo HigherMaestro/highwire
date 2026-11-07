@@ -114,7 +114,9 @@ cd buyback-coin && npm install && npm run setup
 ```
 
 Then read `PRD.md` and `AGENTS.md` in it and build milestone 1. Each idea has its own wallet and policy, in
-`~/.highwire/<idea>/`, and stays a dry run until a person sets it live. Every spec is also at
+`~/.highwire/<idea>/`, and stays a dry run until a person sets it live. `npm start` runs the finished agent in one
+process (its order runner and its own loop), and `npm run service -- install` keeps it running on a Mac; it picks up
+the policy going live by itself. Every spec is also at
 `https://highwire.fun/ideas/<idea>/prd.md`.
 
 ## Launch with a person

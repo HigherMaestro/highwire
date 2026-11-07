@@ -114,6 +114,8 @@ Next:
 Then open it in your coding agent and say:
   ${idea.prompt}
 
+Once it's built, \`npm start\` runs the whole agent, a dry run until you set its policy live.
+
 The idea, with its costs and risks: ${ideaUrl(SITE_URL, idea.slug)}`);
   return 0;
 }

@@ -12,15 +12,19 @@ higher.fun: launch, earn, reinvest, report.
 1. **Launch, once.** `npm run launch` reads `coin.config.json` (name, ticker, description, image, links, first buy) and
    runs `highwire launch … --json`. A live launch writes `coin.json` (mint, ticker, signature, time) to the repository:
    it's public information, and every later step reads the mint from it.
-2. **Schedule the claims, once.** `npm run schedule` places a fee-claim order:
-   `highwire orders claim --every-hours 24 --min-sol 0.01 --buyback-pct 50 --mint <mint> --slippage-bps 500`. It first
-   checks the order book (`OrderBook` from `highwire-agent`, at `~/.highwire/buyback-coin/orders.json`) and does nothing
-   if an open fee-claim order is already there.
-3. **Fill it.** `npm run orders` (Highwire's order runner) runs continuously. Every 24 hours, if at least 0.01 SOL of
-   fees is waiting, it claims them, then buys the coin with 50% of what came in. Both steps pass the policy again.
-4. **Report.** `npm run agent -- --loop` wakes every few hours, reads the fee-claim order's history, and posts once for
-   each new run where the claim was sent. Each history entry has `at`, `step` (`claim` or `buyback`), `outcome` and
-   `reason`. A sent claim's reason is `claimed about <X> SOL`, and a sent buyback's is `bought back with <Y> SOL`.
+2. **Schedule the claims.** Once `coin.json` exists, the agent's loop places a fee-claim order whenever none is open:
+   `highwire orders claim --every-hours 24 --min-sol 0.01 --buyback-pct 50 --mint <mint> --slippage-bps 500`. It checks
+   the order book first (`OrderBook` from `highwire-agent`, at `~/.highwire/buyback-coin/orders.json`), so a restart
+   never places a second. `npm run schedule` does the same by hand.
+3. **Fill it.** Highwire's order runner, which `npm start` runs alongside the loop, claims every 24 hours if at least
+   0.01 SOL of fees is waiting, then buys the coin with 50% of what came in. Both steps pass the policy again.
+4. **Report.** The loop wakes every 10 minutes, reads the fee-claim order's history, and posts once for each new run
+   where the claim was sent, in the agent's own voice: it launched the coin and owns the wallet. Each history entry has
+   `at`, `step` (`claim` or `buyback`), `outcome` and `reason`. A sent claim's reason is `claimed about <X> SOL`, and a
+   sent buyback's is `bought back with <Y> SOL`.
+
+`npm start` runs all of it in one process, and `npm run service -- install` keeps it running on a Mac. Only the launch
+is a separate command, run once by the user.
 
 ## Policy
 
@@ -71,24 +75,26 @@ The user does this; the agent only explains it:
 2. Set `"live": true` in the policy.
 3. Run `npm run launch`, check `coin.json`, and open the coin's page on higher.fun.
 4. Add the mint to the policy's `coins.allow`.
+5. Leave `npm start` running, or run `npm run service -- install` on a Mac. Everything after the launch is automatic.
 
 ### M3 · Daily claims and buybacks
 
-- `src/schedule.ts`, run by `npm run schedule`: reads the mint from `coin.json`, checks the order book for an open
-  fee-claim order, and if there's none, places one with `highwire orders claim` (24 hours, 0.01 SOL minimum, 50%
-  buyback, 500 bps slippage). Prints the order.
-- The README explains keeping `npm run orders` running (a terminal on a machine that stays on, or a process manager).
+- `src/order.ts`: reads the mint from `coin.json`, checks the order book for an open fee-claim order, and if there's
+  none, places one with `highwire orders claim` (24 hours, 0.01 SOL minimum, 50% buyback, 500 bps slippage). The
+  loop in `src/agent.ts` calls it on every wake once `coin.json` exists; `src/schedule.ts` (`npm run schedule`) calls
+  it by hand and prints the order.
 
 Done when: `npm run schedule` places one order in a dry run and refuses to place a second; `npm run highwire -- orders
-list` shows it.
+list` shows it; `npm start` places it too when none is open, and never a second.
 
 ### M4 · Posting what it did
 
 - `src/report.ts`: given the order's history and the time of the last post, returns the posts to make. One post per run
-  whose claim was sent, for example: `Claimed 0.41 SOL of creator fees today and spent 0.2 SOL buying back $CAT.` When
-  the buyback was skipped or failed, it says so plainly: `Claimed 0.004 SOL of creator fees; too little to buy back
-  this time.` Amounts come from the history's reasons; if a reason can't be read, it posts nothing for that run.
-- `src/agent.ts` with `--loop`: every 6 hours, reads the history (`OrderBook`), builds the posts, and posts each with
+  whose claim was sent, in the agent's own voice, for example: `I claimed 0.41 SOL of my $CAT creator fees and spent
+  0.2 SOL buying $CAT back.` When the buyback was skipped or failed, it says so plainly: `I claimed 0.004 SOL of my $CAT
+  creator fees, too little to buy back this time.` Amounts come from the history's reasons; if a reason can't be read,
+  it posts nothing for that run.
+- `src/agent.ts` with `--loop`: every 10 minutes, reads the history (`OrderBook`), builds the posts, and posts each with
   `highwire post --mint <mint> "<text>"`, recording the last posted run's time in
   `~/.highwire/buyback-coin/agent-state.json` so a restart never posts the same run twice.
 - Unit tests for `report.ts` with made-up histories: claim and buyback sent; buyback skipped; claim skipped (no post);

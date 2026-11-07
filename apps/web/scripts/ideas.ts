@@ -67,6 +67,18 @@ async function check(only?: string) {
         const tools = sh("npx", ["tsx", "src/check-tools.ts"], { cwd: repo, env });
         row("src/tools.ts calls Highwire's tools for that wallet", tools.ok && tools.out.includes('{"ok":true,"live":false}'), tools.ok ? tools.out.slice(-300) : tools.err.slice(-400));
         rmSync(join(repo, "src", "check-tools.ts"));
+        // npm start, for a few seconds: both halves start for this wallet, as a dry run, with the RPC from .env.
+        writeFileSync(join(repo, ".env"), "SOLANA_RPC_URL=https://api.mainnet-beta.solana.com\n");
+        const startEnv = { ...env };
+        delete startEnv.SOLANA_RPC_URL;
+        const start = spawnSync(join(repo, "node_modules", ".bin", "tsx"), ["src/start.ts"], { cwd: repo, env: startEnv, encoding: "utf8", timeout: 20_000, killSignal: "SIGTERM" });
+        const startOut = `${start.stdout ?? ""}${start.stderr ?? ""}`;
+        row(
+          "npm start runs the order runner and the loop, as a dry run, with .env's RPC",
+          /The policy is a dry run/.test(startOut) && /Filling orders for \S+ on mainnet, dry run/.test(startOut) && !/public RPC/.test(startOut),
+          startOut.slice(-400),
+        );
+        rmSync(join(repo, ".env"));
         const help = sh("npm", ["run", "highwire", "--", "--help"], { cwd: repo, env });
         row("npm run highwire reaches Highwire's command line", help.ok && help.out.includes("highwire post"));
         writeFileSync(join(repo, "oops-keypair.json"), JSON.stringify(Array.from({ length: 64 }, (_, i) => i)));

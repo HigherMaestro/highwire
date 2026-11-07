@@ -348,6 +348,32 @@ test("a fee claim claims on schedule, then buys back its share of what came in",
   assert.equal(after.runsDone, 2);
 });
 
+test("a timed order that only dry-ran runs as soon as the policy goes live, not a whole interval later", async () => {
+  const c = clock();
+  const book = tmpBook(c.now);
+  const m = fakeMarket();
+  const dry = (): ExecuteResult => ({ status: "dry_run", wallet: WALLET, cluster: "mainnet", transactions: [], summary: [], spentSol: 0, dayLeftSol: 1 });
+  m.claimNext = dry;
+  m.next = dry;
+  let live = false;
+  const o = await book.place(claimer(), 5);
+  const r = runner(book, m, c, { live: () => live });
+  await r.tick();
+  assert.deepEqual(book.get(o.id)!.history.map((h) => [h.step, h.outcome]), [["claim", "dry_run"], ["buyback", "dry_run"]]);
+  c.advance(3_600_000);
+  await r.tick();
+  assert.equal(m.claims.length, 1, "still a dry run: it waits for its interval");
+
+  live = true;
+  m.claimNext = fakeMarket().claimNext;
+  m.next = fakeMarket().next;
+  await r.tick();
+  assert.equal(m.claims.length, 2, "live now: it runs straight away");
+  assert.deepEqual(book.get(o.id)!.history.slice(-2).map((h) => [h.step, h.outcome]), [["claim", "sent"], ["buyback", "sent"]]);
+  await r.tick();
+  assert.equal(m.claims.length, 2, "a real run waits for the next interval again");
+});
+
 test("a fee claim skips a dusting, notes it once, and buys back nothing too small", async () => {
   const c = clock();
   const book = tmpBook(c.now);

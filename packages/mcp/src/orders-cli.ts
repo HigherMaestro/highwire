@@ -183,6 +183,13 @@ async function runRunner(env: Env, paths: ReturnType<typeof agentPaths>, book: O
       market: orderMarket(deps, signer),
       feed: deps.live,
       stopped,
+      live: () => {
+        try {
+          return loadPolicy(paths.policy).live;
+        } catch {
+          return false;
+        }
+      },
       log: (l) => io.err(`${new Date().toISOString().slice(11, 19)}  ${l}`),
     });
     await runner.run(io.signal);

@@ -42,8 +42,8 @@ nothing; buying starts as a dry run.
    `take_profit` on the position with `place_order`, at the buy's price less `stop_pct` and plus `take_pct`, and when
    one fills it cancels the other.
 
-`npm run scout` runs all of it until stopped. `npm run orders` (Highwire's order runner) fills the guards, so it runs
-alongside whenever buying is on.
+The scout is the agent's loop, `src/agent.ts --loop`. `npm start` runs it together with Highwire's order runner, which
+fills the guards when buying is on, and `npm run service -- install` keeps both running on a Mac.
 
 ## Policy
 
@@ -80,10 +80,10 @@ alongside whenever buying is on.
 - `src/watch.ts`: the feed with the `list_coins` fallback, `seen.json`, and reconnects with backoff. Back off for a
   minute when higher.fun answers 429 or 403.
 - `src/score.ts`: pure, from the reads to `{ pass, reasons, nearMiss }`.
-- `npm run scout` prints one line per coin it scores.
+- `npm start` (the scout's loop) prints one line per coin it scores.
 
 Done when: unit tests cover `score.ts` with made-up coins (each rule failing alone, a pass, a HIGH_RISK verdict), and
-`npm run scout` prints scores for real launches within an hour of starting.
+`npm start` prints scores for real launches within an hour of starting.
 
 ### M2 · The daily report
 
@@ -109,7 +109,7 @@ The user does this; the agent only explains it:
 
 1. Read at least a week of reports. If the passes don't look worth buying, keep buying off.
 2. Fund the wallet with the most you're willing to lose (about 0.3 SOL to start).
-3. Set `"live": true` in the policy, and keep `npm run orders` running with `npm run scout`.
+3. Set `"live": true` in the policy, and leave `npm start` running. It picks up the change by itself.
 
 ## Outside services
 
