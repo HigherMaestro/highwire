@@ -333,7 +333,9 @@ test("a fee claim claims on schedule, then buys back its share of what came in",
   assert.equal(after.status, "open");
   assert.equal(after.runsDone, 1);
   assert.deepEqual(after.history.map((h) => [h.step, h.outcome]), [["claim", "sent"], ["buyback", "sent"]]);
-  assert.match(after.history[0]!.reason!, /claimed about 0.1 SOL/);
+  // Idea templates read these amounts from the history (ideas/*/PRD.md): keep the wording.
+  assert.equal(after.history[0]!.reason, "claimed about 0.1 SOL");
+  assert.equal(after.history[1]!.reason, "bought back with 0.05 SOL");
   assert.equal(after.nextRunAt, "2026-11-06T18:00:00.000Z");
   // Not due again until six hours on.
   c.advance(3_600_000);

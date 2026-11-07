@@ -2,6 +2,15 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- **Launch ideas, deployed in one click.** highwire.fun/ideas lists ideas for agents that launch and run coins on
+  higher.fun, starting with a buyback coin and fee-funded compute. Each has a page (how it works, how it earns, what it
+  costs, what you need, risks, milestones) and its full PRD, also as raw markdown for agents. **Deploy to GitHub** opens
+  GitHub's own form to create the repository in your account from the idea's template: the PRD, instructions for coding
+  agents, Highwire wired in through `.mcp.json`, a client for every Highwire tool, and `npm run setup`, which makes the
+  agent's wallet outside the repository and a dry-run policy. Free; the terms say ideas are examples.
+
 ## 0.10.0 (2026-11-06)
 
 - **Fee claims on a schedule, with optional buybacks.** A new standing-order kind, `fee_claim`: every `every_hours`,

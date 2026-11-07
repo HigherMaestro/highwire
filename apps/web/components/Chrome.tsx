@@ -19,6 +19,9 @@ export function SiteHeader() {
                 <a href="/docs">Docs</a>
               </li>
               <li>
+                <a href="/ideas">Ideas</a>
+              </li>
+              <li>
                 <a href="/fees">Fees</a>
               </li>
               <li>
@@ -61,6 +64,9 @@ export function SiteFooter() {
             </li>
             <li>
               <a href="/docs#signing">Signing</a>
+            </li>
+            <li>
+              <a href="/ideas">Launch ideas</a>
             </li>
             <li>
               <a href="/fees">Ecosystem fees</a>

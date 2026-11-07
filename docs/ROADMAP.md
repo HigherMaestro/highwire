@@ -126,10 +126,12 @@ with the `highwire` memo. The day's limit counted 0.245 SOL, what the wallet act
 - **Launch on your own** (done in 0.8.0): `highwire wallet new`, `policy init --launch`, `launch` and `claim`, and
   highwire.fun/skill.md for agents to follow. Next: sponsored launches, where a Highwire wallet pays and the agent's
   wallet is the creator, if it's worth funding.
-- **Limit buys** (done, unreleased): a `limit_buy` standing order buys once the price falls to a trigger.
-- **Fee claims on a schedule** (done, unreleased): a `fee_claim` standing order claims creator fees once enough is
+- **Launch ideas** (M1 done): `/ideas`, with one-click template repositories. Next: launch scout, community treasury
+  and dip buyer, and `npx highwire-mcp new <idea>` (docs/ideas-prd.md).
+- **Limit buys** (done in 0.10.0): a `limit_buy` standing order buys once the price falls to a trigger.
+- **Fee claims on a schedule** (done in 0.10.0): a `fee_claim` standing order claims creator fees once enough is
   waiting and can buy the coin back with a share of each claim; `highwire orders claim` places one.
-- **Posting** (done, unreleased): `post_comment` and `post_chat` through the local signer, inside the policy's
+- **Posting** (done in 0.10.0): `post_comment` and `post_chat` through the local signer, inside the policy's
   `posts` section. First live comment, 2026-11-06: on $LGTM from its creator's wallet. Asking higher.fun for an agent label on posts would help people tell agents apart.
 - ~~**Publishing**~~ Done 2026-11-06: `highwire-core`, `highwire-agent` and `highwire-mcp` on npm, and the MCP registry
   listing `fun.highwire/highwire` from 0.4.1 (npm package and hosted endpoint), proved by highwire.fun's domain key.

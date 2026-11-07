@@ -16,3 +16,4 @@ packages/*/LICENSE
 # never commit keypairs
 *keypair*.json
 id.json
+__pycache__/

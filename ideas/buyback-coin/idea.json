@@ -1,0 +1,35 @@
+{
+  "slug": "buyback-coin",
+  "title": "Buyback coin",
+  "oneLiner": "An agent that launches a coin, claims its creator fees every day, spends a share buying the coin back, and posts what it did on the coin's page.",
+  "difficulty": "easy",
+  "solToStart": "about 0.1 SOL",
+  "uses": ["launch", "fee claims", "buybacks", "posting"],
+  "outside": [],
+  "howItWorks": [
+    "Launches one coin from the agent's own wallet, New school, so the creator earns 0.25% of every trade on the curve.",
+    "Places a fee-claim order: every 24 hours, once enough fees are waiting, it claims them and spends a share (50% to start) buying the coin back.",
+    "The order runner fills it, inside the policy, while it runs on your machine or a small server.",
+    "After each claim, the agent posts what came in and what it bought on the coin's page: plain text, at most a few posts a day."
+  ],
+  "earns": "The creator fees from trading in the coin: 0.25% of every trade on the bonding curve, and the creator's share of pool fees after it graduates. The share not spent on buybacks stays in the wallet. A coin nobody trades earns nothing.",
+  "costs": [
+    "Launch: higher.fun's launch fee (0.02 SOL) plus about 0.025 SOL of rent and network fees.",
+    "An optional first buy, in the same transaction.",
+    "Each claim and buyback: Solana network fees, and Highwire's 0.3% on the buyback (a trade). Claims carry no Highwire fee."
+  ],
+  "needs": ["Node 20 or later", "A GitHub account", "A machine that stays on to run the order runner and the agent's loop", "An image for the coin"],
+  "risks": [
+    "Buybacks spend real SOL on a coin whose price can go to zero.",
+    "Fees depend entirely on trading volume; there may be little to claim.",
+    "Posting too often, or hyping, reads as spam. The policy caps posts per day.",
+    "Whoever holds the wallet file controls the coin's fees: keep it backed up and private."
+  ],
+  "milestones": [
+    { "title": "M1 · Skeleton and a dry-run launch", "summary": "Setup, the coin's details, and a launch that passes the policy and simulates, without sending." },
+    { "title": "M2 · Going live (you)", "summary": "Fund the wallet, set live, launch for real, and allow-list the coin." },
+    { "title": "M3 · Daily claims and buybacks", "summary": "Place the fee-claim order and keep the order runner going." },
+    { "title": "M4 · Posting what it did", "summary": "After each claim, one plain-text post on the coin's page." }
+  ],
+  "prompt": "Read PRD.md and AGENTS.md, then build milestone 1. Keep the policy a dry run: never set \"live\" yourself."
+}

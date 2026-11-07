@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 
-// Just enough Markdown for CHANGELOG.md: ## and ### headings, paragraphs,
-// "- " lists (with indented continuation lines), `code`, **bold** and
-// [links](url). Builds React nodes, never raw HTML.
+// Just enough Markdown for CHANGELOG.md and the ideas' PRDs: ## and ###
+// headings, paragraphs, "- " and "1. " lists (with indented continuation
+// lines), fenced code blocks, `code`, **bold** and [links](url). Builds React
+// nodes, never raw HTML.
 
 function inline(text: string, key: string): ReactNode[] {
   const out: ReactNode[] = [];
@@ -30,22 +31,35 @@ export function Markdown({ source }: { source: string }) {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   let para: string[] = [];
   let list: string[] = [];
+  let ordered = false;
+  let code: string[] | null = null;
   const flush = () => {
     const k = `b${blocks.length}`;
     if (para.length) blocks.push(<p key={k}>{inline(para.join(" "), k)}</p>);
     if (list.length) {
-      blocks.push(
-        <ul key={`${k}l`}>
-          {list.map((item, j) => (
-            <li key={j}>{inline(item, `${k}-${j}`)}</li>
-          ))}
-        </ul>,
-      );
+      const items = list.map((item, j) => <li key={j}>{inline(item, `${k}-${j}`)}</li>);
+      blocks.push(ordered ? <ol key={`${k}l`}>{items}</ol> : <ul key={`${k}l`}>{items}</ul>);
     }
     para = [];
     list = [];
   };
   for (const line of lines) {
+    if (code) {
+      if (/^```/.test(line)) {
+        blocks.push(
+          <pre key={`c${blocks.length}`}>
+            <code>{code.join("\n")}</code>
+          </pre>,
+        );
+        code = null;
+      } else code.push(line);
+      continue;
+    }
+    if (/^```/.test(line)) {
+      flush();
+      code = [];
+      continue;
+    }
     if (/^# /.test(line)) continue;
     const h = /^(#{2,3}) (.*)$/.exec(line);
     if (h) {
@@ -61,9 +75,11 @@ export function Markdown({ source }: { source: string }) {
           <h3 key={k}>{inline(text, k)}</h3>
         ),
       );
-    } else if (/^- /.test(line)) {
-      if (para.length) flush();
-      list.push(line.slice(2));
+    } else if (/^(- |\d+\. )/.test(line)) {
+      const isOrdered = !line.startsWith("- ");
+      if (para.length || (list.length && isOrdered !== ordered)) flush();
+      ordered = isOrdered;
+      list.push(line.replace(/^(- |\d+\. )/, ""));
     } else if (/^\s+\S/.test(line) && list.length) {
       list[list.length - 1] += ` ${line.trim()}`;
     } else if (line.trim() === "") {

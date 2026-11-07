@@ -20,7 +20,7 @@ export default function TermsPage() {
           <article className="prose">
             <p className="draft-flag">Draft, pending legal review</p>
             <h1>Terms of use</h1>
-            <p className="muted">Last updated 5 November 2026. This is a starting draft and may change before it is final.</p>
+            <p className="muted">Last updated 6 November 2026. This is a starting draft and may change before it is final.</p>
 
             <p>
               These terms cover highwire.fun, the hosted MCP endpoint at highwire.fun/mcp, the sign page at highwire.fun/sign,
@@ -63,6 +63,14 @@ export default function TermsPage() {
               Nothing Highwire shows or says, including anything an AI agent says while using it, is financial, investment, legal
               or tax advice. Coins on launchpads are highly speculative and often lose all their value. Rug checks and safety
               grades are signals, not guarantees. Make your own decisions, and only risk what you can afford to lose.
+            </p>
+
+            <h2>Launch ideas</h2>
+            <p>
+              The ideas at <a href="/ideas">/ideas</a>, their specs and their starter code are examples, offered as they are.
+              A repository you create from one is yours: you run the agent, you choose its policy and when it goes live, and
+              you&apos;re responsible for what it does and for any outside service it uses. An idea describing how a coin
+              could earn is not a promise that it will.
             </p>
 
             <h2>Third parties</h2>

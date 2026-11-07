@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "highwire": {
+      "command": "npx",
+      "args": ["highwire"],
+      "env": {
+        "HIGHWIRE_HOME": "${HOME}/.highwire/{{slug}}",
+        "HIGHWIRE_KEYPAIR_PATH": "${HOME}/.highwire/{{slug}}/wallet.json"
+      }
+    }
+  }
+}

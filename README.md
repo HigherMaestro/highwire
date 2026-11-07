@@ -210,6 +210,12 @@ creator, so the creator fees go to it. A retry with the same wallet, name, ticke
 launching a second one. `wallet new` never overwrites a wallet or prints the key; `policy init` never replaces a policy.
 `wallet`, `launch` and `claim` use `HIGHWIRE_KEYPAIR_PATH` instead of `wallet.json` when it's set.
 
+### Launch ideas
+
+[highwire.fun/ideas](https://highwire.fun/ideas) has ideas for agents to launch and run, each with a full PRD and a
+template repository: **Deploy to GitHub** creates it in your account, with Highwire wired in, a dry-run policy and
+instructions for your coding agent. The ideas and the starter live in [ideas/](ideas).
+
 ### Local signer
 
 Off unless you turn it on, and never on the hosted endpoint. It signs only inside a policy you write in
@@ -282,7 +288,8 @@ An npm workspaces monorepo.
 | [packages/core](packages/core) | `highwire-core`: the higher.fun API client, constants, unit formatting, the rug check, and the quote and transaction builders |
 | [packages/agent](packages/agent) | `highwire-agent`: the opt-in local signer: the policy, the keypair loader, the audit log and the executor |
 | [packages/mcp](packages/mcp) | `highwire-mcp`: the MCP server, the `highwire` stdio bin and a stateless HTTP handler |
-| [apps/web](apps/web) | The Next.js site: the sign page at `/sign`, `/docs`, `/changelog`, `/terms`, `/privacy`, the hosted MCP at `/mcp` and `GET /api/health` |
+| [apps/web](apps/web) | The Next.js site: the sign page at `/sign`, `/docs`, `/ideas`, `/fees`, `/changelog`, `/terms`, `/privacy`, the hosted MCP at `/mcp` and `GET /api/health` |
+| [ideas](ideas) | Launch ideas: the starter skeleton and one folder per idea, assembled into template repositories |
 
 ## Development
 

@@ -43,6 +43,8 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/mcp/scripts/simulate.ts` | `npm run simulate`: builds and simulates trades, launches and claims on mainnet and devnet |
 | `packages/mcp/scripts/rehearse.ts` | `npm run rehearse`: the execute tools, live, for a public wallet on mainnet and devnet, with the send replaced by a simulation of the signed bytes |
 | `packages/core/test/fixtures/` | recorded mainnet responses the transaction tests replay; re-record with `npm run record-fixtures -w highwire-core` |
+| `ideas/` | launch ideas: `starter/` (the skeleton every template gets) and one folder per idea (`idea.json`, `PRD.md`, `policy.example.json`). `docs/ideas-prd.md` is the spec |
+| `apps/web/lib/ideas.ts`, `apps/web/app/ideas/`, `apps/web/scripts/ideas.ts` | reading and assembling ideas, `/ideas` and `/ideas/<slug>` (plus `prd.md`), and `npm run ideas -w highwire-web -- assemble\|check\|sync` |
 | `brand/` | logo, icons, social images and colour tokens. `brand/README.md` says which file goes where; regenerate with `brand/scripts/build.py`, never by hand-editing the exports |
 
 ## Conventions
@@ -116,6 +118,10 @@ Streamable HTTP. An npm workspaces monorepo. Read
   memory before using a Next API. `next build` and `next dev` share `apps/web/.next`: if dev fails with a
   `next/font` "Module not found" error, stop it, delete `apps/web/.next` and start it again.
 - **Dependencies:** pin exact versions, at least two weeks old.
+- **Launch ideas** are templates other people run with real money. Every idea's starting policy is a mainnet dry run
+  with only the actions it needs and no transfers; every PRD has the shared sections (`PRD_SECTIONS`) and shows its
+  policy; templates never ship a key or a placeholder left unfilled, and pin the current Highwire. Keys live outside
+  the generated repository. `apps/web/test/ideas.test.ts` checks all of this.
 - **Original code only:** write it yourself rather than porting another project's code, and don't name or credit
   other agent-tooling projects as inspiration, in the repo or on the site. Naming the platforms Highwire works with
   (higher.fun, Raydium, Solana) is fine.
@@ -129,9 +135,12 @@ root `server.json` (both places) and, once npm shows it, log in and publish in o
 `mcp-publisher login http --domain highwire.fun --private-key …` then `mcp-publisher publish`. Until npm shows the
 version the registry answers 400, and after the login expires 401: the registry listing is `fun.highwire/highwire`, proved by
 `apps/web/public/.well-known/mcp-registry-auth`. The domain key's private half stays with the maintainer, never in the repo.
+Once npm shows the release, sync the launch-idea templates so they pin it:
+`GH_TOKEN=… npm run ideas -w highwire-web -- sync` (with `--dry-run` first to see what changes).
 
 ## Before you say it's done
 
 Run `npm run typecheck`, `npm test` and `npm run build` from the root. Run `npm run smoke` too, which needs network
-access and starts `next dev`, and `npm run simulate` when you touch the transaction code (`npm run rehearse -w highwire-mcp` when you touch the signer). If the API changed shape, update `packages/core/src/higher/api.ts` and
+access and starts `next dev`, and `npm run simulate` when you touch the transaction code (`npm run rehearse -w highwire-mcp` when you touch the signer, and `npm run ideas -w highwire-web -- check` when you touch
+`ideas/`). If the API changed shape, update `packages/core/src/higher/api.ts` and
 docs/higher-reference.md together.
