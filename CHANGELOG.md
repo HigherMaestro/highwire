@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.11.1 (2026-11-07)
 
 - **Every launch idea runs with one command.** `npm start` runs the whole agent in one process: Highwire's order
   runner and the agent's own loop, stopping and restarting together. `npm run service -- install` keeps it running in
