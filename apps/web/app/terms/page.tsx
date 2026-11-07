@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
-import { DONATION_WALLET, REPO_URL } from "../../lib/site.ts";
+import { DONATION_WALLET, REPO_URL, pageMetadata } from "../../lib/site.ts";
 
 export const metadata: Metadata = {
-  title: "Terms",
-  description: "The terms for using Highwire, its hosted MCP endpoint and its sign page. Draft, pending legal review.",
-  alternates: { canonical: "/terms" },
+  ...pageMetadata({
+    title: "Terms",
+    description: "The terms for using Highwire, its hosted MCP endpoint and its sign page. Draft, pending legal review.",
+    path: "/terms",
+  }),
 };
 
 // A plain-language starting draft, based on a standard open-source software and

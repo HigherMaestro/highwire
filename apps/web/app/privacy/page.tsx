@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
-import { REPO_URL } from "../../lib/site.ts";
+import { REPO_URL, pageMetadata } from "../../lib/site.ts";
 
 export const metadata: Metadata = {
-  title: "Privacy",
-  description: "What Highwire's site, hosted endpoint and sign page record. Draft, pending legal review.",
-  alternates: { canonical: "/privacy" },
+  ...pageMetadata({
+    title: "Privacy",
+    description: "What Highwire's site, hosted endpoint and sign page record. Draft, pending legal review.",
+    path: "/privacy",
+  }),
 };
 
 // A plain-language starting draft, based on a standard website privacy notice

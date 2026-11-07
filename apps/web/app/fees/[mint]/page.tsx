@@ -4,6 +4,7 @@ import { coinUrl } from "highwire-core";
 import { SiteFooter, SiteHeader } from "../../../components/Chrome.tsx";
 import { SplitBar } from "../../../components/fees/SplitBar.tsx";
 import { MODE_LABEL, RECIPIENTS, coinFees, coinLabel, isMint, sol, updatedAt, usd } from "../../../lib/fees.ts";
+import { FEES_CARD, pageMetadata } from "../../../lib/site.ts";
 
 export const revalidate = 600;
 
@@ -19,11 +20,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = isMint(mint) ? await coinFees(mint) : null;
   const coin = data?.coins[0];
   const ticker = coin ? coinLabel(coin).ticker : null;
-  return {
+  return pageMetadata({
     title: ticker ? `$${ticker} fees` : "Coin fees",
-    description: coin ? `The fees ${ticker ? `$${ticker}` : "this coin"} has paid on higher.fun, and who got them.` : undefined,
-    alternates: { canonical: `/fees/${mint}` },
-  };
+    description: `The fees ${ticker ? `$${ticker}` : "this coin"} has paid on higher.fun, and who got them.`,
+    path: `/fees/${mint}`,
+    card: FEES_CARD,
+  });
 }
 
 const PHASE = { curve: "Bonding curve", pool: "Raydium pool" } as const;

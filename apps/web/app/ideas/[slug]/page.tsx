@@ -9,8 +9,9 @@ import { SectionNav } from "../../../components/ideas/SectionNav.tsx";
 import { CopyCommand } from "../../../components/CopyCommand.tsx";
 import { IdeaCalculator, type MarketContext } from "../../../components/ideas/IdeaCalculator.tsx";
 import { agentPrompt, assemble, defaultIdeasDir, deployUrl, fileTree, getIdea, listIdeas, newCommand, readPrd, startCommand } from "../../../lib/ideas.ts";
+import { ideaCardFor } from "../../../lib/idea-card.tsx";
 import { Markdown } from "../../../lib/markdown.tsx";
-import { SITE_URL } from "../../../lib/site.ts";
+import { SITE_URL, pageMetadata } from "../../../lib/site.ts";
 
 export const dynamicParams = false;
 // The market numbers that anchor the calculator are read again at most hourly.
@@ -25,7 +26,7 @@ type Props = { params: Promise<{ slug: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const idea = getIdea((await params).slug);
   if (!idea) return {};
-  return { title: `${idea.title}: launch idea`, description: idea.oneLiner, alternates: { canonical: `/ideas/${idea.slug}` } };
+  return pageMetadata({ title: `${idea.title}: launch idea`, description: idea.oneLiner, path: `/ideas/${idea.slug}`, card: ideaCardFor(idea.slug) });
 }
 
 /** Real higher.fun volumes and the SOL price, for scale. Best effort: the calculator works without them. */

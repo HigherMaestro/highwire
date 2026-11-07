@@ -3,11 +3,14 @@ import { join } from "node:path";
 import type { Metadata } from "next";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { Markdown } from "../../lib/markdown.tsx";
+import { pageMetadata } from "../../lib/site.ts";
 
 export const metadata: Metadata = {
-  title: "Changelog",
-  description: "Every Highwire release: the MCP server, highwire-core and the site.",
-  alternates: { canonical: "/changelog" },
+  ...pageMetadata({
+    title: "Changelog",
+    description: "Every Highwire release: the MCP server, highwire-core and the site.",
+    path: "/changelog",
+  }),
 };
 
 /** The repo's CHANGELOG.md, read at build time. `next` runs from apps/web. */

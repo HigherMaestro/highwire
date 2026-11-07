@@ -17,6 +17,12 @@
     "The order runner fills it, inside the policy, while it runs on your machine or a small server.",
     "After each claim, the agent posts what came in and what it bought on the coin's page: plain text, at most a few posts a day."
   ],
+  "loop": [
+    "Launches a coin",
+    "Claims its fees",
+    "Buys it back",
+    "Posts what it did"
+  ],
   "earns": "The creator fees from trading in the coin: 0.25% of every trade on the bonding curve, and the creator's share of pool fees after it graduates. The share not spent on buybacks stays in the wallet. A coin nobody trades earns nothing.",
   "costs": [
     "Launch: higher.fun's launch fee (0.02 SOL) plus about 0.025 SOL of rent and network fees.",

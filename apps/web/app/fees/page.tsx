@@ -5,13 +5,17 @@ import { FeeTable, type FeeRow } from "../../components/fees/FeeTable.tsx";
 import { FeeFlow } from "../../components/fees/FeeFlow.tsx";
 import { SplitBar } from "../../components/fees/SplitBar.tsx";
 import { MODE_LABEL, allFees, coinLabel, flowScenarios, pctOf, sol, updatedAt, usd } from "../../lib/fees.ts";
+import { FEES_CARD, pageMetadata } from "../../lib/site.ts";
 
 export const revalidate = 600;
 
 export const metadata: Metadata = {
-  title: "Ecosystem fees",
-  description: "Every fee higher.fun's coins have paid, and who got it: creators, holders, higher.fun, Raydium and the pools. Read from Solana.",
-  alternates: { canonical: "/fees" },
+  ...pageMetadata({
+    title: "Ecosystem fees",
+    description: "Every fee higher.fun's coins have paid, and who got it: creators, holders, higher.fun, Raydium and the pools. Read from Solana.",
+    path: "/fees",
+    card: FEES_CARD,
+  }),
 };
 
 export default async function FeesPage() {

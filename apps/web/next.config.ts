@@ -37,6 +37,9 @@ const config: NextConfig = {
     },
   },
   outputFileTracingRoot: root,
+  // The ideas' link previews read their fonts at render time (lib/idea-card.tsx); they're drawn at build, but ship
+  // the fonts in case one is drawn again on the server.
+  outputFileTracingIncludes: { "/ideas/**": ["./assets/fonts/*.ttf"] },
   // The repo's own AGENTS.md covers this app; don't let `next dev` write another.
   agentRules: false,
   poweredByHeader: false,

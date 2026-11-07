@@ -18,6 +18,12 @@
     "Writes a daily report, reports/<date>.md: the coins that passed and why, and the near misses.",
     "If you turn buying on, it makes one small buy in a coin that passes (0.05 SOL to start), guards it with a stop-loss and a take-profit, and buys at most three a day."
   ],
+  "loop": [
+    "Watches launches",
+    "Rug-checks them",
+    "Writes a report",
+    "Buys small, if on"
+  ],
   "earns": "Reporting earns nothing and costs nothing on-chain. Buying can win or lose, and most new coins fall: a scout that buys a few a day will lose on most of them, and needs the rare big winner to come out ahead. Treat buying as a small, capped experiment, and read the calculator first.",
   "costs": [
     "Reporting: nothing on-chain. It reads higher.fun's API and live feed.",

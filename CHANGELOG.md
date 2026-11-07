@@ -2,6 +2,14 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- **Link previews of their own.** Every page on highwire.fun used to hand X and other apps the homepage's title,
+  description, address and card, so a link to an idea previewed as the homepage. Each page now has its own, and each
+  idea gets a card drawn from its idea.json on the wire: its name and difficulty, what the agent does in three or four
+  steps (idea.json's new `loop`), the SOL to start and the minutes to a first dry run. /ideas has one with every idea
+  on it.
+
 ## 0.11.0 (2026-11-06)
 
 - **Three more launch ideas, and `highwire new`.** A dip buyer (limit buys on coins you picked, each fill guarded by a

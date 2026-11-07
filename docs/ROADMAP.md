@@ -126,8 +126,9 @@ with the `highwire` memo. The day's limit counted 0.245 SOL, what the wallet act
 - **Launch on your own** (done in 0.8.0): `highwire wallet new`, `policy init --launch`, `launch` and `claim`, and
   highwire.fun/skill.md for agents to follow. Next: sponsored launches, where a Highwire wallet pays and the agent's
   wallet is the creator, if it's worth funding.
-- **Launch ideas** (M1 done): `/ideas`, with one-click template repositories. Next: launch scout, community treasury
-  and dip buyer, and `npx highwire-mcp new <idea>` (docs/ideas-prd.md).
+- **Launch ideas** (M1 and M2 done, 0.11.0): `/ideas`, five ideas with one-click template repositories, and
+  `npx highwire-mcp new <idea>`. Link previews per idea are done; next, a "built with this" showcase of live coins,
+  with their creators' consent (docs/ideas-prd.md).
 - **Limit buys** (done in 0.10.0): a `limit_buy` standing order buys once the price falls to a trigger.
 - **Fee claims on a schedule** (done in 0.10.0): a `fee_claim` standing order claims creator fees once enough is
   waiting and can buy the coin back with a share of each claim; `highwire orders claim` places one.

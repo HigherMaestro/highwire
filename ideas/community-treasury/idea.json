@@ -19,6 +19,12 @@
     "You read the draft and run npm run payout to approve it. Only then does it send, one transfer per wallet, inside the policy.",
     "It posts the books on the coin's page: claimed, paid out and held, with recipients by the names you gave them, never by address."
   ],
+  "loop": [
+    "Launches a coin",
+    "Claims its fees",
+    "Drafts payouts",
+    "You approve them"
+  ],
   "earns": "The coin's creator fees, from trading in it: 0.25% of every trade on the curve, and the creator's share of pool fees after graduation. All of it goes to the treasury, and from there to the wallets you chose. A coin nobody trades funds nothing.",
   "costs": [
     "Launch: higher.fun's launch fee (0.02 SOL) plus about 0.025 SOL of rent and network fees.",

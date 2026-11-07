@@ -18,6 +18,12 @@
     "When a buy fills, it places a stop-loss and a take-profit on what it bought. When one of them fills, it cancels the other.",
     "After a cooldown it re-arms that coin, at most a few rounds per coin, and never past the policy's daily cap."
   ],
+  "loop": [
+    "Rug-checks coins",
+    "Buys after a dip",
+    "Sets a stop-loss",
+    "Takes profit"
+  ],
   "earns": "Nothing by itself. It buys after a fall and sells after a rise or a further fall, and any round can lose. Each round pays the coin's trading fee both ways (1% on a New school curve) and Highwire's 0.3% both ways, so a take-profit has to clear them. The calculator shows what a win and a loss come to.",
   "costs": [
     "No launch, so no launch fee.",

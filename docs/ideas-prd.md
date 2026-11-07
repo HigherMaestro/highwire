@@ -1,6 +1,6 @@
 # PRD: Launch ideas, one-click deploys
 
-Status: M1 and M2 built, 2026-11-06. Owner: HigherMaestro.
+Status: M1 and M2 built, 2026-11-06; M3's link previews built, 2026-11-07. Owner: HigherMaestro.
 
 ## Summary
 
@@ -202,7 +202,7 @@ deploys. Signals:
    GitHub account can click Deploy, clone, `npm install && npm run setup`, and reach M1's dry-run launch.
 2. **M2, more ideas and the shell route:** launch scout, community treasury and dip buyer; `npx highwire-mcp new`;
    skill.md points agents at `/ideas`.
-3. **M3, later:** per-idea link previews, a "built with this" showcase of live coins (with their creators' consent),
+3. **M3, later:** per-idea link previews (done: drawn from idea.json by `apps/web/lib/idea-card.tsx`), a "built with this" showcase of live coins (with their creators' consent),
    and maybe sponsored ideas.
 
 ## Acceptance criteria for M1

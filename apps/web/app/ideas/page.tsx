@@ -2,11 +2,16 @@ import type { Metadata } from "next";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { AmbientWire } from "../../components/hero/AmbientWire.tsx";
 import { listIdeas } from "../../lib/ideas.ts";
+import { IDEAS_CARD } from "../../lib/idea-card.tsx";
+import { pageMetadata } from "../../lib/site.ts";
 
 export const metadata: Metadata = {
-  title: "Launch ideas",
-  description: "Ideas for agents that launch and run coins on higher.fun: a full spec and a working starter for each, deployed to your GitHub in one click.",
-  alternates: { canonical: "/ideas" },
+  ...pageMetadata({
+    title: "Launch ideas",
+    description: "Ideas for agents that launch and run coins on higher.fun: a full spec and a working starter for each, deployed to your GitHub in one click.",
+    path: "/ideas",
+    card: IDEAS_CARD,
+  }),
 };
 
 export default function IdeasPage() {

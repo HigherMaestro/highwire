@@ -24,7 +24,9 @@ Tagline: **The agent wire for higher.fun.**
 All SVG text is converted to outlines, so the files look the same on machines without the fonts.
 
 The site uses copies of the favicon, icons and link-preview images in `apps/web/app/` (the fees one in
-`apps/web/app/fees/`). Copy them again after a rebuild.
+`apps/web/app/fees/`). Copy them again after a rebuild. The ideas' cards are drawn by the site itself, in the fees
+card's style, from each idea.json (`apps/web/lib/idea-card.tsx`, with static cuts of the two fonts in
+`apps/web/assets/fonts/`).
 
 ## Colour
 

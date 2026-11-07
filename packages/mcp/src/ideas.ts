@@ -21,6 +21,8 @@ export interface Idea {
   uses: string[];
   outside: string[];
   howItWorks: string[];
+  /** The loop in three or four short steps, each a few words starting with a verb, for the link preview. */
+  loop: string[];
   earns: string;
   costs: string[];
   needs: string[];
@@ -43,6 +45,8 @@ export interface Idea {
 export const PRD_SECTIONS = ["Summary", "The loop", "Policy", "Milestones", "Outside services", "Rules", "Out of scope"];
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** A loop step's longest, so it fits on the idea's card. */
+export const LOOP_STEP_MAX = 18;
 
 const str = (v: unknown, what: string, max = 600): string => {
   if (typeof v !== "string" || !v.trim() || v.length > max) throw new Error(`${what} must be text of at most ${max} characters`);
@@ -79,6 +83,11 @@ export function validateIdea(raw: unknown, dirName: string): Idea {
       uses: strs(o.uses, "uses", 1),
       outside: strs(o.outside, "outside"),
       howItWorks: strs(o.howItWorks, "howItWorks", 1),
+      loop: ((): string[] => {
+        const loop = strs(o.loop, "loop", 3);
+        if (loop.length > 4 || loop.some((s) => s.length > LOOP_STEP_MAX)) throw new Error(`loop must be three or four steps of at most ${LOOP_STEP_MAX} characters`);
+        return loop;
+      })(),
       earns: str(o.earns, "earns", 800),
       costs: strs(o.costs, "costs", 1),
       needs: strs(o.needs, "needs", 1),

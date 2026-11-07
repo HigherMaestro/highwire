@@ -19,6 +19,12 @@
     "Rents GPUs through a provider's API, runs the project's workload (say, an open model serving or a batch job), and stops the rental when the budget or the job runs out.",
     "Posts the books on the coin's page: fees claimed, GPU hours bought, what they ran. Plain text, a few times a day at most."
   ],
+  "loop": [
+    "Launches a coin",
+    "Claims its fees",
+    "Rents GPU time",
+    "Posts the books"
+  ],
   "earns": "The coin's creator fees, from trading in it. Here they're spent, not kept: the point is compute paid for by the coin's trading, with public books. Selling that compute to others is a later milestone, not the start.",
   "costs": [
     "Launch: higher.fun's launch fee (0.02 SOL) plus about 0.025 SOL of rent and network fees.",

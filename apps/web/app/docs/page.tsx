@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { Connect } from "../../components/Connect.tsx";
 import { getCatalog, groupTools, type ToolInfo } from "../../lib/catalog.ts";
-import { MCP_URL, REPO_URL } from "../../lib/site.ts";
+import { MCP_URL, REPO_URL, pageMetadata } from "../../lib/site.ts";
 
 export const metadata: Metadata = {
-  title: "Docs",
-  description: "Connect Highwire to your MCP client, and every tool, prompt and resource it offers, with parameters.",
-  alternates: { canonical: "/docs" },
+  ...pageMetadata({
+    title: "Docs",
+    description: "Connect Highwire to your MCP client, and every tool, prompt and resource it offers, with parameters.",
+    path: "/docs",
+  }),
 };
 
 const RECIPES: { title: string; ask: string; prompt: string; steps: string[] }[] = [

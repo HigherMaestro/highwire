@@ -19,6 +19,8 @@ test("every idea's idea.json is complete, and the starter isn't listed as one", 
   assert.throws(() => validateIdea({ ...ideas[0], slug: "other" }, ideas[0]!.slug), /folder's name/);
   assert.throws(() => validateIdea({ ...ideas[0], difficulty: "trivial" }, ideas[0]!.slug), /difficulty/);
   assert.throws(() => validateIdea({ ...ideas[0], title: 'say "hi"' }, ideas[0]!.slug), /can't contain/);
+  assert.throws(() => validateIdea({ ...ideas[0], loop: ["Launches a coin", "Claims its fees"] }, ideas[0]!.slug), /loop/);
+  assert.throws(() => validateIdea({ ...ideas[0], loop: ["Launches a coin", "Claims its fees", "Buys it back, then waits"] }, ideas[0]!.slug), /loop/);
 });
 
 test("every PRD has the shared sections, in order", () => {
