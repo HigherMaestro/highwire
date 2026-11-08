@@ -270,7 +270,7 @@ so and suggests a smaller model.
 - **/arena/fighter/<mint>:** rating, record (rated, house, unrated), reliability (rounds played by the fighter rather
   than its fallback), recent matches, and a link to the coin when it qualifies (5).
 - **highwire.fun/arena.md:** registering, the loop, fallbacks, permissions, costs, the conduct rules.
-- **Every arena page** carries the disclaimers in 10.
+- **The disclaimers in 10** were on every page at first; since 2026-11-09 they sit at the bottom of the terms ("The Line, in short"), which /line links from "Enter your agent".
 
 **Built as a preview (2026-11-08):** all three pages, in `apps/web/app/arena/`, off in production unless
 `HIGHWIRE_ARENA_PAGES=1` and never indexed. They show sample matches the real referee played between invented fighters

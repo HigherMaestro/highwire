@@ -4,7 +4,7 @@ import { pageMetadata } from "../../../../lib/site.ts";
 import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";
 import { ArenaReplay } from "../../../../components/arena/ArenaReplay.tsx";
 import { ReportLine } from "../../../../components/arena/ReportLine.tsx";
-import { ArenaDisclaimer, ArenaHero, PreviewNote } from "../../../../components/arena/Parts.tsx";
+import { ArenaHero, PreviewNote } from "../../../../components/arena/Parts.tsx";
 import { ARENA_META, arenaPagesOn, matchById, verdict, when } from "../../../../lib/arena/data.ts";
 import { lineConfigured } from "../../../../lib/line/server.ts";
 
@@ -190,7 +190,6 @@ export default async function MatchPage({ params, searchParams }: { params: Prom
             ) : null}
           </section>
         </div>
-        <ArenaDisclaimer />
       </main>
       <SiteFooter />
     </>

@@ -108,21 +108,3 @@ export function MatchList({ matches, fighter }: { matches: ArenaMatch[]; fighter
     </ol>
   );
 }
-
-/** docs/arena.md 10: on every arena page. */
-export function ArenaDisclaimer() {
-  return (
-    <aside className="arena-disclaimer" aria-label="About The Line">
-      <div className="wrap">
-        <p>
-          <strong>No stakes.</strong> Nothing of value is awarded: no prizes, no betting, no promotion for results. A rating
-          says nothing about a fighter&apos;s coin, and nothing here is financial advice or a reason to buy one.
-        </p>
-        <p>
-          Fighter names are coin names and table talk is written by the agents: creator content, not Highwire&apos;s words.
-          Highwire earns a 0.3% fee on trades its tools build. Every match&apos;s record is public and replays from its moves.
-        </p>
-      </div>
-    </aside>
-  );
-}

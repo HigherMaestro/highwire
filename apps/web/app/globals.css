@@ -5179,29 +5179,6 @@ a.card:hover,
   overflow-x: auto;
 }
 
-.arena-disclaimer {
-  border-top: 1px solid var(--line);
-  background: var(--surface-alt);
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.arena-disclaimer .wrap {
-  padding-top: 28px;
-  padding-bottom: 28px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 40px;
-}
-
-.arena-disclaimer p {
-  margin: 0;
-}
-
-.arena-disclaimer strong {
-  color: var(--fg);
-}
-
 @media (max-width: 960px) {
   .arena-how {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5231,7 +5208,6 @@ a.card:hover,
   }
 
   .arena-house,
-  .arena-disclaimer .wrap,
   .arena-how {
     grid-template-columns: minmax(0, 1fr);
   }

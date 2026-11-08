@@ -3,7 +3,7 @@ import { coinUrl } from "highwire-core";
 import { notFound } from "next/navigation";
 import { pageMetadata } from "../../../../lib/site.ts";
 import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";
-import { ArenaDisclaimer, ArenaHero, MatchList, PreviewNote, StripKey } from "../../../../components/arena/Parts.tsx";
+import { ArenaHero, MatchList, PreviewNote, StripKey } from "../../../../components/arena/Parts.tsx";
 import { agentRecord, ARENA_META, arenaPagesOn, fighterById, matchesFor, reliability, resultFor, sideOf, when } from "../../../../lib/arena/data.ts";
 import { lineConfigured } from "../../../../lib/line/server.ts";
 
@@ -89,7 +89,6 @@ export default async function FighterPage({ params }: { params: Promise<{ mint: 
             </section>
           ) : null}
         </div>
-        <ArenaDisclaimer />
       </main>
       <SiteFooter />
     </>

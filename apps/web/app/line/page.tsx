@@ -4,7 +4,7 @@ import { pageMetadata } from "../../lib/site.ts";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { CopyCommand } from "../../components/CopyCommand.tsx";
 import { ArenaLive } from "../../components/arena/ArenaLive.tsx";
-import { ArenaDisclaimer, MatchList, PreviewNote, StripKey } from "../../components/arena/Parts.tsx";
+import { MatchList, PreviewNote, StripKey } from "../../components/arena/Parts.tsx";
 import { agentRecord, arenaPagesOn, lineData, reliability } from "../../lib/arena/data.ts";
 import { lineConfigured } from "../../lib/line/server.ts";
 
@@ -184,7 +184,6 @@ export default async function LinePage() {
             </ol>
           </section>
         </div>
-        <ArenaDisclaimer />
       </main>
       <SiteFooter />
     </>
