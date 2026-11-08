@@ -1,14 +1,14 @@
+import type { ReactNode } from "react";
 import type { Metadata } from "next";
-import type { CSSProperties, ReactNode } from "react";
-import { HOLDER_AIRDROPS, type Recipient } from "highwire-core";
+import { HOLDER_AIRDROPS } from "highwire-core";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
-import { AmbientWire } from "../../components/hero/AmbientWire.tsx";
 import { SectionNav } from "../../components/ideas/SectionNav.tsx";
 import { FeeTable, type FeeRow } from "../../components/fees/FeeTable.tsx";
 import { FeeFlow } from "../../components/fees/FeeFlow.tsx";
 import { SplitBar } from "../../components/fees/SplitBar.tsx";
 import { EarningsCalculator } from "../../components/fees/EarningsCalculator.tsx";
 import { WalletLookup } from "../../components/fees/WalletLookup.tsx";
+import { COLOR, FeeHero, Head as SectionHead, Tile } from "../../components/fees/Parts.tsx";
 import { MODE_LABEL, RECIPIENTS, allFees, coinLabel, flowScenarios, pctOf, short, sol, topCreators, topToday, updatedAt, usd, volumes24h } from "../../lib/fees.ts";
 import { FEES_CARD, pageMetadata } from "../../lib/site.ts";
 
@@ -37,31 +37,11 @@ const n = (id: string) => String(SECTIONS.findIndex((s) => s.id === id) + 1).pad
 
 function Head({ id, title, children }: { id: string; title: string; children?: ReactNode }) {
   return (
-    <div className="section-head">
-      <h2 id={`${id}-title`} className="sec-h">
-        <span className="sec-n">{n(id)}</span>
-        {title}
-      </h2>
-      {children ? <p className="muted">{children}</p> : null}
-    </div>
+    <SectionHead id={id} n={n(id)} title={title}>
+      {children}
+    </SectionHead>
   );
 }
-
-/** A figure in a card: a small label, the number, and a line under it. */
-function Tile({ label, value, unit, sub, accent }: { label: string; value: string; unit?: string; sub?: ReactNode; accent?: string }) {
-  return (
-    <div className="fee-tile" style={accent ? ({ "--accent": accent } as CSSProperties) : undefined}>
-      <span className="fee-tile-label">{label}</span>
-      <span className="fee-tile-n">
-        {value}
-        {unit ? <small> {unit}</small> : null}
-      </span>
-      {sub ? <span className="fee-tile-sub">{sub}</span> : null}
-    </div>
-  );
-}
-
-const COLOR = Object.fromEntries(RECIPIENTS.map((r) => [r.key, r.color])) as Record<Recipient, string>;
 
 export default async function FeesPage() {
   const data = await allFees();
@@ -70,55 +50,29 @@ export default async function FeesPage() {
     <>
       <SiteHeader />
       <main>
-        <section className="page-hero fees-hero" aria-labelledby="fees-title">
-          <AmbientWire />
-          <div className="wrap page-hero-copy">
-            <p className="eyebrow">Ecosystem fees · read from Solana</p>
-            <h1 id="fees-title">Every fee on higher.fun, and who got it</h1>
-            {data && t ? (
-              <>
-                <div className="fee-hero-figure">
-                  <span className="fee-hero-n">
-                    {sol(t.feesSol)}
-                    <small> SOL</small>
-                  </span>
-                  <span className="fee-hero-sub">
-                    paid in fees{usd(t.feesSol, data.solUsd) ? ` (${usd(t.feesSol, data.solUsd)})` : ""}, across all {t.coins.toLocaleString("en-US")} coins
-                  </span>
-                </div>
-                <dl className="fee-hero-facts">
-                  <div>
-                    <dt>Traded</dt>
-                    <dd>{sol(t.volumeSol)} SOL</dd>
-                  </div>
-                  <div>
-                    <dt>To creators</dt>
-                    <dd>{sol(t.byRecipient.creator)} SOL</dd>
-                  </div>
-                  <div>
-                    <dt>Graduated</dt>
-                    <dd>
-                      {t.graduated} of {t.coins.toLocaleString("en-US")}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Last 24 hours</dt>
-                    <dd>{sol(t.last24h.feesSol)} SOL</dd>
-                  </div>
-                </dl>
-                <p className="fee-fresh">
-                  <span className="fee-fresh-dot" aria-hidden="true" />
-                  Read {updatedAt(data.generatedAt)} · refreshed every 10 minutes
-                </p>
-              </>
-            ) : (
-              <p className="lead">
-                Read from Solana for all of higher.fun's coins, on the bonding curve and after graduation. Refreshed every 10
-                minutes.
-              </p>
-            )}
-          </div>
-        </section>
+        {data && t ? (
+          <FeeHero
+            id="fees-title"
+            eyebrow="Ecosystem fees · read from Solana"
+            title="Every fee on higher.fun, and who got it"
+            figure={sol(t.feesSol)}
+            figureSub={`paid in fees${usd(t.feesSol, data.solUsd) ? ` (${usd(t.feesSol, data.solUsd)})` : ""}, across all ${t.coins.toLocaleString("en-US")} coins`}
+            facts={[
+              { label: "Traded", value: `${sol(t.volumeSol)} SOL` },
+              { label: "To creators", value: `${sol(t.byRecipient.creator)} SOL` },
+              { label: "Graduated", value: `${t.graduated} of ${t.coins.toLocaleString("en-US")}` },
+              { label: "Last 24 hours", value: `${sol(t.last24h.feesSol)} SOL` },
+            ]}
+            readAt={data.generatedAt}
+          />
+        ) : (
+          <FeeHero id="fees-title" eyebrow="Ecosystem fees · read from Solana" title="Every fee on higher.fun, and who got it">
+            <p className="lead">
+              Read from Solana for all of higher.fun's coins, on the bonding curve and after graduation. Refreshed every 10
+              minutes.
+            </p>
+          </FeeHero>
+        )}
         {data ? (
           <>
             <SectionNav sections={SECTIONS} />

@@ -1455,37 +1455,9 @@ summary:focus-visible,
 }
 
 /* Ecosystem fees (/fees, /fees/[mint] and /fees/creator/[wallet]) */
-.fees-page {
-  padding: 48px 0 80px;
-}
-
-.fees-intro {
-  margin-bottom: 28px;
-}
-
 .fee-name {
   font-weight: 500;
   font-size: 0.55em;
-}
-
-.fee-stats {
-  margin-bottom: 8px;
-}
-
-.fee-stats li {
-  min-width: 160px;
-}
-
-.fee-section {
-  margin-top: 56px;
-}
-
-.fee-section > h2 {
-  margin: 0 0 16px;
-}
-
-.fee-section-lede {
-  margin: -6px 0 16px;
 }
 
 .split {
@@ -1551,35 +1523,6 @@ summary:focus-visible,
   grid-column: 2;
   font-size: 14.5px;
   margin-top: 2px;
-}
-
-/* Two pairs (phase, mode): four across, two by two, or one column, never three and an orphan. */
-.fee-cards {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-@media (min-width: 1040px) {
-  .fee-cards {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (max-width: 560px) {
-  .fee-cards {
-    grid-template-columns: 1fr;
-  }
-}
-
-.fee-cards h3 {
-  margin: 0;
-  font-size: 17px;
-}
-
-.fee-big {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
 }
 
 .fee-controls {
@@ -1650,11 +1593,6 @@ summary:focus-visible,
   margin-top: 14px;
 }
 
-.fee-links {
-  margin: 0 0 12px;
-  padding-left: 20px;
-}
-
 .fee-lookup {
   display: flex;
   flex-wrap: wrap;
@@ -1718,23 +1656,6 @@ summary:focus-visible,
   }
   .params.fees td:first-child::before {
     display: none;
-  }
-  .fees-page .stats {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px 16px;
-  }
-  .fees-page .stats li {
-    min-width: 0;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .fees-page .stat-n {
-    font-size: 24px;
-  }
-  .fees-page .stat-label {
-    font-size: 14px;
-    line-height: 1.35;
   }
 }
 
@@ -3818,4 +3739,94 @@ a.card:hover,
   font-size: 0.36em;
   letter-spacing: -0.01em;
   color: var(--muted);
+}
+
+/* The coin and creator pages: the full address under the title, tiles that fill the row, link cards. */
+.fee-hero-id {
+  margin: -6px 0 0;
+  font-family: var(--font-code);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.fee-hero-ctas,
+.fee-cta-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fee-tiles-auto {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.fee-table-panel {
+  padding: 4px 20px;
+}
+
+.fee-line-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fee-line-name i {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.fee-board-who > a.fee-board-coin {
+  font-family: var(--font-display);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* A leaderboard alone in its panel starts at the top, with no rule above the first row. */
+.fee-panel > .fee-board:first-child {
+  margin-top: 0;
+}
+
+.fee-panel > .fee-board:first-child li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.fee-panel > .fee-board:first-child li:last-child {
+  padding-bottom: 0;
+}
+
+.fee-linkcards {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.fee-linkcards a {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  text-decoration: none;
+  transition: border-color 0.2s ease;
+}
+
+.fee-linkcards a:hover,
+.fee-linkcards a:focus-visible {
+  border-color: var(--signal);
+}
+
+@media (max-width: 640px) {
+  .fee-table-panel {
+    padding: 4px 16px;
+  }
 }
