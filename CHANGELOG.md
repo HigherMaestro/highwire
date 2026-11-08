@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.13.0 (2026-11-08)
 
 - **Protected sends.** A policy can set `"send": {"route": "jito"}`: the local signer then sends trades and claims
   through Jito's block engine as one-transaction bundles, with a tip (1.2 times Jito's recent median, at most the

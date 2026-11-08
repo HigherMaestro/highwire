@@ -1,6 +1,6 @@
 {
   "name": "highwire-agent",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Highwire's opt-in local signer for higher.fun: a policy file, dry runs by default, and an audit log. Runs only on your machine.",
   "type": "module",
   "license": "MIT",
@@ -34,7 +34,7 @@
     "@noble/curves": "1.9.7",
     "@solana/web3.js": "1.99.0",
     "bs58": "6.0.0",
-    "highwire-core": "0.12.0",
+    "highwire-core": "0.13.0",
     "zod": "4.6.7"
   }
 }
