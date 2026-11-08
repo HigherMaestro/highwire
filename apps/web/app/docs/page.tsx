@@ -57,7 +57,7 @@ const RECIPES: { title: string; ask: string; prompt: string; steps: string[] }[]
 const POLICY_KEYS: [string, string][] = [
   ["cluster", "mainnet or devnet. Required, so mainnet is always a deliberate choice."],
   ["live", "false (the default) makes every execute a dry run. true lets it sign and send."],
-  ["actions", "Which of trade, launch, claim and transfer it may do."],
+  ["actions", "Which of trade, launch, claim, transfer and register (The Line's registration memo) it may do."],
   ["max_sol_per_tx", "The most SOL one execute may spend: a buy, a launch fee plus first buy, or SOL sent, plus up to 0.03 SOL of rent and fees."],
   ["max_sol_per_day", "The most SOL in any 24 hours, counted from the audit log: what the wallet actually spent, rent and fees included."],
   ["max_slippage_bps", "The most slippage a trade or first buy may allow."],

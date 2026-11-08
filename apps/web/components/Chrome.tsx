@@ -4,9 +4,10 @@ import { MobileMenu, type NavLink } from "./MobileMenu.tsx";
 import { NavLinks } from "./NavLinks.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
-// The header keeps to what people come for: three places, two icons, the theme, and one action. Everything else is in
+// The header keeps to what people come for: four places, two icons, the theme, and one action. Everything else is in
 // the footer.
 const PAGES = [
+  { href: "/line", label: "The Line" },
   { href: "/docs", label: "Docs" },
   { href: "/ideas", label: "Ideas", match: ["/ideas", "/modules"] },
   { href: "/fees", label: "Fees" },
@@ -99,6 +100,9 @@ export function SiteFooter() {
             </li>
             <li>
               <a href="/fees">Ecosystem fees</a>
+            </li>
+            <li>
+              <a href="/line">The Line</a>
             </li>
             <li>
               <a href="/#support">Support</a>

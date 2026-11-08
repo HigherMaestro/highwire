@@ -317,3 +317,53 @@ test("simultaneous moves: of two different moves sent at once, one is recorded a
   const winner = x.status === 200 ? 1 : 2;
   assert.equal(after.rounds[0][after.you].pull, winner, "with the move that was accepted");
 });
+
+test("the pages' indexes: live and recent matches, and each fighter's matches, newest first", async () => {
+  const { r, token, view } = await setup();
+  let lists = await r.relay.referee.matches();
+  assert.deepEqual(lists.live.map((m) => m.id), [view.id]);
+  assert.equal(lists.live[0]!.self, undefined, "spectator views only");
+  await r.call("POST", "/api/arena/retire", {}, token);
+  const second = (await r.call("POST", "/api/arena/join", { fallback: "zero" }, token)).body;
+  lists = await r.relay.referee.matches();
+  assert.deepEqual(lists.recent.map((m) => m.id), [view.id]);
+  assert.deepEqual(lists.live.map((m) => m.id), [second.id]);
+  assert.deepEqual((await r.relay.referee.fighterMatches(MINT)).map((m) => m.id), [second.id, view.id]);
+});
+
+test("reports and hiding: a spectator reports a line; a moderator hides it; every commitment still checks out", async () => {
+  const { r, token, view } = await setup("even");
+  const moved = await r.call("POST", "/api/arena/move", { match: view.id, round: 1, pull: 3, nonce: nonce(), line: "something rude" }, token);
+  const me = moved.body.you;
+  const report = await r.call("POST", "/api/arena/report", { match: view.id, round: 1, side: me, why: "rude" });
+  assert.equal(report.status, 200, report.text);
+  assert.equal((await r.call("POST", "/api/arena/report", { match: view.id, round: 1, side: me === "a" ? "b" : "a" })).status, 404, "nothing said there");
+  // Without an admin token the admin routes don't exist.
+  assert.equal((await r.call("GET", "/api/arena/admin/reports")).status, 404);
+  const { createRelay } = await import("../src/http.ts");
+  const admin = createRelay({ store: r.store, clock: r.clock, rpc: r.rpc, coins: r.coins, adminToken: "mod" });
+  const req = (m: string, p: string, b?: unknown, t?: string) => admin.fetch(new Request(`https://x.test${p}`, { method: m, headers: { "content-type": "application/json", ...(t ? { authorization: `Bearer ${t}` } : {}) }, body: b === undefined ? undefined : JSON.stringify(b) }));
+  assert.equal((await req("GET", "/api/arena/admin/reports", undefined, "wrong")).status, 404);
+  const listed = (await (await req("GET", "/api/arena/admin/reports", undefined, "mod")).json()) as any[];
+  assert.equal(listed.length, 1);
+  assert.equal((await req("POST", "/api/arena/admin/hide", { match: view.id, round: 1, side: me }, "mod")).status, 200);
+  const after = (await r.call("GET", `/api/arena/match/${view.id}`)).body;
+  assert.equal(after.rounds[0][me].line, "");
+  assert.equal(after.rounds[0][me].hidden, true);
+  assert.equal(after.rounds[0][me].commitment, commitment(view.id, 1, me, 3, after.rounds[0][me].nonce));
+  assert.deepEqual((await (await req("GET", "/api/arena/admin/reports", undefined, "mod")).json()), []);
+});
+
+test("without a cron secret the sweep runs at most every 30 seconds; registration is limited per caller", async () => {
+  const r = rig();
+  const { createRelay } = await import("../src/http.ts");
+  const open = createRelay({ store: r.store, clock: r.clock, rpc: r.rpc, coins: r.coins, clientKey: () => "1.2.3.4" });
+  const sweep = async () => (await (await open.fetch(new Request("https://x.test/api/arena/sweep"))).json()) as any;
+  assert.ok("open" in (await sweep()));
+  assert.ok("skipped" in (await sweep()));
+  r.clock.advance(31_000);
+  assert.ok("open" in (await sweep()));
+  let last = 0;
+  for (let i = 0; i < 22; i++) last = (await open.fetch(new Request("https://x.test/api/agents/challenge", { method: "POST", body: "{}" }))).status;
+  assert.equal(last, 429);
+});

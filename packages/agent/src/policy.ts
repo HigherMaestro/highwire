@@ -99,7 +99,8 @@ export const LAUNCH_POLICY_TEMPLATE = {
   version: 1,
   cluster: "mainnet",
   live: false,
-  actions: ["launch", "claim"],
+  // "register": The Line's registration memo (network fee only), so a fresh launch can enter it.
+  actions: ["launch", "claim", "register"],
   max_sol_per_tx: 0.25,
   max_sol_per_day: 0.5,
   max_slippage_bps: 500,

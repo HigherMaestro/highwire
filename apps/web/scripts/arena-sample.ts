@@ -80,7 +80,7 @@ async function main() {
     }
   };
 
-  // Register every fighter, as arena_register would: a launch, a challenge, the memo, the token.
+  // Register every fighter, as line_register would: a launch, a challenge, the memo, the token.
   const roster: { id: string; name: string; ticker: string; style: string; token: string }[] = [];
   for (const f of FIGHTERS) {
     const wallet = address();

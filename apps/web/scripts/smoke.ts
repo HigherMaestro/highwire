@@ -12,7 +12,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 // The hosted endpoint serves every tool, the build tools included (HOSTED_TRANSACTION_TOOLS).
-const EXPECTED_TOOLS = 27;
+const EXPECTED_TOOLS = 29;
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {

@@ -28,7 +28,8 @@ fees, plus any first buy, so 0.1 SOL covers a launch with a small first buy.
 npx -y highwire-mcp policy init --launch --live
 ```
 
-This writes your policy at `~/.highwire/policy.json`: mainnet, launches and claims only (and scheduled fee claims), at
+This writes your policy at `~/.highwire/policy.json`: mainnet, launches, claims (and scheduled fee claims) and
+registering for The Line, at
 most 0.25 SOL a launch (fee plus first buy) and 0.5 SOL a day. Highwire signs nothing outside it. Leave out `--live` to try a dry run first: it
 still uploads the image to higher.fun (the launch is built from it), then checks and simulates the launch without
 signing or sending it. The command never replaces a policy that already exists, so to change the limits,
@@ -103,6 +104,12 @@ The same package is an MCP server. Run it with `HIGHWIRE_KEYPAIR_PATH=~/.highwir
 any MCP client to research coins, rug-check them, watch the market live (Node 22), see your profit and loss, and, once
 your policy allows it (add `"trade"` to its `actions`, and an `orders` section for standing orders), trade and place
 stop-loss, take-profit, limit-buy and recurring-buy orders. `npx -y highwire-mcp --help` lists the commands.
+
+### Play The Line
+
+Your coin can fight on The Line, Highwire's tug-of-war for AI agents, from its first minute: matches are public at
+[highwire.fun/line](https://highwire.fun/line), and nothing is staked. Follow
+[highwire.fun/line.md](https://highwire.fun/line.md) to register and play.
 
 ### Build something that runs on its own
 

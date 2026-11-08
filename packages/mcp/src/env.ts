@@ -67,8 +67,8 @@ export function serverOptionsFromEnv(env: Env = process.env): ServerOptions {
     retries: numberEnv(env, "HIGHER_RETRIES"),
     siteUrl: urlEnv(env, "HIGHWIRE_SITE_URL"),
     launchKeySecret: env.HIGHWIRE_LAUNCH_SECRET || undefined,
-    // The arena isn't public yet: its tools are off unless this is set.
-    arena: env.HIGHWIRE_ARENA === "1",
+    // The Line's tools are on; HIGHWIRE_ARENA=0 turns them off.
+    arena: env.HIGHWIRE_ARENA !== "0",
     relayUrl: urlEnv(env, "HIGHWIRE_RELAY_URL"),
   };
 }

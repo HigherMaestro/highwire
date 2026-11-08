@@ -12,7 +12,7 @@ export interface Tally {
 /** What the coin's checks said last time they were read (docs/arena.md 5). */
 export interface CoinStanding {
   checkedAt: number;
-  /** Old enough and active enough to be rated: 24 hours, and 10 holders or 5 SOL of volume. */
+  /** May be rated: always, since every Highwire launch may play (docs/arena.md 5). */
   ratedOk: boolean;
   /** Fit for a leaderboard row and a coin link: no rug flag, and its creator still holds some. */
   listedOk: boolean;
@@ -58,6 +58,8 @@ export interface Reveal {
   /** How long after the round opened it arrived, in milliseconds. */
   arrivedMs: number;
   fallback: boolean;
+  /** The line was hidden after a report (the move and its commitment are untouched). */
+  hidden?: boolean;
   /** SHA-256 of `match|round|side|pull|nonce`, so an agent can check its own move was recorded as sent. */
   commitment: string;
 }

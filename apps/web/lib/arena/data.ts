@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
+import { RelayError } from "highwire-relay";
+import { lineConfigured, lineRelay } from "../line/server.ts";
 import sample from "./sample.json";
 
-// The arena pages' data. The arena isn't public: these pages exist only in local development, or with
-// HIGHWIRE_ARENA_PAGES=1, and show sample matches the real referee played (scripts/arena-sample.ts). Once the relay is
-// deployed, this is where they'll read /api/arena/* instead.
+// The Line's pages' data: the referee's (lib/line/server.ts) once its database is connected, and otherwise, in local
+// development, sample matches the real referee played between invented fighters (scripts/arena-sample.ts). Until the
+// first real match, the live pages show one sample match, labelled as an example.
 
-export const arenaPagesOn = () => process.env.NODE_ENV === "development" || process.env.HIGHWIRE_ARENA_PAGES === "1";
+export const arenaPagesOn = () => lineConfigured() || process.env.NODE_ENV === "development" || process.env.HIGHWIRE_ARENA_PAGES === "1";
 
-/** Never indexed, never previewed, while it's a preview. */
+/** Sample pages are never indexed or previewed. */
 export const ARENA_META: Metadata = { robots: { index: false, follow: false } };
 
 export type Side = "a" | "b";
@@ -16,6 +18,7 @@ export interface Reveal {
   pull: number;
   nonce: string;
   line: string;
+  hidden?: boolean;
   arrivedMs: number;
   fallback: boolean;
   commitment: string;
@@ -73,11 +76,44 @@ interface Sample {
 
 const data = sample as unknown as Sample;
 
-export const SAMPLE = true;
-export const arenaData = () => data;
-export const matchById = (id: string) => data.matches.find((m) => m.id === id) ?? null;
-export const fighterById = (id: string) => data.fighters.find((f) => f.id === id) ?? null;
-export const matchesFor = (id: string) => data.matches.filter((m) => m.sides.a.id === id || m.sides.b.id === id);
+export interface LineData {
+  /** Sample data, not the referee's. */
+  sample: boolean;
+  live: ArenaMatch[];
+  recent: ArenaMatch[];
+  fighters: ArenaFighter[];
+  house: Sample["house"];
+  /** A sample match to show while nothing real has been played. */
+  example: ArenaMatch;
+}
+
+const example = () => data.matches.find((m) => !m.house && m.rounds.length >= 10) ?? data.matches[0]!;
+const notFound = (err: unknown) => err instanceof RelayError && err.code === "not_found";
+
+export async function lineData(): Promise<LineData> {
+  const r = lineRelay();
+  if (!r) return { sample: true, live: [], recent: data.matches, fighters: data.fighters, house: data.house, example: example() };
+  const [{ live, recent }, board] = await Promise.all([r.referee.matches(), r.referee.leaderboard()]);
+  return { sample: false, live: live as unknown as ArenaMatch[], recent: recent as unknown as ArenaMatch[], fighters: board.fighters, house: board.house, example: example() };
+}
+
+export async function matchById(id: string): Promise<ArenaMatch | null> {
+  const r = lineRelay();
+  if (!r) return data.matches.find((m) => m.id === id) ?? null;
+  return (await r.referee.spectate(id).catch((err) => (notFound(err) ? null : Promise.reject(err)))) as unknown as ArenaMatch | null;
+}
+
+export async function fighterById(id: string): Promise<ArenaFighter | null> {
+  const r = lineRelay();
+  if (!r) return data.fighters.find((f) => f.id === id) ?? null;
+  return r.referee.fighter(id).catch((err) => (notFound(err) ? null : Promise.reject(err)));
+}
+
+export async function matchesFor(id: string): Promise<ArenaMatch[]> {
+  const r = lineRelay();
+  if (!r) return data.matches.filter((m) => m.sides.a.id === id || m.sides.b.id === id);
+  return (await r.referee.fighterMatches(id)) as unknown as ArenaMatch[];
+}
 
 export const sideOf = (m: ArenaMatch, id: string): Side => (m.sides.a.id === id ? "a" : "b");
 
@@ -107,10 +143,10 @@ export function verdict(m: ArenaMatch): string {
 }
 
 /** The share of a fighter's rounds it played itself, rather than its fallback. */
-export function reliability(id: string): number | null {
+export function reliability(id: string, matches: ArenaMatch[]): number | null {
   let own = 0;
   let all = 0;
-  for (const m of matchesFor(id)) {
+  for (const m of matches) {
     const s = sideOf(m, id);
     for (const r of m.rounds) {
       all++;
@@ -120,10 +156,10 @@ export function reliability(id: string): number | null {
   return all ? own / all : null;
 }
 
-/** Results against other agents in the sample (the referee rates these from phase 3). */
-export function agentRecord(id: string): Tally {
+/** Results against other agents (the referee rates these from phase 3). */
+export function agentRecord(id: string, matches: ArenaMatch[]): Tally {
   const t: Tally = { win: 0, draw: 0, loss: 0 };
-  for (const m of matchesFor(id)) {
+  for (const m of matches) {
     if (m.house) continue;
     const r = resultFor(m, sideOf(m, id));
     if (r === "win") t.win++;

@@ -3,10 +3,21 @@ import { notFound } from "next/navigation";
 import { pageMetadata } from "../../../../lib/site.ts";
 import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";
 import { ArenaReplay } from "../../../../components/arena/ArenaReplay.tsx";
+import { ReportLine } from "../../../../components/arena/ReportLine.tsx";
 import { ArenaDisclaimer, ArenaHero, PreviewNote } from "../../../../components/arena/Parts.tsx";
 import { ARENA_META, arenaPagesOn, matchById, verdict, when } from "../../../../lib/arena/data.ts";
+import { lineConfigured } from "../../../../lib/line/server.ts";
 
-export const metadata: Metadata = { ...pageMetadata({ title: "Arena match (preview)", description: "One arena match, round by round: every pull, nonce and commitment.", path: "/arena" }), ...ARENA_META };
+export const revalidate = 15;
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const m = /^[0-9a-f]{24}$/.test(id) ? await matchById(id).catch(() => null) : null;
+  return {
+    ...pageMetadata({ title: m ? `${m.sides.a.name} v ${m.sides.b.name} · The Line` : "A match on The Line", description: "One match on The Line, round by round.", path: `/line/match/${id}`, card: { url: `/line/match/${id}/opengraph-image`, alt: "A match on The Line" } }),
+    ...(lineConfigured() ? {} : ARENA_META),
+  };
+}
 
 export async function generateStaticParams() {
   return [];
@@ -20,9 +31,10 @@ export default async function MatchPage({ params, searchParams }: { params: Prom
   const { id } = await params;
   // A link to watch (from the live stage, or shared) starts at round 1 and keeps the result back until the end.
   const fromStart = (await searchParams).from === "start";
-  const m = matchById(id);
+  const m = /^[0-9a-f]{24}$/.test(id) ? await matchById(id) : null;
   if (!m) notFound();
   const name = (s: "a" | "b") => m.sides[s].name;
+  const live = lineConfigured();
 
   return (
     <>
@@ -32,7 +44,7 @@ export default async function MatchPage({ params, searchParams }: { params: Prom
           id="match-title"
           eyebrow={
             <>
-              <a href="/arena">Arena</a> · {fromStart ? "replay" : "match"}
+              <a href="/line">The Line</a> · {fromStart ? "replay" : "match"}
             </>
           }
           title={
@@ -53,11 +65,11 @@ export default async function MatchPage({ params, searchParams }: { params: Prom
         >
           {fromStart ? null : (
             <p className="arena-hero-link">
-              <a href={`/arena/match/${id}?from=start`}>Watch it from the start →</a>
+              <a href={`/line/match/${id}?from=start`}>Watch it from the start →</a>
             </p>
           )}
         </ArenaHero>
-        <PreviewNote />
+        {lineConfigured() ? null : <PreviewNote />}
         <div className="wrap arena-body">
           <section className="fee-block" aria-label="Replay">
             <div className="arena-live-panel">
@@ -108,8 +120,17 @@ export default async function MatchPage({ params, searchParams }: { params: Prom
                         {r.energy.a} · {r.energy.b}
                       </td>
                       <td className="arena-said-cell">
-                        {r.a.line ? <span className="arena-q arena-q-a">{r.a.line}</span> : null}
-                        {r.b.line ? <span className="arena-q arena-q-b">{r.b.line}</span> : null}
+                        {(["a", "b"] as const).map((s) =>
+                          r[s].line ? (
+                            <span key={s} className={`arena-q arena-q-${s}`}>
+                              {r[s].line} {live ? <ReportLine match={m.id} round={r.round} side={s} /> : null}
+                            </span>
+                          ) : r[s].hidden ? (
+                            <span key={s} className={`arena-q arena-q-${s} muted`}>
+                              (removed after a report)
+                            </span>
+                          ) : null,
+                        )}
                       </td>
                     </tr>
                   ))}

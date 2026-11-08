@@ -18,8 +18,8 @@ import { ALL_TOOLS, EXECUTE_TOOLS, FAKE_OPTIONS, HOSTED_TOOLS } from "./fake.ts"
 // the local signer, plays the house to the end, and checks every reveal and the house's seed; against Highwire's
 // relay, in process, with an in-memory store and a fake RPC. Nothing touches a network.
 
-const PLAY_TOOLS = ["arena_join", "arena_move", "arena_register", "arena_retire", "arena_state"];
-const READ = ["arena_leaderboard", "arena_rules"];
+const PLAY_TOOLS = ["line_join", "line_move", "line_register", "line_retire", "line_state"];
+const READ = ["line_leaderboard", "line_rules"];
 const BLOCKHASH = bs58.encode(new Uint8Array(32).fill(9));
 
 /** A fake Solana RPC for building the registration transaction: fees, a blockhash and a clean simulation. */
@@ -105,19 +105,21 @@ const call = async (client: Client, name: string, args: Record<string, unknown> 
   return { isError: Boolean(res.isError), body: JSON.parse(text), text };
 };
 
-test("the arena's tools are off by default; on, the hosted endpoint gets only the rules and the leaderboard", async () => {
+test("The Line's tools: on by default, off with arena: false, and only the rules and fighters on the hosted endpoint", async () => {
   const w = world();
-  const off = createServer({ ...FAKE_OPTIONS });
+  const off = createServer({ ...FAKE_OPTIONS, arena: false });
   const offClient = new Client({ name: "t", version: "0" });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await Promise.all([off.connect(a), offClient.connect(b)]);
-  assert.deepEqual((await offClient.listTools()).tools.map((t) => t.name).sort(), ALL_TOOLS);
+  assert.deepEqual((await offClient.listTools()).tools.map((t) => t.name).sort(), ALL_TOOLS.filter((t) => !READ.includes(t)));
 
   const hosted = await connect(w, { hosted: true });
-  assert.deepEqual((await hosted.listTools()).tools.map((t) => t.name).sort(), [...HOSTED_TOOLS, ...READ].sort());
+  assert.deepEqual((await hosted.listTools()).tools.map((t) => t.name).sort(), HOSTED_TOOLS);
+  assert.ok(READ.every((t) => HOSTED_TOOLS.includes(t)));
   const local = await connect(w, { signer: new LocalSigner(Keypair.generate(), home()) });
-  assert.deepEqual((await local.listTools()).tools.map((t) => t.name).sort(), [...ALL_TOOLS, ...EXECUTE_TOOLS, ...READ, ...PLAY_TOOLS].sort());
-  const rules = await call(hosted, "arena_rules");
+  assert.deepEqual((await local.listTools()).tools.map((t) => t.name).sort(), [...ALL_TOOLS, ...EXECUTE_TOOLS].sort());
+  assert.ok(PLAY_TOOLS.every((t) => EXECUTE_TOOLS.includes(t)));
+  const rules = await call(hosted, "line_rules");
   assert.equal(rules.body.rules.id, "duels-1");
 });
 
@@ -128,7 +130,7 @@ test("registration goes through the user's policy: refused without \"register\",
   const args = { mint: MINT, launch_signature: launch, adult: true, confirm: true };
 
   const noRegister = await connect(w, { signer: new LocalSigner(key, home({ ...POLICY, actions: ["trade"] })) });
-  const refused = await call(noRegister, "arena_register", args);
+  const refused = await call(noRegister, "line_register", args);
   assert.equal(refused.isError, true);
   assert.equal(refused.body.code, "policy_refused");
   assert.match(refused.body.error, /registrations/);
@@ -136,7 +138,7 @@ test("registration goes through the user's policy: refused without \"register\",
   // A second challenge for the same wallet and coin waits for the first to expire.
   w.clock.advance(601_000);
   const dry = await connect(w, { signer: new LocalSigner(key, home({ ...POLICY, live: false })) });
-  const out = await call(dry, "arena_register", args);
+  const out = await call(dry, "line_register", args);
   assert.equal(out.body.registered, false);
   assert.equal(out.body.signer.status, "dry_run");
   assert.match(out.body.next_step, /dry run/);
@@ -149,11 +151,11 @@ test("an agent registers through the signer, plays the house to the end, and eve
   const signer = new LandingSigner(key, paths, w);
   const client = await connect(w, { signer });
 
-  const early = await call(client, "arena_join", { fallback: "zero" });
-  assert.equal(early.body.code, "arena_not_registered");
+  const early = await call(client, "line_join", { fallback: "zero" });
+  assert.equal(early.body.code, "line_not_registered");
 
   const launch = w.rpc.add(launchTx({ payer: signer.wallet }));
-  const reg = await call(client, "arena_register", { mint: MINT, launch_signature: launch, adult: true, confirm: true });
+  const reg = await call(client, "line_register", { mint: MINT, launch_signature: launch, adult: true, confirm: true });
   assert.equal(reg.isError, false, reg.text);
   assert.equal(reg.body.registered, true);
   assert.equal(reg.body.fighter.name, "Wire Cat");
@@ -165,17 +167,17 @@ test("an agent registers through the signer, plays the house to the end, and eve
   assert.equal(statSync(paths.agent).mode & 0o777, 0o600);
   assert.ok(!reg.text.includes(file.arena.token));
 
-  let v = (await call(client, "arena_join", { fallback: "steady:2" })).body;
+  let v = (await call(client, "line_join", { fallback: "steady:2" })).body;
   assert.equal(v.round, 1);
   assert.equal(v.opponent.name, "Reader");
   const texts: string[] = [];
   while (v.round !== null) {
-    const res = await call(client, "arena_move", { match: v.match, round: v.round, pull: Math.min(3, v.energy.you), line: v.round === 1 ? "good luck" : undefined });
+    const res = await call(client, "line_move", { match: v.match, round: v.round, pull: Math.min(3, v.energy.you), line: v.round === 1 ? "good luck" : undefined });
     assert.equal(res.isError, false, res.text);
     texts.push(res.text);
     v = res.body;
   }
-  const end = (await call(client, "arena_state", { match: v.match, wait: false })).body;
+  const end = (await call(client, "line_state", { match: v.match, wait: false })).body;
   assert.ok(["win", "loss", "draw"].includes(end.ending.result));
   assert.equal(end.checks.your_moves_verified, end.rounds.length, "every move verified by its nonce and commitment");
   assert.deepEqual(end.checks.problems, []);

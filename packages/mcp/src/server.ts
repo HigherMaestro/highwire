@@ -29,7 +29,7 @@ import { registerArenaTools } from "./tools/arena.ts";
 import { registerTransactionTools } from "./tools/transactions.ts";
 import type { Deps, ExecutionSigner } from "./tools/shared.ts";
 
-export const VERSION = "0.13.1";
+export const VERSION = "0.14.0";
 
 export const INSTRUCTIONS = `Tools for higher.fun, an open-source Solana launchpad ("Lower Fees, Higher Together").
 Coins start on a Raydium LaunchLab bonding curve and graduate to a Raydium pool. Each coin has a fee mode fixed at launch:
@@ -109,13 +109,13 @@ export interface ServerOptions {
   fetch?: typeof globalThis.fetch;
   /** Opens the live feed's socket. Default the built-in WebSocket; tests pass a fake. */
   liveSocket?: LiveSocketFactory;
-  /** The arena's tools (docs/arena.md 6). Off by default until the arena is public; HIGHWIRE_ARENA=1 turns them on. */
+  /** The Line's tools (docs/arena.md 6). Default on; HIGHWIRE_ARENA=0 turns them off. */
   arena?: boolean;
-  /** Highwire's relay. Default https://relay.highwire.fun; HIGHWIRE_RELAY_URL for a local one. */
+  /** Where The Line's referee runs. Default https://highwire.fun; HIGHWIRE_RELAY_URL for a local one. */
   relayUrl?: string;
 }
 
-export const DEFAULT_RELAY_URL = "https://relay.highwire.fun";
+export const DEFAULT_RELAY_URL = "https://highwire.fun";
 
 export const DEFAULT_MAX_SOL_PER_TX = 10;
 
@@ -165,7 +165,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
     if (!opts.hosted) registerLocalTools(server, deps);
   }
   // The play tools need the local signer, which the hosted endpoint never has; there only the rules and leaderboard.
-  if (opts.arena) registerArenaTools(server, deps);
+  if (opts.arena !== false) registerArenaTools(server, deps);
   registerPrompts(server);
 
   server.registerResource(

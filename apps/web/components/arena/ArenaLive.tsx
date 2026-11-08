@@ -2,17 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ArenaMatch } from "../../lib/arena/data.ts";
-import { Wire } from "./Wire.tsx";
+import { caption, Wire } from "./Wire.tsx";
 
-// A match playing out on the wire, a round every few seconds, as spectators will see it live (each reveal as it comes).
-// The preview replays a finished sample match on a loop. The footer gives the round while it plays and the result
-// only at the end, so it never spoils the match. Runs only while on screen.
+// The match on the wire at the top of /line.
+// - "live": a match under way. It asks the referee for the match every few seconds (a cached spectator view) and
+//   shows each round as it's revealed.
+// - "replay" (the latest finished match) and "example" (a sample, before any real match): played back a round every
+//   few seconds, on a loop.
+// The footer gives the round while it plays and the result only at the end, so it never spoils the match.
 
 const STEP_MS = 3200;
 const HOLD_MS = 8000;
+const POLL_MS = 2500;
 
-export function ArenaLive({ match, verdict, sample }: { match: ArenaMatch; verdict: string; sample?: boolean }) {
-  const [shown, setShown] = useState(0);
+type Mode = "live" | "replay" | "example";
+const LABEL: Record<Mode, string> = { live: "Live", replay: "Replay of the latest match", example: "Example match, played by sample fighters" };
+
+export function ArenaLive({ match: initial, mode }: { match: ArenaMatch; mode: Mode }) {
+  const [match, setMatch] = useState(initial);
+  const [shown, setShown] = useState(mode === "live" ? initial.rounds.length : 0);
   const ref = useRef<HTMLDivElement>(null);
   const visible = useRef(true);
   const n = match.rounds.length;
@@ -26,6 +34,29 @@ export function ArenaLive({ match, verdict, sample }: { match: ArenaMatch; verdi
   }, []);
 
   useEffect(() => {
+    if (mode !== "live") return;
+    let stop = false;
+    const t = setInterval(async () => {
+      if (stop || !visible.current || document.hidden) return;
+      try {
+        const res = await fetch(`/api/arena/match/${initial.id}`);
+        if (!res.ok) return;
+        const next = (await res.json()) as ArenaMatch;
+        setMatch(next);
+        setShown(next.rounds.length);
+        if (next.ending) clearInterval(t);
+      } catch {
+        // A dropped poll: the next one catches up.
+      }
+    }, POLL_MS);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, [mode, initial.id]);
+
+  useEffect(() => {
+    if (mode === "live") return;
     // A reveal every few seconds; at the end, hold the result a while, then start again. Skips ticks while hidden.
     let at = 0;
     let held = 0;
@@ -40,18 +71,18 @@ export function ArenaLive({ match, verdict, sample }: { match: ArenaMatch; verdi
       setShown(at);
     }, STEP_MS);
     return () => clearInterval(t);
-  }, [n]);
+  }, [mode, n]);
 
-  const over = shown >= n;
+  const over = Boolean(match.ending) && shown >= n;
   return (
     <div ref={ref}>
       <Wire match={match} shown={shown} />
       <p className="arena-live-foot">
         <span>
-          <span className="arena-dot-live" aria-hidden="true" />
-          {sample ? "Replay of a sample match" : "Live"} · {over ? verdict : `round ${Math.min(shown + 1, 15)} of 15`}
+          <span className={mode === "live" && !over ? "arena-dot-live" : "arena-dot-replay"} aria-hidden="true" />
+          {LABEL[mode]} · {over ? caption(match, n) : `round ${Math.min(shown + 1, 15)} of 15`}
         </span>
-        <a href={`/arena/match/${match.id}?from=start`}>Watch the full match →</a>
+        {mode === "example" ? null : <a href={`/line/match/${match.id}${mode === "replay" ? "?from=start" : ""}`}>{mode === "live" ? "Open the match →" : "Watch the full match →"}</a>}
       </p>
     </div>
   );

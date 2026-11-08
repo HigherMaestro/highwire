@@ -61,6 +61,13 @@ const HOUSE_RATINGS: Record<HouseBot, Rating> = {
 
 const FIGHTERS = "arena:fighters";
 const OPEN = "arena:open";
+/** The latest finished matches, newest first, for the pages. */
+const RECENT = "arena:recent";
+const RECENT_MAX = 60;
+/** A fighter's matches, newest first. */
+const fighterMatches = (id: string) => `arena:fighter-matches:${id}`;
+const FIGHTER_MATCHES_MAX = 50;
+const REPORTS = "arena:reports";
 const OK = "arena:ok";
 const OUTAGES = "arena:outages";
 /** A gap this long between the referee's touches of the store, while the sweep runs each minute, was an outage. */
@@ -109,7 +116,7 @@ export class Referee {
 
   /** Registers (or re-registers) the coin a verified wallet launched. Returns the arena token, once. */
   async enroll(v: Verified, adult: unknown): Promise<{ token: string; fighter: FighterView }> {
-    if (adult !== true) fail("bad_request", "The arena is for people 18 or older: the owner confirms it (adult: true).");
+    if (adult !== true) fail("bad_request", "The Line is for people 18 or older: the owner confirms it (adult: true).");
     const facts = await this.coinFacts(v.mint);
     if (!facts) fail("not_found", "higher.fun doesn't know that coin.");
     if (HOUSE_NAME.test(facts!.name) || HOUSE_NAME.test(facts!.ticker)) fail("refused", "Fighter names can't contain \"Highwire\" or a house fighter's name.");
@@ -147,12 +154,12 @@ export class Referee {
 
   /** The fighter a token belongs to, renewing the token at most once a day. */
   async authenticate(token: string | null): Promise<Fighter> {
-    if (!token || !/^[0-9a-f]{64}$/.test(token)) fail("unauthorized", "Send the arena token from registration (the local server does this for you).");
+    if (!token || !/^[0-9a-f]{64}$/.test(token)) fail("unauthorized", "Send the token from registration (the local server does this for you).");
     const hash = sha256Hex(token!);
     const t = await this.store.get<{ fighter: string; renewedAt: number }>(`arena:token:${hash}`);
-    if (!t) fail("unauthorized", "That arena token isn't valid (it expired, or the coin was registered again). Register again.");
+    if (!t) fail("unauthorized", "That token isn't valid (it expired, or the coin was registered again). Register again.");
     const f = await this.store.get<Fighter>(`arena:fighter:${t!.value.fighter}`);
-    if (!f || !sameHex(f.value.tokenHash, hash)) fail("unauthorized", "That arena token was replaced by a newer registration.");
+    if (!f || !sameHex(f.value.tokenHash, hash)) fail("unauthorized", "That token was replaced by a newer registration.");
     const now = this.clock.now();
     if (now - t!.value.renewedAt > 86_400_000) await this.store.cas(`arena:token:${hash}`, t!.version, { fighter: t!.value.fighter, renewedAt: now }, TOKEN_SECONDS);
     return f!.value;
@@ -173,15 +180,16 @@ export class Referee {
     }
   }
 
+  /**
+   * Every coin launched with Highwire's tools plays and is rated from its first match: there's no age, holder or volume
+   * gate, so launching a coin to play is encouraged (the launch fee is the cost of a fighter). The checks decide only
+   * whether the page may link to the coin.
+   */
   private standing(c: CoinFacts, now: number): CoinStanding {
     const why: string[] = [];
-    const old = now - c.createdAt >= 86_400_000;
-    const active = c.holders >= 10 || c.volumeSol >= 5;
-    if (!old) why.push("the coin is under 24 hours old");
-    if (!active) why.push("the coin has fewer than 10 holders and under 5 SOL of volume");
     if (c.rugFlag) why.push("the coin's risk check carries a rug flag");
     if (!c.creatorHolds) why.push("the coin's creator no longer holds any");
-    return { checkedAt: now, ratedOk: old && active, listedOk: !c.rugFlag && c.creatorHolds, why };
+    return { checkedAt: now, ratedOk: true, listedOk: !c.rugFlag && c.creatorHolds, why };
   }
 
   // ---------------------------------------------------------------- matches
@@ -237,11 +245,12 @@ export class Referee {
     // Claim the fighter first, so two joins at once can't make two matches.
     await update<Fighter>(this.store, `arena:fighter:${f.id}`, (cur) => {
       if (!cur) return fail("unauthorized", "That fighter is gone.");
-      if (cur.match && cur.match !== f.match) fail("conflict", "You joined another match just now; call arena_join again to get it.");
+      if (cur.match && cur.match !== f.match) fail("conflict", "You joined another match just now; call line_join again to get it.");
       return { ...cur, match: id };
     });
     await this.store.cas(`arena:match:${id}`, 0, m);
     await update<string[]>(this.store, OPEN, (cur) => [...(cur ?? []), id]);
+    await update<string[]>(this.store, fighterMatches(f.id), (cur) => [id, ...(cur ?? []).filter((x) => x !== id)].slice(0, FIGHTER_MATCHES_MAX));
     return viewMatch(m, this.sideOf(m, f), outages);
   }
 
@@ -251,7 +260,7 @@ export class Referee {
    */
   async state(f: Fighter, input: { match?: unknown; after?: unknown; wait?: unknown }): Promise<MatchView> {
     const id = typeof input.match === "string" ? input.match : f.match;
-    if (!id) fail("not_found", "You're not in a match; call arena_join.");
+    if (!id) fail("not_found", "You're not in a match; call line_join.");
     const after = typeof input.after === "number" && Number.isInteger(input.after) ? input.after : -1;
     const wait = input.wait === true;
     await this.spend(f, wait ? 5 : 1);
@@ -326,6 +335,70 @@ export class Referee {
     return viewMatch(done, this.sideOf(done, f), outages);
   }
 
+  /**
+   * The matches for the pages: those under way (their clocks played forward) and the latest finished, newest first,
+   * each as a spectator sees it.
+   */
+  async matches(n = 24): Promise<{ live: MatchView[]; recent: MatchView[] }> {
+    const outages = await this.outages();
+    const views = async (ids: string[]) => {
+      const out: MatchView[] = [];
+      for (const id of ids) {
+        const m = await this.current(id, outages).catch(() => null);
+        if (m) out.push(viewMatch(m, null, outages));
+      }
+      return out;
+    };
+    const open = (await this.store.get<string[]>(OPEN))?.value ?? [];
+    const recent = (await this.store.get<string[]>(RECENT))?.value ?? [];
+    const live = (await views(open.slice(-6).reverse())).filter((v) => !v.ending);
+    return { live, recent: await views(recent.slice(0, n)) };
+  }
+
+  /** One fighter's matches, newest first, as spectators see them. */
+  async fighterMatches(id: string, n = 30): Promise<MatchView[]> {
+    const outages = await this.outages();
+    const ids = (await this.store.get<string[]>(fighterMatches(id)))?.value ?? [];
+    const out: MatchView[] = [];
+    for (const mid of ids.slice(0, n)) {
+      const m = await this.current(mid, outages).catch(() => null);
+      if (m) out.push(viewMatch(m, null, outages));
+    }
+    return out;
+  }
+
+  /** A spectator reports a revealed line of table talk. Kept for review; nothing changes until someone hides it. */
+  async report(input: { match?: unknown; round?: unknown; side?: unknown; why?: unknown }): Promise<{ reported: true }> {
+    if (typeof input.match !== "string" || !/^[0-9a-f]{24}$/.test(input.match)) fail("bad_request", "match is a match id.");
+    if (typeof input.round !== "number" || !Number.isInteger(input.round)) fail("bad_request", "round is a round number.");
+    if (input.side !== "a" && input.side !== "b") fail("bad_request", 'side is "a" or "b".');
+    const m = await this.load(input.match as string);
+    const r = m.rounds[(input.round as number) - 1];
+    if (!r || !r[input.side as "a" | "b"].line) fail("not_found", "There's no line there to report.");
+    const why = typeof input.why === "string" ? input.why.slice(0, 200) : "";
+    await update<{ match: string; round: number; side: string; why: string; at: number }[]>(this.store, REPORTS, (cur) =>
+      [...(cur ?? []), { match: input.match as string, round: input.round as number, side: input.side as string, why, at: this.clock.now() }].slice(-500),
+    );
+    return { reported: true };
+  }
+
+  /** Reports waiting for review, oldest first. */
+  async reports() {
+    return (await this.store.get<{ match: string; round: number; side: string; why: string; at: number }[]>(REPORTS))?.value ?? [];
+  }
+
+  /** Hides a revealed line of table talk. Its move's commitment doesn't cover the line, so every check still holds. */
+  async hideLine(match: string, round: number, side: "a" | "b"): Promise<void> {
+    await update<Match>(this.store, `arena:match:${match}`, (cur) => {
+      if (!cur) return fail("not_found", "No such match.");
+      const r = cur.rounds[round - 1];
+      if (!r) return fail("not_found", "No such round.");
+      r[side] = { ...r[side], line: "", hidden: true };
+      return cur;
+    });
+    await update<{ match: string; round: number; side: string }[]>(this.store, REPORTS, (cur) => (cur ? cur.filter((x) => !(x.match === match && x.round === round && x.side === side)) : undefined));
+  }
+
   /** The cron's sweep: plays every open match's clock forward, so matches nobody is watching still end. */
   async sweep(): Promise<{ open: number; ended: number }> {
     const outages = await this.outages();
@@ -353,6 +426,7 @@ export class Referee {
     });
     if (!first) return m!;
     await update<string[]>(this.store, OPEN, (cur) => (cur ? cur.filter((x) => x !== id) : undefined));
+    await update<string[]>(this.store, RECENT, (cur) => [id, ...(cur ?? []).filter((x) => x !== id)].slice(0, RECENT_MAX));
     for (const side of ["a", "b"] as const) {
       const s = m!.sides[side];
       if (s.kind !== "fighter") continue;

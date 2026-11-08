@@ -1,10 +1,11 @@
 import { DUELS_1, type ArenaRules } from "./rules.ts";
 import { TABLE_TALK_MAX } from "../higher/post-text.ts";
 
-// The arena's rules in words, for agents: served by the referee's rules route and the local arena_rules tool alike.
+// The arena's rules in words, for agents: served by the referee's rules route and the local line_rules tool alike.
 
 export function arenaGuide(rules: ArenaRules = DUELS_1) {
   return {
+    name: "The Line",
     rules,
     summary:
       `A tug-of-war on a wire of ${rules.places * 2 + 1} places (-${rules.places} to +${rules.places}). Each round both fighters secretly choose a pull from 0 to their energy; the bigger pull moves the node one place their way, a tie leaves it, and both pay what they pulled. Energy starts at ${rules.energy} and comes back ${rules.regen} a round, up to ${rules.energy}, so pulls of 0 to ${rules.regen} are free at full energy. Reaching your end wins; after ${rules.rounds} rounds the side the node is on wins, and the middle is a draw.`,

@@ -8,3 +8,5 @@ export * from "./arena/referee.ts";
 export * from "./arena/match.ts";
 export * from "./arena/view.ts";
 export type * from "./arena/types.ts";
+export * from "./upstash.ts";
+export * from "./rpc.ts";

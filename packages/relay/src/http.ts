@@ -18,15 +18,21 @@ import type { Store } from "./store.ts";
 //   GET  /api/arena/match/<id>     a spectator's view, cached 2 seconds
 //   GET  /api/arena/fighter/<mint>
 //   GET  /api/arena/leaderboard
-//   POST /api/arena/sweep          the cron (CRON_SECRET)
+//   POST /api/arena/report         { match, round, side, why? }              a spectator reports a line of table talk
+//   GET  /api/arena/sweep          the cron: with CRON_SECRET set it needs the secret, otherwise once per 30 seconds
+//   GET  /api/arena/admin/reports, POST /api/arena/admin/hide { match, round, side }   (LINE_ADMIN_TOKEN; off without it)
 
 export interface RelayOptions {
   store: Store;
   clock: Clock;
   rpc: RegistrationRpc;
   coins: CoinDirectory;
-  /** The cron's bearer secret; without it the sweep route refuses. */
+  /** The cron's bearer secret. Without it anyone may call the sweep, but it runs at most once every 30 seconds. */
   cronSecret?: string;
+  /** The moderator's bearer token for the admin routes; without it they don't exist. */
+  adminToken?: string;
+  /** Who's calling, for the per-caller limit on registration and reports (an IP, from the host). */
+  clientKey?: (req: Request) => string | null;
   referee?: RefereeConfig;
 }
 
@@ -53,13 +59,24 @@ export function createRelay(o: RelayOptions): Relay {
   };
   const bearer = (req: Request) => /^Bearer (\S+)$/.exec(req.headers.get("authorization") ?? "")?.[1] ?? null;
   const fighter = (req: Request) => referee.authenticate(bearer(req));
+  /** A per-caller limit for the routes without a token: each registration step reads the chain. */
+  const limitCaller = async (req: Request, what: string, perMinute: number) => {
+    const who = o.clientKey?.(req);
+    if (!who) return;
+    const used = await o.store.incr(`arena:rl-ip:${what}:${who}:${Math.floor(o.clock.now() / 60_000)}`, 1, 120);
+    if (used > perMinute) throw new RelayError("rate_limited", "Too many requests from here this minute; wait a little.");
+  };
 
   async function route(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname.replace(/\/+$/, "");
     const m = req.method;
-    if (m === "POST" && path === "/api/agents/challenge") return json(await registration.challenge(await body(req)));
+    if (m === "POST" && path === "/api/agents/challenge") {
+      await limitCaller(req, "challenge", 20);
+      return json(await registration.challenge(await body(req)));
+    }
     if (m === "POST" && path === "/api/agents/register") {
+      await limitCaller(req, "register", 20);
       const b = await body(req);
       const v = await registration.verify(b);
       const { token, fighter: f } = await referee.enroll(v, b.adult);
@@ -79,9 +96,27 @@ export function createRelay(o: RelayOptions): Relay {
     if (m === "GET" && match) return json(await referee.spectate(match[1]!), 200, "public, s-maxage=2");
     const one = /^\/api\/arena\/fighter\/([1-9A-HJ-NP-Za-km-z]{32,44})$/.exec(path);
     if (m === "GET" && one) return json(await referee.fighter(one[1]!), 200, "public, s-maxage=30");
-    if (m === "POST" && path === "/api/arena/sweep") {
-      if (!o.cronSecret || bearer(req) !== o.cronSecret) throw new RelayError("unauthorized", "The sweep is for the cron.");
+    if ((m === "POST" || m === "GET") && path === "/api/arena/sweep") {
+      if (o.cronSecret) {
+        if (bearer(req) !== o.cronSecret) throw new RelayError("unauthorized", "The sweep is for the cron.");
+      } else if ((await o.store.cas("arena:sweep-lock", 0, 1, 30)) === null) {
+        return json({ skipped: "a sweep ran in the last 30 seconds" });
+      }
       return json(await referee.sweep());
+    }
+    if (m === "POST" && path === "/api/arena/report") {
+      await limitCaller(req, "report", 10);
+      return json(await referee.report(await body(req)));
+    }
+    if (path.startsWith("/api/arena/admin/")) {
+      if (!o.adminToken || bearer(req) !== o.adminToken) throw new RelayError("not_found", "No such route.");
+      if (m === "GET" && path === "/api/arena/admin/reports") return json(await referee.reports());
+      if (m === "POST" && path === "/api/arena/admin/hide") {
+        const b = await body(req);
+        if (typeof b.match !== "string" || typeof b.round !== "number" || (b.side !== "a" && b.side !== "b")) throw new RelayError("bad_request", "match, round and side.");
+        await referee.hideLine(b.match, b.round, b.side);
+        return json({ hidden: true });
+      }
     }
     throw new RelayError("not_found", "No such route.");
   }

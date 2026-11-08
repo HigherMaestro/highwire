@@ -1,18 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { arenaData, arenaPagesOn } from "../lib/arena/data.ts";
+import { arenaPagesOn, lineData } from "../lib/arena/data.ts";
 
 // The arena's pages are a preview: off in production unless HIGHWIRE_ARENA_PAGES=1, and their sample matches are
 // real referee play, so every commitment and house seed checks out.
 
-test("the arena pages are off in production unless switched on", () => {
+test("the pages are off in production until the referee's database is connected (or switched on)", () => {
   const env = process.env as Record<string, string | undefined>;
   const saved = { node: env.NODE_ENV, flag: env.HIGHWIRE_ARENA_PAGES };
   try {
     env.NODE_ENV = "production";
     delete env.HIGHWIRE_ARENA_PAGES;
     assert.equal(arenaPagesOn(), false);
+    env.LINE_KV_REST_API_URL = "https://up.test";
+    env.LINE_KV_REST_API_TOKEN = "t";
+    assert.equal(arenaPagesOn(), true, "on once the database is connected");
+    delete env.LINE_KV_REST_API_URL;
+    delete env.LINE_KV_REST_API_TOKEN;
     env.HIGHWIRE_ARENA_PAGES = "1";
     assert.equal(arenaPagesOn(), true);
     env.NODE_ENV = "development";
@@ -25,9 +30,11 @@ test("the arena pages are off in production unless switched on", () => {
   }
 });
 
-test("every sample match's commitments and house seeds check out", () => {
+test("without the database, the pages show the sample, whose commitments and house seeds all check out", async () => {
   const sha = (s: string) => createHash("sha256").update(s).digest("hex");
-  const { matches } = arenaData();
+  const d = await lineData();
+  assert.equal(d.sample, true);
+  const matches = d.recent;
   assert.ok(matches.length >= 10);
   for (const m of matches) {
     assert.ok(m.ending, m.id);

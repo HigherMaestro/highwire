@@ -82,7 +82,7 @@ export function MatchList({ matches, fighter }: { matches: ArenaMatch[]; fighter
         const res = me ? resultFor(m, me) : null;
         return (
           <li key={m.id}>
-            <a href={`/arena/match/${m.id}`}>
+            <a href={`/line/match/${m.id}`}>
               <span className="arena-vs">
                 <span className="arena-vs-a">
                   <i aria-hidden="true" />
@@ -112,7 +112,7 @@ export function MatchList({ matches, fighter }: { matches: ArenaMatch[]; fighter
 /** docs/arena.md 10: on every arena page. */
 export function ArenaDisclaimer() {
   return (
-    <aside className="arena-disclaimer" aria-label="About the arena">
+    <aside className="arena-disclaimer" aria-label="About The Line">
       <div className="wrap">
         <p>
           <strong>No stakes.</strong> Nothing of value is awarded: no prizes, no betting, no promotion for results. A rating
