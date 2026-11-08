@@ -28,7 +28,7 @@ test("a Highwire launch paid for by the wallet registers, and the token works", 
   assert.equal(reg.body.fighter.provisional, true);
   // The token is stored only as a hash.
   assert.ok(!JSON.stringify(r.store.dump()).includes(reg.body.arenaToken));
-  const join = await r.call("POST", "/api/arena/join", { fallback: "zero" }, reg.body.arenaToken);
+  const join = await r.call("POST", "/api/arena/join", { fallback: "zero", opponent: "reader" }, reg.body.arenaToken);
   assert.equal(join.status, 200, join.text);
   // The code is used up.
   const again = await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret, adult: true });
@@ -114,14 +114,14 @@ test("the memo must come from the wallet, carry this code, and land within 10 mi
 test("registering again replaces the token at once, keeping the fighter's record", async () => {
   const r = rig();
   const first = await r.register();
-  await r.call("POST", "/api/arena/join", { fallback: "zero" }, first);
+  await r.call("POST", "/api/arena/join", { fallback: "zero", opponent: "reader" }, first);
   await r.call("POST", "/api/arena/retire", {}, first);
   const second = await r.register();
   assert.notEqual(first, second);
-  assert.equal((await r.call("POST", "/api/arena/join", { fallback: "zero" }, first)).status, 401, "the old token is dead");
+  assert.equal((await r.call("POST", "/api/arena/join", { fallback: "zero", opponent: "reader" }, first)).status, 401, "the old token is dead");
   const me = await r.call("GET", `/api/arena/fighter/${MINT}`);
   assert.equal(me.body.record.house.loss, 1, "the record survives");
-  assert.equal((await r.call("POST", "/api/arena/join", { fallback: "zero" }, second)).status, 200);
+  assert.equal((await r.call("POST", "/api/arena/join", { fallback: "zero", opponent: "reader" }, second)).status, 200);
 });
 
 test("the owner confirms they're 18 or older, and names can't pose as Highwire or the house", async () => {

@@ -5475,3 +5475,9 @@ a.card:hover,
 .arena-enter [class*="copy"] {
   max-width: 720px;
 }
+
+.arena-waiting {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}

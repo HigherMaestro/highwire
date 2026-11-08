@@ -22,7 +22,7 @@ async function move(r: Rig, token: string, view: any, pull: number, line = "") {
 async function setup(opponent?: string) {
   const r = rig();
   const token = await r.register();
-  const join = await r.call("POST", "/api/arena/join", { fallback: "steady:2", ...(opponent ? { opponent } : {}) }, token);
+  const join = await r.call("POST", "/api/arena/join", { fallback: "steady:2", opponent: opponent ?? "reader" }, token);
   assert.equal(join.status, 200, join.text);
   return { r, token, view: join.body };
 }
@@ -266,18 +266,18 @@ test("retiring forfeits; before round 3 it's a loss on the record but tells the 
   assert.equal(f.record.house.loss, 1);
   assert.equal(f.deviation, 350, "unchanged");
   // And a new match can start.
-  assert.equal((await r.call("POST", "/api/arena/join", { fallback: "zero" }, token)).body.round, 1);
+  assert.equal((await r.call("POST", "/api/arena/join", { fallback: "zero", opponent: "reader" }, token)).body.round, 1);
 });
 
 test("joining is idempotent while a match is on, and declares a fallback from the menu", async () => {
   const { r, token, view } = await setup();
-  const again = await r.call("POST", "/api/arena/join", { fallback: "zero" }, token);
+  const again = await r.call("POST", "/api/arena/join", { fallback: "zero", opponent: "reader" }, token);
   assert.equal(again.body.id, view.id);
   assert.equal(again.body.self.fallback, "steady:2", "the first declaration stands");
   const other = rig();
   const t = await other.register();
   for (const bad of [undefined, "all-in", "steady:x"]) assert.equal((await other.call("POST", "/api/arena/join", { fallback: bad }, t)).status, 400);
-  assert.equal((await other.call("POST", "/api/arena/join", { fallback: "zero", opponent: "agent" }, t)).status, 400);
+  assert.equal((await other.call("POST", "/api/arena/join", { fallback: "zero", opponent: "nobody" }, t)).status, 400);
 });
 
 test("operator coins play but are never ranked; coins that fail the checks lose their listing", async () => {
@@ -300,7 +300,7 @@ test("the sweep needs the cron's secret; unknown routes and bodies get the error
   const nope = await r.call("GET", "/api/arena/nope");
   assert.deepEqual(Object.keys(nope.body).sort(), ["code", "error"]);
   assert.equal((await r.call("GET", "/api/arena/rules")).body.rules.id, "duels-1");
-  assert.equal((await r.call("POST", "/api/arena/join", { fallback: "zero" })).status, 401);
+  assert.equal((await r.call("POST", "/api/arena/join", { fallback: "zero", opponent: "reader" })).status, 401);
 });
 
 test("simultaneous moves: of two different moves sent at once, one is recorded and the other is a conflict or late", async () => {
@@ -324,7 +324,7 @@ test("the pages' indexes: live and recent matches, and each fighter's matches, n
   assert.deepEqual(lists.live.map((m) => m.id), [view.id]);
   assert.equal(lists.live[0]!.self, undefined, "spectator views only");
   await r.call("POST", "/api/arena/retire", {}, token);
-  const second = (await r.call("POST", "/api/arena/join", { fallback: "zero" }, token)).body;
+  const second = (await r.call("POST", "/api/arena/join", { fallback: "zero", opponent: "reader" }, token)).body;
   lists = await r.relay.referee.matches();
   assert.deepEqual(lists.recent.map((m) => m.id), [view.id]);
   assert.deepEqual(lists.live.map((m) => m.id), [second.id]);

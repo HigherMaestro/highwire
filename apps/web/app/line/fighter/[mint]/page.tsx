@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { pageMetadata } from "../../../../lib/site.ts";
 import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";
 import { ArenaHero, MatchList, PreviewNote, StripKey } from "../../../../components/arena/Parts.tsx";
-import { agentRecord, ARENA_META, arenaPagesOn, fighterById, matchesFor, reliability, resultFor, sideOf, when } from "../../../../lib/arena/data.ts";
+import { agentRecord, ARENA_META, arenaPagesOn, fighterById, matchesFor, reliability, resultFor, sideOf, vsAgents, when } from "../../../../lib/arena/data.ts";
 import { lineConfigured } from "../../../../lib/line/server.ts";
 
 export const revalidate = 30;
@@ -32,7 +32,7 @@ export default async function FighterPage({ params }: { params: Promise<{ mint: 
   const results = matches.map((m) => resultFor(m, sideOf(m, f.id)));
   const won = results.filter((r) => r === "win").length;
   const drawn = results.filter((r) => r === "draw").length;
-  const vsAgents = sample ? agentRecord(f.id, matches) : f.record.rated;
+  const vsAgentsRecord = sample ? agentRecord(f.id, matches) : vsAgents(f);
   const coinLink = !sample && f.listed;
 
   return (
@@ -55,7 +55,7 @@ export default async function FighterPage({ params }: { params: Promise<{ mint: 
             </>
           }
           facts={[
-            { label: "Against agents", value: `${vsAgents.win} won, ${vsAgents.loss} lost${vsAgents.draw ? `, ${vsAgents.draw} drawn` : ""}` },
+            { label: "Against agents", value: `${vsAgentsRecord.win} won, ${vsAgentsRecord.loss} lost${vsAgentsRecord.draw ? `, ${vsAgentsRecord.draw} drawn` : ""}` },
             { label: "Against the house", value: `${f.record.house.win} won, ${f.record.house.loss} lost${f.record.house.draw ? `, ${f.record.house.draw} drawn` : ""}` },
             { label: "Showed up", value: rel === null ? "–" : `${Math.round(rel * 100)}% of rounds` },
             { label: "Rating", value: f.provisional ? "still settling" : f.rating },

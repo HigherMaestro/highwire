@@ -15,7 +15,7 @@ import type { Clock } from "../clock.ts";
 import { fail, RelayError } from "../errors.ts";
 import { randomHex, sha256Hex, sameHex, TOKEN_SECONDS, type Verified } from "../registration.ts";
 import { update, type Store } from "../store.ts";
-import { applyMove, contested, forfeitMatch, newHouseMatch, settle } from "./match.ts";
+import { applyMove, contested, forfeitMatch, newAgentMatch, newHouseMatch, settle } from "./match.ts";
 import type { CoinStanding, Fighter, Match, Outage, Tally } from "./types.ts";
 import { viewFighter, viewMatch, type FighterView, type MatchView } from "./view.ts";
 
@@ -68,6 +68,36 @@ const RECENT_MAX = 60;
 const fighterMatches = (id: string) => `arena:fighter-matches:${id}`;
 const FIGHTER_MATCHES_MAX = 50;
 const REPORTS = "arena:reports";
+const QUEUE = "arena:queue";
+const FLAGS = "arena:flags";
+/** A queue entry lives while its long-poll is open and this long after it returns. */
+const QUEUE_ALIVE_MS = 60_000;
+/** Unpaired this long, a fighter plays the house instead. */
+const HOUSE_AFTER_MS = 120_000;
+/** Rated matches a week between the same two fighters. */
+const RATED_PER_WEEK = 3;
+const WEEK_MS = 7 * 86_400_000;
+
+interface QueueEntry {
+  fighter: string;
+  /** The owner: the wallet that registered it. Two fighters with one owner are never paired. */
+  owner: string;
+  rating: number;
+  fallback: string;
+  since: number;
+  seen: number;
+}
+
+interface Queue {
+  entries: QueueEntry[];
+  /** Pairings just made, so the partner's own poll finds its match even before its fighter record says so. */
+  paired: Record<string, { match: string; at: number }>;
+}
+
+/** The rating gap a pairing allows: 150, widening by 100 every 30 seconds of waiting. */
+const ratingGap = (waitedMs: number) => 150 + 100 * Math.floor(waitedMs / 30_000);
+
+export type JoinResult = MatchView | { waiting: true; queue: number; waitedSeconds: number; houseInSeconds: number };
 const OK = "arena:ok";
 const OUTAGES = "arena:outages";
 /** A gap this long between the referee's touches of the store, while the sweep runs each minute, was an outage. */
@@ -220,37 +250,160 @@ export class Referee {
     return fail("refused", "That isn't your match.");
   }
 
-  /** Joins: the fighter's current match if it has one, otherwise a new match against the house. */
-  async join(f: Fighter, input: { fallback?: unknown; opponent?: unknown }): Promise<MatchView> {
-    await this.spend(f, 1);
+  /**
+   * Joins. The fighter's current match if it has one. Otherwise, against the house ("reader", the default, or "even")
+   * at once, or with "agent", against another agent: the fighter queues and this waits (up to the long-poll limit) to be paired by
+   * rating, the allowed gap widening with the wait; after two minutes unpaired, the house plays instead. If it returns
+   * "waiting", call again within a minute to keep the place.
+   */
+  async join(f: Fighter, input: { fallback?: unknown; opponent?: unknown; wait?: unknown }): Promise<JoinResult> {
     const outages = await this.outages();
     if (f.match) {
       const m = await this.current(f.match, outages);
-      if (!m.ending) return viewMatch(m, this.sideOf(m, f), outages);
+      if (!m.ending) {
+        await this.spend(f, 1);
+        return viewMatch(m, this.sideOf(m, f), outages);
+      }
     }
     const fallback = parseFallback(typeof input.fallback === "string" ? input.fallback : "");
     if (!fallback) fail("bad_request", 'Declare a fallback for rounds you miss: "zero", "mirror" or "steady:<n>".');
-    const bot: HouseBot = input.opponent === "even" ? "even" : input.opponent === undefined || input.opponent === "reader" ? "reader" : fail("bad_request", 'opponent is "reader" (the default) or "even". Matches against other agents come later.');
+    // Without one named, the house: 0.14.0's tool names none and can't read "waiting". Newer tools ask for "agent".
+    const opponent = input.opponent ?? "reader";
+    if (opponent !== "agent" && opponent !== "reader" && opponent !== "even") fail("bad_request", 'opponent is "agent", "reader" or "even".');
+    if (opponent !== "agent") {
+      await this.spend(f, 1);
+      return this.startHouse(f, fallback!, opponent as HouseBot, outages);
+    }
+
+    const wait = input.wait !== false;
+    await this.spend(f, wait ? 5 : 1);
+    const lock = `arena:join-poll:${f.id}`;
+    if (wait && (await this.store.cas(lock, 0, 1, Math.ceil(this.longPollMs / 1000) + 5)) === null) fail("rate_limited", "One join at a time per fighter.");
+    try {
+      const until = this.clock.now() + (wait ? this.longPollMs : 0);
+      let pause = 1000;
+      for (;;) {
+        const now = this.clock.now();
+        const found = await this.queueStep(f, input.fallback as string, now);
+        if (found.match) {
+          // A pairing note can outlive its match (the fighter found the match through its own record first): only a
+          // match still being played counts.
+          const m = await this.current(found.match, outages).catch(() => null);
+          if (m && !m.ending) return viewMatch(m, this.sideOf(m, f), outages);
+          continue;
+        }
+        if (found.house) return this.startHouse(f, fallback!, "reader", outages);
+        if (now >= until) return { waiting: true, queue: found.queue, waitedSeconds: Math.round(found.waited / 1000), houseInSeconds: Math.max(0, Math.round((HOUSE_AFTER_MS - found.waited) / 1000)) };
+        await this.clock.sleep(Math.min(pause, Math.max(0, until - now)));
+        pause = Math.min(2000, pause * 1.25);
+      }
+    } finally {
+      if (wait) await this.store.del(lock).catch(() => undefined);
+    }
+  }
+
+  /** How many fighters are waiting for an opponent. */
+  async queueSize(): Promise<number> {
+    const now = this.clock.now();
+    const q = (await this.store.get<Queue>(QUEUE))?.value;
+    return q ? q.entries.filter((e) => now - e.seen < QUEUE_ALIVE_MS).length : 0;
+  }
+
+  /**
+   * One look at the queue for this fighter: its match if it was just paired, a partner if one fits (the match is made
+   * here), the house if it has waited too long, or its place, refreshed.
+   */
+  private async queueStep(f: Fighter, fallback: string, now: number): Promise<{ match?: string; house?: boolean; queue: number; waited: number }> {
+    // Paired by someone else's poll already?
+    const me = (await this.store.get<Fighter>(`arena:fighter:${f.id}`))?.value;
+    if (me?.match) {
+      const m = await this.store.get<Match>(`arena:match:${me.match}`);
+      if (m && !m.value.ending) return { match: me.match, queue: 0, waited: 0 };
+    }
+    const id = randomHex(12);
+    let outcome: { match?: string; partner?: QueueEntry; house?: boolean; queue: number; waited: number } = { queue: 0, waited: 0 };
+    await update<Queue>(this.store, QUEUE, (cur) => {
+      const q: Queue = { entries: (cur?.entries ?? []).filter((e) => now - e.seen < QUEUE_ALIVE_MS), paired: Object.fromEntries(Object.entries(cur?.paired ?? {}).filter(([, v]) => now - v.at < 2 * QUEUE_ALIVE_MS)) };
+      const done = q.paired[f.id];
+      if (done) {
+        delete q.paired[f.id];
+        outcome = { match: done.match, queue: q.entries.length, waited: 0 };
+        return q;
+      }
+      const mine = q.entries.find((e) => e.fighter === f.id);
+      const entry: QueueEntry = { fighter: f.id, owner: f.wallet, rating: f.rating.r, fallback, since: mine?.since ?? now, seen: now };
+      const others = q.entries.filter((e) => e.fighter !== f.id);
+      const waited = now - entry.since;
+      if (waited >= HOUSE_AFTER_MS) {
+        outcome = { house: true, queue: others.length, waited };
+        return { ...q, entries: others };
+      }
+      const fits = others
+        .filter((e) => e.owner !== entry.owner)
+        .filter((e) => Math.abs(e.rating - entry.rating) <= ratingGap(Math.max(waited, now - e.since)))
+        .sort((x, y) => Math.abs(x.rating - entry.rating) - Math.abs(y.rating - entry.rating) || x.since - y.since);
+      const partner = fits[0];
+      if (partner) {
+        outcome = { match: id, partner, queue: others.length - 1, waited };
+        return { entries: others.filter((e) => e.fighter !== partner.fighter), paired: { ...q.paired, [partner.fighter]: { match: id, at: now } } };
+      }
+      outcome = { queue: others.length, waited };
+      return { ...q, entries: [...others, entry] };
+    });
+    if (outcome.partner && !(await this.startAgents(f, fallback, outcome.partner, id, now))) return { queue: outcome.queue, waited: outcome.waited };
+    return outcome;
+  }
+
+  /**
+   * Makes the match the queue just paired: rated unless it's over the weekly cap for this pair. False when the partner
+   * turned out to be busy (it started a match against the house meanwhile): no match, and this fighter queues again.
+   */
+  private async startAgents(f: Fighter, fallback: string, partner: QueueEntry, id: string, now: number): Promise<boolean> {
+    const other = (await this.store.get<Fighter>(`arena:fighter:${partner.fighter}`))?.value;
+    if (!other) return false;
+    if (other.match) {
+      const busy = (await this.store.get<Match>(`arena:match:${other.match}`))?.value;
+      if (busy && !busy.ending) return false;
+    }
+    const week = (x: Fighter, y: string) => x.recent.filter((r) => r.opponent === y && r.rated && now - r.at < WEEK_MS).length;
+    const rated = f.wallet !== other.wallet && Math.max(week(f, other.id), week(other, f.id)) < RATED_PER_WEEK && Boolean(f.standing?.ratedOk ?? true) && Boolean(other.standing?.ratedOk ?? true);
+    const first = Math.random() < 0.5;
+    const me = { id: f.id, name: f.name, fallback: parseFallback(fallback)! };
+    const them = { id: other.id, name: other.name, fallback: parseFallback(partner.fallback) ?? { kind: "zero" as const } };
+    const m = newAgentMatch({ id, rules: this.rules, now, a: first ? me : them, b: first ? them : me, rated });
+    await this.store.cas(`arena:match:${id}`, 0, m);
+    for (const x of [f.id, other.id]) {
+      await update<Fighter>(this.store, `arena:fighter:${x}`, (cur) => (cur ? { ...cur, match: id } : undefined));
+      await update<string[]>(this.store, fighterMatches(x), (cur) => [id, ...(cur ?? []).filter((y) => y !== id)].slice(0, FIGHTER_MATCHES_MAX));
+    }
+    await update<string[]>(this.store, OPEN, (cur) => [...(cur ?? []), id]);
+    return true;
+  }
+
+  /** A match against the house, at once. */
+  private async startHouse(f: Fighter, fallback: NonNullable<ReturnType<typeof parseFallback>>, bot: HouseBot, outages: Outage[]): Promise<MatchView> {
     const now = this.clock.now();
     const id = randomHex(12);
-    const m = newHouseMatch({
-      id,
-      rules: this.rules,
-      now,
-      fighter: { id: f.id, name: f.name, fallback: fallback! },
-      fighterSide: Math.random() < 0.5 ? "a" : "b",
-      bot,
-      seed: randomHex(32),
-    });
+    const m = newHouseMatch({ id, rules: this.rules, now, fighter: { id: f.id, name: f.name, fallback }, fighterSide: Math.random() < 0.5 ? "a" : "b", bot, seed: randomHex(32) });
     // Claim the fighter first, so two joins at once can't make two matches.
+    let taken: string | null = null;
     await update<Fighter>(this.store, `arena:fighter:${f.id}`, (cur) => {
       if (!cur) return fail("unauthorized", "That fighter is gone.");
-      if (cur.match && cur.match !== f.match) fail("conflict", "You joined another match just now; call line_join again to get it.");
+      if (cur.match && cur.match !== f.match) {
+        taken = cur.match;
+        return undefined;
+      }
       return { ...cur, match: id };
     });
+    if (taken) {
+      const existing = await this.current(taken, outages);
+      if (!existing.ending) return viewMatch(existing, this.sideOf(existing, f), outages);
+    }
     await this.store.cas(`arena:match:${id}`, 0, m);
     await update<string[]>(this.store, OPEN, (cur) => [...(cur ?? []), id]);
     await update<string[]>(this.store, fighterMatches(f.id), (cur) => [id, ...(cur ?? []).filter((x) => x !== id)].slice(0, FIGHTER_MATCHES_MAX));
+    // Out of the queue: a fighter playing the house isn't waiting for an agent.
+    await update<Queue>(this.store, QUEUE, (cur) => (cur?.entries.some((e) => e.fighter === f.id) ? { ...cur, entries: cur.entries.filter((e) => e.fighter !== f.id) } : undefined));
     return viewMatch(m, this.sideOf(m, f), outages);
   }
 
@@ -416,7 +569,7 @@ export class Referee {
 
   // ---------------------------------------------------------------- results
 
-  /** Applies an ended match's result once: records, ratings, the house's tally, and frees the fighters. */
+  /** Applies an ended match's result once: records, ratings, the house's tally, flags, and frees the fighters. */
   private async finish(id: string): Promise<Match> {
     let first = false;
     const m = await update<Match>(this.store, `arena:match:${id}`, (cur) => {
@@ -427,17 +580,21 @@ export class Referee {
     if (!first) return m!;
     await update<string[]>(this.store, OPEN, (cur) => (cur ? cur.filter((x) => x !== id) : undefined));
     await update<string[]>(this.store, RECENT, (cur) => [id, ...(cur ?? []).filter((x) => x !== id)].slice(0, RECENT_MAX));
-    for (const side of ["a", "b"] as const) {
-      const s = m!.sides[side];
-      if (s.kind !== "fighter") continue;
-      const facts = await this.coins.coin(s.id).catch(() => null);
-      await update<Fighter>(this.store, `arena:fighter:${s.id}`, (cur) => (cur ? this.result(cur, m!, side, facts) : undefined));
+    const sides = (["a", "b"] as const).filter((s) => m!.sides[s].kind === "fighter");
+    // Both sides' ratings before the match, so each is rated against the other as it was.
+    const before: Partial<Record<Side, Fighter>> = {};
+    for (const s of sides) before[s] = (await this.store.get<Fighter>(`arena:fighter:${m!.sides[s].id}`))?.value;
+    for (const s of sides) {
+      const facts = await this.coins.coin(m!.sides[s].id).catch(() => null);
+      const other = s === "a" ? "b" : "a";
+      await update<Fighter>(this.store, `arena:fighter:${m!.sides[s].id}`, (cur) => (cur ? this.result(cur, m!, s, facts, before[other]) : undefined));
     }
     if (m!.house) {
       const h = m!.house;
       const score = this.score(m!, h.side);
       if (score !== null) await update<Tally>(this.store, `arena:house:${h.bot}`, (cur) => tally(cur ?? empty(), score));
     }
+    await this.flag(m!, before);
     return m!;
   }
 
@@ -449,23 +606,59 @@ export class Referee {
     return e.winner === side ? 1 : 0;
   }
 
-  /** The fighter after a match: its record, and against the house, only its deviation (never its rating). */
-  private result(f: Fighter, m: Match, side: Side, facts: CoinFacts | null): Fighter {
+  /**
+   * The fighter after a match. Against the house: its record, and only its deviation (never its rating). Against an
+   * agent: its record, and in a rated match its rating against the opponent's rating before the match, a quarter as
+   * much when the opponent is still provisional. Forfeits before round 3 and uncontested draws carry no rating.
+   */
+  private result(f: Fighter, m: Match, side: Side, facts: CoinFacts | null, opponent: Fighter | undefined): Fighter {
     const now = this.clock.now();
     const next: Fighter = { ...f, match: f.match === m.id ? null : f.match, standing: facts ? this.standing(facts, now) : f.standing };
     const score = this.score(m, side);
+    const pulls = m.rounds.map((r) => r[side].pull).join(",");
+    if (m.rounds.length >= 5) next.seqs = [sha256Hex(pulls), ...(f.seqs ?? [])].slice(0, 10);
     if (score === null) return next;
     const isHouse = Boolean(m.house);
-    const record = { ...f.record, [isHouse ? "house" : "rated"]: tally(isHouse ? f.record.house : f.record.rated, score) };
-    next.record = record;
-    // Forfeits before round 3 and uncontested draws carry no information.
-    if (m.ending!.reason === "forfeit" && m.rounds.length < 3) return next;
-    if (score === 0.5 && !(contested(m, "a") && contested(m, "b"))) return next;
+    const which = isHouse ? "house" : m.rated ? "rated" : "unrated";
+    next.record = { ...f.record, [which]: tally(f.record[which] ?? empty(), score) };
+    if (!isHouse && opponent) next.recent = [{ opponent: opponent.id, at: now, rated: m.rated, score }, ...f.recent].slice(0, 100);
+    const informative = !(m.ending!.reason === "forfeit" && m.rounds.length < 3) && !(score === 0.5 && !(contested(m, "a") && contested(m, "b")));
+    if (!informative) return next;
     if (isHouse) {
       const after = rate(f.rating, [{ opponent: this.house[m.house!.bot], score }]);
       next.rating = { ...f.rating, rd: after.rd, vol: after.vol };
+    } else if (m.rated && opponent) {
+      const provisional = opponent.rating.rd >= PROVISIONAL_RD;
+      next.rating = rate(f.rating, [{ opponent: opponent.rating, score, weight: provisional ? 0.25 : 1 }]);
+      next.opponentOwners = [...new Set([...f.opponentOwners, opponent.wallet])];
+      if (!provisional) next.establishedOpponents = [...new Set([...f.establishedOpponents, opponent.id])];
     }
     return next;
+  }
+
+  /** Marks what a moderator should look at (docs/arena.md 7). Nothing changes automatically. */
+  private async flag(m: Match, before: Partial<Record<Side, Fighter>>): Promise<void> {
+    const now = this.clock.now();
+    const found: { fighter: string; match: string; reason: string; at: number }[] = [];
+    for (const s of ["a", "b"] as const) {
+      const f = before[s];
+      if (m.sides[s].kind !== "fighter" || !f) continue;
+      const add = (reason: string) => found.push({ fighter: f.id, match: m.id, reason, at: now });
+      if (m.rounds.length >= 3 && m.rounds.every((r) => r[s].fallback)) add("played only its fallback");
+      if (!m.house && m.ending?.reason === "draw" && !(contested(m, "a") && contested(m, "b"))) add("an uncontested draw");
+      if (m.rounds.length >= 5 && (f.seqs ?? []).includes(sha256Hex(m.rounds.map((r) => r[s].pull).join(",")))) add("the same pulls as an earlier match");
+      const other = m.sides[s === "a" ? "b" : "a"];
+      if (!m.house && m.ending?.winner && m.ending.winner !== s) {
+        const losses = f.recent.filter((r) => r.opponent === other.id && r.score === 0 && now - r.at < WEEK_MS).length + 1;
+        if (losses >= 3) add(`lost ${losses} times this week to ${other.name}`);
+      }
+    }
+    if (found.length) await update<typeof found>(this.store, FLAGS, (cur) => [...(cur ?? []), ...found].slice(-500));
+  }
+
+  /** Flags waiting for review, oldest first. */
+  async flags() {
+    return (await this.store.get<{ fighter: string; match: string; reason: string; at: number }[]>(FLAGS))?.value ?? [];
   }
 
   // ---------------------------------------------------------------- the leaderboard

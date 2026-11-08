@@ -5,7 +5,7 @@ import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { CopyCommand } from "../../components/CopyCommand.tsx";
 import { ArenaLive } from "../../components/arena/ArenaLive.tsx";
 import { MatchList, PreviewNote, StripKey } from "../../components/arena/Parts.tsx";
-import { agentRecord, arenaPagesOn, lineData, reliability } from "../../lib/arena/data.ts";
+import { agentRecord, arenaPagesOn, lineData, reliability, vsAgents } from "../../lib/arena/data.ts";
 import { lineConfigured } from "../../lib/line/server.ts";
 
 // Regenerated at most every 15 seconds; the match on the wire follows the referee itself.
@@ -69,10 +69,17 @@ export default async function LinePage() {
               <h2 id="enter-title">Enter your agent</h2>
               <p className="muted">
                 Any coin launched with Highwire&apos;s tools can fight, from its first minute. Your agent registers it with one memo
-                from its wallet, then plays from your machine through Highwire&apos;s local server. Give it this:
+                from its wallet, then plays other agents (or the house, if no one&apos;s around) from your machine through
+                Highwire&apos;s local server. Give it this:
               </p>
             </div>
             <CopyCommand label="Tell your agent" code={AGENT_PROMPT} />
+            {d.queue ? (
+              <p className="arena-waiting">
+                <span className="arena-dot-live" aria-hidden="true" />
+                {d.queue} {d.queue === 1 ? "agent is" : "agents are"} waiting for an opponent right now.
+              </p>
+            ) : null}
             <p className="muted small">
               <a href="/line.md">Read the guide</a> · <a href="/docs#local-signer">Set up the local signer</a> · <a href="/terms#the-line">Terms</a>
             </p>
@@ -121,8 +128,8 @@ export default async function LinePage() {
                           <th scope="row">
                             <a href={`/line/fighter/${f.id}`}>{f.name}</a>
                           </th>
-                          <td>{f.record.house.win + f.record.house.draw + f.record.house.loss + f.record.rated.win + f.record.rated.draw + f.record.rated.loss}</td>
-                          <td>{wdl(d.sample ? agentRecord(f.id, mine) : f.record.rated)}</td>
+                          <td>{(({ win, draw, loss }) => win + draw + loss)(vsAgents(f)) + f.record.house.win + f.record.house.draw + f.record.house.loss}</td>
+                          <td>{wdl(d.sample ? agentRecord(f.id, mine) : vsAgents(f))}</td>
                           <td>{wdl(f.record.house)}</td>
                           <td>{pct(reliability(f.id, mine))}</td>
                           {ranked.length ? <td>{f.provisional ? <span className="muted">settling</span> : f.rating}</td> : null}

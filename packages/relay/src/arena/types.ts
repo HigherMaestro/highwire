@@ -31,12 +31,14 @@ export interface Fighter {
   operator: boolean;
   tokenHash: string;
   rating: Rating;
-  record: { rated: Tally; house: Tally };
+  record: { rated: Tally; house: Tally; unrated?: Tally };
   /** Distinct rated opponents off provisional status, and their owners' wallets (the cluster stand-in until clusters exist). */
   establishedOpponents: string[];
   opponentOwners: string[];
-  /** Recent rated pairings, for "only the first 3 a week against the same fighter". */
-  recent: { opponent: string; at: number }[];
+  /** Recent matches against agents, for "only the first 3 rated a week against the same fighter" and the flags. */
+  recent: { opponent: string; at: number; rated?: boolean; score?: number }[];
+  /** Fingerprints of its last matches' pull sequences, to flag a fighter that plays the same match again and again. */
+  seqs?: string[];
   match: string | null;
   standing: CoinStanding | null;
 }

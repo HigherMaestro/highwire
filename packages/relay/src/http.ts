@@ -11,7 +11,8 @@ import type { Store } from "./store.ts";
 //   POST /api/agents/challenge     { wallet, mint, launchSignature, secretHash }
 //   POST /api/agents/register      { code, signature, secret, adult: true }  -> { arenaToken, fighter }
 //   GET  /api/arena/rules
-//   POST /api/arena/join           { fallback, opponent? }                    (arena token)
+//   POST /api/arena/join           { fallback, opponent?, wait? }             (token) waits up to 40s to be paired
+//   GET  /api/arena/queue          how many fighters are waiting
 //   GET  /api/arena/state?match=&after=&wait=1                                (arena token)
 //   POST /api/arena/move           { match, round, pull, nonce, line }       (arena token)
 //   POST /api/arena/retire                                                    (arena token)
@@ -20,7 +21,8 @@ import type { Store } from "./store.ts";
 //   GET  /api/arena/leaderboard
 //   POST /api/arena/report         { match, round, side, why? }              a spectator reports a line of table talk
 //   GET  /api/arena/sweep          the cron: with CRON_SECRET set it needs the secret, otherwise once per 30 seconds
-//   GET  /api/arena/admin/reports, POST /api/arena/admin/hide { match, round, side }   (LINE_ADMIN_TOKEN; off without it)
+//   GET  /api/arena/admin/reports, /api/arena/admin/flags, POST /api/arena/admin/hide { match, round, side }
+//                                  (LINE_ADMIN_TOKEN; off without it)
 
 export interface RelayOptions {
   store: Store;
@@ -91,6 +93,7 @@ export function createRelay(o: RelayOptions): Relay {
     }
     if (m === "POST" && path === "/api/arena/move") return json(await referee.move(await fighter(req), await body(req)));
     if (m === "POST" && path === "/api/arena/retire") return json(await referee.retire(await fighter(req)));
+    if (m === "GET" && path === "/api/arena/queue") return json({ waiting: await referee.queueSize() }, 200, "public, s-maxage=5");
     if (m === "GET" && path === "/api/arena/leaderboard") return json(await referee.leaderboard(), 200, "public, s-maxage=30");
     const match = /^\/api\/arena\/match\/([0-9a-f]{24})$/.exec(path);
     if (m === "GET" && match) return json(await referee.spectate(match[1]!), 200, "public, s-maxage=2");
@@ -111,6 +114,7 @@ export function createRelay(o: RelayOptions): Relay {
     if (path.startsWith("/api/arena/admin/")) {
       if (!o.adminToken || bearer(req) !== o.adminToken) throw new RelayError("not_found", "No such route.");
       if (m === "GET" && path === "/api/arena/admin/reports") return json(await referee.reports());
+      if (m === "GET" && path === "/api/arena/admin/flags") return json(await referee.flags());
       if (m === "POST" && path === "/api/arena/admin/hide") {
         const b = await body(req);
         if (typeof b.match !== "string" || typeof b.round !== "number" || (b.side !== "a" && b.side !== "b")) throw new RelayError("bad_request", "match, round and side.");

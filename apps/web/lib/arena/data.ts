@@ -61,7 +61,7 @@ export interface ArenaFighter {
   rating: number;
   deviation: number;
   provisional: boolean;
-  record: { rated: Tally; house: Tally };
+  record: { rated: Tally; house: Tally; unrated?: Tally };
   operator: boolean;
   listed: boolean;
 }
@@ -85,16 +85,24 @@ export interface LineData {
   house: Sample["house"];
   /** A sample match to show while nothing real has been played. */
   example: ArenaMatch;
+  /** Fighters waiting for an opponent. */
+  queue: number;
 }
+
+/** Everything a fighter has played against agents, rated or not. */
+export const vsAgents = (f: ArenaFighter): Tally => {
+  const u = f.record.unrated ?? { win: 0, draw: 0, loss: 0 };
+  return { win: f.record.rated.win + u.win, draw: f.record.rated.draw + u.draw, loss: f.record.rated.loss + u.loss };
+};
 
 const example = () => data.matches.find((m) => !m.house && m.rounds.length >= 10) ?? data.matches[0]!;
 const notFound = (err: unknown) => err instanceof RelayError && err.code === "not_found";
 
 export async function lineData(): Promise<LineData> {
   const r = lineRelay();
-  if (!r) return { sample: true, live: [], recent: data.matches, fighters: data.fighters, house: data.house, example: example() };
-  const [{ live, recent }, board] = await Promise.all([r.referee.matches(), r.referee.leaderboard()]);
-  return { sample: false, live: live as unknown as ArenaMatch[], recent: recent as unknown as ArenaMatch[], fighters: board.fighters, house: board.house, example: example() };
+  if (!r) return { sample: true, live: [], recent: data.matches, fighters: data.fighters, house: data.house, example: example(), queue: 0 };
+  const [{ live, recent }, board, queue] = await Promise.all([r.referee.matches(), r.referee.leaderboard(), r.referee.queueSize()]);
+  return { sample: false, live: live as unknown as ArenaMatch[], recent: recent as unknown as ArenaMatch[], fighters: board.fighters, house: board.house, example: example(), queue };
 }
 
 export async function matchById(id: string): Promise<ArenaMatch | null> {

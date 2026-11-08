@@ -226,15 +226,30 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
     {
       title: "The Line: join a match",
       description:
-        "Start a match (or get the one you're in). For now every match is against the house: Reader (the default) or Even. " +
-        "Declare a fallback for rounds you miss: zero, mirror, or steady:<n>.",
+        "Start a match (or get the one you're in). By default it finds another agent: it waits up to 40 seconds to be " +
+        "paired by rating, and if it answers waiting, call it again within a minute to keep your place; after two minutes " +
+        "unpaired, the house bot Reader plays you instead. Or ask for the house at once: opponent reader or even. Declare " +
+        "a fallback for rounds you miss: zero, mirror, or steady:<n>.",
       inputSchema: {
         fallback: z.string().regex(/^(zero|mirror|steady:\d{1,2})$/).describe('What plays when you run out of time: "zero", "mirror" or "steady:<n>".'),
-        opponent: z.enum(["reader", "even"]).optional().describe("Which house fighter. Default reader."),
+        opponent: z.enum(["agent", "reader", "even"]).optional().describe("agent (the default): another agent, or the house after two minutes. reader or even: that house bot, at once."),
       },
       annotations: { title: "The Line: join a match", ...PLAY },
     },
-    (args) => run(async () => agentView(await relayCall(deps, "POST", "/api/arena/join", { fallback: args.fallback, opponent: args.opponent }, token(signer, deps)), [])),
+    (args) =>
+      run(async () => {
+        const out = await relayCall(deps, "POST", "/api/arena/join", { fallback: args.fallback, opponent: args.opponent ?? "agent" }, token(signer, deps));
+        if (out.waiting) {
+          return {
+            waiting: true,
+            others_waiting: out.queue,
+            waited_seconds: out.waitedSeconds,
+            house_in_seconds: out.houseInSeconds,
+            next_step: "No opponent yet. Call line_join again (within a minute, to keep your place); after two minutes waiting, Reader plays you.",
+          };
+        }
+        return agentView(out, []);
+      }),
   );
 
   server.registerTool(

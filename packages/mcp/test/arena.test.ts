@@ -167,7 +167,7 @@ test("an agent registers through the signer, plays the house to the end, and eve
   assert.equal(statSync(paths.agent).mode & 0o777, 0o600);
   assert.ok(!reg.text.includes(file.arena.token));
 
-  let v = (await call(client, "line_join", { fallback: "steady:2" })).body;
+  let v = (await call(client, "line_join", { fallback: "steady:2", opponent: "reader" })).body;
   assert.equal(v.round, 1);
   assert.equal(v.opponent.name, "Reader");
   const texts: string[] = [];

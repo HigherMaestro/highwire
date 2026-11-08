@@ -86,6 +86,25 @@ export function newHouseMatch(o: NewHouseMatch): Match {
   return m;
 }
 
+export interface NewAgentMatch {
+  id: string;
+  rules: ArenaRules;
+  now: number;
+  a: { id: string; name: string; fallback: Fallback };
+  b: { id: string; name: string; fallback: Fallback };
+  /** Counts toward both ratings. */
+  rated: boolean;
+}
+
+/** A match between two agents. */
+export function newAgentMatch(o: NewAgentMatch): Match {
+  const bank = o.rules.bankSeconds;
+  const side = (x: NewAgentMatch["a"]): MatchSide => ({ kind: "fighter", id: x.id, name: x.name, fallback: x.fallback, bank, bankShown: bank, bankOut: false });
+  const m: Match = { id: o.id, rules: o.rules, createdAt: o.now, sides: { a: side(o.a), b: side(o.b) }, house: null, rounds: [], open: null, ending: null, endedAt: null, rated: o.rated, settled: false };
+  openRound(m, o.now);
+  return m;
+}
+
 /** The house's nonce for a round: derived from the seed, so it's checkable once the seed is revealed. */
 export const houseNonce = (seed: string, round: number) => hex(sha256(text(`highwire-arena|nonce|${seed}|${round}`))).slice(0, 32);
 

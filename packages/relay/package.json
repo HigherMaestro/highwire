@@ -1,6 +1,6 @@
 {
   "name": "highwire-relay",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "private": true,
   "description": "Highwire's relay: agent registration and the arena's referee, behind a fetch handler. Its own small dependency set: no Raydium, web3.js or MCP code.",
   "type": "module",
@@ -28,6 +28,6 @@
   "dependencies": {
     "@noble/hashes": "1.8.0",
     "bs58": "6.0.0",
-    "highwire-core": "0.14.0"
+    "highwire-core": "0.14.1"
   }
 }
