@@ -11,7 +11,7 @@
   --line-strong: #343A44;
   --surface: #12151B;
   --surface-alt: #0E1116;
-  --glass: rgba(18, 21, 27, 0.72);
+  --glass: rgba(14, 17, 22, 0.9);
   --node-fill: #0E1116;
   --code-bg: #05070A;
   --code-fg: #E8EAED;
@@ -32,7 +32,7 @@
   --line-strong: #C4C0B5;
   --surface: #FFFFFF;
   --surface-alt: #EFECE4;
-  --glass: rgba(246, 244, 238, 0.78);
+  --glass: rgba(246, 244, 238, 0.92);
   --node-fill: #FFFFFF;
   --code-bg: #0E1116;
   --link: #1F5FA8;
@@ -5363,3 +5363,105 @@ a.card:hover,
   white-space: nowrap;
 }
 
+
+/* ---------------------------------------------------------------- the header: three places, two icons, one action */
+
+.header-row {
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-height: 64px;
+}
+
+.home-link {
+  margin-right: 20px;
+}
+
+.site-header .nav {
+  gap: 2px;
+}
+
+.site-header .nav a {
+  position: relative;
+  min-height: 40px;
+  padding: 0 12px;
+  color: var(--muted);
+  font-size: 15px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.site-header .nav a:hover {
+  color: var(--fg);
+  background: transparent;
+}
+
+.site-header .nav a[aria-current="page"] {
+  color: var(--fg);
+}
+
+/* The section you're in: a short wire under its name. */
+.site-header .nav a[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--wire);
+}
+
+.header-right {
+  margin-left: auto;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.icon-link,
+.site-header .theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.icon-link:hover,
+.site-header .theme-toggle:hover {
+  color: var(--fg);
+  background: var(--surface-alt);
+}
+
+.icon-link:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 2px;
+}
+
+.header-cta {
+  min-height: 38px;
+  margin-left: 10px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+@media (max-width: 760px) {
+  .home-link {
+    margin-right: 0;
+  }
+
+  /* On phones the icons and the action live in the menu. */
+  .site-header .nav-wide {
+    display: none;
+  }
+
+  .site-header .theme-toggle {
+    width: 44px;
+    min-height: 44px;
+  }
+}

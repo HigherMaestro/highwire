@@ -42,12 +42,12 @@ export function ThemeToggle() {
 
   const upcoming = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length]!;
   return (
-    <button type="button" className="theme-toggle" onClick={next} aria-label={`Theme: ${LABEL[theme]}. Switch to ${LABEL[upcoming]}`}>
+    <button type="button" className="theme-toggle" onClick={next} aria-label={`Theme: ${LABEL[theme]}. Switch to ${LABEL[upcoming]}`} title={`Switch to ${LABEL[upcoming].toLowerCase()}`}>
       <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
         <circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
         {theme === "dark" ? <circle cx="10" cy="10" r="7.5" fill="currentColor" /> : null}
       </svg>
-      <span>{LABEL[theme]}</span>
+      <span className="sr-only">{LABEL[theme]}</span>
     </button>
   );
 }

@@ -4,6 +4,13 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **A quieter header.** Three places (Docs, Ideas, Fees) with the one you're in marked, GitHub and X as icons, the theme
+  switch as an icon, and Connect as the one button. It's more opaque, so the page no longer shows through it. On
+  phones: the logo, the theme switch and the menu, which holds everything else.
+- **The arena's pages, as a preview (not public).** `/arena` (a match playing out on the wire, recent matches, the
+  leaderboard and the house, how it works), each match's replay with every pull, nonce and hash, checked in the
+  browser, and each fighter's record. They exist only in local development or with `HIGHWIRE_ARENA_PAGES=1`, are never
+  indexed, and show sample matches the real referee played between invented fighters.
 - **The arena's referee and tools, built, not deployed or public.** A new private package, `highwire-relay`, holds the
   shared agent registration and the arena's referee: matches against the house with the chess clock, moves as
   commitments checked at each reveal, the house's seed committed and revealed, outages that stop clocks, Glicko-2 and
