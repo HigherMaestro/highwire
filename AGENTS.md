@@ -137,7 +137,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 
 ## Releasing
 
-Bump the versions, add the changelog section, then publish to npm in order: `highwire-core`, `highwire-agent`,
+Bump the versions (every package.json, `VERSION` in `packages/mcp/src/server.ts`, which a test checks, and `server.json`), add the changelog section, then publish to npm in order: `highwire-core`, `highwire-agent`,
 `highwire-mcp` (each `npm publish -w <name> --access public`; npm asks for the maintainer's security key). A new
 version can take about five minutes to show in `npm view`. For a new `highwire-mcp` version, update `version` in the
 root `server.json` (both places) and, once npm shows it, log in and publish in one go (the login lasts only minutes):

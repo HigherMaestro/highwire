@@ -487,3 +487,10 @@ test("a limit_buy needs sol and a trigger under the current price, and is placed
   assert.match(placed.order.description, /^Buy 0.01 SOL of EE3p.* if its price falls to .* SOL or below$/);
   assert.ok(placed.order.expiresAt);
 });
+
+test("the server reports the package's own version", async () => {
+  const { VERSION } = await import("../src/server.ts");
+  const { readFileSync } = await import("node:fs");
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+  assert.equal(VERSION, pkg.version, "bump VERSION in src/server.ts with the release");
+});
