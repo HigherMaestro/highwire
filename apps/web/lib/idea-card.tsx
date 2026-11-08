@@ -42,8 +42,8 @@ export const MODULE_CARD_ALT = "A Highwire module: its name, what it adds to an 
 /** A module page's card: app/modules/[slug]/opengraph-image.tsx. */
 export const moduleCardFor = (slug: string): Card => ({ url: `/modules/${slug}/opengraph-image`, alt: MODULE_CARD_ALT });
 
-/** One card: up to five strands, under an optional heading; `srcX` moves the wire left when their labels are long. */
-function wireCard(o: { label: string; title: string; facts: string; strands: string[]; heading?: string; srcX?: number; labelSize?: number }) {
+/** One card: up to five strands (in the wire's colours, or `colors`), under an optional heading; `srcX` moves the wire left when their labels are long. */
+export function wireCard(o: { label: string; title: string; facts: string; strands: string[]; colors?: string[]; heading?: string; srcX?: number; labelSize?: number }) {
   const strands = o.strands.slice(0, 5);
   const srcX = o.srcX ?? 790, srcY = 330, endX = srcX + 122, gap = strands.length > 4 ? 88 : 100, labelSize = o.labelSize ?? 34;
   const ys = strands.map((_, i) => srcY + (i - (strands.length - 1) / 2) * gap);
@@ -64,11 +64,11 @@ function wireCard(o: { label: string; title: string; facts: string; strands: str
             <path
               d={`M${srcX} ${srcY} C${srcX + 70} ${srcY} ${endX - 70} ${y} ${endX} ${y}`}
               fill="none"
-              stroke={STRANDS[i % STRANDS.length]}
+              stroke={o.colors?.[i] ?? STRANDS[i % STRANDS.length]}
               strokeWidth="8"
               strokeLinecap="round"
             />
-            <circle cx={endX} cy={y} r="11" fill={STRANDS[i % STRANDS.length]} />
+            <circle cx={endX} cy={y} r="11" fill={o.colors?.[i] ?? STRANDS[i % STRANDS.length]} />
           </g>
         ))}
         <circle cx={srcX} cy={srcY} r="78" fill="url(#glow)" />
@@ -97,7 +97,7 @@ function wireCard(o: { label: string; title: string; facts: string; strands: str
   );
 }
 
-async function render(card: ReactElement): Promise<ImageResponse> {
+export async function render(card: ReactElement): Promise<ImageResponse> {
   fonts ??= Promise.all([font("SpaceGrotesk-Bold.ttf"), font("SpaceGrotesk-Medium.ttf"), font("JetBrainsMono-Medium.ttf")]);
   const [bold, medium, mono] = await fonts;
   return new ImageResponse(card, {

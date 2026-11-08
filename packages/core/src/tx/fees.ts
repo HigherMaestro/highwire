@@ -575,3 +575,57 @@ function emptyFees(warnings: string[]): EcosystemFees {
 const round9 = (n: number) => Math.round(n * 1e9) / 1e9;
 const mapValues = <K extends string>(o: Record<K, number>, f: (n: number) => number) =>
   Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v as number)])) as Record<K, number>;
+
+/** One day's fees, from that day's volume at the coin's on-chain rates. `day` is the UTC date, as YYYY-MM-DD. */
+export interface DailyFees {
+  day: string;
+  volumeSol: number;
+  feesSol: number;
+  byRecipient: Record<Recipient, number>;
+}
+
+const noRecipients = (): Record<Recipient, number> => ({ "higher.fun": 0, creator: 0, holders: 0, Raydium: 0, liquidity: 0 });
+const utcDay = (unixSeconds: number) => new Date(unixSeconds * 1000).toISOString().slice(0, 10);
+
+/**
+ * A coin's fees day by day, from higher.fun's daily candles (`volume` in lamports) at the rates of its fee lines: a
+ * graduated coin's days count at curve rates until they add up to its measured curve volume, and at pool rates after.
+ * Computed, not measured, like the pool lines.
+ */
+export function dailyFees(coin: CoinFees, candles: { time: number; volume: string }[]): DailyFees[] {
+  const rates = { curve: noRecipients(), pool: noRecipients() };
+  for (const l of coin.lines) rates[l.phase][l.to] += l.ratePct / 100;
+  let curveLeft = coin.status === "graduated" ? coin.curveVolumeSol : Infinity;
+  const days: DailyFees[] = [];
+  for (const c of [...candles].sort((a, b) => a.time - b.time)) {
+    const volumeSol = Number(BigInt(c.volume.split(".")[0] || "0")) / 1e9;
+    const onCurve = Math.min(volumeSol, curveLeft);
+    curveLeft -= onCurve;
+    const inPool = volumeSol - onCurve;
+    const byRecipient = noRecipients();
+    for (const r of Object.keys(byRecipient) as Recipient[]) byRecipient[r] = onCurve * rates.curve[r] + inPool * rates.pool[r];
+    const feesSol = Object.values(byRecipient).reduce((a, b) => a + b, 0);
+    days.push({ day: utcDay(c.time), volumeSol, feesSol, byRecipient });
+  }
+  return days;
+}
+
+/** Days from several coins added up, for the `days` UTC days up to and including `now`'s, with quiet days as zero. */
+export function sumDailyFees(series: DailyFees[][], days: number, now = Date.now()): DailyFees[] {
+  const out = new Map<string, DailyFees>();
+  const today = Math.floor(now / 86_400_000);
+  for (let d = today - days + 1; d <= today; d++) {
+    const day = utcDay(d * 86_400);
+    out.set(day, { day, volumeSol: 0, feesSol: 0, byRecipient: noRecipients() });
+  }
+  for (const s of series) {
+    for (const d of s) {
+      const into = out.get(d.day);
+      if (!into) continue;
+      into.volumeSol += d.volumeSol;
+      into.feesSol += d.feesSol;
+      for (const r of Object.keys(d.byRecipient) as Recipient[]) into.byRecipient[r] += d.byRecipient[r];
+    }
+  }
+  return [...out.values()].map((d) => ({ day: d.day, volumeSol: round9(d.volumeSol), feesSol: round9(d.feesSol), byRecipient: mapValues(d.byRecipient, round9) }));
+}

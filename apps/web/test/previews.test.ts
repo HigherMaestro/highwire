@@ -70,3 +70,19 @@ test("every page with metadata of its own goes through pageMetadata", () => {
   assert.ok(found.length >= 8);
   for (const p of found) assert.match(readFileSync(p, "utf8"), /pageMetadata\(/, p);
 });
+
+test("coin and creator pages have cards of their own, drawn from the same read", async () => {
+  const { coinCard, coinCardFor, creatorCard, creatorCardFor, fit } = await import("../lib/fee-card.tsx");
+  const by = { creator: 69.7, "higher.fun": 44.8, holders: 0, Raydium: 42.7, liquidity: 143.2 };
+  const coin = { mint: "7ymF66Z6VhgNiwadtVhjTtT6U7iQRpSxeiRrhfufhigh", ticker: "WIRE", name: "Wire", feeMode: "rewards", totalFeesSol: 300.4, byRecipient: by };
+  const data = { coins: [coin], totals: { byRecipient: by } } as never;
+  for (const card of [coinCard(data, coin.mint), creatorCard(data, "3nG8WsVqotPWH74NRUpLwfQ1NMabdorWQ52YvbrVHA2E"), coinCard(null, coin.mint), creatorCard(null, coin.mint)]) {
+    const png = Buffer.from(await (await card).arrayBuffer());
+    assert.deepEqual([...png.subarray(1, 4)], [...Buffer.from("PNG")]);
+    assert.equal(png.readUInt32BE(16), 1200);
+    assert.equal(png.readUInt32BE(20), 630);
+  }
+  assert.equal(fit("$AVERYLONGTICKERNAME", 12), "$AVERYLONGT…");
+  assert.ok(existsSync(join(process.cwd(), "app/fees/[mint]/opengraph-image.tsx")) && coinCardFor("abc").url === "/fees/abc/opengraph-image");
+  assert.ok(existsSync(join(process.cwd(), "app/fees/creator/[wallet]/opengraph-image.tsx")) && creatorCardFor("abc").url === "/fees/creator/abc/opengraph-image");
+});

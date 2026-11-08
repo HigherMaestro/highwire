@@ -3,9 +3,11 @@ import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";
 import { SplitBar } from "../../../../components/fees/SplitBar.tsx";
-import { COLOR, FeeHero, Head, LinkCards, Tile } from "../../../../components/fees/Parts.tsx";
-import { MODE_LABEL, coinLabel, creatorFees, isMint, short, sol, updatedAt, usd } from "../../../../lib/fees.ts";
-import { FEES_CARD, pageMetadata } from "../../../../lib/site.ts";
+import { COLOR, FeeHero, Head, HistoryChart, LinkCards, Tile, weekOnWeek } from "../../../../components/fees/Parts.tsx";
+import { ShareLinks } from "../../../../components/fees/ShareLinks.tsx";
+import { MODE_LABEL, coinLabel, creatorFees, feeHistory, type FeeHistory, isMint, short, sol, updatedAt, usd } from "../../../../lib/fees.ts";
+import { SITE_URL, pageMetadata } from "../../../../lib/site.ts";
+import { creatorCardFor } from "../../../../lib/fee-card.tsx";
 
 export const revalidate = 600;
 
@@ -23,7 +25,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: `${label}'s creator fees`,
     description: `What ${label}'s higher.fun coins have paid them, and what's waiting to be claimed. Read from Solana.`,
     path: `/fees/creator/${wallet}`,
-    card: FEES_CARD,
+    card: creatorCardFor(wallet),
   });
 }
 
@@ -46,7 +48,7 @@ export default async function CreatorFeesPage({ params }: Props) {
       <SiteHeader />
       <main>
         {data ? (
-          <Creator wallet={wallet} data={data} eyebrow={eyebrow} />
+          <Creator wallet={wallet} data={data} eyebrow={eyebrow} history={await feeHistory(data.coins)} />
         ) : (
           <>
             <FeeHero id="creator-title" eyebrow={eyebrow} title={short(wallet)} sub={wallet}>
@@ -74,7 +76,7 @@ export default async function CreatorFeesPage({ params }: Props) {
   );
 }
 
-function Creator({ wallet, data, eyebrow }: { wallet: string; data: Data; eyebrow: ReactNode }) {
+function Creator({ wallet, data, eyebrow, history }: { wallet: string; data: Data; eyebrow: ReactNode; history: FeeHistory | null }) {
   const coins = data.coins;
   const earned = data.totals.byRecipient.creator;
   const graduated = coins.filter((c) => c.status === "graduated").length;
@@ -105,7 +107,12 @@ function Creator({ wallet, data, eyebrow }: { wallet: string; data: Data; eyebro
           { label: "Their coins traded", value: `${sol(data.totals.volumeSol)} SOL` },
         ]}
         readAt={data.generatedAt}
-      />
+      >
+        <ShareLinks
+          url={`${SITE_URL}/fees/creator/${wallet}`}
+          text={`${sol(earned)} SOL earned as a creator on higher.fun, from ${coins.length} ${coins.length === 1 ? "coin" : "coins"}.`}
+        />
+      </FeeHero>
 
       <div className="wrap fees-body">
         <section id="claim" className="fee-block" aria-labelledby="claim-title">
@@ -142,9 +149,18 @@ function Creator({ wallet, data, eyebrow }: { wallet: string; data: Data; eyebro
           </p>
         </section>
 
+        {history ? (
+          <section id="history" className="fee-block" aria-labelledby="history-title">
+            <Head id="history" n="02" title="Day by day">
+              {weekOnWeek(history, (d) => d.byRecipient.creator, "earned").line}
+            </Head>
+            <HistoryChart history={history} solUsd={data.solUsd} title="Their coins' fees a day" />
+          </section>
+        ) : null}
+
         {data.totals.feesSol > 0 ? (
           <section id="split" className="fee-block" aria-labelledby="split-title">
-            <Head id="split" n="02" title="Where their coins' fees went">
+            <Head id="split" n={history ? "03" : "02"} title="Where their coins' fees went">
               All {sol(data.totals.feesSol)} SOL their coins have paid in fees, by who got it.
             </Head>
             <div className="fee-panel fee-split-panel">
@@ -154,7 +170,7 @@ function Creator({ wallet, data, eyebrow }: { wallet: string; data: Data; eyebro
         ) : null}
 
         <section id="coins" className="fee-block" aria-labelledby="coins-title">
-          <Head id="coins" n="03" title="Their coins">
+          <Head id="coins" n={String(2 + (history ? 1 : 0) + (data.totals.feesSol > 0 ? 1 : 0)).padStart(2, "0")} title="Their coins">
             By what each has paid its creator.
           </Head>
           <div className="fee-panel">
@@ -192,7 +208,7 @@ function Creator({ wallet, data, eyebrow }: { wallet: string; data: Data; eyebro
         </section>
 
         <section id="links" className="fee-block" aria-labelledby="links-title">
-          <Head id="links" n="04" title="Look it up" />
+          <Head id="links" n={String(3 + (history ? 1 : 0) + (data.totals.feesSol > 0 ? 1 : 0)).padStart(2, "0")} title="Look it up" />
           <LinkCards
             links={[
               { href: `https://solscan.io/account/${wallet}`, label: "This wallet on Solscan", sub: short(wallet) },

@@ -4,6 +4,16 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Fees day by day.** /fees, every coin page and every creator page chart fees a day since higher.fun's first coins,
+  stacked by who got them, with the week against the week before once there are two. Worked out from higher.fun's daily
+  candles at each coin's on-chain rates (curve rates until a coin's days add up to its measured curve volume, pool rates
+  after), from the coins that make up 99% of all volume; each coin's candles are kept for an hour.
+- **Coin and creator pages share as themselves.** Each draws its own link preview, the coin's fees by recipient or the
+  creator's coins by what they paid, and has Share on X and Copy link.
+- **/docs, redesigned.** The wire header and a pinned bar of numbered sections in place of the side list, the signing
+  and local-signer steps as cards, tool groups as links, and prompts, resources, limits and troubleshooting as cards.
+  The header and the Tools section say plainly that 27 tools are hosted and 38 run locally.
+- **A not-found page** in the same design, with the ways back.
 - **/fees, redesigned.** The wire header from /ideas with the all-time fees as one large figure, a pinned bar of
   numbered sections, and figures in cards. The coins that paid most in the last 24 hours are a chart split by who got
   each fee, the top creators a leaderboard with bars, the phase and fee-mode splits two bars, the calculator leads with

@@ -8,8 +8,8 @@ import { FeeFlow } from "../../components/fees/FeeFlow.tsx";
 import { SplitBar } from "../../components/fees/SplitBar.tsx";
 import { EarningsCalculator } from "../../components/fees/EarningsCalculator.tsx";
 import { WalletLookup } from "../../components/fees/WalletLookup.tsx";
-import { COLOR, FeeHero, Head as SectionHead, Tile } from "../../components/fees/Parts.tsx";
-import { MODE_LABEL, RECIPIENTS, allFees, coinLabel, flowScenarios, pctOf, short, sol, topCreators, topToday, updatedAt, usd, volumes24h } from "../../lib/fees.ts";
+import { COLOR, FeeHero, Head as SectionHead, HistoryChart, Tile, weekOnWeek } from "../../components/fees/Parts.tsx";
+import { MODE_LABEL, RECIPIENTS, allFees, coinLabel, feeHistory, type FeeHistory, flowScenarios, pctOf, short, sol, topCreators, topToday, updatedAt, usd, volumes24h } from "../../lib/fees.ts";
 import { FEES_CARD, pageMetadata } from "../../lib/site.ts";
 
 export const revalidate = 600;
@@ -25,6 +25,7 @@ export const metadata: Metadata = {
 
 const SECTIONS = [
   { id: "today", label: "Today" },
+  { id: "history", label: "Over time" },
   { id: "flow", label: "The split" },
   { id: "waiting", label: "To claim" },
   { id: "creators", label: "Creators" },
@@ -45,6 +46,7 @@ function Head({ id, title, children }: { id: string; title: string; children?: R
 
 export default async function FeesPage() {
   const data = await allFees();
+  const history = data ? await feeHistory(data.coins) : null;
   const t = data?.totals;
   return (
     <>
@@ -76,7 +78,7 @@ export default async function FeesPage() {
         {data ? (
           <>
             <SectionNav sections={SECTIONS} />
-            <Ecosystem data={data} />
+            <Ecosystem data={data} history={history} />
           </>
         ) : (
           <div className="wrap fees-body">
@@ -89,7 +91,7 @@ export default async function FeesPage() {
   );
 }
 
-function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFees>>> }) {
+function Ecosystem({ data, history }: { data: NonNullable<Awaited<ReturnType<typeof allFees>>>; history: FeeHistory | null }) {
   const t = data.totals;
   const w = data.waiting;
   const rows: FeeRow[] = data.coins.map((c) => ({
@@ -171,6 +173,22 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
             </figure>
           ) : null}
         </div>
+      </section>
+
+      <section id="history" className="fee-block" aria-labelledby="history-title">
+        <Head id="history" title="Day by day">
+          {history ? weekOnWeek(history).line : "Fees day by day, and who got them."}
+        </Head>
+        {history ? (
+          <HistoryChart
+            history={history}
+            solUsd={data.solUsd}
+            title="Fees a day"
+            scope={`from the ${history.coins} busiest coins, ${history.sharePct.toFixed(1)}% of all volume`}
+          />
+        ) : (
+          <p className="notice">The daily numbers couldn't be read from higher.fun just now. This page tries again within 10 minutes.</p>
+        )}
       </section>
 
       <section id="flow" className="fee-block" aria-labelledby="flow-title">
@@ -316,6 +334,14 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
             <p>
               higher.fun's 24-hour volume for each coin, which counts curve and pool trades alike, priced at the rates of the
               phase the coin trades in now. A coin that graduated during the day is priced at pool rates throughout.
+            </p>
+          </li>
+          <li>
+            <h3>Day by day, estimated</h3>
+            <p>
+              Each of the busiest coins' daily volume from higher.fun's candles, at its on-chain rates: curve rates until
+              the days add up to its measured curve volume, pool rates after. Together they make up 99% of all volume; the
+              rest is too small to see.
             </p>
           </li>
           <li>

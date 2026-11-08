@@ -166,3 +166,28 @@ test("fees: a wallet that created no coins costs one request to higher.fun, and 
   assert.equal(r.coins.length, 0);
   assert.deepEqual(seen, [`https://api.higher.fun/users/${TRADER.toBase58()}/coins`]);
 });
+
+test("fees over time: a coin's days add up to its lifetime fees, at curve rates until its curve volume, pool rates after", async () => {
+  const { dailyFees, sumDailyFees } = await import("../src/tx/fees.ts");
+  const c = ((await runScenario("fees-coin", replayFetch(coinRecording))) as { fees: Awaited<ReturnType<typeof ecosystemFees>> }).fees.coins[0]!;
+  assert.equal(c.status, "graduated");
+  const candles = (coinRecording[`get:https://api.higher.fun/coins/${NEW_SCHOOL_GRADUATED.toBase58()}/candles?interval=1d`]![0] as { items: { time: number; volume: string }[] }).items;
+  const days = dailyFees(c, candles);
+  assert.equal(days.length, candles.length);
+  const sum = (f: (d: (typeof days)[number]) => number) => days.reduce((n, d) => n + f(d), 0);
+  // Within the rounding of the rates to six decimals, as the 24-hour figures.
+  assert.ok(Math.abs(sum((d) => d.feesSol) / c.totalFeesSol - 1) < 1e-5, `${sum((d) => d.feesSol)} vs ${c.totalFeesSol}`);
+  assert.ok(Math.abs(sum((d) => d.volumeSol) / c.volumeSol - 1) < 1e-6, "volume");
+  for (const r of ["creator", "Raydium", "liquidity"] as const) assert.ok(Math.abs(sum((d) => d.byRecipient[r]) / c.byRecipient[r] - 1) < 1e-5, r);
+  // Pool fees start on the day the running volume passes the curve's, and not before.
+  let running = 0;
+  const graduatedOn = days.findIndex((d) => (running += d.volumeSol) > c.curveVolumeSol);
+  assert.equal(days.findIndex((d) => d.byRecipient.liquidity > 0), graduatedOn);
+
+  // Added up over a window: every day present, quiet ones as zero, the rest summed.
+  const last = Date.parse(`${days.at(-1)!.day}T12:00:00Z`);
+  const window = sumDailyFees([days, days], 3, last + 86_400_000);
+  assert.deepEqual(window.map((d) => d.day), [days.at(-2)!.day, days.at(-1)!.day, new Date(last + 86_400_000).toISOString().slice(0, 10)].filter((d, i, a) => a.indexOf(d) === i).slice(-3));
+  assert.equal(window.at(-1)!.feesSol, 0);
+  assert.ok(Math.abs(window.at(-2)!.feesSol - 2 * days.at(-1)!.feesSol) < 1e-6);
+});

@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { coinUrl } from "highwire-core";
 import { SiteFooter, SiteHeader } from "../../../components/Chrome.tsx";
 import { SplitBar } from "../../../components/fees/SplitBar.tsx";
-import { COLOR, FeeHero, Head, LinkCards, Tile, type Fact } from "../../../components/fees/Parts.tsx";
-import { MODE_LABEL, RECIPIENTS, coinFees, coinLabel, isMint, short, sol, updatedAt, usd } from "../../../lib/fees.ts";
-import { FEES_CARD, pageMetadata } from "../../../lib/site.ts";
+import { COLOR, FeeHero, Head, HistoryChart, LinkCards, Tile, weekOnWeek, type Fact } from "../../../components/fees/Parts.tsx";
+import { ShareLinks } from "../../../components/fees/ShareLinks.tsx";
+import { MODE_LABEL, RECIPIENTS, coinFees, coinLabel, feeHistory, isMint, short, sol, updatedAt, usd } from "../../../lib/fees.ts";
+import { SITE_URL, pageMetadata } from "../../../lib/site.ts";
+import { coinCardFor } from "../../../lib/fee-card.tsx";
 
 export const revalidate = 600;
 
@@ -25,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: ticker ? `$${ticker} fees` : "Coin fees",
     description: `The fees ${ticker ? `$${ticker}` : "this coin"} has paid on higher.fun, and who got them.`,
     path: `/fees/${mint}`,
-    card: FEES_CARD,
+    card: coinCardFor(mint),
   });
 }
 
@@ -55,6 +57,7 @@ export default async function CoinFeesPage({ params }: Props) {
     );
   }
   const label = coinLabel(c);
+  const history = c.volumeSol > 0 ? await feeHistory([c]) : null;
   const facts: Fact[] = [
     { label: "Traded", value: `${sol(c.volumeSol)} SOL` },
     { label: "To the creator", value: `${sol(c.byRecipient.creator)} SOL` },
@@ -85,7 +88,12 @@ export default async function CoinFeesPage({ params }: Props) {
           figureSub={`paid in fees${usd(c.totalFeesSol, data.solUsd) ? ` (${usd(c.totalFeesSol, data.solUsd)})` : ""}${c.last24h && c.last24h.feesSol > 0 ? `, ${sol(c.last24h.feesSol)} SOL of it in the last 24 hours (estimated)` : ""}`}
           facts={facts}
           readAt={data.generatedAt}
-        />
+        >
+          <ShareLinks
+            url={`${SITE_URL}/fees/${c.mint}`}
+            text={`${label.ticker ? `$${label.ticker}` : "This higher.fun coin"} has paid ${sol(c.totalFeesSol)} SOL in fees, ${sol(c.byRecipient.creator)} SOL of it to its creator.`}
+          />
+        </FeeHero>
 
         <div className="wrap fees-body">
           {c.totalFeesSol > 0 ? (
@@ -94,6 +102,15 @@ export default async function CoinFeesPage({ params }: Props) {
               <div className="fee-panel fee-split-panel">
                 <SplitBar by={c.byRecipient} total={c.totalFeesSol} label="This coin's fees by recipient" />
               </div>
+            </section>
+          ) : null}
+
+          {history ? (
+            <section id="history" className="fee-block" aria-labelledby="history-title">
+              <Head id="history" n={next()} title="Day by day">
+                {weekOnWeek(history).line}
+              </Head>
+              <HistoryChart history={history} solUsd={data.solUsd} title="Its fees a day" />
             </section>
           ) : null}
 

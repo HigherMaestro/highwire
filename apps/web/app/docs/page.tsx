@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { Connect } from "../../components/Connect.tsx";
+import { AmbientWire } from "../../components/hero/AmbientWire.tsx";
+import { SectionNav } from "../../components/ideas/SectionNav.tsx";
 import { getCatalog, groupTools, type ToolInfo } from "../../lib/catalog.ts";
 import { MCP_URL, REPO_URL, pageMetadata } from "../../lib/site.ts";
 
@@ -138,332 +141,455 @@ function ToolDoc({ tool }: { tool: ToolInfo }) {
   );
 }
 
+const SECTIONS = [
+  { id: "connect", label: "Connect" },
+  { id: "signing", label: "Signing" },
+  { id: "local-signer", label: "Local signer" },
+  { id: "tools", label: "Tools" },
+  { id: "prompts", label: "Prompts" },
+  { id: "resources", label: "Resources" },
+  { id: "recipes", label: "Recipes" },
+  { id: "limits", label: "Limits and errors" },
+  { id: "troubleshooting", label: "Troubleshooting" },
+];
+
+const n = (id: string) => String(SECTIONS.findIndex((s) => s.id === id) + 1).padStart(2, "0");
+
+function Head({ id, title, children }: { id: string; title: string; children?: ReactNode }) {
+  return (
+    <div className="section-head">
+      <h2 id={`${id}-h`} className="sec-h">
+        <span className="sec-n">{n(id)}</span>
+        {title}
+      </h2>
+      {children ? <p className="muted">{children}</p> : null}
+    </div>
+  );
+}
+
+/** Numbered steps as cards: a short title, then what happens. */
+function Steps({ steps }: { steps: [string, ReactNode][] }) {
+  return (
+    <ol className="doc-steps">
+      {steps.map(([title, body], i) => (
+        <li key={title}>
+          <span className="doc-step-n">{String(i + 1).padStart(2, "0")}</span>
+          <strong>{title}</strong>
+          <span className="muted">{body}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const SIGNING: [string, ReactNode][] = [
+  [
+    "The link carries the transaction",
+    <>
+      It rides in the part after <code>#</code>, which browsers never send to a server, so Highwire never sees it. The page
+      sends nothing to Highwire.
+    </>,
+  ],
+  [
+    "The page checks it again",
+    <>
+      It decodes every instruction from the transaction itself, not from the link&apos;s description, and refuses anything
+      Highwire doesn&apos;t build: a program off the allow-list, SOL sent to someone else, another platform, another fee
+      payer.
+    </>,
+  ],
+  [
+    "You see what it does",
+    <>
+      What you spend and receive, the fees, the fee payer, when it expires, and each transaction in order (a launch with a
+      creator lock has two).
+    </>,
+  ],
+  ["It simulates in your browser", <>Against a Solana RPC called directly, and shows the change to your SOL balance.</>],
+  [
+    "Your wallet signs",
+    <>
+      Connect Phantom, Solflare, Backpack or any Wallet Standard wallet. The page only signs with the fee payer&apos;s
+      account, then sends, confirms, and links to Solscan and the coin on higher.fun.
+    </>,
+  ],
+];
+
+const SIGNER: [string, ReactNode][] = [
+  [
+    "Write a policy",
+    <>
+      <code>npx highwire-mcp policy init</code> writes a starting one to <code>~/.highwire/policy.json</code>: devnet, dry
+      run, trades and claims, 0.1 SOL a transaction, 0.5 SOL a day. Without a policy, nothing executes.
+    </>,
+  ],
+  [
+    "Point it at a keypair",
+    <>
+      Set <code>HIGHWIRE_KEYPAIR_PATH</code> to a Solana CLI keypair file in your MCP client&apos;s config for the local
+      server. The key is read from that file only, never from a tool argument, and never leaves your machine. Use a wallet
+      that holds only what you&apos;re willing to let an agent spend.
+    </>,
+  ],
+  [
+    "Dry runs first",
+    <>
+      <code>execute_trade</code>, <code>execute_launch</code>, <code>execute_claim</code> and <code>execute_transfer</code>{" "}
+      build exactly what the build tools build, simulate it, and check your policy, but sign nothing until the policy says{" "}
+      <code>&quot;live&quot;: true</code>.
+    </>,
+  ],
+  [
+    "Every execute is logged",
+    <>
+      To <code>~/.highwire/audit.jsonl</code>: refusals, dry runs, and each signature, written as it&apos;s sent. The daily
+      limit counts from it.
+    </>,
+  ],
+  [
+    "Stop it any time",
+    <>
+      Create <code>~/.highwire/STOP</code>. Every execute is refused until you delete it.
+    </>,
+  ],
+];
+
 export default async function Docs() {
   const catalog = await getCatalog();
   const groups = groupTools(catalog.tools);
-  const toc = [
-    ["connect", "Connect"],
-    ["signing", "Signing"],
-    ["local-signer", "Local signer"],
-    ["tools", `Tools (${catalog.tools.length})`],
-    ["prompts", `Prompts (${catalog.prompts.length})`],
-    ["resources", `Resources (${catalog.resources.length})`],
-    ["recipes", "Recipes"],
-    ["limits", "Limits and errors"],
-    ["troubleshooting", "Troubleshooting"],
-  ];
+  const hosted = catalog.tools.filter((t) => t.hosted).length;
+  const builds = catalog.tools.filter((t) => t.builds && t.hosted).length;
+  const localOnly = catalog.tools.length - hosted;
 
   return (
     <>
       <SiteHeader />
-      <main className="docs">
-        <div className="wrap docs-grid">
-          <nav className="docs-toc" aria-label="On this page">
-            <p className="toc-title">On this page</p>
-            <ul>
-              {toc.map(([id, label]) => (
-                <li key={id}>
-                  <a href={`#${id}`}>{label}</a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          <div className="docs-body">
-            <header className="docs-intro">
-              <p className="eyebrow">Docs</p>
-              <h1>Highwire docs</h1>
-              <p className="lead">
-                Highwire is an MCP server for <a href="https://higher.fun">higher.fun</a>. It gives agents{" "}
-                {catalog.tools.filter((t) => t.hosted).length} hosted tools, of which{" "}
-                {catalog.tools.filter((t) => t.builds && t.hosted).length} build transactions you sign in your own wallet,{" "}
-                {catalog.prompts.length} prompts and {catalog.resources.length} resources. Everything below is generated
-                from the running server.
-              </p>
-            </header>
-
-            <section id="connect" aria-labelledby="connect-h">
-              <h2 id="connect-h">Connect</h2>
-              <Connect />
-            </section>
-
-            <section id="signing" aria-labelledby="signing-h">
-              <h2 id="signing-h">Signing</h2>
-              <p className="muted">
-                Highwire never signs and never holds a key. A build tool returns an unsigned transaction and a{" "}
-                <code>sign_url</code>, a link to <a href="/sign">highwire.fun/sign</a>. Your agent gives you the link; you open
-                it and sign in your own wallet.
-              </p>
-              <ol className="plain">
-                <li>
-                  <strong>The link carries the transaction.</strong> It rides in the part after <code>#</code>, which browsers
-                  never send to a server, so Highwire never sees it. The page sends nothing to Highwire.
-                </li>
-                <li>
-                  <strong>The page checks it again.</strong> It decodes every instruction from the transaction itself, not from
-                  the link&apos;s description, and refuses anything Highwire doesn&apos;t build: a program off the allow-list,
-                  SOL sent to someone else, another platform, another fee payer.
-                </li>
-                <li>
-                  <strong>You see what it does.</strong> What you spend and receive, the fees, the fee payer, when it expires,
-                  and each transaction in order (a launch with a creator lock has two).
-                </li>
-                <li>
-                  <strong>It simulates in your browser,</strong> against a Solana RPC called directly, and shows the change to
-                  your SOL balance.
-                </li>
-                <li>
-                  <strong>Your wallet signs.</strong> Connect Phantom, Solflare, Backpack or any Wallet Standard wallet. The page
-                  only signs with the fee payer&apos;s account, then sends, confirms, and links to Solscan and the coin on
-                  higher.fun.
-                </li>
-              </ol>
-              <p className="muted">
-                Trade and claim links work for up to 10 minutes. Only your wallet signs them, so the page fetches a fresh
-                blockhash when it opens and again right before your wallet signs, changes nothing else, and checks and
-                simulates again. Past 5 minutes it tells you how old the quote is; your minimum out is still enforced. Past 10
-                minutes it asks you to have your agent rebuild it, since prices move. Launch links last about a minute,
-                because the new coin&apos;s address is already signed into the transaction. For a launch, rebuild with the
-                same <code>idempotency_key</code>: it keeps the same coin, so it can&apos;t be created or paid for twice. Every transaction Highwire builds also carries a memo, <code>highwire</code>, so its use can be
-                counted on-chain.
-              </p>
-            </section>
-
-            <section id="local-signer" aria-labelledby="local-signer-h">
-              <h2 id="local-signer-h">Local signer</h2>
-              <p className="muted">
-                For agents that act on their own, the local server can sign with a keypair on your machine. It&apos;s off
-                unless you turn it on, it never runs on the hosted endpoint, and it signs only inside a policy file you
-                write. No tool can change that file.
-              </p>
-              <ol className="plain">
-                <li>
-                  <strong>Write a policy.</strong> <code>npx highwire-mcp policy init</code> writes a starting one to{" "}
-                  <code>~/.highwire/policy.json</code>: devnet, dry run, trades and claims, 0.1 SOL a transaction, 0.5 SOL a
-                  day. Without a policy, nothing executes.
-                </li>
-                <li>
-                  <strong>Point it at a keypair.</strong> Set <code>HIGHWIRE_KEYPAIR_PATH</code> to a Solana CLI keypair file
-                  in your MCP client&apos;s config for the local server. The key is read from that file only, never from a
-                  tool argument, and never leaves your machine. Use a wallet that holds only what you&apos;re willing to let
-                  an agent spend.
-                </li>
-                <li>
-                  <strong>Dry runs first.</strong> <code>execute_trade</code>, <code>execute_launch</code>,{" "}
-                  <code>execute_claim</code> and <code>execute_transfer</code> build exactly what the build tools build,
-                  simulate it, and check your policy, but sign nothing until the policy says <code>&quot;live&quot;: true</code>.
-                </li>
-                <li>
-                  <strong>Every execute is logged</strong> to <code>~/.highwire/audit.jsonl</code>: refusals, dry runs, and
-                  each signature, written as it&apos;s sent. The daily limit counts from it.
-                </li>
-                <li>
-                  <strong>Stop it any time</strong> by creating <code>~/.highwire/STOP</code>. Every execute is refused until
-                  you delete it.
-                </li>
-              </ol>
-              <div className="table-wrap">
-                <table className="params">
-                  <thead>
-                    <tr>
-                      <th>Policy key</th>
-                      <th>What it limits</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {POLICY_KEYS.map(([k, v]) => (
-                      <tr key={k}>
-                        <td>
-                          <code>{k}</code>
-                        </td>
-                        <td>{v}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+      <main>
+        <section className="page-hero docs-hero" aria-labelledby="docs-title">
+          <AmbientWire />
+          <div className="wrap page-hero-copy">
+            <p className="eyebrow">Docs · generated from the running server</p>
+            <h1 id="docs-title">Highwire docs</h1>
+            <p className="lead">
+              Highwire is an MCP server for <a href="https://higher.fun">higher.fun</a>. Connect it, and your agent can read the
+              market, check coins, and build trades and launches you sign in your own wallet.
+            </p>
+            <dl className="fee-hero-facts">
+              <div>
+                <dt>Hosted tools</dt>
+                <dd>{hosted}</dd>
               </div>
-              <p className="muted">
-                Transfers go only to wallets on <code>transfer_allowlist</code>, and the sign page never signs them, since a
-                sign link can come from anyone.
-              </p>
-              <p className="muted">
-                <strong>Launch on your own.</strong> An agent with a shell can launch from its own wallet with no one in the
-                loop: <code>npx highwire-mcp wallet new</code> makes the wallet, <code>policy init --launch</code> writes a
-                launch policy, <code>launch --name … --ticker … --image …</code> signs in, uploads and launches through{" "}
-                <code>execute_launch</code>, and <code>claim</code> collects the creator fees. Point an agent at{" "}
-                <a href="/skill.md">highwire.fun/skill.md</a> and it can do the rest.
-              </p>
-              <p className="muted">
-                <strong>Standing orders.</strong> With an <code>orders</code> section in the policy, an agent can place a
-                stop-loss, a take-profit, a limit buy, a recurring buy or a fee claim with <code>place_order</code>.{" "}
-                <code>highwire orders run</code> fills them while it runs: price orders against the coin&apos;s on-chain price
-                (the live feed only says when to look), recurring buys and fee claims on their schedule. A fee claim
-                collects the wallet&apos;s creator fees once enough is waiting, and can spend a share of each claim buying
-                the coin back; <code>highwire orders claim --every-hours 24</code> places one from the shell. Every fill passes the whole policy again, is simulated and is
-                logged with its order&apos;s id. <code>highwire orders list</code> and <code>highwire orders cancel</code>{" "}
-                show and cancel them.
-              </p>
-              <p className="muted">
-                <strong>Posting.</strong> With a <code>posts</code> section, <code>post_comment</code> and{" "}
-                <code>post_chat</code> post on higher.fun as the wallet: a comment on its own coin (or any coin, if you
-                allow it) or a message in the site chat. Plain text only: links and wallet or mint addresses are refused.
-                Each post is logged before it goes up and counts against the daily cap.
-              </p>
-            </section>
+              <div>
+                <dt>With the local server</dt>
+                <dd>{catalog.tools.length}</dd>
+              </div>
+              <div>
+                <dt>Build a transaction</dt>
+                <dd>{builds}</dd>
+              </div>
+              <div>
+                <dt>Prompts · resources</dt>
+                <dd>
+                  {catalog.prompts.length} · {catalog.resources.length}
+                </dd>
+              </div>
+            </dl>
+            <div className="fee-hero-ctas">
+              <a className="button" href="#connect">
+                Connect your agent
+              </a>
+              <a className="button button-quiet" href="/skill.md">
+                skill.md for agents
+              </a>
+            </div>
+          </div>
+        </section>
+        <SectionNav sections={SECTIONS} />
 
-            <section id="tools" aria-labelledby="tools-h">
-              <h2 id="tools-h">Tools</h2>
-              <p className="muted">
-                Amounts come back in SOL, whole tokens and percentages. Prices are SOL per whole token. Coin text written by
-                users is marked and flagged, so agents treat it as data.
+        <div className="wrap docs-body">
+          <section id="connect" className="doc-block" aria-labelledby="connect-h">
+            <Head id="connect" title="Connect" />
+            <Connect />
+          </section>
+
+          <section id="signing" className="doc-block" aria-labelledby="signing-h">
+            <Head id="signing" title="Signing">
+              Highwire never signs and never holds a key. A build tool returns an unsigned transaction and a{" "}
+              <code>sign_url</code>, a link to <a href="/sign">highwire.fun/sign</a>. Your agent gives you the link; you open it
+              and sign in your own wallet.
+            </Head>
+            <Steps steps={SIGNING} />
+            <div className="doc-note">
+              <p>
+                <strong>How long links last.</strong> Trade and claim links work for up to 10 minutes. Only your wallet signs
+                them, so the page fetches a fresh blockhash when it opens and again right before your wallet signs, changes
+                nothing else, and checks and simulates again. Past 5 minutes it tells you how old the quote is; your minimum out
+                is still enforced. Past 10 minutes it asks you to have your agent rebuild it, since prices move.
               </p>
-              {groups.map((g) => (
-                <div key={g.id} className="doc-group">
-                  <h3 id={`group-${g.id}`}>{g.title}</h3>
-                  {g.items.map((t) => (
-                    <ToolDoc key={t.name} tool={t} />
+              <p>
+                Launch links last about a minute, because the new coin&apos;s address is already signed into the transaction.
+                For a launch, rebuild with the same <code>idempotency_key</code>: it keeps the same coin, so it can&apos;t be
+                created or paid for twice. Every transaction Highwire builds also carries a memo, <code>highwire</code>, so its
+                use can be counted on-chain.
+              </p>
+            </div>
+          </section>
+
+          <section id="local-signer" className="doc-block" aria-labelledby="local-signer-h">
+            <Head id="local-signer" title="Local signer">
+              For agents that act on their own, the local server can sign with a keypair on your machine. It&apos;s off unless
+              you turn it on, it never runs on the hosted endpoint, and it signs only inside a policy file you write. No tool
+              can change that file.
+            </Head>
+            <Steps steps={SIGNER} />
+            <div className="table-wrap fee-panel fee-table-panel">
+              <table className="params">
+                <caption className="sr-only">Policy keys</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Policy key</th>
+                    <th scope="col">What it limits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {POLICY_KEYS.map(([k, v]) => (
+                    <tr key={k}>
+                      <td data-label="Policy key">
+                        <code>{k}</code>
+                      </td>
+                      <td data-label="What it limits">{v}</td>
+                    </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted small">
+              Transfers go only to wallets on <code>transfer_allowlist</code>, and the sign page never signs them, since a sign
+              link can come from anyone.
+            </p>
+            <div className="doc-cards">
+              <div className="card">
+                <h3>Launch on your own</h3>
+                <p className="muted">
+                  An agent with a shell can launch from its own wallet with no one in the loop:{" "}
+                  <code>npx highwire-mcp wallet new</code> makes the wallet, <code>policy init --launch</code> writes a launch
+                  policy, <code>launch --name … --ticker … --image …</code> signs in, uploads and launches through{" "}
+                  <code>execute_launch</code>, and <code>claim</code> collects the creator fees. Point an agent at{" "}
+                  <a href="/skill.md">highwire.fun/skill.md</a> and it can do the rest.
+                </p>
+              </div>
+              <div className="card">
+                <h3>Standing orders</h3>
+                <p className="muted">
+                  With an <code>orders</code> section in the policy, an agent can place a stop-loss, a take-profit, a limit buy, a
+                  recurring buy or a fee claim with <code>place_order</code>. <code>highwire orders run</code> fills them while
+                  it runs: price orders against the coin&apos;s on-chain price (the live feed only says when to look), recurring
+                  buys and fee claims on their schedule. A fee claim collects the wallet&apos;s creator fees once enough is
+                  waiting, and can spend a share of each claim buying the coin back;{" "}
+                  <code>highwire orders claim --every-hours 24</code> places one from the shell. Every fill passes the whole
+                  policy again, is simulated and is logged with its order&apos;s id. <code>highwire orders list</code> and{" "}
+                  <code>highwire orders cancel</code> show and cancel them.
+                </p>
+              </div>
+              <div className="card">
+                <h3>Posting</h3>
+                <p className="muted">
+                  With a <code>posts</code> section, <code>post_comment</code> and <code>post_chat</code> post on higher.fun as
+                  the wallet: a comment on its own coin (or any coin, if you allow it) or a message in the site chat. Plain text
+                  only: links and wallet or mint addresses are refused. Each post is logged before it goes up and counts against
+                  the daily cap.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section id="tools" className="doc-block" aria-labelledby="tools-h">
+            <Head id="tools" title="Tools">
+              {catalog.tools.length} tools. The hosted endpoint serves {hosted} of them; the other {localOnly}, which sign with
+              your own key, run only on the local server. Amounts come back in SOL, whole tokens and percentages, and prices are
+              SOL per whole token. Coin text written by users is marked and flagged, so agents treat it as data.
+            </Head>
+            <nav className="doc-chips" aria-label="Tool groups">
+              {groups.map((g) => (
+                <a key={g.id} href={`#group-${g.id}`}>
+                  {g.title} <span className="muted">{g.items.length}</span>
+                </a>
+              ))}
+            </nav>
+            {groups.map((g) => (
+              <div key={g.id} className="doc-group">
+                <h3 id={`group-${g.id}`}>{g.title}</h3>
+                {g.items.map((t) => (
+                  <ToolDoc key={t.name} tool={t} />
+                ))}
+              </div>
+            ))}
+          </section>
+
+          <section id="prompts" className="doc-block" aria-labelledby="prompts-h">
+            <Head id="prompts" title="Prompts">
+              Ready-made workflows your client can offer as slash commands or templates.
+            </Head>
+            <div className="doc-cards">
+              {catalog.prompts.map((p) => (
+                <div key={p.name} className="card doc-item">
+                  <h4>
+                    <code>{p.name}</code>
+                  </h4>
+                  <p className="small">{p.title}</p>
+                  <p className="muted">{p.description}</p>
+                  {p.args.length ? (
+                    <p className="small muted">
+                      Arguments:{" "}
+                      {p.args.map((a, i) => (
+                        <span key={a.name}>
+                          {i ? ", " : ""}
+                          <code>{a.name}</code>
+                          {a.required ? " (required)" : " (optional)"}
+                          {a.description ? `: ${a.description}` : ""}
+                        </span>
+                      ))}
+                    </p>
+                  ) : null}
                 </div>
               ))}
-            </section>
+            </div>
+          </section>
 
-            <section id="prompts" aria-labelledby="prompts-h">
-              <h2 id="prompts-h">Prompts</h2>
-              <p className="muted">Ready-made workflows your client can offer as slash commands or templates.</p>
-              <div className="doc-list">
-                {catalog.prompts.map((p) => (
-                  <div key={p.name} className="doc-item">
-                    <h4>
-                      <code>{p.name}</code> <span className="muted">· {p.title}</span>
-                    </h4>
-                    <p className="muted">{p.description}</p>
-                    {p.args.length ? (
-                      <p className="small">
-                        Arguments:{" "}
-                        {p.args.map((a, i) => (
-                          <span key={a.name}>
-                            {i ? ", " : ""}
-                            <code>{a.name}</code>
-                            {a.required ? " (required)" : " (optional)"}
-                            {a.description ? `: ${a.description}` : ""}
-                          </span>
-                        ))}
-                      </p>
-                    ) : null}
-                  </div>
-                ))}
+          <section id="resources" className="doc-block" aria-labelledby="resources-h">
+            <Head id="resources" title="Resources">
+              Reference your client can load into the agent&apos;s context.
+            </Head>
+            <div className="doc-cards">
+              {catalog.resources.map((r) => (
+                <div key={r.uri} className="card doc-item">
+                  <h4>
+                    <code>{r.uri}</code>
+                  </h4>
+                  <p className="muted">{r.description || r.title}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section id="recipes" className="doc-block" aria-labelledby="recipes-h">
+            <Head id="recipes" title="Recipes">
+              Things to ask your agent, and the tools it will reach for.
+            </Head>
+            <div className="recipes">
+              {RECIPES.map((r) => (
+                <div key={r.title} className="card">
+                  <h3>{r.title}</h3>
+                  <p className="quote">&ldquo;{r.ask}&rdquo;</p>
+                  <ol className="steps small">
+                    {r.steps.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ol>
+                  <p className="muted small">
+                    Or run the <code>{r.prompt}</code> prompt.
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section id="limits" className="doc-block" aria-labelledby="limits-h">
+            <Head id="limits" title="Limits and errors" />
+            <div className="doc-cards">
+              <div className="card">
+                <h3>Stateless</h3>
+                <p className="muted">
+                  The hosted server at <code>{MCP_URL}</code> speaks stateless Streamable HTTP: POST JSON-RPC, get JSON back. GET
+                  returns 405.
+                </p>
               </div>
-            </section>
-
-            <section id="resources" aria-labelledby="resources-h">
-              <h2 id="resources-h">Resources</h2>
-              <div className="doc-list">
-                {catalog.resources.map((r) => (
-                  <div key={r.uri} className="doc-item">
-                    <h4>
-                      <code>{r.uri}</code>
-                    </h4>
-                    <p className="muted">{r.description || r.title}</p>
-                  </div>
-                ))}
+              <div className="card">
+                <h3>60 units a minute</h3>
+                <p className="muted">
+                  Per IP: a build tool call costs 5, anything else 1. For heavy use, run it locally and point{" "}
+                  <code>SOLANA_RPC_URL</code> at your own RPC.
+                </p>
               </div>
-            </section>
-
-            <section id="recipes" aria-labelledby="recipes-h">
-              <h2 id="recipes-h">Recipes</h2>
-              <p className="muted">Things to ask your agent, and the tools it will reach for.</p>
-              <div className="recipes">
-                {RECIPES.map((r) => (
-                  <div key={r.title} className="card">
-                    <h3>{r.title}</h3>
-                    <p className="quote">&ldquo;{r.ask}&rdquo;</p>
-                    <ol className="steps small">
-                      {r.steps.map((s) => (
-                        <li key={s}>{s}</li>
-                      ))}
-                    </ol>
-                    <p className="muted small">
-                      Or run the <code>{r.prompt}</code> prompt.
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section id="limits" aria-labelledby="limits-h">
-              <h2 id="limits-h">Limits and errors</h2>
-              <ul className="plain">
-                <li>
-                  The hosted server at <code>{MCP_URL}</code> speaks stateless Streamable HTTP: POST JSON-RPC, get JSON back.
-                  GET returns 405.
-                </li>
-                <li>
-                  Each IP gets 60 units a minute: a build tool call costs 5, anything else 1. For heavy use, run it locally
-                  and point <code>SOLANA_RPC_URL</code> at your own RPC.
-                </li>
-                <li>
+              <div className="card">
+                <h3>Errors say what to do</h3>
+                <p className="muted">
                   A failed call comes back with <code>isError</code> set and a JSON body of <code>error</code>,{" "}
                   <code>code</code> and, when there&apos;s a fix, <code>next_step</code>.
-                </li>
-              </ul>
-              <div className="table-wrap">
-                <table className="params">
-                  <caption className="sr-only">Error codes</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Code</th>
-                      <th scope="col">Meaning</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ERRORS.map(([code, meaning]) => (
-                      <tr key={code}>
-                        <td data-label="Code">
-                          <code>{code}</code>
-                        </td>
-                        <td data-label="Meaning">{meaning}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                </p>
               </div>
-            </section>
+            </div>
+            <div className="table-wrap fee-panel fee-table-panel">
+              <table className="params">
+                <caption className="sr-only">Error codes</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Code</th>
+                    <th scope="col">Meaning</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ERRORS.map(([code, meaning]) => (
+                    <tr key={code}>
+                      <td data-label="Code">
+                        <code>{code}</code>
+                      </td>
+                      <td data-label="Meaning">{meaning}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-            <section id="troubleshooting" aria-labelledby="trouble-h">
-              <h2 id="trouble-h">Troubleshooting</h2>
-              <dl className="faq">
+          <section id="troubleshooting" className="doc-block" aria-labelledby="troubleshooting-h">
+            <Head id="troubleshooting" title="Troubleshooting" />
+            <dl className="doc-faq">
+              <div>
                 <dt>Claude added Highwire but doesn&apos;t use it.</dt>
                 <dd>
-                  Connectors are off per chat by default. Open <strong>+</strong> → <strong>Connectors</strong> and turn
-                  Highwire on.
+                  Connectors are off per chat by default. Open <strong>+</strong> → <strong>Connectors</strong> and turn Highwire
+                  on.
                 </dd>
+              </div>
+              <div>
                 <dt>Opening the URL in a browser shows an error.</dt>
                 <dd>That&apos;s expected. The endpoint only answers MCP clients, which POST to it.</dd>
+              </div>
+              <div>
                 <dt>I get rate_limited.</dt>
                 <dd>You used the minute&apos;s 60 units (a build costs 5). Wait a moment, or run the server locally.</dd>
+              </div>
+              <div>
                 <dt>The sign page says the link has expired.</dt>
                 <dd>
                   Trade and claim links last up to 10 minutes, launch links about a minute. Ask your agent to build the
                   transaction again and open the new link.
                 </dd>
+              </div>
+              <div>
                 <dt>The sign page doesn&apos;t list my wallet.</dt>
-                <dd>
-                  Unlock the wallet extension and reload. On a phone, open the link in your wallet app&apos;s own browser.
-                </dd>
+                <dd>Unlock the wallet extension and reload. On a phone, open the link in your wallet app&apos;s own browser.</dd>
+              </div>
+              <div>
                 <dt>rug_check reports an RPC timeout.</dt>
                 <dd>
-                  The on-chain check uses a public Solana RPC, which is sometimes busy. The rest of the check still runs.
-                  Locally, set <code>SOLANA_RPC_URL</code> to your own RPC.
+                  The on-chain check uses a public Solana RPC, which is sometimes busy. The rest of the check still runs. Locally,
+                  set <code>SOLANA_RPC_URL</code> to your own RPC.
                 </dd>
+              </div>
+              <div>
                 <dt>Prices look tiny.</dt>
                 <dd>They&apos;re SOL per whole token. New coins often trade at a few millionths of a SOL each.</dd>
+              </div>
+              <div>
                 <dt>Something else.</dt>
                 <dd>
                   Open an issue on <a href={`${REPO_URL}/issues`}>GitHub</a>.
                 </dd>
-              </dl>
-            </section>
-          </div>
+              </div>
+            </dl>
+          </section>
         </div>
       </main>
       <SiteFooter />

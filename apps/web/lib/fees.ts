@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { PublicKey } from "@solana/web3.js";
-import { Chain, DEFAULT_API_URL, HOLDER_AIRDROPS, HigherApi, createHttpConfig, ecosystemFees, type EcosystemFees, type FeeMode, type Recipient } from "highwire-core";
+import { unstable_cache } from "next/cache";
+import { Chain, DEFAULT_API_URL, HOLDER_AIRDROPS, HigherApi, createHttpConfig, dailyFees, ecosystemFees, sumDailyFees, type CoinFees, type DailyFees, type EcosystemFees, type FeeMode, type Recipient } from "highwire-core";
 import type { Flow, FlowScenario, Scenario } from "../components/fees/FeeFlow.tsx";
 import { serverOptionsFromEnv } from "highwire-mcp";
 import { coinLabel } from "./names.ts";
@@ -64,6 +65,58 @@ export const creatorFees = cache(async (wallet: string): Promise<EcosystemFees |
     return failed(wallet, err, undefined);
   }
 });
+
+// Fees over time come from each coin's daily candles: each coin's are kept for an hour, apart from the ten-minute read
+// of the rest, so today's column moves through the day without a candle request per coin every ten minutes.
+const candles = unstable_cache(
+  async (mint: string) => {
+    const { api } = sources();
+    const { items } = await api.candles(mint, "1d");
+    return items.map((c) => ({ time: c.time, volume: c.volume }));
+  },
+  ["fee-candles-1d"],
+  { revalidate: 3_600 },
+);
+
+export interface FeeHistory {
+  days: DailyFees[];
+  /** How many coins it's drawn from, and their share of all the volume. */
+  coins: number;
+  sharePct: number;
+}
+
+/**
+ * Fees day by day, from the first of these coins' launches up to `days` days back, from the busiest coins that together
+ * make up `share` of all volume (at most `max` of them): the rest add too little to see. Null when no coin's candles
+ * could be read.
+ */
+export async function feeHistory(coins: CoinFees[], { days = 30, share = 0.99, max = 150 } = {}): Promise<FeeHistory | null> {
+  const first = Math.min(...coins.map((c) => (c.createdAt ? Date.parse(c.createdAt) : Infinity)));
+  if (Number.isFinite(first)) days = Math.max(2, Math.min(days, Math.floor(Date.now() / 86_400_000) - Math.floor(first / 86_400_000) + 1));
+  const total = coins.reduce((n, c) => n + c.volumeSol, 0);
+  const picked: CoinFees[] = [];
+  let covered = 0;
+  for (const c of [...coins].sort((a, b) => b.volumeSol - a.volumeSol)) {
+    if (picked.length >= max || (total > 0 && covered / total >= share) || c.volumeSol <= 0) break;
+    picked.push(c);
+    covered += c.volumeSol;
+  }
+  const series: DailyFees[][] = [];
+  let read = 0;
+  let readVolume = 0;
+  for (let i = 0; i < picked.length; i += 4) {
+    const batch = picked.slice(i, i + 4);
+    const got = await Promise.allSettled(batch.map((c) => candles(c.mint)));
+    got.forEach((g, j) => {
+      if (g.status !== "fulfilled") return console.error(`fees: couldn't read ${batch[j]!.mint}'s candles`, g.reason);
+      series.push(dailyFees(batch[j]!, g.value));
+      read++;
+      readVolume += batch[j]!.volumeSol;
+    });
+  }
+  if (!read) return null;
+  return { days: sumDailyFees(series, days), coins: read, sharePct: total > 0 ? (readVolume / total) * 100 : 100 };
+}
 
 export interface CreatorRow {
   wallet: string;

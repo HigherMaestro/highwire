@@ -1,7 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Recipient } from "highwire-core";
 import { AmbientWire } from "../hero/AmbientWire.tsx";
-import { RECIPIENTS, updatedAt } from "../../lib/fees.ts";
+import { RECIPIENTS, sol, updatedAt, type FeeHistory } from "../../lib/fees.ts";
+import { FeeChart } from "./FeeChart.tsx";
 
 // The pieces the fee pages share: the wire header with one large figure, numbered section heads, and figures in cards.
 
@@ -109,5 +110,40 @@ export function LinkCards({ links }: { links: { href: string; label: string; sub
         </li>
       ))}
     </ul>
+  );
+}
+
+const SERIES = RECIPIENTS.map((r) => ({ key: r.key, label: r.label, color: r.color }));
+
+const dayName = (day: string) => new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
+
+/**
+ * The line over a chart: the last seven full days against the seven before ("41.2 SOL in the last seven days, up 12% on
+ * the week before"), or, with less than two weeks to go on, everything since the first day.
+ */
+export function weekOnWeek(h: FeeHistory, pick: (d: FeeHistory["days"][number]) => number = (d) => d.feesSol, what = "in fees"): { line: string } {
+  const full = h.days.slice(0, -1);
+  if (full.length < 14) return { line: `${sol(h.days.reduce((n, d) => n + pick(d), 0))} SOL ${what} since ${dayName(h.days[0]!.day)}.` };
+  const sum = (a: typeof full) => a.reduce((n, d) => n + pick(d), 0);
+  const last = sum(full.slice(-7));
+  const before = sum(full.slice(-14, -7));
+  const change = before > 0 ? ((last - before) / before) * 100 : null;
+  const line =
+    change == null
+      ? `${sol(last)} SOL ${what} in the last seven days.`
+      : `${sol(last)} SOL ${what} in the last seven days, ${Math.abs(change) < 0.5 ? "level with" : `${change > 0 ? "up" : "down"} ${Math.abs(change).toFixed(0)}% on`} the week before.`;
+  return { line };
+}
+
+/** Fees day by day: the chart, and how it's worked out. */
+export function HistoryChart({ history, solUsd, title, scope }: { history: FeeHistory; solUsd: number | null; title: string; scope?: string }) {
+  return (
+    <>
+      <FeeChart days={history.days} series={SERIES} solUsd={solUsd} title={title} />
+      <p className="fee-chart-foot">
+        Estimated from higher.fun's daily volume at each coin's on-chain rates, in UTC days
+        {scope ? `; ${scope}` : ""}. Today is still going.
+      </p>
+    </>
   );
 }
