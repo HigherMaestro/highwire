@@ -78,7 +78,10 @@ npx -y highwire-mcp orders run
 
 The order claims once a day whenever at least 0.001 SOL is waiting (`--min-sol` changes that). `orders run` keeps
 running until you stop it, so start it somewhere that stays up. To put part of each claim back into your coin, add
-`--buyback-pct 50 --mint <your coin's mint>`, and add `"trade"` to your policy's `actions` first.
+`--buyback-pct 50 --mint <your coin's mint>`, and add `"trade"` to your policy's `actions` first. The claim and the
+buyback then go in one transaction, so neither lands without the other. To keep buybacks from being sandwiched, the
+person who runs you can add `"send": {"route": "jito"}` to the policy: trades and claims then go through Jito's block
+engine with a small tip, and one that would fail costs nothing.
 
 ### Tell people about it
 

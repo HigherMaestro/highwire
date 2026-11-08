@@ -172,3 +172,43 @@ test("a launch never carries Highwire's trade fee, even with a first buy", async
   assert.deepEqual(describeTransaction(real, "mainnet").highwireFees, []);
   assert.equal(highwireFeeBound(describeTransaction(real, "mainnet")), null);
 });
+
+test("Jito tips: only the local signer's protected sends tip, once, within the cap, with the don't-front key and nothing else", async () => {
+  const { JITO_DONT_FRONT, JITO_TIP_ACCOUNTS } = await import("../src/higher/constants.ts");
+  const { jitoTipInstruction } = await import("../src/tx/envelope.ts");
+  const { jitoTipsOf } = await import("../src/tx/decode.ts");
+  const tipAccount = JITO_TIP_ACCOUNTS[2];
+  const tip = (lamports = 50_000n) => jitoTipInstruction(wallet, { tipLamports: lamports, tipAccount });
+  const exp = { wallet, platformId: new PublicKey(ADDRESSES.mainnet.rewardsPlatform) };
+  const allowed = (t: VersionedTransaction, maxLamports = 100_000n) => assertSafe(t, "mainnet", { ...exp, jitoTip: { maxLamports } });
+
+  // The builder's tip passes with its expectation, and reads back from the bytes alone.
+  allowed(tx(tip()));
+  assert.deepEqual(jitoTipsOf(tx(tip())), [50_000n]);
+  assert.match(describeTransaction(tx(tip()), "mainnet").instructions[0]!.text, /Tip Jito's block engine 0\.00005 SOL .*nothing allowed in front of it/);
+  // Without it (every build tool, every sign link), a tip is refused.
+  refused(tx(tip()), /only the local signer's protected sends make/);
+  // Exactly one, within the cap and Jito's minimum.
+  assert.throws(() => allowed(tx(tip(), tip())), /more than one tip/);
+  assert.throws(() => allowed(tx(tip(200_000n))), /outside its bounds/);
+  assert.throws(() => allowed(tx()), /must tip exactly once/);
+  const small = SystemProgram.transfer({ fromPubkey: wallet, toPubkey: new PublicKey(tipAccount), lamports: 500 });
+  assert.throws(() => allowed(tx(small)), /outside its bounds/);
+  // The don't-front key: read-only, on the tip only, and nothing else rides along.
+  const writableKey = SystemProgram.transfer({ fromPubkey: wallet, toPubkey: new PublicKey(tipAccount), lamports: 50_000 });
+  writableKey.keys.push(meta(new PublicKey(JITO_DONT_FRONT), true));
+  assert.throws(() => allowed(tx(writableKey)), /unexpected accounts/);
+  const extra = tip();
+  extra.keys.push(meta(attacker, false));
+  assert.throws(() => allowed(tx(extra)), /unexpected accounts/);
+  const onFee = SystemProgram.transfer({ fromPubkey: wallet, toPubkey: new PublicKey(HIGHWIRE_WALLET), lamports: 1000 });
+  onFee.keys.push(meta(new PublicKey(JITO_DONT_FRONT), false));
+  assert.throws(() => allowed(tx(onFee, tip())), /"don't front" key, which only a tip may/);
+  // A plain transfer with extra accounts is refused too, tip or not.
+  const sneaky = SystemProgram.transfer({ fromPubkey: wallet, toPubkey: new PublicKey(HIGHWIRE_WALLET), lamports: 1000 });
+  sneaky.keys.push(meta(attacker, false));
+  assert.throws(() => assertSafe(tx(sneaky), "mainnet", { ...exp, highwireFee: { maxLamports: 1000n } }), /unexpected accounts/);
+  // The builder only tips Jito's own accounts, within 0.000001 to 0.01 SOL.
+  assert.throws(() => jitoTipInstruction(wallet, { tipLamports: 50_000n, tipAccount: attacker.toBase58() }), /isn't one of Jito's tip accounts/);
+  assert.throws(() => jitoTipInstruction(wallet, { tipLamports: 20_000_000n, tipAccount }), /outside/);
+});

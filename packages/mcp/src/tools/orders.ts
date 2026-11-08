@@ -5,7 +5,7 @@ import { HigherError, lamportsNumber, MAX_SLIPPAGE_BPS, quoteTrade, solToLamport
 import { checkPolicy, describeOrder, lockHolder, ORDER_KINDS, OrderBook, type NewOrder, type Order, type OrderMarket } from "highwire-agent";
 import { run } from "../result.ts";
 import { EXECUTE, mint, READ_ONLY, type Deps, type ExecutionSigner } from "./shared.ts";
-import { creatorOf, executeTrade } from "./execute.ts";
+import { creatorOf, executeClaimAndBuy, executeTrade } from "./execute.ts";
 import { buildClaimFor } from "./transactions.ts";
 
 // Standing orders for the local signer: stop-loss, take-profit, recurring buys and fee claims. The tools place, list
@@ -42,11 +42,17 @@ export function orderMarket(deps: Deps, signer: ExecutionSigner): OrderMarket {
     },
     claim: async ({ order, minLamports }) => {
       // The same claim build_claim_creator_fees and execute_claim make, and the SOL it collects.
-      const { result: r } = await buildClaimFor(deps, signer.publicKey);
+      const jito = await signer.jitoTip(chain.cluster, "claim");
+      const { result: r } = await buildClaimFor(deps, signer.publicKey, jito);
       const lamports = solToLamports(r.claimable.curveSol) + r.claimable.pools.reduce((n, p) => n + solToLamports(p.sol), 0n);
       if (!r.envelope || lamports === 0n || lamports < minLamports) return { result: null, lamports };
       const result = await signer.execute(chain.connection, { tool: `order ${order.kind}`, intent: { action: "claim", cluster: chain.cluster, solOut: 0n }, envelope: r.envelope, order: order.id });
       return { result, lamports };
+    },
+    claimAndBuy: async ({ order, minLamports, slippageBps }) => {
+      // The claim and its buyback in one transaction, as execute_claim's buyback; null to claim and buy separately.
+      const done = await executeClaimAndBuy(deps, signer, `order ${order.kind}`, { mint: order.mint!, buybackPct: order.buybackPct!, slippageBps, minLamports }, order.id);
+      return done && { result: done.result, claimLamports: done.claimLamports, buyLamports: done.buyLamports };
     },
   };
 }

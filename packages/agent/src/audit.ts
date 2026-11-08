@@ -13,9 +13,10 @@ export type AuditAction = Action | "post";
 /**
  * signed_in: the signer signed higher.fun's sign-in message for a launch's uploads or a post; it moves no funds. order:
  * a standing order was placed, cancelled or closed (its fills are logged like any trade). posted: a comment or chat
- * message went up on higher.fun.
+ * message went up on higher.fun. not_landed: a protected send that provably never landed (the block engine refused it,
+ * or its blockhash expired unseen), so its "sent" line no longer counts against the daily limit.
  */
-export type Outcome = "refused" | "dry_run" | "sent" | "confirmed" | "failed" | "signed_in" | "order" | "posted";
+export type Outcome = "refused" | "dry_run" | "sent" | "confirmed" | "failed" | "not_landed" | "signed_in" | "order" | "posted";
 
 export interface AuditEntry {
   time: string;
@@ -38,6 +39,10 @@ export interface AuditEntry {
   /** A post's text, and where it went ("comment" or "chat"). */
   text?: string;
   where?: string;
+  /** How a send went out: "jito" (a protected send) or "rpc"; its tip in lamports, and the block engine's bundle id. */
+  route?: string;
+  tip?: string;
+  bundle?: string;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -97,9 +102,13 @@ export class AuditLog {
    */
   spentSince(cluster: Cluster, ms = DAY_MS): bigint {
     const since = this.now().getTime() - ms;
+    const entries = this.entries();
+    // A send that provably never landed spent nothing.
+    const unlanded = new Set(entries.filter((e) => e.outcome === "not_landed" && e.signature).map((e) => e.signature));
     let total = 0n;
-    for (const e of this.entries()) {
+    for (const e of entries) {
       if (e.outcome !== "sent" || e.cluster !== cluster) continue;
+      if (e.signature && unlanded.has(e.signature)) continue;
       if (Date.parse(e.time) < since) continue;
       total += BigInt(e.lamports);
     }

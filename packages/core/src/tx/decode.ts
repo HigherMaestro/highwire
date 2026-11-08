@@ -6,6 +6,9 @@ import {
   HIGHWIRE_FEE_BPS,
   HIGHWIRE_MEMO,
   HIGHWIRE_WALLET,
+  isJitoTipAccount,
+  JITO_DONT_FRONT,
+  JITO_MIN_TIP_LAMPORTS,
   MEMO_PROGRAM_ID,
   PRIORITY_FEE_MICRO_LAMPORTS,
   type Cluster,
@@ -104,6 +107,8 @@ export interface DecodedTransaction {
   transfers: { to: string; lamports: bigint }[];
   /** Highwire's trade fee transfers, in lamports. */
   highwireFees: bigint[];
+  /** Tips to Jito's block engine (a protected send), by tip account. */
+  jitoTips: { to: string; lamports: bigint }[];
   /** Token transfers (TransferChecked): the mint, the accounts, and the amount in base units. */
   tokenTransfers: { mint: string; from: string; to: string; owner: string; amount: bigint }[];
   /** Coins created by initialize_v2: the mint and the creator recorded on-chain. */
@@ -152,6 +157,7 @@ export function describeTransaction(
     trades: [],
     transfers: [],
     highwireFees: [],
+    jitoTips: [],
     tokenTransfers: [],
     launches: [],
     claims: [],
@@ -182,6 +188,9 @@ export function describeTransaction(
         if (k(1) === HIGHWIRE_WALLET) {
           out.highwireFees.push(lamports);
           known(feeLine(lamports));
+        } else if (isJitoTipAccount(k(1))) {
+          out.jitoTips.push({ to: k(1), lamports });
+          known(`Tip Jito's block engine ${formatLamports(lamports)} SOL (${k(1)}), to send this privately${k(2) === JITO_DONT_FRONT ? " with nothing allowed in front of it" : ""}`);
         } else {
           out.transfers.push({ to: k(1), lamports });
           known(`Send ${formatLamports(lamports)} SOL from ${k(0)} to ${k(1)}`);
@@ -263,6 +272,22 @@ export function describeTransaction(
   return out;
 }
 
+/**
+ * The tips to Jito's tip accounts in a transaction, read from its static keys alone (a tip account is never in a lookup
+ * table), so it needs no table: what the local signer checks against the policy's route.
+ */
+export function jitoTipsOf(tx: VersionedTransaction): bigint[] {
+  const keys = tx.message.staticAccountKeys;
+  const out: bigint[] = [];
+  for (const ix of tx.message.compiledInstructions) {
+    if (keys[ix.programIdIndex]?.toBase58() !== PROGRAMS.system) continue;
+    const d = Buffer.from(ix.data);
+    const to = ix.accountKeyIndexes[1] !== undefined ? keys[ix.accountKeyIndexes[1]] : undefined;
+    if (d.length === 12 && d.readUInt32LE(0) === 2 && to && isJitoTipAccount(to.toBase58())) out.push(d.readBigUInt64LE(4));
+  }
+  return out;
+}
+
 export function summaryLines(d: DecodedTransaction): string[] {
   return [`Fee payer and signer: ${d.signers.join(", ")}`, ...d.instructions.map((ix, i) => `${i + 1}. ${ix.text}`)];
 }
@@ -294,6 +319,12 @@ export interface Expectations {
    * builder knows it. Without it, nothing may go to Highwire.
    */
   highwireFee?: { maxLamports: bigint; lamports?: bigint };
+  /**
+   * A protected send's tip: one SOL transfer to a Jito tip account, as a static key, of 1,000 lamports to `maxLamports`,
+   * whose only extra account is the read-only JITO_DONT_FRONT key. Without it, nothing may go to a tip account and no
+   * instruction may carry that key: build tools and sign links never tip.
+   */
+  jitoTip?: { maxLamports: bigint };
 }
 
 /**
@@ -344,8 +375,18 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
   let fundings = 0;
   let memos = 0;
   let transfers = 0;
+  let tips = 0;
   const send = exp.transfer;
+  const staticKeys = new Set(keys.map((k) => k.toBase58()));
+  const writable = (k: PublicKey) => {
+    const at = keys.findIndex((x) => x.equals(k));
+    return at < 0 || tx.message.isAccountWritable(at);
+  };
   ixs.forEach((ix, i) => {
+    // The "don't front" key belongs on the tip transfer only.
+    const dontFront = ix.keys.findIndex((k) => k.toBase58().startsWith("jitodontfront"));
+    const isTip = ix.programId.toBase58() === PROGRAMS.system && ix.keys[1] !== undefined && isJitoTipAccount(ix.keys[1].toBase58());
+    if (dontFront >= 0 && !isTip) fail(`instruction ${i + 1}: carries Jito's "don't front" key, which only a tip may`);
     const p = ix.programId.toBase58();
     const d = ix.data;
     const key = (n: number) => ix.keys[n] ?? fail(`instruction ${i + 1} is missing account ${n}`);
@@ -361,6 +402,16 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
       if (type === 2 && d.length === 12) {
         const to = key(1);
         const lamports = d.readBigUInt64LE(4);
+        if (isJitoTipAccount(to.toBase58())) {
+          if (!exp.jitoTip) fail(`instruction ${i + 1}: a tip to Jito's block engine, which only the local signer's protected sends make`);
+          if (!staticKeys.has(to.toBase58())) fail(`instruction ${i + 1}: the tip account comes from a lookup table`);
+          if (lamports < JITO_MIN_TIP_LAMPORTS || lamports > exp.jitoTip!.maxLamports) fail(`instruction ${i + 1}: the tip is outside its bounds`);
+          const extra = ix.keys.slice(2);
+          if (extra.length > 1 || (extra[0] && (extra[0].toBase58() !== JITO_DONT_FRONT || writable(extra[0])))) fail(`instruction ${i + 1}: the tip carries unexpected accounts`);
+          if (++tips > 1) fail(`instruction ${i + 1}: more than one tip`);
+          return;
+        }
+        if (ix.keys.length > 2) fail(`instruction ${i + 1}: a transfer with unexpected accounts`);
         if (to.toBase58() === HIGHWIRE_WALLET) {
           if (!exp.highwireFee) fail(`instruction ${i + 1}: a payment to Highwire, which this transaction never makes`);
           if (lamports > exp.highwireFee!.maxLamports) fail(`instruction ${i + 1}: Highwire's fee is more than ${HIGHWIRE_FEE_BPS / 100}% of the trade`);
@@ -481,6 +532,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
   if (exp.launchFee && feeTransfers !== 1) fail("the launch fee must be paid exactly once");
   if (send && transfers !== 1) fail("the transfer must happen exactly once");
   if (exp.highwireFee?.lamports !== undefined && exp.highwireFee.lamports > 0n && highwireFees !== 1) fail("Highwire's trade fee must be paid exactly once");
+  if (exp.jitoTip && tips !== 1) fail("a protected send must tip exactly once");
 }
 
 /** Default compute limits, re-exported for the builders. */

@@ -4,6 +4,16 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Protected sends.** A policy can set `"send": {"route": "jito"}`: the local signer then sends trades and claims
+  through Jito's block engine as one-transaction bundles, with a tip (1.2 times Jito's recent median, at most the
+  policy's `max_tip_sol`) and its "don't front" key, so they can't be sandwiched and one that would fail costs nothing.
+  The tip is built into the transaction and checked like every other instruction; build tools and sign links never
+  tip, and the sign page refuses one. A send that provably never landed is logged as `not_landed` and gives its spend
+  back, and a standing order tries again instead of closing. Mainnet only; launches and transfers go the ordinary way.
+  See docs/protected-sends.md.
+- **Claim and buy back in one transaction.** A fee-claim order with a buyback claims and buys in one transaction when
+  they fit (they do for curve and graduated coins), so neither lands without the other; its history reads as before.
+  `execute_claim` takes an optional `buyback` to do the same by hand.
 - **Fees day by day.** /fees, every coin page and every creator page chart fees a day since higher.fun's first coins,
   stacked by who got them, with the week against the week before once there are two. Worked out from higher.fun's daily
   candles at each coin's on-chain rates (curve rates until a coin's days add up to its measured curve volume, pool rates

@@ -32,6 +32,7 @@ import {
   type Envelope,
 } from "highwire-core";
 import { PublicKey } from "@solana/web3.js";
+import type { JitoTip } from "highwire-core";
 import { jsonResult, run, runResult } from "../result.ts";
 import { BUILD, READ_ONLY, mint, solUsd, wallet, type Deps } from "./shared.ts";
 
@@ -253,11 +254,11 @@ export async function walletPnl(deps: Deps, w: PublicKey, opts: { mints?: string
 }
 
 /** The claimable fees and, when there's something on-chain, the claim transactions. */
-export async function buildClaimFor(deps: Deps, w: PublicKey) {
+export async function buildClaimFor(deps: Deps, w: PublicKey, jito?: JitoTip) {
   const { api, chain } = deps;
   const onMainnet = chain.cluster === "mainnet";
   const [graduated, earnings] = onMainnet ? await Promise.all([graduatedCoinsOf(api, w), api.earnings(w.toBase58()).catch(() => null)]) : [[], null];
-  const result = await buildClaimCreatorFees(chain, w, graduated);
+  const result = await buildClaimCreatorFees(chain, w, graduated, { jito });
   const offChainPayouts = earnings
     ? {
         paidOutSol: lamportsToSol(earnings.paidOut, 6),

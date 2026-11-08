@@ -342,3 +342,148 @@ test("posts go up only inside the policy's posts section, plain text, under the 
   writeFileSync(dry.paths.stop, "");
   await assert.rejects(dry.signer.post(comment(), publish), (e: { code?: string }) => e.code === "signer_stopped");
 });
+
+// ---------------------------------------------------------------- protected sends: Jito's route, against a fake block engine
+
+import { JITO_TIP_ACCOUNTS, jitoTipInstruction } from "highwire-core";
+import { JitoRejected, routeOf, tipFor, type JitoClient } from "../src/index.ts";
+
+function fakeJito(mode: "ok" | "reject" | "lost" = "ok", accounts: string[] = [...JITO_TIP_ACCOUNTS]) {
+  const sends: string[] = [];
+  const jito: JitoClient = {
+    tipAccounts: async () => accounts,
+    tipFloorLamports: async () => 10_000n,
+    send: async (b64) => {
+      sends.push(b64);
+      if (mode === "reject") throw new JitoRejected("Jito's block engine refused it: rate limited");
+      if (mode === "lost") throw new Error("socket hang up");
+      return { bundleId: "bundle-1" };
+    },
+  };
+  return { jito, sends };
+}
+
+/** A mainnet trade's envelope (a tip and a token-free stand-in for the trade), optionally without its tip. */
+function tradeEnvelope(wallet: PublicKey, tip: bigint | null): Envelope {
+  const env = envelopeFor(wallet, 1_000n);
+  const ixs = [SystemProgram.transfer({ fromPubkey: wallet, toPubkey: new PublicKey(FRIEND), lamports: 1_000n })];
+  if (tip !== null) ixs.push(jitoTipInstruction(wallet, { tipLamports: tip, tipAccount: JITO_TIP_ACCOUNTS[3] }));
+  const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: PublicKey.default.toBase58(), instructions: ixs }).compileToV0Message());
+  return { ...env, cluster: "mainnet", kind: "trade", transactions: [{ ...env.transactions[0]!, base64: Buffer.from(tx.serialize()).toString("base64") }] };
+}
+
+const mainnetPolicy = (send: Record<string, unknown>, over: Partial<Policy> = {}) =>
+  PolicySchema.parse({ ...POLICY_TEMPLATE, cluster: "mainnet", live: true, actions: ["trade", "claim", "transfer"], max_sol_per_tx: 0.3, max_sol_per_day: 0.5, transfer_allowlist: [FRIEND], send, ...over });
+
+function jitoSigner(p: Policy, mode: Parameters<typeof fakeJito>[0] = "ok", accounts?: string[]) {
+  const paths = agentPaths({ HIGHWIRE_HOME: home() });
+  writeFileSync(paths.policy, JSON.stringify(p));
+  const fj = fakeJito(mode, accounts);
+  return { signer: new LocalSigner(Keypair.generate(), paths, undefined, () => new Date(), fj.jito), ...fj };
+}
+
+/** A mainnet RPC that may never see the transaction: confirm fails, the block height has passed, and the status is null. */
+function mainnetConnection(opts: { lands?: boolean } = {}) {
+  const base = fakeConnection({ genesis: GENESIS_HASHES.mainnet, spend: 1_000 + 12_000 + 5_000, ...(opts.lands === false ? { confirmErr: "block height exceeded" } : {}) });
+  Object.assign(base.connection, {
+    getBlockHeight: async () => 1_000,
+    getSignatureStatuses: async () => ({ value: [opts.lands === false ? null : { confirmationStatus: "confirmed" }] }),
+  });
+  return base;
+}
+
+const trade = (): Intent => ({ action: "trade", cluster: "mainnet", solOut: 1_000n, slippageBps: 100, mint: COIN });
+
+test("the policy's send section: Jito's route is mainnet only, tips are capped, and only trades and claims take it", () => {
+  assert.equal(PolicySchema.safeParse({ ...POLICY_TEMPLATE, send: { route: "jito" } }).success, false, "devnet can't route through Jito");
+  assert.equal(PolicySchema.safeParse({ ...POLICY_TEMPLATE, cluster: "mainnet", send: { route: "jito", max_tip_sol: 0.02 } }).success, false, "over the cap");
+  const p = mainnetPolicy({ route: "jito" });
+  assert.deepEqual(p.send, { route: "jito", max_tip_sol: 0.0005, fallback: "none" });
+  assert.deepEqual(["trade", "claim", "launch", "transfer"].map((a) => routeOf(p, a as never)), ["jito", "jito", "rpc", "rpc"]);
+  assert.equal(routeOf(mainnetPolicy({ route: "rpc" }), "trade"), "rpc");
+  // 1.2 times the median, within Jito's minimum and the cap; a quarter of the cap without a median.
+  assert.equal(tipFor(10_000n, 500_000n), 12_000n);
+  assert.equal(tipFor(100n, 500_000n), 1_000n);
+  assert.equal(tipFor(9_000_000n, 500_000n), 500_000n);
+  assert.equal(tipFor(null, 500_000n), 125_000n);
+});
+
+test("a protected send tips within the policy, goes to Jito's block engine only, and is logged with its route", async () => {
+  const { signer, sends } = jitoSigner(mainnetPolicy({ route: "jito" }));
+  const tip = await signer.jitoTip("mainnet", "trade");
+  assert.equal(tip?.tipLamports, 12_000n);
+  assert.ok(JITO_TIP_ACCOUNTS.includes(tip!.tipAccount as never));
+  assert.equal(await signer.jitoTip("mainnet", "launch"), undefined, "launches go the ordinary way");
+  const { connection, sent } = mainnetConnection();
+  const r = await signer.execute(connection, { tool: "execute_trade", intent: trade(), envelope: tradeEnvelope(signer.publicKey, 12_000n) });
+  assert.equal(r.status, "sent");
+  assert.equal(sends.length, 1, "through the block engine");
+  assert.equal(sent.length, 0, "never through the public RPC");
+  assert.equal(r.transactions[0]?.route, "jito");
+  assert.equal(r.transactions[0]?.tipSol, 0.000012);
+  const [s, c] = signer.audit.entries();
+  assert.deepEqual([s?.outcome, s?.route, s?.tip, c?.outcome, c?.bundle], ["sent", "jito", "12000", "confirmed", "bundle-1"]);
+});
+
+test("Jito's tip accounts must match Highwire's list before anything is tipped", async () => {
+  const { signer } = jitoSigner(mainnetPolicy({ route: "jito" }), "ok", [...JITO_TIP_ACCOUNTS.slice(1), FRIEND]);
+  await assert.rejects(signer.jitoTip("mainnet", "trade"), (e: { code?: string }) => e.code === "unavailable");
+});
+
+test("a refused protected send spends nothing; with fallback rpc it goes the ordinary way instead", async () => {
+  const none = jitoSigner(mainnetPolicy({ route: "jito" }), "reject");
+  const a = mainnetConnection();
+  const r = await none.signer.execute(a.connection, { tool: "execute_trade", intent: trade(), envelope: tradeEnvelope(none.signer.publicKey, 12_000n) });
+  assert.equal(r.status, "not_landed");
+  assert.equal(r.transactions[0]?.landed, false);
+  assert.equal(a.sent.length, 0, "nothing goes the ordinary way without the fallback");
+  assert.deepEqual(none.signer.audit.entries().map((e) => e.outcome), ["sent", "not_landed"]);
+  assert.equal(none.signer.audit.spentSince("mainnet"), 0n, "the spend is given back");
+
+  const rpc = jitoSigner(mainnetPolicy({ route: "jito", fallback: "rpc" }), "reject");
+  const b = mainnetConnection();
+  const r2 = await rpc.signer.execute(b.connection, { tool: "execute_trade", intent: trade(), envelope: tradeEnvelope(rpc.signer.publicKey, 12_000n) });
+  assert.equal(r2.status, "sent");
+  assert.equal(b.sent.length, 1);
+  assert.equal(r2.transactions[0]?.route, "rpc");
+  assert.ok(rpc.signer.audit.entries().some((e) => e.outcome === "failed" && /fallback/.test(e.reason ?? "")));
+});
+
+test("a protected send whose answer is lost and whose blockhash expires unseen never landed, so nothing was spent", async () => {
+  const { signer } = jitoSigner(mainnetPolicy({ route: "jito" }), "lost");
+  const { connection, sent } = mainnetConnection({ lands: false });
+  const r = await signer.execute(connection, { tool: "execute_trade", intent: trade(), envelope: tradeEnvelope(signer.publicKey, 12_000n) });
+  assert.equal(r.status, "not_landed");
+  assert.equal(sent.length, 0);
+  assert.equal(signer.audit.spentSince("mainnet"), 0n);
+});
+
+test("the tips in the bytes must match the policy's route", async () => {
+  const jito = jitoSigner(mainnetPolicy({ route: "jito" }));
+  const { connection } = mainnetConnection();
+  await assert.rejects(
+    jito.signer.execute(connection, { tool: "execute_trade", intent: trade(), envelope: tradeEnvelope(jito.signer.publicKey, null) }),
+    (e: { code?: string; message: string }) => e.code === "policy_refused" && /one tip/.test(e.message),
+  );
+  await assert.rejects(
+    jito.signer.execute(connection, { tool: "execute_trade", intent: trade(), envelope: tradeEnvelope(jito.signer.publicKey, 600_000n) }),
+    (e: { code?: string; message: string }) => e.code === "policy_refused" && /at most 0.0005 SOL/.test(e.message),
+  );
+  const plain = jitoSigner(mainnetPolicy({ route: "rpc" }));
+  await assert.rejects(
+    plain.signer.execute(connection, { tool: "execute_trade", intent: trade(), envelope: tradeEnvelope(plain.signer.publicKey, 12_000n) }),
+    (e: { code?: string; message: string }) => e.code === "policy_refused" && /ordinary way/.test(e.message),
+  );
+  // A transfer on a Jito policy goes the ordinary way, so it must carry no tip.
+  await assert.rejects(
+    jito.signer.execute(connection, { tool: "execute_transfer", intent: { action: "transfer", cluster: "mainnet", solOut: 1_000n, recipient: FRIEND }, envelope: tradeEnvelope(jito.signer.publicKey, 12_000n) }),
+    (e: { code?: string; message: string }) => e.code === "policy_refused" && /ordinary way/.test(e.message),
+  );
+});
+
+test("a claim and buyback needs both actions in the policy", () => {
+  const p = mainnetPolicy({ route: "rpc" }, { actions: ["claim"] });
+  assert.equal(checkPolicy(p, { ...trade(), also: ["claim"] }, 0n)?.rule, "actions");
+  assert.equal(checkPolicy(mainnetPolicy({ route: "rpc" }, { actions: ["trade"] }), { ...trade(), also: ["claim"] }, 0n)?.rule, "actions");
+  assert.equal(checkPolicy(mainnetPolicy({ route: "rpc" }), { ...trade(), also: ["claim"] }, 0n), null);
+});

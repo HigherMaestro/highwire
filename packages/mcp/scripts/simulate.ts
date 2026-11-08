@@ -11,7 +11,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { LaunchpadPool } from "@raydium-io/raydium-sdk-v2";
-import { Chain, decodeSignPayload, DEFAULT_RPC_URLS, type Cluster } from "highwire-core";
+import { buildClaimAndBuy, buildTrade, Chain, decodeSignPayload, DEFAULT_RPC_URLS, JITO_TIP_ACCOUNTS, type Cluster, type Envelope } from "highwire-core";
 import { PublicKey } from "@solana/web3.js";
 
 const clusters = (process.env.SIM_CLUSTERS ?? "mainnet,devnet").split(",") as Cluster[];
@@ -216,6 +216,31 @@ for (const cluster of clusters) {
     await pause();
     console.log("- claim creator fees");
     await report(cluster, `claim creator fees (${plan.creator})`, await call(client, "build_claim_creator_fees", { wallet: plan.creator }));
+
+    // Protected sends (docs/protected-sends.md), built in-process since no build tool tips: a tipped buy (the tip with the
+    // read-only "don't front" key on it), and a fee claim and its buyback in one transaction, on the curve and in a pool.
+    const tip = { tipLamports: 12_000n, tipAccount: JITO_TIP_ACCOUNTS[0] };
+    const built = (envelope: Envelope) => ({ isError: false, out: { unsigned: envelope } });
+    const failedRow = (what: string, err: unknown) => rows.push({ cluster, what, ok: false, result: err instanceof Error ? err.message : String(err) });
+    await pause();
+    console.log("- protected buy in the CPMM pool");
+    try {
+      const t = await buildTrade(chain, { wallet: new PublicKey(plan.graduatedHolder.wallet), mint: new PublicKey(plan.graduated.mint), side: "buy", amountIn: 50_000_000n, slippageBps: 300, maxLamports: 50_000_000n, jito: tip });
+      await report(cluster, "protected buy 0.05 SOL in the CPMM pool (Jito tip)", built(t.envelope));
+    } catch (err) {
+      failedRow("protected buy 0.05 SOL in the CPMM pool (Jito tip)", err);
+    }
+    for (const [what, coin] of [["claim and buy back, graduated coin", plan.graduated], ["claim and buy back, curve coin", plan.curve]] as const) {
+      await pause();
+      console.log(`- ${what}`);
+      try {
+        const r = await buildClaimAndBuy(chain, { wallet: new PublicKey(coin.creator), mint: new PublicKey(coin.mint), buybackPct: 50, slippageBps: 500, minBuyLamports: 1n, jito: tip });
+        if (r.built) await report(cluster, `${what} (${coin.creator}, Jito tip)`, built(r.built.envelope));
+        else rows.push({ cluster, what, ok: true, result: `nothing to build: ${r.claimLamports} lamports to claim` });
+      } catch (err) {
+        failedRow(what, err);
+      }
+    }
   } else {
     const plan = await devnetPlan(chain);
     console.log(`${plan.pools} higher.fun pools on devnet`);

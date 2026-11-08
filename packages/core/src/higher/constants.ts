@@ -139,6 +139,28 @@ export const highwireFeeApplies = (cluster: Cluster) => cluster === "mainnet";
  */
 export const RENT_EXEMPT_WALLET_LAMPORTS = 890_880n;
 
+// Protected sends (docs/protected-sends.md): the local signer can send through Jito's block engine as a one-transaction
+// bundle. The tip is one SOL transfer to one of Jito's tip accounts inside the transaction, and the transfer carries the
+// read-only JITO_DONT_FRONT key, so the block engine refuses any bundle that puts something in front of it.
+
+/** Jito's eight tip accounts (its getTipAccounts, 2026-11-08; Jito says they don't change). The signer checks them live once. */
+export const JITO_TIP_ACCOUNTS = [
+  "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5",
+  "HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe",
+  "Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY",
+  "ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49",
+  "DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh",
+  "ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt",
+  "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL",
+  "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT",
+] as const;
+/** Any address starting "jitodontfront" works; it needn't exist. Read-only, on the tip transfer. */
+export const JITO_DONT_FRONT = "jitodontfront111111111111111111111111111111";
+/** Jito's minimum tip, and the most a transaction Highwire builds may tip (the policy's max_tip_sol is at most this). */
+export const JITO_MIN_TIP_LAMPORTS = 1_000n;
+export const JITO_MAX_TIP_LAMPORTS = 10_000_000n;
+export const isJitoTipAccount = (address: string) => (JITO_TIP_ACCOUNTS as readonly string[]).includes(address);
+
 /** The trade fee for a trade whose SOL side is `lamports` (a buy's SOL in, a sell's minimum SOL out). Rounds down. */
 export function highwireFeeLamports(lamports: bigint): bigint {
   return (lamports * BigInt(HIGHWIRE_FEE_BPS)) / 10_000n;

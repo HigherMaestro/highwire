@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, resolve, sep } from "node:path";
 import { PublicKey, VersionedTransaction } from "@solana/web3.js";
-import { buildTrade, buildTransfer, describeTransaction, HigherError, HigherSession, POST_LIMITS, solToLamports, summarizeQuote, tokensToBase, ValidationError, type Envelope, type Posted } from "highwire-core";
+import { buildClaimAndBuy, buildTrade, lamportsNumber, buildTransfer, describeTransaction, HigherError, HigherSession, MAX_SLIPPAGE_BPS, POST_LIMITS, solToLamports, summarizeQuote, tokensToBase, ValidationError, type Envelope, type JitoTip, type Posted } from "highwire-core";
 import type { ExecuteResult, Intent, PostRequest, PostResult } from "highwire-agent";
 import { friendlyError, jsonResult, run, runResult } from "../result.ts";
 import { BUILD, EXECUTE, READ_ONLY, address, mint, type Deps, type ExecutionSigner } from "./shared.ts";
@@ -85,6 +85,7 @@ export const LIST_ONLY_SIGNER: ExecutionSigner = {
   logOrder: () => {
     throw new ValidationError("This server has no local signer.", { code: "no_signer" });
   },
+  jitoTip: () => Promise.reject(new ValidationError("This server has no local signer.", { code: "no_signer" })),
   paths: { home: "", policy: "", audit: "", stop: "", lock: "", orders: "", ordersRunner: "", wallet: "" },
 };
 
@@ -110,7 +111,9 @@ export interface TradeExecution {
 export async function executeTrade(deps: Deps, signer: ExecutionSigner, tool: string, req: TradeExecution, order?: string) {
   const { chain } = deps;
   const policy = signer.precheck("trade", chain.cluster, tool);
-  const built = await buildTrade(chain, { wallet: signer.publicKey, mint: new PublicKey(req.mint), side: req.side, amountIn: req.amountIn, slippageBps: req.slippageBps, maxLamports: req.maxLamports });
+  // A protected send's tip, when the policy routes trades through Jito: part of the build, so the checks see it.
+  const jito = await signer.jitoTip(chain.cluster, "trade");
+  const built = await buildTrade(chain, { wallet: signer.publicKey, mint: new PublicKey(req.mint), side: req.side, amountIn: req.amountIn, slippageBps: req.slippageBps, maxLamports: req.maxLamports, jito });
   const creator = policy.creators ? await creatorOf(chain, req.mint) : null;
   const intent: Intent = {
     action: "trade",
@@ -123,6 +126,48 @@ export async function executeTrade(deps: Deps, signer: ExecutionSigner, tool: st
   };
   const result = await signer.execute(chain.connection, { tool, intent, envelope: built.envelope, ...(order ? { order } : {}) });
   return { built, result };
+}
+
+export interface ClaimAndBuyExecution {
+  mint: string;
+  buybackPct: number;
+  slippageBps: number;
+  /** Skip it (null) when less than this is waiting. */
+  minLamports: bigint;
+}
+
+/** A buy smaller than this isn't worth its own fees (as the runner's MIN_BUYBACK_LAMPORTS). */
+const MIN_BUY_LAMPORTS = 1_000_000n;
+
+/**
+ * Claims the creator fees and buys back `mint` in one transaction, through the local signer: neither lands without the
+ * other. Null when there's too little to claim or buy back with, or it doesn't fit one transaction (claim, then trade).
+ */
+export async function executeClaimAndBuy(deps: Deps, signer: ExecutionSigner, tool: string, req: ClaimAndBuyExecution, order?: string) {
+  const { chain } = deps;
+  const policy = signer.precheck("trade", chain.cluster, tool);
+  signer.precheck("claim", chain.cluster, tool);
+  const jito: JitoTip | undefined = await signer.jitoTip(chain.cluster, "trade");
+  let cab;
+  try {
+    cab = await buildClaimAndBuy(chain, { wallet: signer.publicKey, mint: new PublicKey(req.mint), buybackPct: req.buybackPct, slippageBps: req.slippageBps, minBuyLamports: MIN_BUY_LAMPORTS, jito });
+  } catch (err) {
+    if (err instanceof HigherError && err.code === "too_large") return null;
+    throw err;
+  }
+  if (!cab.built || cab.claimLamports < req.minLamports) return null;
+  const creator = policy.creators ? await creatorOf(chain, req.mint) : null;
+  const intent: Intent = {
+    action: "trade",
+    also: ["claim"],
+    cluster: chain.cluster,
+    solOut: cab.buyLamports,
+    slippageBps: Math.max(req.slippageBps, impliedSlippageBps(cab.built.envelope, chain.cluster, cab.built.quote.amountOut)),
+    mint: req.mint,
+    creator,
+  };
+  const result = await signer.execute(chain.connection, { tool, intent, envelope: cab.built.envelope, ...(order ? { order } : {}) });
+  return { result, claimLamports: cab.claimLamports, buyLamports: cab.buyLamports, built: cab.built };
 }
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -318,14 +363,41 @@ function registerExecuteTools(server: McpServer, deps: Deps, signer: ExecutionSi
       title: "Claim creator fees (local signer)",
       description:
         "Claim the local signer's wallet's creator fees exactly as build_claim_creator_fees builds the claims, then sign and " +
-        "send them if the user's policy allows claims and is live; otherwise it's a dry run. Claims spend no SOL beyond fees.",
-      inputSchema: {},
+        "send them if the user's policy allows claims and is live; otherwise it's a dry run. Claims spend no SOL beyond fees. " +
+        "With buyback, the claim and a buy of your own coin with that share of what it collects go in one transaction, so " +
+        "neither lands without the other (the policy must allow trades too; it carries Highwire's 0.3% fee on the buy).",
+      inputSchema: {
+        buyback: z
+          .object({
+            mint: mint.describe("Your coin, to buy back."),
+            pct: z.number().min(1).max(100).describe("The share of the SOL claimed to spend buying it."),
+            max_slippage_bps: z.number().int().min(0).max(MAX_SLIPPAGE_BPS).default(300),
+          })
+          .optional()
+          .describe("Buy back your own coin with part of what the claim collects, in the same transaction."),
+      },
       annotations: { title: "Claim creator fees (local signer)", ...EXECUTE },
     },
-    () =>
+    (args) =>
       runResult(async () => {
         signer.precheck("claim", cluster, "execute_claim");
-        const { result: r, offChainPayouts } = await buildClaimFor(deps, signer.publicKey);
+        if (args.buyback) {
+          const done = await executeClaimAndBuy(deps, signer, "execute_claim", { mint: args.buyback.mint, buybackPct: args.buyback.pct, slippageBps: args.buyback.max_slippage_bps, minLamports: 0n });
+          if (done) {
+            return jsonResult(executed(done.result, {
+              claimedSol: lamportsNumber(done.claimLamports),
+              buybackSol: lamportsNumber(done.buyLamports),
+              quote: summarizeQuote(done.built.quote, done.built.highwireFeeLamports),
+              note: "The claim and the buyback are one transaction: neither lands without the other.",
+            }));
+          }
+          return jsonResult({
+            status: "nothing_to_do",
+            note: "There's too little to claim to buy back with (under 0.001 SOL to spend), or the claim and the buy don't fit one transaction. Claim with execute_claim, then buy with execute_trade.",
+          });
+        }
+        const jito = await signer.jitoTip(cluster, "claim");
+        const { result: r, offChainPayouts } = await buildClaimFor(deps, signer.publicKey, jito);
         if (!r.envelope) return jsonResult({ claimable: r.claimable, offChainPayouts, note: "Nothing to claim on-chain right now." });
         const done = await go("execute_claim", { action: "claim", cluster, solOut: 0n }, r.envelope);
         return jsonResult(executed(done, { claimable: r.claimable, offChainPayouts }));

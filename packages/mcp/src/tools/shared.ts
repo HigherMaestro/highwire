@@ -24,7 +24,7 @@ export interface Deps {
 }
 
 /** What the execute tools use of the local signer. */
-export type ExecutionSigner = Pick<LocalSigner, "wallet" | "publicKey" | "status" | "precheck" | "execute" | "signInMessage" | "logOrder" | "post" | "paths">;
+export type ExecutionSigner = Pick<LocalSigner, "wallet" | "publicKey" | "status" | "precheck" | "execute" | "signInMessage" | "logOrder" | "post" | "paths" | "jitoTip">;
 
 export const address = (what: string) =>
   z

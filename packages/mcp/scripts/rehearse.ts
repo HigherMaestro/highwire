@@ -14,7 +14,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { LaunchpadPool } from "@raydium-io/raydium-sdk-v2";
 import { Connection, Keypair, PublicKey, VersionedTransaction } from "@solana/web3.js";
 import bs58 from "bs58";
-import { agentPaths, LocalSigner, OrderBook, OrderRunner } from "highwire-agent";
+import { agentPaths, jitoClient, JitoRejected, LocalSigner, OrderBook, OrderRunner, type JitoClient } from "highwire-agent";
 import { Chain, DEFAULT_RPC_URLS, type Cluster } from "highwire-core";
 import { createServer, serverOptionsFromEnv } from "../src/index.ts";
 import { createDeps } from "../src/server.ts";
@@ -172,6 +172,47 @@ for (const cluster of clusters) {
   });
   await client.close();
   rmSync(home, { recursive: true, force: true });
+
+  // A protected send (docs/protected-sends.md), mainnet only: the policy routes trades through Jito, so the build tips;
+  // Jito's real tip accounts and tip floor are read, and the block engine is replaced by a simulation of the signed bytes.
+  if (cluster === "mainnet") {
+    const jhome = mkdtempSync(join(tmpdir(), "highwire-rehearse-jito-"));
+    const jpaths = agentPaths({ HIGHWIRE_HOME: jhome });
+    writeFileSync(jpaths.policy, JSON.stringify({ ...policy, send: { route: "jito", max_tip_sol: 0.0005 } }));
+    const real = jitoClient();
+    const engine: JitoClient = {
+      tipAccounts: () => real.tipAccounts(),
+      tipFloorLamports: () => real.tipFloorLamports(),
+      send: async (b64) => {
+        const tx = VersionedTransaction.deserialize(Buffer.from(b64, "base64"));
+        const sim = await chain.connection.simulateTransaction(tx, { sigVerify: false, replaceRecentBlockhash: true, commitment: "confirmed" });
+        const simulated = sim.value.err ? `FAILED ${JSON.stringify(sim.value.err)}` : `ok, ${sim.value.unitsConsumed} CU`;
+        sends.push({ signature: bs58.encode(tx.signatures[0]!), signed: tx.signatures[0]!.some((x) => x !== 0), simulated });
+        if (sim.value.err) throw new JitoRejected(`the signed bytes don't simulate: ${simulated}`);
+        return { bundleId: "rehearsal" };
+      },
+    };
+    const jsigner = new LocalSigner(watchOnly, jpaths, undefined, () => new Date(), engine);
+    const jclient = new Client({ name: "rehearse-jito", version: "0" });
+    const [ja, jb] = InMemoryTransport.createLinkedPair();
+    await Promise.all([createServer({ ...serverOptionsFromEnv({ ...process.env, HIGHWIRE_CLUSTER: cluster, SOLANA_RPC_URL: rpcFor(cluster) }), signer: jsigner }).connect(ja), jclient.connect(jb)]);
+    await pause();
+    const before = sends.length;
+    const res = await jclient.callTool({ name: "execute_trade", arguments: { ...trade, side: "buy", sol: 0.001 } });
+    const out = JSON.parse((res.content as Array<{ text: string }>)[0]!.text);
+    const mine = sends.slice(before);
+    const t0 = out.transactions?.[0];
+    rows.push({
+      cluster,
+      what: "execute_trade buy 0.001 SOL through Jito's route",
+      ok: !res.isError && out.status === "sent" && t0?.route === "jito" && t0?.tipSol > 0 && mine.length === 1 && mine[0]!.signed && mine[0]!.simulated.startsWith("ok"),
+      result: res.isError ? `${out.code}: ${out.error}` : `${out.status} via ${t0?.route}, tip ${t0?.tipSol} SOL; signed bytes simulate ${mine[0]?.simulated}`,
+    });
+    const jlog = jsigner.audit.entries().find((e) => e.outcome === "sent");
+    rows.push({ cluster, what: "audit log records the route and tip", ok: jlog?.route === "jito" && Number(jlog?.tip) > 0, result: `route ${jlog?.route}, tip ${jlog?.tip} lamports` });
+    await jclient.close();
+    rmSync(jhome, { recursive: true, force: true });
+  }
 
   // Standing orders, in a home of their own: placed through the tools, then filled by one pass of the real runner,
   // with the stop-loss's trigger moved above the price so it fires.

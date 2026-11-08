@@ -5,7 +5,7 @@ import { COMPUTE_UNITS, HIGHWIRE_WALLET, highwireFeeApplies, highwireFeeLamports
 import { ValidationError } from "../lib/errors.ts";
 import { WSOL, type Chain } from "./chain.ts";
 import { describeTransaction, UnsafeTransactionError, type DecodedTrade } from "./decode.ts";
-import { finish, priorityFee, type Finished } from "./envelope.ts";
+import { finish, priorityFee, type BuiltTx, type Finished, type JitoTip } from "./envelope.ts";
 import { quoteFromMarket, vaultBalances, type Quote, type QuoteRequest } from "./quote.ts";
 
 // build_trade: the same transaction higher.fun's site builds for a buy or a
@@ -17,6 +17,8 @@ export interface TradeRequest extends QuoteRequest {
   /** For a buy, the most SOL it may spend; for a sell, the most SOL it may return. In lamports. */
   maxLamports: bigint;
   simulate?: boolean;
+  /** A protected send's tip (the local signer only). */
+  jito?: JitoTip;
 }
 
 export interface BuiltTrade extends Finished {
@@ -69,7 +71,14 @@ async function feeWalletReady(chain: Chain): Promise<boolean> {
   }
 }
 
-export async function buildTrade(chain: Chain, req: TradeRequest): Promise<BuiltTrade> {
+/** A trade built and checked against its quote, with Highwire's fee, before finish(): what a claim and buy combines. */
+export interface PreparedTrade {
+  built: BuiltTx;
+  quote: Quote;
+  fee: bigint;
+}
+
+export async function prepareTrade(chain: Chain, req: TradeRequest): Promise<PreparedTrade> {
   const market = await chain.market(req.mint);
   const vaults = market.stage === "graduated" ? await vaultBalances(chain, market.pool) : undefined;
   const quote = quoteFromMarket(market, req, vaults);
@@ -144,27 +153,27 @@ export async function buildTrade(chain: Chain, req: TradeRequest): Promise<Built
   const charged = highwireFeeApplies(chain.cluster) && (await feeWalletReady(chain));
   const fee = charged ? highwireFeeLamports(req.side === "buy" ? trade.amountIn : trade.minOut) : 0n;
   const append = fee > 0n ? [SystemProgram.transfer({ fromPubkey: req.wallet, toPubkey: new PublicKey(HIGHWIRE_WALLET), lamports: fee })] : [];
-
-  const done = await finish({
-    chain,
-    wallet: req.wallet,
-    kind: "trade",
-    simulate: req.simulate,
-    txs: [
-      {
-        tx,
-        append,
-        label: `${req.side} ${quote.stage === "curve" ? "on the curve" : "in the CPMM pool"}`,
-        expect: {
-          wallet: req.wallet,
-          platformId: market.stage === "curve" ? market.pool.platformId : undefined,
-          allowLaunchLab: market.stage === "curve",
-          allowCpmm: market.stage === "graduated",
-          ...(fee > 0n ? { highwireFee: { maxLamports: fee, lamports: fee } } : {}),
-        },
+  return {
+    quote,
+    fee,
+    built: {
+      tx,
+      append,
+      label: `${req.side} ${quote.stage === "curve" ? "on the curve" : "in the CPMM pool"}`,
+      expect: {
+        wallet: req.wallet,
+        platformId: market.stage === "curve" ? market.pool.platformId : undefined,
+        allowLaunchLab: market.stage === "curve",
+        allowCpmm: market.stage === "graduated",
+        ...(fee > 0n ? { highwireFee: { maxLamports: fee, lamports: fee } } : {}),
       },
-    ],
-  });
+    },
+  };
+}
+
+export async function buildTrade(chain: Chain, req: TradeRequest): Promise<BuiltTrade> {
+  const { built, quote, fee } = await prepareTrade(chain, req);
+  const done = await finish({ chain, wallet: req.wallet, kind: "trade", simulate: req.simulate, jito: req.jito, txs: [built] });
   assertTradeMatches(done.decoded[0]!.trades, quote, req.mint);
   return { ...done, quote, highwireFeeLamports: fee };
 }

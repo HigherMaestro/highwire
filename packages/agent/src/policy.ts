@@ -57,8 +57,23 @@ export const PolicySchema = z
       })
       .strict()
       .optional(),
+    /**
+     * How sends go out (docs/protected-sends.md). "rpc", the default, is SOLANA_RPC_URL. "jito" sends each transaction
+     * through Jito's block engine as a one-transaction bundle with a tip of at most `max_tip_sol` (mainnet only): it
+     * can't be sandwiched, and one that would fail costs nothing. With "fallback": "rpc", a refused Jito send goes the
+     * ordinary way instead; the default, "none", sends nothing.
+     */
+    send: z
+      .object({
+        route: z.enum(["rpc", "jito"]).default("rpc"),
+        max_tip_sol: z.number().min(0.000001).max(0.01).default(0.0005),
+        fallback: z.enum(["none", "rpc"]).default("none"),
+      })
+      .strict()
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine((p) => !(p.send?.route === "jito" && p.cluster !== "mainnet"), { message: 'send.route "jito" is mainnet only: Jito has no devnet block engine', path: ["send", "route"] });
 
 export type Policy = z.infer<typeof PolicySchema>;
 
@@ -139,6 +154,8 @@ export interface Intent {
   creator?: string | null;
   /** A transfer's recipient. */
   recipient?: string;
+  /** Other actions it needs too: a claim and buyback is a claim and a trade. */
+  also?: Action[];
 }
 
 export interface Refusal {
@@ -151,6 +168,7 @@ export function checkPolicy(policy: Policy, intent: Intent, spentToday: bigint):
   const no = (rule: string, reason: string): Refusal => ({ rule, reason });
   if (intent.cluster !== policy.cluster) return no("cluster", `the policy is for ${policy.cluster}, and this server builds on ${intent.cluster}`);
   if (!policy.actions.includes(intent.action)) return no("actions", `the policy doesn't allow ${plural(intent.action)}`);
+  for (const a of intent.also ?? []) if (!policy.actions.includes(a)) return no("actions", `the policy doesn't allow ${plural(a)}`);
   if (intent.slippageBps !== undefined && intent.slippageBps > policy.max_slippage_bps) {
     return no("max_slippage_bps", `${intent.slippageBps} bps of slippage is over the policy's ${policy.max_slippage_bps}`);
   }

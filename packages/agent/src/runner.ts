@@ -22,6 +22,12 @@ export interface OrderMarket {
    * is waiting. `lamports` is the SOL the claim collects (read before it's built); `result` is null when it wasn't made.
    */
   claim(req: { order: Order; minLamports: bigint }): Promise<{ result: ExecuteResult | null; lamports: bigint }>;
+  /**
+   * A fee claim and its buyback in one transaction (docs/protected-sends.md), so neither lands without the other: the
+   * claim's SOL as read before the build, and what the buy spends. Null when it can't be built that way (nothing to
+   * claim, too little to buy back with, or too big for one transaction): the runner claims and buys separately then.
+   */
+  claimAndBuy?(req: { order: Order; minLamports: bigint; slippageBps: number }): Promise<{ result: ExecuteResult; claimLamports: bigint; buyLamports: bigint } | null>;
 }
 
 export interface RunnerOptions {
@@ -47,6 +53,10 @@ export interface RunnerOptions {
 
 /** Failures in a row (RPC, simulation) before an order is given up on. */
 export const MAX_ORDER_FAILURES = 5;
+/** A protected send that provably never landed: nothing was spent, so the order can simply try again. */
+const notLanded = (r: ExecuteResult) =>
+  new HigherError(r.transactions.at(-1)?.error ?? "it didn't land, and nothing was spent", { code: "not_landed" });
+
 /** A fee claim doesn't buy back with less than this: the trade's own fees would eat it. */
 export const MIN_BUYBACK_LAMPORTS = 1_000_000n;
 
@@ -216,6 +226,10 @@ export class OrderRunner {
     } catch (err) {
       error = err;
     }
+    if (result?.status === "not_landed") {
+      error = notLanded(result);
+      result = undefined;
+    }
     const now = this.now();
     const at = now.toISOString();
     const price = priceSol !== undefined ? { priceSol } : {};
@@ -277,11 +291,13 @@ export class OrderRunner {
       if (x.status === "open" && !x.fillingSince) x.fillingSince = startedAt.toISOString();
     });
     if (!taken || taken.status !== "open" || taken.fillingSince !== startedAt.toISOString()) return;
+    if (taken.buybackPct && taken.mint && this.o.market.claimAndBuy && (await this.combinedRun(taken))) return;
 
     let claim: { result: ExecuteResult | null; lamports: bigint } | undefined;
     let claimError: unknown;
     try {
       claim = await this.o.market.claim({ order: taken, minLamports: solToLamports(order.minClaimSol ?? 0) });
+      if (claim.result?.status === "not_landed") throw notLanded(claim.result);
     } catch (err) {
       claimError = err;
     }
@@ -292,6 +308,10 @@ export class OrderRunner {
     if (buyLamports >= MIN_BUYBACK_LAMPORTS) {
       try {
         buy = await this.o.market.trade({ order: taken, side: "buy", amountIn: buyLamports, slippageBps: order.maxSlippageBps });
+        if (buy.status === "not_landed") {
+          buyError = notLanded(buy);
+          buy = undefined;
+        }
       } catch (err) {
         buyError = err;
       }
@@ -369,6 +389,70 @@ export class OrderRunner {
     const after = this.o.book.get(order.id);
     const lastTwo = after?.history.slice(-2).map((h) => `${h.step ?? ""} ${h.outcome}${h.reason ? ` (${h.reason})` : ""}`).join("; ");
     this.log(`order ${order.id}: ${lastTwo ?? "?"}${after?.status !== "open" ? ` (now ${after?.status}: ${after?.closeReason})` : ""}`);
+  }
+
+  /**
+   * A fee claim and its buyback as one transaction. Returns false when it can't be built that way (the caller claims and
+   * buys separately), true once the run is recorded. It's recorded as a claim and a buyback with the same signature, in
+   * the same words as two separate steps, so whatever reads the history (the idea templates, receipts) reads it alike.
+   * Its send is a buy: an unknown outcome closes the order, as any fill; one that provably never landed waits.
+   */
+  private async combinedRun(taken: Order): Promise<boolean> {
+    let got: Awaited<ReturnType<NonNullable<OrderMarket["claimAndBuy"]>>> = null;
+    let error: unknown;
+    try {
+      got = await this.o.market.claimAndBuy!({ order: taken, minLamports: solToLamports(taken.minClaimSol ?? 0), slippageBps: taken.maxSlippageBps });
+      if (got?.result.status === "not_landed") throw notLanded(got.result);
+    } catch (err) {
+      error = err;
+    }
+    if (got === null && error === undefined) return false;
+    const now = this.now();
+    const at = now.toISOString();
+    const nextRun = new Date(now.getTime() + taken.everyHours! * 3_600_000).toISOString();
+    const code = error instanceof HigherError ? error.code : undefined;
+    const why = error instanceof Error ? error.message : String(error);
+    await this.o.book.update(taken.id, (x) => {
+      delete x.fillingSince;
+      if (got && error === undefined) {
+        const r = got.result;
+        const signatures = r.transactions.map((t) => t.signature);
+        if (r.status === "partly_sent") {
+          record(x, { at, outcome: "partly_sent", signatures, reason: r.transactions.at(-1)?.error, step: "buyback" });
+          close(x, "failed", "only part of a claim and buyback was sent: check the signatures before placing it again", now);
+          return;
+        }
+        const dry = r.status === "dry_run";
+        const sig = signatures.length ? { signatures } : {};
+        x.failures = 0;
+        x.runsDone += 1;
+        x.nextRunAt = nextRun;
+        record(x, { at, outcome: dry ? "dry_run" : "sent", ...sig, reason: `${dry ? "would claim" : "claimed"} about ${lamportsNumber(got.claimLamports)} SOL`, step: "claim" });
+        record(x, { at, outcome: dry ? "dry_run" : "sent", ...sig, reason: `bought back with ${lamportsNumber(got.buyLamports)} SOL`, step: "buyback" });
+        return;
+      }
+      if (code === "signer_stopped") return;
+      if (code === "send_failed") {
+        record(x, { at, outcome: "failed", reason: `claim and buyback: ${why}`, step: "buyback" });
+        close(x, "failed", "a claim and buyback's send outcome is unknown: check the audit log's signature before placing it again", now);
+        return;
+      }
+      if (code === "policy_refused" || code === "no_policy" || code === "policy_invalid") {
+        const last = x.history.at(-1);
+        if (!(last?.outcome === "refused" && last.reason === why)) record(x, { at, outcome: "refused", reason: why, step: "claim" });
+        x.nextRunAt = nextRun;
+        return;
+      }
+      // Something that may pass (an RPC, a simulation, a send that never landed): try again later, a few times.
+      x.failures += 1;
+      record(x, { at, outcome: "failed", reason: `claim and buyback: ${why}`, step: "buyback" });
+      if (x.failures >= MAX_ORDER_FAILURES) close(x, "failed", `failed ${x.failures} times in a row; last: ${why}`, now);
+      else x.nextRunAt = new Date(now.getTime() + TRANSIENT_WAIT_MS * x.failures).toISOString();
+    });
+    const after = this.o.book.get(taken.id);
+    const lastTwo = after?.history.slice(-2).map((h) => `${h.step ?? ""} ${h.outcome}${h.reason ? ` (${h.reason})` : ""}`).join("; ");
+    this.log(`order ${taken.id}: ${lastTwo ?? "?"}${after?.status !== "open" ? ` (now ${after?.status}: ${after?.closeReason})` : ""}`);
+    return true;
   }
 
   /**

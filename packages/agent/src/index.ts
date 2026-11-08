@@ -6,3 +6,4 @@ export * from "./signer.ts";
 export * from "./lock.ts";
 export * from "./orders.ts";
 export * from "./runner.ts";
+export * from "./jito.ts";

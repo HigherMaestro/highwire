@@ -468,3 +468,75 @@ test("a limit buy waits above its trigger, buys its SOL once the price falls to 
   assert.equal(book.get(waits.id)!.status, "open");
   assert.equal(book.get(waits.id)!.history.at(-1)?.outcome, "refused");
 });
+
+// ---------------------------------------------------------------- protected sends: one transaction, and sends that never landed
+
+const one = (sig: string, status: ExecuteResult["status"] = "sent"): ExecuteResult => ({ status, wallet: WALLET, cluster: "mainnet", transactions: [{ index: 0, label: "Claim and buy", signature: sig, confirmed: status === "sent", ...(status === "not_landed" ? { landed: false as const, error: "Jito's block engine didn't land it before its blockhash expired; nothing was spent" } : {}) }], summary: [], spentSol: 0, dayLeftSol: 1 });
+
+test("a fee claim with a buyback claims and buys in one transaction, recorded in the same words as two steps", async () => {
+  const c = clock();
+  const book = tmpBook(c.now);
+  const m = fakeMarket();
+  const calls: { minLamports: bigint; slippageBps: number }[] = [];
+  m.market.claimAndBuy = async ({ minLamports, slippageBps }) => {
+    calls.push({ minLamports, slippageBps });
+    return { result: one("both"), claimLamports: 100_000_000n, buyLamports: 50_000_000n };
+  };
+  const o = await book.place(claimer(), 5);
+  await runner(book, m, c).tick();
+  assert.deepEqual(calls, [{ minLamports: 1_000_000n, slippageBps: 300 }]);
+  assert.equal(m.claims.length + m.trades.length, 0, "no separate claim or trade");
+  const after = book.get(o.id)!;
+  assert.deepEqual(after.history.map((h) => [h.step, h.outcome, h.reason, h.signatures]), [
+    ["claim", "sent", "claimed about 0.1 SOL", ["both"]],
+    ["buyback", "sent", "bought back with 0.05 SOL", ["both"]],
+  ]);
+  assert.equal(after.runsDone, 1);
+  assert.equal(after.nextRunAt, "2026-11-06T18:00:00.000Z");
+});
+
+test("when it can't be one transaction, the claim and the buy go separately, as before", async () => {
+  const c = clock();
+  const book = tmpBook(c.now);
+  const m = fakeMarket();
+  m.market.claimAndBuy = async () => null;
+  const o = await book.place(claimer(), 5);
+  await runner(book, m, c).tick();
+  assert.equal(m.claims.length, 1);
+  assert.deepEqual(m.trades, [{ order: o.id, side: "buy", amountIn: 50_000_000n }]);
+});
+
+test("a claim and buyback that never landed waits for the next try; an unknown outcome closes the order", async () => {
+  const c = clock();
+  const book = tmpBook(c.now);
+  const m = fakeMarket();
+  m.market.claimAndBuy = async () => ({ result: one("gone", "not_landed"), claimLamports: 100_000_000n, buyLamports: 50_000_000n });
+  const o = await book.place(claimer(), 5);
+  const r = runner(book, m, c);
+  await r.tick();
+  let after = book.get(o.id)!;
+  assert.equal(after.status, "open");
+  assert.equal(after.failures, 1);
+  assert.match(after.history.at(-1)!.reason!, /nothing was spent/);
+
+  m.market.claimAndBuy = async () => { throw new HigherError("no answer", { code: "send_failed" }); };
+  c.advance(10 * 60_000);
+  await r.tick();
+  after = book.get(o.id)!;
+  assert.equal(after.status, "failed");
+  assert.match(after.closeReason!, /claim and buyback's send outcome is unknown/);
+});
+
+test("a fill that never landed is retried, not closed as an unknown outcome", async () => {
+  const c = clock();
+  const book = tmpBook(c.now);
+  const m = fakeMarket();
+  m.price = 0.000009;
+  m.next = () => one("gone", "not_landed");
+  const o = await book.place(stop(), 5);
+  await runner(book, m, c).tick();
+  const after = book.get(o.id)!;
+  assert.equal(after.status, "open", "a stop-loss whose sell never landed still stands");
+  assert.equal(after.history.at(-1)!.outcome, "failed");
+  assert.match(after.history.at(-1)!.reason!, /nothing was spent/);
+});

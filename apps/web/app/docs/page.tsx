@@ -66,6 +66,7 @@ const POLICY_KEYS: [string, string][] = [
   ["transfer_allowlist", "The only wallets transfers may go to. Empty by default."],
   ["orders", "kinds: which standing orders an agent may place (stop_loss, take_profit, limit_buy, recurring_buy, fee_claim); max_open: how many at once (default 10). Without it, none."],
   ["posts", "comments: own (only coins the wallet launched, the default), any or none; chat: true to allow higher.fun's site chat; max_per_day (default 10). Without it, none."],
+  ["send", "route: rpc (the default) or jito, which sends trades and claims through Jito's block engine as one-transaction bundles: they can't be sandwiched, and one that would fail costs nothing. Mainnet only. max_tip_sol caps each tip (default 0.0005); fallback: none (the default) or rpc."],
 ];
 
 const ERRORS: [string, string][] = [

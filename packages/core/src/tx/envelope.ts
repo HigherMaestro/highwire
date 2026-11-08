@@ -1,12 +1,13 @@
 import {
   PublicKey,
+  SystemProgram,
   TransactionInstruction,
   TransactionMessage,
   VersionedTransaction,
   type AddressLookupTableAccount,
   type Keypair,
 } from "@solana/web3.js";
-import { HIGHWIRE_MEMO, MEMO_PROGRAM_ID, PRIORITY_FEE_MICRO_LAMPORTS } from "../higher/constants.ts";
+import { HIGHWIRE_MEMO, isJitoTipAccount, JITO_DONT_FRONT, JITO_MAX_TIP_LAMPORTS, JITO_MIN_TIP_LAMPORTS, MEMO_PROGRAM_ID, PRIORITY_FEE_MICRO_LAMPORTS } from "../higher/constants.ts";
 import { HigherError } from "../lib/errors.ts";
 import type { Chain } from "./chain.ts";
 import { assertSafe, describeTransaction, summaryLines, type DecodedTransaction, type Expectations } from "./decode.ts";
@@ -102,6 +103,26 @@ export interface BuiltTx {
   expect: Expectations;
 }
 
+/** A tip for Jito's block engine, for the local signer's protected sends. Never in a sign link. */
+export interface JitoTip {
+  tipLamports: bigint;
+  /** One of JITO_TIP_ACCOUNTS. */
+  tipAccount: string;
+}
+
+/**
+ * The tip: one SOL transfer from the wallet to a Jito tip account, with the read-only "don't front" key as a third
+ * account (the System program ignores accounts past the two a transfer uses), so the block engine refuses any bundle
+ * that puts a transaction in front of this one.
+ */
+export function jitoTipInstruction(wallet: PublicKey, tip: JitoTip): TransactionInstruction {
+  if (!isJitoTipAccount(tip.tipAccount)) throw new HigherError(`${tip.tipAccount} isn't one of Jito's tip accounts`, { code: "bad_request" });
+  if (tip.tipLamports < JITO_MIN_TIP_LAMPORTS || tip.tipLamports > JITO_MAX_TIP_LAMPORTS) throw new HigherError("the Jito tip is outside 0.000001 to 0.01 SOL", { code: "bad_request" });
+  const ix = SystemProgram.transfer({ fromPubkey: wallet, toPubkey: new PublicKey(tip.tipAccount), lamports: tip.tipLamports });
+  ix.keys.push({ pubkey: new PublicKey(JITO_DONT_FRONT), isSigner: false, isWritable: false });
+  return ix;
+}
+
 export interface FinishOptions {
   chain: Chain;
   wallet: PublicKey;
@@ -109,6 +130,8 @@ export interface FinishOptions {
   txs: BuiltTx[];
   /** Simulate transactions that don't depend on an earlier one. Default true. */
   simulate?: boolean;
+  /** Each transaction tips Jito's block engine this much (the local signer's protected sends only). */
+  jito?: JitoTip;
 }
 
 export interface Finished {
@@ -127,10 +150,12 @@ export async function finish(opts: FinishOptions): Promise<Finished> {
   const decoded: DecodedTransaction[] = [];
   const out: UnsignedTransaction[] = [];
   for (const [index, b] of opts.txs.entries()) {
-    const rebuilt = withHighwireMemo(b.tx, tables, b.append);
+    // The tip goes after Highwire's fee, just before the memo, with the tip account as a static key (never from a table).
+    const append = [...(b.append ?? []), ...(opts.jito ? [jitoTipInstruction(wallet, opts.jito)] : [])];
+    const rebuilt = withHighwireMemo(b.tx, tables, append);
     rebuilt.message.recentBlockhash = blockhash;
     const tx = new VersionedTransaction(rebuilt.message);
-    assertSafe(tx, chain.cluster, b.expect, tables);
+    assertSafe(tx, chain.cluster, opts.jito ? { ...b.expect, jitoTip: { maxLamports: opts.jito.tipLamports } } : b.expect, tables);
     if (b.presign?.length) tx.sign(b.presign);
     const d = describeTransaction(tx, chain.cluster, tables);
     decoded.push(d);

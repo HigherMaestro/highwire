@@ -19,7 +19,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/tx/fees.ts` | `ecosystemFees`: every higher.fun coin's fees by recipient and phase, for /fees. Curve lines are measured, pool lines computed from volume at on-chain rates, and holder airdrops measured from each coin's airdrop wallet. `dailyFees` and `sumDailyFees`: fees day by day from a coin's daily candles at its rates |
 | `packages/core/src/tx/pnl.ts` | `coinPnl`, `txEffect`, `applyEvents`: a wallet's profit and loss on a coin, from its own token accounts' history on-chain (average cost; trades paid in another token valued by their pool's SOL leg) |
 | `packages/core/src/tx/transfer.ts` | `buildTransfer`: SOL or a higher.fun coin to another wallet. Transfers never get a sign link |
-| `packages/agent/src/` | `highwire-agent`, the opt-in local signer: `policy.ts` (the schema and `checkPolicy`), `keypair.ts`, `audit.ts` (the JSONL log and the daily count), `signer.ts` (`LocalSigner`: check, re-simulate, sign, send, confirm), `paths.ts` (`~/.highwire`), `orders.ts` (`OrderBook`: standing orders in `orders.json`), `runner.ts` (`OrderRunner`: fills them through the signer), `lock.ts` |
+| `packages/agent/src/` | `highwire-agent`, the opt-in local signer: `policy.ts` (the schema and `checkPolicy`), `keypair.ts`, `audit.ts` (the JSONL log and the daily count), `signer.ts` (`LocalSigner`: check, re-simulate, sign, send, confirm), `jito.ts` (Jito's block engine for protected sends, docs/protected-sends.md), `paths.ts` (`~/.highwire`), `orders.ts` (`OrderBook`: standing orders in `orders.json`), `runner.ts` (`OrderRunner`: fills them through the signer), `lock.ts` |
 | `packages/mcp/src/tools/execute.ts` | `build_transfer`, `get_signer_status` and the execute tools (`executeTrade` is the one path for execute_trade and order fills); `signer-env.ts` turns the signer on from `HIGHWIRE_KEYPAIR_PATH` (the CLI only) |
 | `packages/mcp/src/launch-cli.ts` | `highwire wallet new`, `highwire launch`, `highwire claim` and `policy init --launch`: an agent launching from its own wallet. launch and claim call `execute_launch` and `execute_claim` on an in-process server, so they run the tools' code |
 | `apps/web/public/skill.md` | highwire.fun/skill.md: the instructions an agent follows to launch on its own, or with a person's wallet |
@@ -100,6 +100,10 @@ Streamable HTTP. An npm workspaces monorepo. Read
 - **Posting** goes only through `LocalSigner.post()`, inside the policy's `posts` section (own coins by default, chat
   only when allowed, a daily cap counted from the audit log), with `checkPostText` refusing links and addresses. Log
   the post before it goes up. Never post to test: the unit tests fake higher.fun.
+- **Protected sends** (docs/protected-sends.md): with the policy's `send.route` set to `jito`, trades and claims carry a tip
+  that `finish()` adds (`jito` option) and `assertSafe` checks (`jitoTip`), and the signer sends them to Jito's block engine.
+  Only the local signer tips: build tools, the hosted endpoint and sign links never do. Test the route with a fake
+  `JitoClient`; the rehearsal replaces the block engine with a simulation, and nothing may ever call the real one's send.
 - **Transfers** go only through the local signer, to the policy's allowlist. The sign page refuses them: a sign link
   can come from anyone.
 - **Never** accept private keys or seed phrases through tool arguments. Never commit keys, `.env` files or keypairs.

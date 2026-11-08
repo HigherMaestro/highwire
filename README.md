@@ -268,6 +268,7 @@ you'd let an agent spend.
 | `transfer_allowlist` | the only recipients for `execute_transfer` |
 | `orders` | `kinds`: the standing orders an agent may place (`stop_loss`, `take_profit`, `limit_buy`, `recurring_buy`, `fee_claim`), and `max_open` (default 10). Without it, none |
 | `posts` | `comments`: `own` (the default: only coins the wallet launched), `any` or `none`; `chat`: `true` to allow higher.fun's site chat (default false); `max_per_day` (default 10, comments and chat together). Mainnet only. Without it, none |
+| `send` | `route`: `rpc` (the default) or `jito`, which sends trades and claims through Jito's block engine as one-transaction bundles, so they can't be sandwiched and one that would fail costs nothing (mainnet only); `max_tip_sol`, the most one send tips (default 0.0005, at most 0.01; it counts against the limits like any spend); `fallback`: `none` (the default: if Jito refuses, nothing is sent) or `rpc`. Launches and transfers always go the ordinary way. See [docs/protected-sends.md](docs/protected-sends.md) |
 
 Every execute is written to `~/.highwire/audit.jsonl`: refusals, dry runs, and each signature as it's sent. Creating
 `~/.highwire/STOP` refuses everything until you delete it. `HIGHWIRE_HOME` and `HIGHWIRE_POLICY_PATH` move the files.
@@ -297,7 +298,9 @@ Price orders are checked against the coin's on-chain price every minute, and wit
 feed only says when to look). Each fill passes the whole policy again, dry run included, is simulated and is written to
 the audit log with its order's id. A fill the runner can't be sure about (it stopped mid-fill, or the send's answer
 was lost) closes the order as failed rather than risk filling it twice; a fee claim whose answer was lost just waits
-for its next run, since claiming again is harmless, but its buyback closes the order. `highwire orders list` and
+for its next run, since claiming again is harmless, but its buyback closes the order. A fee claim with a buyback claims
+and buys in one transaction when they fit, so neither lands without the other; on Jito's route, a send that provably
+never landed (refused, or its blockhash expired unseen) costs nothing and the order simply tries again. `highwire orders list` and
 `highwire orders cancel <id>` work without the keypair.
 
 **Posting.** With a `posts` section, `post_comment` and `post_chat` (or `highwire post --mint <mint> "…"` and

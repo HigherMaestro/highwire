@@ -8,16 +8,20 @@ import {
   checkSignInMessage,
   HigherError,
   isRefreshable,
+  JITO_TIP_ACCOUNTS,
+  jitoTipsOf,
   lamportsNumber,
   UnsafeTransactionError,
   withBlockhash,
   type Cluster,
   type Envelope,
+  type JitoTip,
   type Posted,
   type PostWhere,
   type SignMessage,
 } from "highwire-core";
 import { AuditLog, type AuditAction } from "./audit.ts";
+import { jitoClient, JitoRejected, tipFor, type JitoClient } from "./jito.ts";
 import { withFileLock } from "./lock.ts";
 import type { AgentPaths } from "./paths.ts";
 import { checkPolicy, loadPolicy, plural, policyWarnings, type Action, type Intent, type Policy } from "./policy.ts";
@@ -63,10 +67,16 @@ export interface ExecutedTransaction {
   solChange?: number;
   /** The wallet's balance change in the coin traded or sent, in whole tokens. */
   tokenChange?: number;
+  /** How it went out: "jito" (a protected send, with its tip in SOL) or "rpc". */
+  route?: "jito" | "rpc";
+  tipSol?: number;
+  /** false: a protected send that provably never landed, so it spent nothing. */
+  landed?: false;
 }
 
 export interface ExecuteResult {
-  status: "dry_run" | "sent" | "partly_sent";
+  /** not_landed: a protected send the block engine refused, or whose blockhash expired unseen. Nothing was spent. */
+  status: "dry_run" | "sent" | "partly_sent" | "not_landed";
   wallet: string;
   cluster: Cluster;
   /** What was signed and sent; empty on a dry run. */
@@ -117,18 +127,23 @@ function stopped(path: string): boolean {
 
 const lamportsOf = (sol: number) => BigInt(Math.round(sol * 1e9));
 
+/** How an action's sends go out: Jito's route covers trades and claims (the sends worth front-running); launches and transfers go the ordinary way. */
+export const routeOf = (policy: Policy, action: Action): "jito" | "rpc" => (policy.send?.route === "jito" && (action === "trade" || action === "claim") ? "jito" : "rpc");
+
 const refused = (rule: string, reason: string) => new HigherError(`The policy refused this: ${reason}.`, { code: "policy_refused", body: { rule } });
 
 export class LocalSigner {
   readonly audit: AuditLog;
   private queue: Promise<unknown> = Promise.resolve();
   private readonly verifiedRpcs = new WeakSet<Connection>();
+  private tipAccountsChecked = false;
 
   constructor(
     private readonly keypair: Keypair,
     readonly paths: AgentPaths,
     readonly keypairWarning?: string,
     now: () => Date = () => new Date(),
+    private readonly jito: JitoClient = jitoClient(),
   ) {
     this.audit = new AuditLog(paths.audit, now);
   }
@@ -177,6 +192,29 @@ export class LocalSigner {
     return policy;
   }
 
+  /**
+   * The tip a build should carry for a protected send, when the policy routes through Jito; undefined otherwise. 1.2
+   * times Jito's recent median landed tip, within the policy's max_tip_sol; on a live policy, Jito's tip accounts are
+   * checked against Highwire's list first, once per process.
+   */
+  async jitoTip(cluster: Cluster, action: Action): Promise<JitoTip | undefined> {
+    const policy = loadPolicy(this.paths.policy);
+    if (routeOf(policy, action) !== "jito") return undefined;
+    if (cluster !== "mainnet") throw refused("send.route", "Jito's route is mainnet only");
+    const cap = lamportsOf(policy.send!.max_tip_sol);
+    if (!policy.live) return { tipLamports: tipFor(null, cap), tipAccount: JITO_TIP_ACCOUNTS[0] };
+    if (!this.tipAccountsChecked) {
+      const listed = await this.jito.tipAccounts();
+      const ours = new Set<string>(JITO_TIP_ACCOUNTS);
+      if (listed.length !== ours.size || !listed.every((a) => ours.has(a))) {
+        throw new HigherError("Jito's block engine lists different tip accounts than Highwire knows, so nothing is sent through it. Update Highwire, or set send.route to rpc.", { code: "unavailable" });
+      }
+      this.tipAccountsChecked = true;
+    }
+    const tipAccount = JITO_TIP_ACCOUNTS[Math.floor(Math.random() * JITO_TIP_ACCOUNTS.length)]!;
+    return { tipLamports: tipFor(await this.jito.tipFloorLamports(), cap), tipAccount };
+  }
+
   /** Checks the built envelope against the policy, then signs and sends it, or dry-runs it. */
   execute(connection: Connection, req: ExecuteRequest): Promise<ExecuteResult> {
     // One at a time in this process, and across processes through the lock file.
@@ -185,7 +223,11 @@ export class LocalSigner {
     return run;
   }
 
-  private log(req: Pick<ExecuteRequest, "tool" | "intent" | "order">, outcome: "refused" | "dry_run" | "sent" | "confirmed" | "failed", extra: { lamports?: bigint; label?: string; signature?: string; reason?: string } = {}) {
+  private log(
+    req: Pick<ExecuteRequest, "tool" | "intent" | "order">,
+    outcome: "refused" | "dry_run" | "sent" | "confirmed" | "failed" | "not_landed",
+    extra: { lamports?: bigint; label?: string; signature?: string; reason?: string; route?: string; tip?: bigint; bundle?: string } = {},
+  ) {
     const lamports = extra.lamports ?? 0n;
     this.audit.append({
       tool: req.tool,
@@ -201,6 +243,9 @@ export class LocalSigner {
       ...(extra.signature ? { signature: extra.signature } : {}),
       ...(extra.reason ? { reason: extra.reason } : {}),
       ...(req.order ? { order: req.order } : {}),
+      ...(extra.route ? { route: extra.route } : {}),
+      ...(extra.tip !== undefined ? { tip: extra.tip.toString() } : {}),
+      ...(extra.bundle ? { bundle: extra.bundle } : {}),
     });
   }
 
@@ -219,6 +264,13 @@ export class LocalSigner {
       if (failed) throw new HigherError(`Transaction ${failed.index + 1} (${failed.label}) failed simulation: ${failed.simulation.error}`, { code: "simulation_failed" });
       const refusal = checkPolicy(policy, intent, this.audit.spentSince(intent.cluster));
       if (refusal) throw refused(refusal.rule, refusal.reason);
+      const route = routeOf(policy, intent.action);
+      const cap = lamportsOf(policy.send?.max_tip_sol ?? 0);
+      for (const t of env.transactions) {
+        const tips = jitoTipsOf(VersionedTransaction.deserialize(Buffer.from(t.base64, "base64")));
+        if (route === "jito" && (tips.length !== 1 || tips[0]! > cap)) throw refused("send.route", `transaction ${t.index + 1} wasn't built with one tip of at most ${policy.send!.max_tip_sol} SOL for Jito's route; build it again`);
+        if (route === "rpc" && tips.length > 0) throw refused("send.route", `transaction ${t.index + 1} tips Jito's block engine, and the policy sends the ordinary way`);
+      }
     } catch (err) {
       this.log(req, "refused", { lamports: intent.solOut, reason: err instanceof Error ? err.message : String(err) });
       throw err;
@@ -238,6 +290,7 @@ export class LocalSigner {
       if (!tx.message.staticAccountKeys[0]?.equals(this.publicKey)) throw new UnsafeTransactionError("a transaction isn't paid by this signer's wallet");
     }
 
+    const route = routeOf(policy, intent.action);
     const perTx = lamportsOf(policy.max_sol_per_tx) + RENT_AND_FEE_ALLOWANCE_LAMPORTS;
     const perDay = lamportsOf(policy.max_sol_per_day);
     const sent: ExecutedTransaction[] = [];
@@ -286,28 +339,59 @@ export class LocalSigner {
 
         tx.sign([this.keypair]);
         const signature = bs58.encode(tx.signatures[0]!);
+        const tip = jitoTipsOf(tx)[0];
+        let via: "jito" | "rpc" = route;
         // Logged, and counted, before it's sent: if the send's answer is lost, the spend still counts.
-        this.log(req, "sent", { lamports: cost, label: t.label, signature });
+        this.log(req, "sent", { lamports: cost, label: t.label, signature, route, ...(tip !== undefined ? { tip } : {}) });
         charged += cost;
-        const done: ExecutedTransaction = { index: t.index, label: t.label, signature, confirmed: false };
+        const done: ExecutedTransaction = { index: t.index, label: t.label, signature, confirmed: false, route, ...(tip !== undefined ? { tipSol: lamportsNumber(tip) } : {}) };
         sent.push(done);
-        try {
-          await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 });
-        } catch (err) {
-          done.error = `the RPC didn't accept it (${err instanceof Error ? err.message : String(err)}); it may still land: check ${signature} before retrying`;
-          this.log(req, "failed", { label: t.label, signature, reason: done.error });
-          return this.partial(intent, sent, summary, done.error, dayLeft, charged);
+        // A protected send that provably never landed: give the spend back, and say so.
+        const notLanded = (reason: string): ExecuteResult => {
+          done.landed = false;
+          done.error = reason;
+          this.log(req, "not_landed", { lamports: cost, label: t.label, signature, reason });
+          charged -= cost;
+          return this.unlanded(intent, sent, summary, reason, dayLeft, charged);
+        };
+        let bundle: string | undefined;
+        if (route === "jito") {
+          try {
+            bundle = (await this.jito.send(Buffer.from(tx.serialize()).toString("base64"))).bundleId;
+          } catch (err) {
+            if (err instanceof JitoRejected && policy.send?.fallback === "rpc") {
+              via = "rpc";
+              this.log(req, "failed", { label: t.label, signature, route: "jito", reason: `${err.message}; sending it the ordinary way, as the policy's fallback says` });
+            } else if (err instanceof JitoRejected) {
+              return notLanded(`${err.message}, so nothing was sent`);
+            }
+            // No answer at all: it may have been accepted. Watch for it until its blockhash expires.
+          }
+        }
+        if (via === "rpc") {
+          try {
+            await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 });
+            if (route === "jito") done.route = "rpc";
+          } catch (err) {
+            done.error = `the RPC didn't accept it (${err instanceof Error ? err.message : String(err)}); it may still land: check ${signature} before retrying`;
+            this.log(req, "failed", { label: t.label, signature, reason: done.error });
+            return this.partial(intent, sent, summary, done.error, dayLeft, charged);
+          }
         }
         try {
           const res = await connection.confirmTransaction({ signature, blockhash: tx.message.recentBlockhash, lastValidBlockHeight }, "confirmed");
           if (res.value.err) throw new Error(JSON.stringify(res.value.err));
         } catch (err) {
+          // A bundle-only send never enters the public queue, so once its blockhash has expired without it, it can't land.
+          if (via === "jito" && (await this.neverLanded(connection, signature, lastValidBlockHeight))) {
+            return notLanded("Jito's block engine didn't land it before its blockhash expired; nothing was spent");
+          }
           done.error = err instanceof Error ? err.message : String(err);
           this.log(req, "failed", { label: t.label, signature, reason: done.error });
           return this.partial(intent, sent, summary, `transaction ${t.index + 1} didn't confirm: ${done.error}`, dayLeft, charged);
         }
         done.confirmed = true;
-        this.log(req, "confirmed", { label: t.label, signature });
+        this.log(req, "confirmed", { label: t.label, signature, route: via, ...(bundle ? { bundle } : {}) });
         Object.assign(done, await this.fills(connection, signature, intent.mint));
       } catch (err) {
         // After a send, any failure still returns what was sent, so the caller can check it before retrying.
@@ -411,6 +495,23 @@ export class LocalSigner {
       throw refused("cluster", `the RPC is on a different cluster than ${cluster} (genesis hash ${genesis}); check SOLANA_RPC_URL`);
     }
     this.verifiedRpcs.add(connection);
+  }
+
+  /** After its blockhash expired: true when the network has no record of the transaction at all. */
+  private async neverLanded(connection: Connection, signature: string, lastValidBlockHeight: number): Promise<boolean> {
+    try {
+      if ((await connection.getBlockHeight("confirmed")) <= lastValidBlockHeight) return false;
+      const { value } = await connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
+      return value[0] === null;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The first transaction never landed (nothing sent before it: not_landed), or a later one didn't (partly sent). */
+  private unlanded(intent: Intent, sent: ExecutedTransaction[], summary: string[][], reason: string, dayLeft: (spent: bigint) => number, charged: bigint): ExecuteResult {
+    if (sent.length > 1) return this.partial(intent, sent, summary, reason, dayLeft, charged);
+    return { status: "not_landed", wallet: this.wallet, cluster: intent.cluster, transactions: sent, summary, spentSol: 0, dayLeftSol: dayLeft(this.audit.spentSince(intent.cluster)) };
   }
 
   private partial(intent: Intent, sent: ExecutedTransaction[], summary: string[][], reason: string, dayLeft: (spent: bigint) => number, charged: bigint): ExecuteResult {
