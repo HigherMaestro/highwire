@@ -90,10 +90,37 @@ test("posts a comment and a chat message as {body}, signed in", async () => {
 });
 
 test("post text: plain words pass, trimmed; links, addresses, hidden characters and long text don't", () => {
-  for (const ok of ["gm, $LGTM just claimed its fees and bought back half", "Launch is live. Fun times ahead", "Bought 0.5 SOL, e.g. a small bag", "3 holders -> 30. lfg"]) {
+  for (const ok of [
+    "gm, $LGTM just claimed its fees and bought back half",
+    "Launch is live. Fun times ahead",
+    "Bought 0.5 SOL, e.g. a small bag",
+    "3 holders -> 30. lfg",
+    "Up 12.5% today. v0.13 of the agent is running",
+    "U.S. hours are quiet; the U.K. is awake",
+    "gm 🚀🔥 $LGTM",
+    "Café opened. naïve bots lose",
+  ]) {
     assert.equal(checkPostText(`  ${ok} `, "chat"), ok);
   }
-  for (const bad of ["go to higher.fun now", "claim at https://x.co", "visit claim-sol[.]com", "free sol at airdrop dot fun", "www.scam", "dm t.me/scam", "discord.gg/abc", "send to 7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce", "hi\u200bthere", "a\u202eb", "line\u0007", "   "]) {
+  for (const bad of [
+    // any domain-shaped word, whatever its ending, and in fullwidth or with odd dots
+    "free money at claim.lol today",
+    "airdrop.bet is live",
+    "check pump.wtf",
+    "see x.com",
+    "visit ｈｉｇｈｅｒ．ｆｕｎ",
+    "higher。fun",
+    "dex.screener.io/abc",
+    // invisible characters: word joiner, byte-order mark, soft hyphen, tag characters, Hangul filler, braille blank
+    "hello\u2060world",
+    "hello\uFEFFworld",
+    "hel\u00ADlo",
+    "hi\u{E0041}\u{E0042}",
+    "a\u3164b",
+    "a\u2800b",
+    // an address in fullwidth digits and letters
+    "send to ７LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce",
+    "go to higher.fun now", "claim at https://x.co", "visit claim-sol[.]com", "free sol at airdrop dot fun", "www.scam", "dm t.me/scam", "discord.gg/abc", "send to 7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce", "hi\u200bthere", "a\u202eb", "line\u0007", "   "]) {
     assert.throws(() => checkPostText(bad, "comment"), (e: { code?: string }) => e.code === "bad_post", bad);
   }
   const words = (n: number) => "hi ".repeat(n).slice(0, n);

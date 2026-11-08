@@ -43,9 +43,21 @@ export function checkSignInMessage(message: string, wallet: string, now = Date.n
 export const POST_LIMITS = { comment: 500, chat: 280 } as const;
 export type PostWhere = keyof typeof POST_LIMITS;
 
-const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/;
-const LINK = /[a-z][a-z0-9+.-]*:\/\/|\bwww\.|\b[a-z0-9-]+(?:\.|\s*\[\.\]\s*|\s*\(\.\)\s*|\s+dot\s+)(?:com|fun|io|xyz|net|org|app|gg|so|me|co|ly|link|site|live|vip|top|info|pro|ai|to|sh|tv|cc|us|club|online|claim|gift|money|finance)\b|\bt\.me\b|discord\.gg/i;
+// Control characters (tab and newline are fine), every invisible format character (zero-width spaces and joiners,
+// direction overrides, the word joiner, byte-order marks, soft hyphens, tag characters), and the blank-looking letters
+// used to hide text: the combining grapheme joiner, Hangul fillers and the braille blank.
+const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\p{Cf}\u034f\u115f\u1160\u3164\uffa0\u2800]/u;
+// Links, schemes, and the ways people write a domain so a filter misses it ("site[.]com", "site dot com").
+const LINK = /[a-z][a-z0-9+.-]*:\/\/|\bwww\.|\b[a-z0-9-]+(?:\s*\[\.\]\s*|\s*\(\.\)\s*|\s+dot\s+)(?:com|fun|io|xyz|net|org|app|gg|so|me|co|ly|link|site|live|vip|top|info|pro|ai|to|sh|tv|cc|us|club|online|claim|gift|money|finance|lol|bet|wtf|win|xxx)\b|\bt\.me\b|discord\.gg/iu;
+// Anything shaped like a domain, whatever its ending: X turns any real top-level domain into a link, and a list of
+// endings is always missing one. "e.g." and "0.5" don't match: the ending must be two letters or more, right after a dot.
+const DOMAIN = /(?:^|[^\p{L}\p{N}_-])[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.\p{L}{2,63}(?![\p{L}\p{N}_-])/u;
+// Dots that aren't "." but read as one: fullwidth, ideographic, halfwidth, one-dot leaders and the like.
+const DOTS = /[\u3002\uff0e\uff61\u2024\ufe52\u06d4\u0701\u0702\u2e2e]/g;
 const ADDRESS = /[1-9A-HJ-NP-Za-km-z]{32,44}/;
+
+/** The text as a reader (or X's linker) sees it: compatibility forms folded (fullwidth letters, odd dots), lower case. */
+const plain = (t: string) => t.normalize("NFKC").replace(DOTS, ".").toLowerCase();
 
 /**
  * The text an agent may post, trimmed, or why not. higher.fun's own rules (length, no control characters) plus
@@ -58,8 +70,9 @@ export function checkPostText(text: string, where: PostWhere): string {
   if (!t) throw new ValidationError("Write something to post.", { code: "bad_post" });
   if ([...t].length > max) throw new ValidationError(`A ${where === "chat" ? "chat message" : "comment"} is at most ${max} characters; this is ${[...t].length}.`, { code: "bad_post" });
   if (CONTROL.test(t)) throw new ValidationError("The text has control or invisible characters; write it as plain text.", { code: "bad_post" });
-  if (LINK.test(t)) throw new ValidationError("Posts can't carry links or web addresses. Write it without them.", { code: "bad_post" });
-  if (ADDRESS.test(t)) throw new ValidationError("Posts can't carry wallet or mint addresses: people are told never to send funds to an address from chat. Name the coin by its ticker instead.", { code: "bad_post" });
+  const p = plain(t);
+  if (LINK.test(p) || DOMAIN.test(p)) throw new ValidationError("Posts can't carry links or web addresses. Write it without them.", { code: "bad_post" });
+  if (ADDRESS.test(t) || ADDRESS.test(t.normalize("NFKC"))) throw new ValidationError("Posts can't carry wallet or mint addresses: people are told never to send funds to an address from chat. Name the coin by its ticker instead.", { code: "bad_post" });
   return t;
 }
 
