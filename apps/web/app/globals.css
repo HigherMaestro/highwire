@@ -3225,3 +3225,597 @@ a.card:hover,
   max-height: 520px;
   overflow: auto;
 }
+
+/* ------------------------------------------------------------------ /fees: the wire hero, figure tiles and charts */
+
+.fees-hero h1 {
+  max-width: 17ch;
+}
+
+.fee-hero-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.fee-hero-n {
+  align-self: flex-start;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(56px, 9vw, 112px);
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+  background: var(--wire);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.fee-hero-n small {
+  font-size: 0.36em;
+  letter-spacing: -0.02em;
+}
+
+:root[data-theme="light"] .fee-hero-n {
+  background: none;
+  color: var(--fg);
+}
+
+.fee-hero-sub {
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.fee-hero-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 0;
+  margin: 12px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  max-width: 780px;
+}
+
+.fee-hero-facts div {
+  padding-right: 28px;
+  margin-right: 28px;
+  border-right: 1px solid var(--line);
+}
+
+.fee-hero-facts div:last-child {
+  border-right: 0;
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.fee-hero-facts dt,
+.fee-tile-label {
+  font-family: var(--font-code);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.fee-hero-facts dd {
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-fresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 0;
+  font-family: var(--font-code);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.fee-fresh-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #A6EFCB;
+  animation: fee-pulse 2.4s ease-out infinite;
+}
+
+@keyframes fee-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(166, 239, 203, 0.55);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 9px rgba(166, 239, 203, 0);
+  }
+}
+
+.fees-body {
+  padding-top: 72px;
+  padding-bottom: 96px;
+}
+
+.fee-block {
+  scroll-margin-top: 140px;
+  margin-bottom: 104px;
+}
+
+.fee-block:last-child {
+  margin-bottom: 0;
+}
+
+.fee-panel,
+.fee-tile,
+.fee-method li {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 24px 60px -40px rgba(0, 0, 0, 0.7);
+}
+
+:root[data-theme="light"] .fee-panel,
+:root[data-theme="light"] .fee-tile,
+:root[data-theme="light"] .fee-method li {
+  box-shadow: 0 18px 40px -32px rgba(14, 17, 22, 0.25);
+}
+
+.fee-panel {
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.fee-panel-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Figures in cards, with a hairline of the recipient's colour along the top when there is one. */
+.fee-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.fee-tiles-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.fee-tile {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 22px;
+  border-radius: var(--radius-sm);
+}
+
+.fee-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--accent, transparent);
+}
+
+.fee-tile-n {
+  font-size: clamp(26px, 2.6vw, 34px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-tile-n small {
+  font-size: 0.5em;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.fee-tile-sub {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* Today: four tiles beside the coins that paid most, each bar split by who got it. */
+.fee-today {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.fee-rank {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.fee-rank figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px 16px;
+}
+
+.fee-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.fee-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fee-legend i,
+.fee-pair-a,
+.fee-pair-b {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.fee-rank ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fee-rank li {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 14px;
+}
+
+.fee-rank-name {
+  font-weight: 600;
+  color: var(--fg);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fee-rank-name:hover {
+  color: var(--link);
+}
+
+.fee-rank-bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+}
+
+.fee-rank-bar span {
+  min-width: 2px;
+}
+
+.fee-rank-bar span:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.fee-rank-value,
+.fee-board-value strong {
+  font-family: var(--font-code);
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-rank-value {
+  text-align: right;
+  font-size: 14px;
+}
+
+.fee-panel-foot {
+  margin: auto 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* The split: the whole bar, then two halves of it, by phase and by mode. */
+.fee-split-panel {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.fee-pairs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.fee-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.fee-pair-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+}
+
+.fee-pair-bar span:first-child,
+.fee-pair-a {
+  background: var(--fg);
+}
+
+.fee-pair-bar span:last-child,
+.fee-pair-b {
+  background: var(--line-strong);
+}
+
+.fee-pair-bar span:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.fee-pair-bar span:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.fee-pair-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.fee-pair-sides > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fee-pair-sides .fee-tile-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fee-pair-n {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin: 16px 0 0;
+  padding: 18px 22px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.fee-cta .button {
+  flex-shrink: 0;
+}
+
+/* The creators' leaderboard: rank, wallet, a bar of what they earned against the first, and the figure. */
+.fee-board {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+}
+
+.fee-board li {
+  display: grid;
+  grid-template-columns: 32px minmax(200px, 1.1fr) minmax(0, 2fr) 140px;
+  grid-template-areas: "rank who bar value";
+  align-items: center;
+  gap: 18px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.fee-board-rank {
+  grid-area: rank;
+  font-family: var(--font-code);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.fee-board li:nth-child(-n + 3) .fee-board-rank {
+  color: var(--signal);
+}
+
+:root[data-theme="light"] .fee-board li:nth-child(-n + 3) .fee-board-rank {
+  color: #1F5FA8;
+}
+
+.fee-board-who {
+  grid-area: who;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fee-board-who > a {
+  font-family: var(--font-code);
+  font-weight: 500;
+}
+
+.fee-board-bar {
+  grid-area: bar;
+  height: 10px;
+}
+
+.fee-board-bar span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: #F6A9C4;
+  border-radius: 0 4px 4px 0;
+}
+
+.fee-board-value {
+  grid-area: value;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.fee-method {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.fee-method li {
+  padding: 20px 22px;
+  border-radius: var(--radius-sm);
+}
+
+.fee-method h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.fee-method p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+@media (max-width: 960px) {
+  .fee-today {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fee-tiles-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .fee-block,
+  .idea-block {
+    scroll-margin-top: 56px;
+  }
+  .fees-body {
+    padding-top: 48px;
+    padding-bottom: 72px;
+  }
+  .fee-block {
+    margin-bottom: 72px;
+  }
+  .fee-pairs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fee-hero-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fee-hero-facts div {
+    border-right: 0;
+    margin-right: 0;
+    padding-right: 0;
+  }
+  .fee-board li {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "rank who value"
+      "rank bar bar";
+    gap: 8px 12px;
+  }
+  .fee-rank li {
+    grid-template-columns: 84px minmax(0, 1fr) 52px;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 560px) {
+  .fee-panel {
+    padding: 18px;
+  }
+  .fee-tile {
+    padding: 16px;
+  }
+  .fee-tile-n {
+    font-size: 24px;
+  }
+  .fee-pair-sides {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fee-fresh-dot {
+    animation: none;
+  }
+}
+
+/* The fee calculator's answer, large, above the rest. */
+.calc-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.calc-hero {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calc-hero-label {
+  font-family: var(--font-code);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.calc-hero-n {
+  font-size: clamp(40px, 5vw, 60px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: #F6A9C4;
+}
+
+:root[data-theme="light"] .calc-hero-n {
+  color: var(--fg);
+}
+
+.calc-hero-n small {
+  font-size: 0.36em;
+  letter-spacing: -0.01em;
+  color: var(--muted);
+}

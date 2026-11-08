@@ -4,6 +4,10 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **/fees, redesigned.** The wire header from /ideas with the all-time fees as one large figure, a pinned bar of
+  numbered sections, and figures in cards. The coins that paid most in the last 24 hours are a chart split by who got
+  each fee, the top creators a leaderboard with bars, the phase and fee-mode splits two bars, the calculator leads with
+  what the creator earns a day, and the method is a grid of short cards.
 - **A calmer site on phones.** The header is one pinned row: the logo, the theme switch and a menu the links drop down
   from. The fee pages' figures sit in a two-column grid, and their tables become compact cards, label on the left and
   value on the right.

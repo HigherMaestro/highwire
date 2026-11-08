@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
-import { HOLDER_AIRDROPS } from "highwire-core";
+import type { CSSProperties, ReactNode } from "react";
+import { HOLDER_AIRDROPS, type Recipient } from "highwire-core";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
+import { AmbientWire } from "../../components/hero/AmbientWire.tsx";
+import { SectionNav } from "../../components/ideas/SectionNav.tsx";
 import { FeeTable, type FeeRow } from "../../components/fees/FeeTable.tsx";
 import { FeeFlow } from "../../components/fees/FeeFlow.tsx";
 import { SplitBar } from "../../components/fees/SplitBar.tsx";
 import { EarningsCalculator } from "../../components/fees/EarningsCalculator.tsx";
 import { WalletLookup } from "../../components/fees/WalletLookup.tsx";
-import { MODE_LABEL, allFees, coinLabel, flowScenarios, pctOf, short, sol, topCreators, updatedAt, usd, volumes24h } from "../../lib/fees.ts";
+import { MODE_LABEL, RECIPIENTS, allFees, coinLabel, flowScenarios, pctOf, short, sol, topCreators, topToday, updatedAt, usd, volumes24h } from "../../lib/fees.ts";
 import { FEES_CARD, pageMetadata } from "../../lib/site.ts";
 
 export const revalidate = 600;
@@ -20,32 +23,115 @@ export const metadata: Metadata = {
   }),
 };
 
-export default async function FeesPage() {
-  const data = await allFees();
+const SECTIONS = [
+  { id: "today", label: "Today" },
+  { id: "flow", label: "The split" },
+  { id: "waiting", label: "To claim" },
+  { id: "creators", label: "Creators" },
+  { id: "earn", label: "Earnings" },
+  { id: "coins", label: "Every coin" },
+  { id: "method", label: "Method" },
+];
+
+const n = (id: string) => String(SECTIONS.findIndex((s) => s.id === id) + 1).padStart(2, "0");
+
+function Head({ id, title, children }: { id: string; title: string; children?: ReactNode }) {
   return (
-    <>
-      <SiteHeader />
-      <main className="fees-page">
-        <div className="wrap">
-          <header className="docs-intro fees-intro">
-            <p className="eyebrow">Ecosystem fees</p>
-            <h1>Every fee on higher.fun, and who got it</h1>
-            <p className="lead">
-              Read from Solana for all of higher.fun's coins, on the bonding curve and after graduation. Refreshed every 10
-              minutes.
-            </p>
-          </header>
-          {data ? <Ecosystem data={data} /> : <Unavailable />}
-        </div>
-      </main>
-      <SiteFooter />
-    </>
+    <div className="section-head">
+      <h2 id={`${id}-title`} className="sec-h">
+        <span className="sec-n">{n(id)}</span>
+        {title}
+      </h2>
+      {children ? <p className="muted">{children}</p> : null}
+    </div>
   );
 }
 
-function Unavailable() {
+/** A figure in a card: a small label, the number, and a line under it. */
+function Tile({ label, value, unit, sub, accent }: { label: string; value: string; unit?: string; sub?: ReactNode; accent?: string }) {
   return (
-    <p className="notice">The numbers couldn't be read from Solana just now. This page tries again within 10 minutes.</p>
+    <div className="fee-tile" style={accent ? ({ "--accent": accent } as CSSProperties) : undefined}>
+      <span className="fee-tile-label">{label}</span>
+      <span className="fee-tile-n">
+        {value}
+        {unit ? <small> {unit}</small> : null}
+      </span>
+      {sub ? <span className="fee-tile-sub">{sub}</span> : null}
+    </div>
+  );
+}
+
+const COLOR = Object.fromEntries(RECIPIENTS.map((r) => [r.key, r.color])) as Record<Recipient, string>;
+
+export default async function FeesPage() {
+  const data = await allFees();
+  const t = data?.totals;
+  return (
+    <>
+      <SiteHeader />
+      <main>
+        <section className="page-hero fees-hero" aria-labelledby="fees-title">
+          <AmbientWire />
+          <div className="wrap page-hero-copy">
+            <p className="eyebrow">Ecosystem fees · read from Solana</p>
+            <h1 id="fees-title">Every fee on higher.fun, and who got it</h1>
+            {data && t ? (
+              <>
+                <div className="fee-hero-figure">
+                  <span className="fee-hero-n">
+                    {sol(t.feesSol)}
+                    <small> SOL</small>
+                  </span>
+                  <span className="fee-hero-sub">
+                    paid in fees{usd(t.feesSol, data.solUsd) ? ` (${usd(t.feesSol, data.solUsd)})` : ""}, across all {t.coins.toLocaleString("en-US")} coins
+                  </span>
+                </div>
+                <dl className="fee-hero-facts">
+                  <div>
+                    <dt>Traded</dt>
+                    <dd>{sol(t.volumeSol)} SOL</dd>
+                  </div>
+                  <div>
+                    <dt>To creators</dt>
+                    <dd>{sol(t.byRecipient.creator)} SOL</dd>
+                  </div>
+                  <div>
+                    <dt>Graduated</dt>
+                    <dd>
+                      {t.graduated} of {t.coins.toLocaleString("en-US")}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Last 24 hours</dt>
+                    <dd>{sol(t.last24h.feesSol)} SOL</dd>
+                  </div>
+                </dl>
+                <p className="fee-fresh">
+                  <span className="fee-fresh-dot" aria-hidden="true" />
+                  Read {updatedAt(data.generatedAt)} · refreshed every 10 minutes
+                </p>
+              </>
+            ) : (
+              <p className="lead">
+                Read from Solana for all of higher.fun's coins, on the bonding curve and after graduation. Refreshed every 10
+                minutes.
+              </p>
+            )}
+          </div>
+        </section>
+        {data ? (
+          <>
+            <SectionNav sections={SECTIONS} />
+            <Ecosystem data={data} />
+          </>
+        ) : (
+          <div className="wrap fees-body">
+            <p className="notice">The numbers couldn't be read from Solana just now. This page tries again within 10 minutes.</p>
+          </div>
+        )}
+      </main>
+      <SiteFooter />
+    </>
   );
 }
 
@@ -68,242 +154,270 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
   const day = t.last24h;
   const scenarios = flowScenarios(data);
   const creators = topCreators(data, 10);
+  const today = topToday(data, 6);
+  const todayMax = today[0]?.feesSol ?? 0;
+  const creatorMax = creators[0]?.earnedSol ?? 0;
+  const waiting = w.creatorPoolSol + w.creatorCurveSol + w.higherCurveSol + w.holdersSol;
+  const dayRecipients = RECIPIENTS.filter((r) => today.some((c) => c.byRecipient[r.key] > 0));
   return (
-    <>
-      <ul className="stats fee-stats">
-        <li>
-          <span className="stat-n">{sol(t.feesSol)} SOL</span>
-          <span className="stat-label">in fees{usd(t.feesSol, data.solUsd) ? ` · ${usd(t.feesSol, data.solUsd)}` : ""}</span>
-        </li>
-        <li>
-          <span className="stat-n">{sol(t.volumeSol)} SOL</span>
-          <span className="stat-label">traded{usd(t.volumeSol, data.solUsd) ? ` · ${usd(t.volumeSol, data.solUsd)}` : ""}</span>
-        </li>
-        <li>
-          <span className="stat-n">{t.coins.toLocaleString("en-US")}</span>
-          <span className="stat-label">coins, {t.graduated} graduated</span>
-        </li>
-        <li>
-          <span className="stat-n">{sol(t.byRecipient.creator)} SOL</span>
-          <span className="stat-label">to creators</span>
-        </li>
-      </ul>
-
-      <section className="fee-section" aria-labelledby="today">
-        <h2 id="today">The last 24 hours</h2>
-        <p className="muted fee-section-lede">
-          Estimated: each coin's 24-hour volume on higher.fun, at the rates of the phase it trades in now.
-        </p>
-        <ul className="stats">
-          <li>
-            <span className="stat-n">{sol(day.feesSol)} SOL</span>
-            <span className="stat-label">in fees{usd(day.feesSol, data.solUsd) ? ` · ${usd(day.feesSol, data.solUsd)}` : ""}</span>
-          </li>
-          <li>
-            <span className="stat-n">{sol(day.byRecipient.creator)} SOL</span>
-            <span className="stat-label">to creators{usd(day.byRecipient.creator, data.solUsd) ? ` · ${usd(day.byRecipient.creator, data.solUsd)}` : ""}</span>
-          </li>
-          <li>
-            <span className="stat-n">{sol(day.volumeSol)} SOL</span>
-            <span className="stat-label">traded</span>
-          </li>
-          <li>
-            <span className="stat-n">{day.coinsTraded.toLocaleString("en-US")}</span>
-            <span className="stat-label">coins traded, of {t.coins.toLocaleString("en-US")}</span>
-          </li>
-        </ul>
-      </section>
-
-      <section className="fee-section" aria-labelledby="flow">
-        <h2 id="flow">How a trade's fee splits</h2>
-        <FeeFlow scenarios={scenarios} />
-      </section>
-
-      <section className="fee-section" aria-labelledby="split">
-        <h2 id="split">Where the fees went</h2>
-        <SplitBar by={t.byRecipient} total={t.feesSol} label="All fees by recipient" notes />
-      </section>
-
-      <section className="fee-section" aria-labelledby="breakdown">
-        <h2 id="breakdown">By phase and by fee mode</h2>
-        <div className="cards fee-cards">
-          <div className="card">
-            <h3>On the bonding curve</h3>
-            <p className="fee-big">{sol(t.byPhase.curve)} SOL</p>
-            <p className="muted">
-              {pctOf(t.byPhase.curve, t.feesSol)} of all fees, from {sol(t.curveVolumeSol)} SOL of curve trading.
-            </p>
+    <div className="wrap fees-body">
+      <section id="today" className="fee-block" aria-labelledby="today-title">
+        <Head id="today" title="The last 24 hours">
+          Estimated from each coin's 24-hour volume on higher.fun, at the rates of the phase it trades in now.
+        </Head>
+        <div className="fee-today">
+          <div className="fee-tiles">
+            <Tile label="Fees" value={sol(day.feesSol)} unit="SOL" sub={usd(day.feesSol, data.solUsd) ?? undefined} />
+            <Tile label="To creators" value={sol(day.byRecipient.creator)} unit="SOL" sub={usd(day.byRecipient.creator, data.solUsd) ?? undefined} accent={COLOR.creator} />
+            <Tile label="Traded" value={sol(day.volumeSol)} unit="SOL" sub={usd(day.volumeSol, data.solUsd) ?? undefined} />
+            <Tile label="Coins traded" value={day.coinsTraded.toLocaleString("en-US")} sub={`of ${t.coins.toLocaleString("en-US")}`} />
           </div>
-          <div className="card">
-            <h3>In Raydium pools</h3>
-            <p className="fee-big">{sol(t.byPhase.pool)} SOL</p>
-            <p className="muted">
-              {pctOf(t.byPhase.pool, t.feesSol)} of all fees, from {sol(t.poolVolumeSol)} SOL traded in the {t.graduated}{" "}
-              graduated coins' pools.
-            </p>
-          </div>
-          {(["rewards", "classic"] as const).map((m) => (
-            <div className="card" key={m}>
-              <h3>{MODE_LABEL[m]}</h3>
-              <p className="fee-big">{sol(t.byMode[m].feesSol)} SOL</p>
-              <p className="muted">
-                {t.byMode[m].coins.toLocaleString("en-US")} coins, {sol(t.byMode[m].volumeSol)} SOL traded.{" "}
-                {m === "rewards"
-                  ? `${rate.curve.rewards.platform}% to higher.fun (it airdrops ${HOLDER_AIRDROPS.platformBps / 100}% of each trade to holders) and ${rate.curve.rewards.creator}% to the creator on each curve trade.`
-                  : "No platform or creator fee on the curve; higher.fun takes 1% of supply at graduation instead."}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="fee-section" aria-labelledby="waiting">
-        <h2 id="waiting">Waiting to be claimed</h2>
-        <p className="muted fee-section-lede">Earned, and sitting in on-chain vaults right now.</p>
-        <ul className="stats">
-          <li>
-            <span className="stat-n">{sol(w.creatorPoolSol)} SOL</span>
-            <span className="stat-label">pool creator fees, across graduated coins</span>
-          </li>
-          <li>
-            <span className="stat-n">{sol(w.creatorCurveSol)} SOL</span>
-            <span className="stat-label">curve creator fees, in creators' vaults (which also hold their fees from other LaunchLab launchpads)</span>
-          </li>
-          <li>
-            <span className="stat-n">{sol(w.higherCurveSol)} SOL</span>
-            <span className="stat-label">higher.fun's curve fees, in its platform vaults</span>
-          </li>
-          <li>
-            <span className="stat-n">{sol(w.holdersSol)} SOL</span>
-            <span className="stat-label">for holders, in coins' airdrop wallets</span>
-          </li>
-        </ul>
-        <p className="muted small">
-          Creators can claim theirs with Highwire's <a href="/docs#build_claim_creator_fees">build_claim_creator_fees</a>, or
-          look up their wallet below.
-        </p>
-      </section>
-
-      <section className="fee-section" aria-labelledby="creators">
-        <h2 id="creators">Top creators</h2>
-        <p className="muted fee-section-lede">Creator wallets by what their coins have paid them, across every coin they made.</p>
-        <WalletLookup />
-        <div className="table-wrap">
-          <table className="params fees">
-            <thead>
-              <tr>
-                <th scope="col">Creator</th>
-                <th scope="col" className="num">
-                  Coins
-                </th>
-                <th scope="col">Best coin</th>
-                <th scope="col" className="num">
-                  Volume (SOL)
-                </th>
-                <th scope="col" className="num">
-                  Earned (SOL)
-                </th>
-                <th scope="col" className="num">
-                  Last 24h
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {creators.map((r) => (
-                <tr key={r.wallet}>
-                  <td data-label="Creator">
-                    <a href={`/fees/creator/${r.wallet}`} className="mono-wrap">
-                      {short(r.wallet)}
+          {today.length ? (
+            <figure className="fee-panel fee-rank">
+              <figcaption>
+                <span className="fee-panel-title">Most fees today</span>
+                <span className="fee-legend" aria-hidden="true">
+                  {dayRecipients.map((r) => (
+                    <span key={r.key}>
+                      <i style={{ background: r.color }} />
+                      {r.label}
+                    </span>
+                  ))}
+                </span>
+              </figcaption>
+              <ol>
+                {today.map((c) => (
+                  <li key={c.mint}>
+                    <a href={`/fees/${c.mint}`} className="fee-rank-name">
+                      {c.ticker ? `$${c.ticker}` : short(c.mint)}
                     </a>
-                  </td>
-                  <td data-label="Coins" className="num">
-                    {r.coins}
-                    {r.graduated ? <span className="muted"> ({r.graduated} graduated)</span> : null}
-                  </td>
-                  <td data-label="Best coin">
-                    <a href={`/fees/${r.best.mint}`}>{r.best.ticker ? `$${r.best.ticker}` : short(r.best.mint)}</a>
-                  </td>
-                  <td data-label="Volume (SOL)" className="num">
-                    {sol(r.volumeSol)}
-                  </td>
-                  <td data-label="Earned (SOL)" className="num">
-                    <strong>{sol(r.earnedSol)}</strong>
-                  </td>
-                  <td data-label="Last 24h" className="num">
-                    {r.last24hSol > 0 ? sol(r.last24hSol) : <span className="muted">–</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <span
+                      className="fee-rank-bar"
+                      role="img"
+                      aria-label={`${sol(c.feesSol)} SOL in fees from ${sol(c.volumeSol)} SOL traded: ${dayRecipients
+                        .filter((r) => c.byRecipient[r.key] > 0)
+                        .map((r) => `${r.label} ${sol(c.byRecipient[r.key])} SOL`)
+                        .join(", ")}`}
+                    >
+                      {dayRecipients.map((r) =>
+                        c.byRecipient[r.key] > 0 ? (
+                          <span
+                            key={r.key}
+                            title={`${r.label}: ${sol(c.byRecipient[r.key])} SOL`}
+                            style={{ width: `${(c.byRecipient[r.key] / todayMax) * 100}%`, background: r.color }}
+                          />
+                        ) : null,
+                      )}
+                    </span>
+                    <span className="fee-rank-value">{sol(c.feesSol)}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="fee-panel-foot">SOL in fees, estimated; each bar is split by who got it.</p>
+            </figure>
+          ) : null}
         </div>
       </section>
 
-      <section className="fee-section" aria-labelledby="earn">
-        <h2 id="earn">What a coin earns its creator</h2>
-        <p className="muted fee-section-lede">Pick a fee mode and a daily volume.</p>
-        <EarningsCalculator scenarios={scenarios} volumes={volumes24h(data)} solUsd={data.solUsd} />
-        <p className="muted small">
-          To launch one from an agent, give it <a href="/skill.md">highwire.fun/skill.md</a>. To start from a working agent
-          that spends its fees, see <a href="/ideas">ideas</a>.
+      <section id="flow" className="fee-block" aria-labelledby="flow-title">
+        <Head id="flow" title="Where every trade's fee goes">
+          One trade's fee, split by the rates read on-chain. Pick where the coin trades and its fee mode.
+        </Head>
+        <FeeFlow scenarios={scenarios} />
+        <div className="fee-panel fee-split-panel">
+          <h3 className="fee-panel-title">All {sol(t.feesSol)} SOL, by who got it</h3>
+          <SplitBar by={t.byRecipient} total={t.feesSol} label="All fees by recipient" />
+        </div>
+        <div className="fee-pairs">
+          <Pair
+            title="By phase"
+            a={{ label: "Bonding curve", sol: t.byPhase.curve, sub: `from ${sol(t.curveVolumeSol)} SOL of curve trading` }}
+            b={{ label: "Raydium pools", sol: t.byPhase.pool, sub: `from ${sol(t.poolVolumeSol)} SOL in ${t.graduated} graduated coins' pools` }}
+            total={t.feesSol}
+          />
+          <Pair
+            title="By fee mode"
+            a={{ label: MODE_LABEL.rewards, sol: t.byMode.rewards.feesSol, sub: `${t.byMode.rewards.coins.toLocaleString("en-US")} coins: ${rate.curve.rewards.platform}% to higher.fun and ${rate.curve.rewards.creator}% to the creator per curve trade, ${HOLDER_AIRDROPS.platformBps / 100}% airdropped to holders` }}
+            b={{ label: MODE_LABEL.classic, sol: t.byMode.classic.feesSol, sub: `${t.byMode.classic.coins.toLocaleString("en-US")} coins: no platform or creator fee on the curve; higher.fun takes 1% of supply at graduation` }}
+            total={t.feesSol}
+          />
+        </div>
+      </section>
+
+      <section id="waiting" className="fee-block" aria-labelledby="waiting-title">
+        <Head id="waiting" title="Waiting to be claimed">
+          {sol(waiting)} SOL earned and sitting in on-chain vaults right now.
+        </Head>
+        <div className="fee-tiles fee-tiles-4">
+          <Tile label="Pool creator fees" value={sol(w.creatorPoolSol)} unit="SOL" sub="across graduated coins" accent={COLOR.creator} />
+          <Tile label="Curve creator fees" value={sol(w.creatorCurveSol)} unit="SOL" sub="in creators' LaunchLab vaults, which also hold fees from other launchpads" accent={COLOR.creator} />
+          <Tile label="higher.fun" value={sol(w.higherCurveSol)} unit="SOL" sub="curve fees in its platform vaults" accent={COLOR["higher.fun"]} />
+          <Tile label="Holders" value={sol(w.holdersSol)} unit="SOL" sub="in coins' airdrop wallets" accent={COLOR.holders} />
+        </div>
+        <p className="fee-cta">
+          <span>Made a coin? Your agent can claim your creator fees with Highwire.</span>
+          <a className="button" href="/docs#build_claim_creator_fees">
+            How to claim
+          </a>
         </p>
       </section>
 
-      <section className="fee-section" aria-labelledby="coins">
-        <h2 id="coins">Every coin</h2>
+      <section id="creators" className="fee-block" aria-labelledby="creators-title">
+        <Head id="creators" title="Top creators">
+          Creator wallets by what their coins have paid them, across every coin they made.
+        </Head>
+        <div className="fee-panel">
+          <WalletLookup />
+          <ol className="fee-board">
+            {creators.map((r, i) => (
+              <li key={r.wallet}>
+                <span className="fee-board-rank">{String(i + 1).padStart(2, "0")}</span>
+                <span className="fee-board-who">
+                  <a href={`/fees/creator/${r.wallet}`} className="mono-wrap">
+                    {short(r.wallet)}
+                  </a>
+                  <span className="muted small">
+                    {r.coins} {r.coins === 1 ? "coin" : "coins"}
+                    {r.graduated ? `, ${r.graduated} graduated` : ""} · best{" "}
+                    <a href={`/fees/${r.best.mint}`}>{r.best.ticker ? `$${r.best.ticker}` : short(r.best.mint)}</a>
+                  </span>
+                </span>
+                <span className="fee-board-bar" aria-hidden="true">
+                  <span style={{ width: `${(r.earnedSol / creatorMax) * 100}%` }} />
+                </span>
+                <span className="fee-board-value">
+                  <strong>{sol(r.earnedSol)} SOL</strong>
+                  <span className="muted small">{r.last24hSol > 0 ? `+${sol(r.last24hSol)} in 24h` : `${sol(r.volumeSol)} traded`}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section id="earn" className="fee-block" aria-labelledby="earn-title">
+        <Head id="earn" title="What a coin earns its creator">
+          Pick a fee mode, where the coin trades, and a daily volume.
+        </Head>
+        <EarningsCalculator scenarios={scenarios} volumes={volumes24h(data)} solUsd={data.solUsd} />
+        <p className="fee-cta">
+          <span>
+            Launch one from an agent: give it <a href="/skill.md">highwire.fun/skill.md</a>, or start from an agent that already
+            spends its fees.
+          </span>
+          <a className="button" href="/ideas">
+            See the ideas
+          </a>
+        </p>
+      </section>
+
+      <section id="coins" className="fee-block" aria-labelledby="coins-title">
+        <Head id="coins" title="Every coin">
+          All {t.coins.toLocaleString("en-US")} of higher.fun's coins. Search, sort, and open one for its fees line by line.
+        </Head>
         <FeeTable rows={rows} />
       </section>
 
-      <section className="fee-section prose" aria-labelledby="method">
-        <h2 id="method">How it's worked out</h2>
-        <ul>
+      <section id="method" className="fee-block" aria-labelledby="method-title">
+        <Head id="method" title="How it's worked out">
+          Every rate is read from the chain, not assumed.
+        </Head>
+        <ul className="fee-method">
           <li>
-            <strong>On the curve, measured.</strong> Raydium's {rate.curve.rewards.raydium}% LaunchLab fee is counted in each
-            coin's curve account and never resets, so it gives the coin's exact curve volume. higher.fun's platform fee and
-            the creator fee are fixed multiples of it ({rate.curve.rewards.platform}% and {rate.curve.rewards.creator}% for
-            New school, nothing for Old school).
+            <h3>On the curve, measured</h3>
+            <p>
+              Raydium's {rate.curve.rewards.raydium}% LaunchLab fee is counted in each coin's curve account and never resets,
+              so it gives the coin's exact curve volume. higher.fun's platform fee and the creator fee are fixed multiples of
+              it ({rate.curve.rewards.platform}% and {rate.curve.rewards.creator}% for New school, nothing for Old school).
+            </p>
           </li>
           <li>
-            <strong>In the pool, computed.</strong> A graduated coin's pool volume is its lifetime volume from higher.fun's
-            daily candles, less its curve volume. The pool charges {rate.pool.trade}% per trade ({rate.pool.raydiumShareOfTrade}% of
-            that to Raydium, the rest to liquidity) and a {rate.pool.creator}% creator fee on the SOL side, of which Raydium
-            keeps {rate.pool.raydiumShareOfCreator}%. Every rate is read from the chain, not assumed.
+            <h3>In the pool, computed</h3>
+            <p>
+              A graduated coin's pool volume is its lifetime volume from higher.fun's daily candles, less its curve volume.
+              The pool charges {rate.pool.trade}% per trade ({rate.pool.raydiumShareOfTrade}% of that to Raydium, the rest to
+              liquidity) and a {rate.pool.creator}% creator fee on the SOL side, of which Raydium keeps{" "}
+              {rate.pool.raydiumShareOfCreator}%.
+            </p>
           </li>
           <li>
-            <strong>Locked liquidity.</strong> At graduation a New school coin's pool locks about 30% of its liquidity, with
-            the Fee Key held by higher.fun, which pays creators a third of what it earns off-chain. That share of the LP fees
-            is read from the lock; the rest of the liquidity is burned, and its fees stay in the pool.
+            <h3>Locked liquidity</h3>
+            <p>
+              At graduation a New school coin's pool locks about 30% of its liquidity, with the Fee Key held by higher.fun,
+              which pays creators a third of what it earns off-chain. That share of the LP fees is read from the lock; the rest
+              of the liquidity is burned, and its fees stay in the pool.
+            </p>
           </li>
           <li>
-            <strong>Holder airdrops.</strong> On New school coins, higher.fun passes {HOLDER_AIRDROPS.platformBps / 100}% of
-            each trade, out of its platform fee, to the coin's holders as SOL, through an airdrop wallet per coin; a creator
-            can give their fees to holders too. What holders got is what each wallet has paid out (from higher.fun's API) and
-            what's waiting in it (on-chain), taken out of higher.fun's share, or the creator's when they gave theirs.
+            <h3>Holder airdrops</h3>
+            <p>
+              On New school coins, higher.fun passes {HOLDER_AIRDROPS.platformBps / 100}% of each trade, out of its platform
+              fee, to the coin's holders as SOL, through an airdrop wallet per coin; a creator can give their fees to holders
+              too. What holders got is what each wallet has paid out (from higher.fun's API) and what's waiting in it
+              (on-chain).
+            </p>
           </li>
           <li>
-            <strong>The last 24 hours, estimated.</strong> higher.fun's 24-hour volume for each coin, which counts curve and
-            pool trades alike, priced at the rates of the phase the coin trades in now. A coin that graduated during the day
-            is priced at pool rates throughout.
+            <h3>The last 24 hours, estimated</h3>
+            <p>
+              higher.fun's 24-hour volume for each coin, which counts curve and pool trades alike, priced at the rates of the
+              phase the coin trades in now. A coin that graduated during the day is priced at pool rates throughout.
+            </p>
           </li>
           <li>
-            <strong>Creators.</strong> A creator is the wallet each coin's curve names as its creator: the one that launched
-            it, or the one it was launched for. Earned is every creator line above, claimed or not.
+            <h3>Creators</h3>
+            <p>
+              A creator is the wallet each coin's curve names as its creator: the one that launched it, or the one it was
+              launched for. Earned is every creator line, claimed or not.
+            </p>
           </li>
           <li>
-            <strong>Not counted:</strong> launch fees (about {sol(t.launchFeesSol)} SOL at today's 0.02 SOL each), higher.fun's
-            1% of supply from graduated Old school coins, and network fees.
+            <h3>Not counted</h3>
+            <p>
+              Launch fees (about {sol(t.launchFeesSol)} SOL at today's 0.02 SOL each), higher.fun's 1% of supply from
+              graduated Old school coins, and network fees.
+            </p>
+          </li>
+          <li>
+            <h3>For agents</h3>
+            <p>
+              The same numbers through Highwire's MCP: <a href="/docs#get_ecosystem_fees">get_ecosystem_fees</a>,{" "}
+              <a href="/docs#get_coin_fees">get_coin_fees</a> and <a href="/docs#get_creator_fees">get_creator_fees</a>.
+            </p>
           </li>
         </ul>
         <p className="muted small">
           Last read {updatedAt(data.generatedAt)}. Highwire isn't affiliated with higher.fun; these are our reading of public
-          on-chain data, not higher.fun's accounts.
+          on-chain data, not higher.fun's accounts. Coin names are written by their creators.
           {data.warnings.length ? ` ${data.warnings.join(" ")}` : ""}
         </p>
-        <p className="muted small">
-          Agents can read the same numbers through Highwire's MCP: <a href="/docs#get_ecosystem_fees">get_ecosystem_fees</a>,{" "}
-          <a href="/docs#get_coin_fees">get_coin_fees</a> and <a href="/docs#get_creator_fees">get_creator_fees</a>.
-        </p>
       </section>
-    </>
+    </div>
+  );
+}
+
+/** Two halves of the same whole, as one bar and two figures. */
+function Pair({ title, a, b, total }: { title: string; a: { label: string; sol: number; sub: string }; b: { label: string; sol: number; sub: string }; total: number }) {
+  const share = total > 0 ? (a.sol / total) * 100 : 50;
+  return (
+    <div className="fee-panel fee-pair">
+      <h3 className="fee-panel-title">{title}</h3>
+      <div className="fee-pair-bar" role="img" aria-label={`${a.label} ${pctOf(a.sol, total)}, ${b.label} ${pctOf(b.sol, total)}`}>
+        <span style={{ width: `${share}%` }} />
+        <span style={{ width: `${100 - share}%` }} />
+      </div>
+      <div className="fee-pair-sides">
+        {[a, b].map((x, i) => (
+          <div key={x.label}>
+            <span className="fee-tile-label">
+              <i className={i === 0 ? "fee-pair-a" : "fee-pair-b"} aria-hidden="true" />
+              {x.label} · {pctOf(x.sol, total)}
+            </span>
+            <span className="fee-pair-n">{sol(x.sol)} SOL</span>
+            <span className="fee-tile-sub">{x.sub}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

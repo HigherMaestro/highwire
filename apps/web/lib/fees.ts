@@ -25,11 +25,19 @@ function sources() {
   return { chain, api };
 }
 
+// `next dev` renders on every request, and a full read on each one trips the public RPC's rate limit. In dev only, keep
+// the last good read for as long as the deployed page would.
+const devCache = globalThis as { __highwireFees?: { at: number; data: EcosystemFees } };
+
 /** Every higher.fun coin's fees, or null when the chain or the API couldn't be read while building. */
 export const allFees = cache(async (): Promise<EcosystemFees | null> => {
   try {
+    const kept = devCache.__highwireFees;
+    if (process.env.NODE_ENV === "development" && kept && Date.now() - kept.at < 600_000) return kept.data;
     const { chain, api } = sources();
-    return await ecosystemFees(chain, api);
+    const data = await ecosystemFees(chain, api);
+    if (process.env.NODE_ENV === "development") devCache.__highwireFees = { at: Date.now(), data };
+    return data;
   } catch (err) {
     return failed("the ecosystem", err, null);
   }
@@ -89,6 +97,24 @@ export function topCreators(data: EcosystemFees, n = 10): CreatorRow[] {
     .sort((a, b) => b.earnedSol - a.earnedSol)
     .slice(0, n)
     .map(({ bestSol: _, ...r }) => r);
+}
+
+export interface TodayRow {
+  mint: string;
+  ticker: string | null;
+  name: string | null;
+  feesSol: number;
+  volumeSol: number;
+  byRecipient: Record<Recipient, number>;
+}
+
+/** The coins that paid the most fees in the last 24 hours (estimated), highest first. */
+export function topToday(data: EcosystemFees, n = 6): TodayRow[] {
+  return data.coins
+    .filter((c) => (c.last24h?.feesSol ?? 0) > 0)
+    .sort((a, b) => b.last24h!.feesSol - a.last24h!.feesSol)
+    .slice(0, n)
+    .map((c) => ({ mint: c.mint, ...coinLabel(c), feesSol: c.last24h!.feesSol, volumeSol: c.last24h!.volumeSol, byRecipient: c.last24h!.byRecipient }));
 }
 
 /** The 24-hour volumes of the coins that traded, for the calculator's sense of scale. */

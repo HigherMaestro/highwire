@@ -25,10 +25,10 @@ export function EarningsCalculator({ scenarios, volumes, solUsd }: { scenarios: 
   const creator = at("creator");
   const holders = at("holders");
   const all = (volume * s.totalPct) / 100;
-  const dollars = (n: number) => (solUsd ? ` ($${(n * solUsd).toLocaleString("en-US", { maximumFractionDigits: n * solUsd >= 100 ? 0 : 2 })})` : "");
+  const usdOf = (n: number) => (solUsd ? `$${(n * solUsd).toLocaleString("en-US", { maximumFractionDigits: n * solUsd >= 100 ? 0 : 2 })}` : null);
+  const dollars = (n: number) => (solUsd ? ` (${usdOf(n)})` : "");
   const busier = volumes.filter((v) => v >= volume).length;
   const rows: [string, string][] = [
-    ["To the creator", `${fmt(creator)} SOL a day${dollars(creator)}`],
     ["Over 30 days", `${fmt(creator * 30)} SOL${dollars(creator * 30)}`],
     ["To holders, as airdrops", holders > 0 ? `${fmt(holders)} SOL a day` : "none in this mode"],
     [`All fees, ${s.totalPct}% of each trade`, `${fmt(all)} SOL a day`],
@@ -66,14 +66,24 @@ export function EarningsCalculator({ scenarios, volumes, solUsd }: { scenarios: 
           </p>
         </div>
       </div>
-      <dl className="calc-out" aria-live="polite">
-        {rows.map(([k, v]) => (
-          <div key={k}>
-            <dt>{k}</dt>
-            <dd>{v}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className="calc-result" aria-live="polite">
+        <p className="calc-hero">
+          <span className="calc-hero-label">To the creator</span>
+          <span className="calc-hero-n">
+            {fmt(creator)}
+            <small> SOL a day</small>
+          </span>
+          <span className="muted">{solUsd ? `about ${usdOf(creator)} a day` : "\u00a0"}</span>
+        </p>
+        <dl className="calc-out">
+          {rows.map(([k, v]) => (
+            <div key={k}>
+              <dt>{k}</dt>
+              <dd>{v}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
       <p className="muted small calc-note">
         The on-chain rates, as in the diagram above.{" "}
         {mode === "classic" && phase === "curve"
