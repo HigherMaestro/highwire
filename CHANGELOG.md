@@ -4,6 +4,9 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **A calmer site on phones.** The header is one pinned row: the logo, the theme switch and a menu the links drop down
+  from. The fee pages' figures sit in a two-column grid, and their tables become compact cards, label on the left and
+  value on the right.
 - **/fees shows the last 24 hours, and creators.** Every coin's fees in the last 24 hours, estimated from higher.fun's
   24-hour volume at the rates of the phase it trades in now, as totals, a column and a sort. A top-creators table ranks
   creator wallets by what their coins have paid them, and a calculator works out what a coin earns its creator at a

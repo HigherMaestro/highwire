@@ -1,6 +1,16 @@
 import { REPO_URL, SITE_URL, X_HANDLE, X_URL } from "../lib/site.ts";
 import { Lockup } from "./Mark.tsx";
+import { MobileMenu, type NavLink } from "./MobileMenu.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
+
+const LINKS: NavLink[] = [
+  { href: "/#connect", label: "Connect" },
+  { href: "/docs", label: "Docs" },
+  { href: "/ideas", label: "Ideas" },
+  { href: "/fees", label: "Fees" },
+  { href: REPO_URL, label: "GitHub" },
+  { href: X_URL, label: "X", ariaLabel: `Highwire on X (${X_HANDLE})` },
+];
 
 export function SiteHeader() {
   return (
@@ -10,31 +20,19 @@ export function SiteHeader() {
           <Lockup id="hdr" />
         </a>
         <div className="header-right">
-          <nav aria-label="Main">
+          <nav aria-label="Main" className="nav-wide">
             <ul className="nav">
-              <li>
-                <a href="/#connect">Connect</a>
-              </li>
-              <li>
-                <a href="/docs">Docs</a>
-              </li>
-              <li>
-                <a href="/ideas">Ideas</a>
-              </li>
-              <li>
-                <a href="/fees">Fees</a>
-              </li>
-              <li>
-                <a href={REPO_URL}>GitHub</a>
-              </li>
-              <li>
-                <a href={X_URL} aria-label={`Highwire on X (${X_HANDLE})`}>
-                  X
-                </a>
-              </li>
+              {LINKS.map((l) => (
+                <li key={l.href}>
+                  <a href={l.href} aria-label={l.ariaLabel}>
+                    {l.label}
+                  </a>
+                </li>
+              ))}
             </ul>
           </nav>
           <ThemeToggle />
+          <MobileMenu links={LINKS} />
         </div>
       </div>
     </header>

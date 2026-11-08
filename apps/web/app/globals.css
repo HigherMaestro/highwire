@@ -1696,12 +1696,45 @@ summary:focus-visible,
   color: var(--bad);
 }
 
+/* On phones each row is a compact card: the first cell is its title, the rest are label-left, value-right lines. */
 @media (max-width: 640px) {
-  .params.fees .num {
-    text-align: left;
+  .params.fees td {
+    text-align: right;
+    padding: 3px 0;
   }
-  .fee-stats li {
+  .params.fees td::before {
+    float: left;
+    margin: 0 16px 0 0;
+    line-height: inherit;
+  }
+  .params.fees td::after {
+    content: "";
+    display: block;
+    clear: both;
+  }
+  .params.fees td:first-child {
+    text-align: left;
+    padding-bottom: 6px;
+  }
+  .params.fees td:first-child::before {
+    display: none;
+  }
+  .fees-page .stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 16px;
+  }
+  .fees-page .stats li {
     min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .fees-page .stat-n {
+    font-size: 24px;
+  }
+  .fees-page .stat-label {
+    font-size: 14px;
+    line-height: 1.35;
   }
 }
 
@@ -2582,10 +2615,110 @@ a.card:hover,
   }
 }
 
-/* On phones the nav wraps onto a second row, too tall to pin. */
+/* On phones the header is one row: the logo, the theme switch as an icon, and a menu the links drop down from. */
+.mobile-menu {
+  display: none;
+}
+
+.menu-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg);
+  font: 500 15px var(--font-display);
+  cursor: pointer;
+}
+
+.menu-button[aria-expanded="true"] {
+  background: var(--surface-alt);
+}
+
+.menu-button:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 2px;
+}
+
+.menu-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 24px 40px -24px rgba(0, 0, 0, 0.6);
+}
+
+.menu-panel[hidden] {
+  display: none;
+}
+
+.menu-panel ul {
+  list-style: none;
+  margin: 0 auto;
+  padding: 8px 16px 16px;
+  max-width: 1160px;
+}
+
+.menu-panel a {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 8px;
+  border-radius: 10px;
+  color: var(--fg);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 18px;
+}
+
+.menu-panel li + li a {
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.menu-panel a:hover {
+  background: var(--surface-alt);
+}
+
 @media (max-width: 760px) {
+  .header-row {
+    flex-wrap: nowrap;
+    min-height: 64px;
+  }
+  .header-row .lockup-word {
+    font-size: 22px;
+  }
+  .header-row .mark {
+    width: 32px;
+    height: 32px;
+  }
+  html {
+    scroll-padding-top: 72px;
+  }
   .site-header {
-    position: static;
+    background: var(--bg);
+  }
+  .nav-wide {
+    display: none;
+  }
+  .mobile-menu {
+    display: block;
+  }
+  .header-right {
+    flex-wrap: nowrap;
+  }
+  .theme-toggle {
+    width: 44px;
+    justify-content: center;
+    padding: 0;
+  }
+  .theme-toggle span {
+    display: none;
   }
 }
 
@@ -2805,9 +2938,11 @@ a.card:hover,
   border-bottom-color: #1F5FA8;
 }
 
+/* Under the phone header, which is 64px and a hairline. */
 @media (max-width: 760px) {
   .section-nav {
-    top: 0;
+    top: 65px;
+    background: var(--bg);
   }
 }
 
