@@ -116,7 +116,7 @@ test("the checker allows only the Highwire memo, once", () => {
   assertSafe(tx(highwireMemo()), "mainnet", { wallet });
   const other = new TransactionInstruction({ programId: new PublicKey(MEMO_PROGRAM_ID), keys: [], data: Buffer.from("claim your airdrop") });
   assert.throws(() => assertSafe(tx(other), "mainnet", { wallet }), /memo other than Highwire's/);
-  assert.throws(() => assertSafe(tx(highwireMemo(), highwireMemo()), "mainnet", { wallet }), /more than one memo/);
+  assert.throws(() => assertSafe(tx(highwireMemo(), highwireMemo()), "mainnet", { wallet }), /more than one Highwire memo/);
 });
 
 test("the review passes recorded builds and rebuilds their summaries from the bytes", async () => {

@@ -116,11 +116,17 @@ export const GRADUATED_POOL = {
 export const LAUNCH_FEE_CAP_LAMPORTS = 50_000_000n;
 /** Priority fee: the 75th percentile of recent fees on the accounts touched, clamped to this range. */
 export const PRIORITY_FEE_MICRO_LAMPORTS = { min: 50_000, max: 2_000_000 } as const;
-export const COMPUTE_UNITS = { create: 600_000, curveTrade: 300_000, poolSwap: 300_000, claim: 200_000, transfer: 60_000 } as const;
+export const COMPUTE_UNITS = { create: 600_000, curveTrade: 300_000, poolSwap: 300_000, claim: 200_000, transfer: 60_000, register: 30_000 } as const;
 
 /** SPL Memo v2. Every transaction Highwire builds carries one memo with HIGHWIRE_MEMO, so its transactions can be counted on-chain. */
 export const MEMO_PROGRAM_ID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 export const HIGHWIRE_MEMO = "highwire";
+/**
+ * The registration memo (docs/x-posting.md 5): the wallet proves to Highwire's relay that it holds the wallet by sending
+ * a code the local signer asked for. Only the local signer builds it, for a code it requested; the sign page refuses it.
+ */
+export const AGENT_MEMO_PREFIX = "highwire agent ";
+export const AGENT_CODE = /^[a-z2-7]{16}$/;
 
 /** Highwire's one wallet: donations, and the trade fee. Anything else claiming to collect for Highwire isn't us. */
 export const HIGHWIRE_WALLET = "7LnP9W1BcRhGRtUgSweGbGndaKaRmQxKVtCEHTeW7Rce";

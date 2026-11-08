@@ -51,5 +51,8 @@
     "highwire-core": "0.13.1",
     "zod": "4.6.7"
   },
-  "mcpName": "fun.highwire/highwire"
+  "mcpName": "fun.highwire/highwire",
+  "devDependencies": {
+    "highwire-relay": "0.13.1"
+  }
 }

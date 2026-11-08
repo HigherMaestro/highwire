@@ -117,8 +117,9 @@ const KIND_TITLE: Record<Envelope["kind"], string> = {
   trade: "Review a trade",
   launch: "Review a coin launch",
   claim: "Review a creator fee claim",
-  // Never shown: decoding refuses transfer links.
+  // Never shown: decoding refuses transfer and registration links.
   transfer: "Transfers aren't signed here",
+  register: "Registrations aren't signed here",
 };
 
 /** `env` with the given transactions taken from `fresh`. */

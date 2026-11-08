@@ -2,6 +2,8 @@ import { Buffer } from "buffer";
 import { PublicKey, TransactionMessage, type AddressLookupTableAccount, type VersionedTransaction } from "@solana/web3.js";
 import {
   ADDRESSES,
+  AGENT_CODE,
+  AGENT_MEMO_PREFIX,
   COMPUTE_UNITS,
   HIGHWIRE_FEE_BPS,
   HIGHWIRE_MEMO,
@@ -58,6 +60,18 @@ export const feeLine = (lamports: bigint) => `Pay Highwire's ${HIGHWIRE_FEE_BPS 
 export const MEMO_LINE = `Tags the transaction as built by Highwire (memo "${HIGHWIRE_MEMO}")`;
 
 const isHighwireMemo = (ix: { keys: unknown[]; data: Buffer }) => ix.keys.length === 0 && ix.data.toString("utf8") === HIGHWIRE_MEMO;
+
+/** The registration memo's code, when this memo is one ("highwire agent <16 base32 letters>", no accounts), else null. */
+export function agentMemoCode(ix: { keys: unknown[]; data: Buffer }): string | null {
+  if (ix.keys.length !== 0) return null;
+  const text = ix.data.toString("utf8");
+  if (!text.startsWith(AGENT_MEMO_PREFIX)) return null;
+  const code = text.slice(AGENT_MEMO_PREFIX.length);
+  return AGENT_CODE.test(code) ? code : null;
+}
+
+/** The plain-language line for a registration memo. */
+export const agentMemoLine = (code: string) => `Registers this wallet with Highwire's relay (memo "${AGENT_MEMO_PREFIX}${code}"); it moves no funds`;
 
 const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
 
@@ -265,7 +279,9 @@ export function describeTransaction(
       } else unknown("CPMM instruction");
     } else if (program === PROGRAMS.memo) {
       // Never echo another memo's text: on the signing page it would be a stranger's words in Highwire's voice.
+      const agent = agentMemoCode(ix);
       if (isHighwireMemo(ix)) known(MEMO_LINE);
+      else if (agent) known(agentMemoLine(agent));
       else out.instructions.push({ program, text: "UNKNOWN memo (not the Highwire memo)", known: false });
     } else unknown("instruction");
   }
@@ -325,6 +341,12 @@ export interface Expectations {
    * instruction may carry that key: build tools and sign links never tip.
    */
   jitoTip?: { maxLamports: bigint };
+  /**
+   * A registration: exactly one memo "highwire agent <code>" with this code, besides the Highwire memo. Only the local
+   * signer's registration sets it, for a code it requested itself; without it, no such memo is allowed (so the sign
+   * page, which never sets it, refuses one).
+   */
+  agentCode?: string;
 }
 
 /**
@@ -374,6 +396,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
   let highwireFees = 0;
   let fundings = 0;
   let memos = 0;
+  let agentMemos = 0;
   let transfers = 0;
   let tips = 0;
   const send = exp.transfer;
@@ -525,14 +548,18 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
         if (!ownAta(8, 6, 10) || !ownAta(9, 7, 11)) fail(`instruction ${i + 1}: creator fee collect into an account that isn't the wallet's`);
       } else fail(`instruction ${i + 1}: a CPMM instruction Highwire does not build`);
     } else if (p === PROGRAMS.memo) {
-      if (!isHighwireMemo(ix)) fail(`instruction ${i + 1}: a memo other than Highwire's`);
-      if (++memos > 1) fail(`instruction ${i + 1}: more than one memo`);
+      if (isHighwireMemo(ix)) {
+        if (++memos > 1) fail(`instruction ${i + 1}: more than one Highwire memo`);
+      } else if (exp.agentCode !== undefined && agentMemoCode(ix) === exp.agentCode) {
+        if (++agentMemos > 1) fail(`instruction ${i + 1}: more than one registration memo`);
+      } else fail(`instruction ${i + 1}: a memo other than Highwire's`);
     } else fail(`instruction ${i + 1} calls a program outside the allow-list: ${p}`);
   });
   if (exp.launchFee && feeTransfers !== 1) fail("the launch fee must be paid exactly once");
   if (send && transfers !== 1) fail("the transfer must happen exactly once");
   if (exp.highwireFee?.lamports !== undefined && exp.highwireFee.lamports > 0n && highwireFees !== 1) fail("Highwire's trade fee must be paid exactly once");
   if (exp.jitoTip && tips !== 1) fail("a protected send must tip exactly once");
+  if (exp.agentCode !== undefined && agentMemos !== 1) fail("a registration must carry its memo exactly once");
 }
 
 /** Default compute limits, re-exported for the builders. */

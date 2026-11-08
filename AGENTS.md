@@ -15,7 +15,11 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `packages/core/src/lib/` | HTTP client with retries, and the error classes |
 | `packages/core/src/solana/rpc.ts` | the few RPC reads we need, over fetch |
 | `packages/core/src/risk.ts` | `evaluateRisk`, the rug-check verdict |
-| `packages/core/src/arena/` | the arena's game (docs/arena.md, phase 1): `rules.ts` (pure rules, fallbacks, the clock), `solve.ts` (the exact solution), `house.ts` (*Even* and *Reader*, seeded). `npm run arena:sim` (`packages/core/scripts/arena-sim.ts`) plays them against simple and model-like players |
+| `packages/core/src/arena/` | the arena's game (docs/arena.md): `rules.ts` (pure rules, fallbacks, the clock), `solve.ts` (the exact solution), `house.ts` (*Even* and *Reader*, seeded), `glicko.ts`, `guide.ts`. Exported as `highwire-core/arena`, which may reach nothing but `@noble/hashes` (a test checks). `npm run arena:sim` plays the house against simple and model-like players |
+| `packages/core/src/higher/post-text.ts` | the rules for agent-written text: `checkPostText` (higher.fun posts) and `checkTableTalk` (the arena) |
+| `packages/core/src/tx/register.ts` | `buildAgentRegistration`: the relay's registration memo, for the local signer only |
+| `packages/relay/` | `highwire-relay` (private, unpublished): agent registration and the arena's referee behind one fetch handler (`createRelay`), over a compare-and-set `Store` (`MemoryStore` in tests). `src/testing.ts` holds fakes shared with the MCP package's tests. Not deployed yet (docs/arena.md 12.1) |
+| `packages/mcp/src/tools/arena.ts` | the arena's tools, off unless `HIGHWIRE_ARENA=1`; the play tools need the local signer |
 | `packages/core/src/tx/` | quotes and unsigned transactions: `chain.ts` (web3.js and Raydium's SDK behind one fetch), `quote.ts`, `trade.ts`, `launch.ts` (also `DerivedLaunchKeys`), `claim.ts`, `positions.ts`, `decode.ts` (plain-language decoding and the safety checks), `envelope.ts` (the memo, simulation, `finish()`), `format.ts` (the envelope types), `sign-link.ts` (sign URLs), `review.ts` (the sign page's checks), `refresh.ts` (blockhash refresh for wallet-only transactions) |
 | `packages/core/src/tx/fees.ts` | `ecosystemFees`: every higher.fun coin's fees by recipient and phase, for /fees. Curve lines are measured, pool lines computed from volume at on-chain rates, and holder airdrops measured from each coin's airdrop wallet. `dailyFees` and `sumDailyFees`: fees day by day from a coin's daily candles at its rates |
 | `packages/core/src/tx/pnl.ts` | `coinPnl`, `txEffect`, `applyEvents`: a wallet's profit and loss on a coin, from its own token accounts' history on-chain (average cost; trades paid in another token valued by their pool's SOL leg) |
@@ -107,6 +111,13 @@ Streamable HTTP. An npm workspaces monorepo. Read
   `JitoClient`; the rehearsal replaces the block engine with a simulation, and nothing may ever call the real one's send.
 - **Transfers** go only through the local signer, to the policy's allowlist. The sign page refuses them: a sign link
   can come from anyone.
+- **Registrations** (the relay's `highwire agent <code>` memo) go only through the local signer, inside a live policy
+  whose actions include `"register"`, for a code the signer itself requested. `assertSafe` allows the memo only with
+  that exact code expected, so the sign page refuses it, and sign links refuse the `register` kind. The arena token
+  stays in `agent.json`: never in a tool argument, result or log.
+- **The arena isn't public:** its tools stay behind `HIGHWIRE_ARENA=1` until the decisions in docs/arena.md 13 are made.
+  The referee never sends anything about an open round's other side: views come only from `view.ts`, and the tests
+  compare them with and without a pending move.
 - **Never** accept private keys or seed phrases through tool arguments. Never commit keys, `.env` files or keypairs.
 - **Packages:** `highwire-core` knows nothing about MCP; anything MCP-specific goes in `highwire-mcp`. Import across
   packages by name (`from "highwire-core"`), never by relative path.

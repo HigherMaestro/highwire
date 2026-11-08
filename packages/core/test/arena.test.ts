@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
+  checkTableTalk,
+  conservative,
+  rate,
+  START,
   chargeClock,
   DUELS_1,
   fallbackPull,
@@ -225,4 +230,52 @@ test("Reader beats players that pull a fixed amount or outbid its last pull", ()
     }
     assert.ok(net / 100 > 0.7, `${name}: ${net / 100}`);
   }
+});
+
+// ---------------------------------------------------------------- ratings, table talk, the entry point
+
+test("Glicko-2 matches the worked example in Glickman's paper", () => {
+  const after = rate({ r: 1500, rd: 200, vol: 0.06 }, [
+    { opponent: { r: 1400, rd: 30, vol: 0.06 }, score: 1 },
+    { opponent: { r: 1550, rd: 100, vol: 0.06 }, score: 0 },
+    { opponent: { r: 1700, rd: 300, vol: 0.06 }, score: 0 },
+  ]);
+  assert.ok(Math.abs(after.r - 1464.06) < 0.05, `${after.r}`);
+  assert.ok(Math.abs(after.rd - 151.52) < 0.05, `${after.rd}`);
+  assert.ok(Math.abs(after.vol - 0.05999) < 0.00002, `${after.vol}`);
+  // No games: only the deviation grows, up to 350.
+  assert.ok(rate({ r: 1500, rd: 50, vol: 0.06 }, []).rd > 50);
+  assert.equal(rate(START, []).rd, 350);
+  // A quarter-weight win moves a new fighter about a quarter as far as a full one.
+  const full = rate(START, [{ opponent: { r: 1500, rd: 60, vol: 0.06 }, score: 1 }]).r - 1500;
+  const quarter = rate(START, [{ opponent: { r: 1500, rd: 60, vol: 0.06 }, score: 1, weight: 0.25 }]).r - 1500;
+  assert.ok(quarter > 0 && quarter < full * 0.5, `${quarter} vs ${full}`);
+  assert.equal(conservative({ r: 1600, rd: 50, vol: 0.06 }), 1500);
+});
+
+test("table talk: plain lines up to 140 characters, no links, addresses, mentions or hidden text", () => {
+  assert.equal(checkTableTalk("  saving my energy, see you in round 12  "), "saving my energy, see you in round 12");
+  assert.equal(checkTableTalk(""), "", "saying nothing is fine");
+  for (const bad of ["x".repeat(141), "go to claim.lol now", "gm @someone", "send to 7j6tyzmUbb7K1J178ciwuvrTEd6VnK6fwan7tycM6g1Q", "hi\u200bthere", "site dot com"]) {
+    assert.throws(() => checkTableTalk(bad), /Table talk|line/, bad);
+  }
+  assert.equal(checkTableTalk("email me? no. 0.5 energy left, e.g. nothing"), "email me? no. 0.5 energy left, e.g. nothing");
+});
+
+test("highwire-core/arena reaches no Node built-in, web3.js or Raydium's SDK", () => {
+  const seen = new Set<string>();
+  const outside: string[] = [];
+  const visit = (url: URL) => {
+    if (seen.has(url.href)) return;
+    seen.add(url.href);
+    const src = readFileSync(url, "utf8");
+    for (const m of src.matchAll(/^\s*(?:import|export)\s[^;]*?from\s+"([^"]+)"/gms)) {
+      const spec = m[1]!;
+      if (spec.startsWith(".")) visit(new URL(spec, url));
+      else if (!spec.startsWith("@noble/hashes/")) outside.push(`${url.pathname.split("/src/")[1]}: ${spec}`);
+    }
+  };
+  visit(new URL("../src/arena/index.ts", import.meta.url));
+  assert.deepEqual(outside, []);
+  assert.ok(seen.size >= 7);
 });

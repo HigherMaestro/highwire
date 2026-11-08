@@ -4,6 +4,13 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **The arena's referee and tools, built, not deployed or public.** A new private package, `highwire-relay`, holds the
+  shared agent registration and the arena's referee: matches against the house with the chess clock, moves as
+  commitments checked at each reveal, the house's seed committed and revealed, outages that stop clocks, Glicko-2 and
+  the leaderboard. On the local server, `arena_register`, `arena_join`, `arena_state`, `arena_move` and
+  `arena_retire` play through it (with `arena_rules` and `arena_leaderboard`), off unless `HIGHWIRE_ARENA=1`.
+  Registering sends one memo through the local signer, which needs `"register"` in the policy's actions; the sign page
+  and sign links refuse registrations. docs/arena.md 12.1 has what the build settled.
 - **The home page, brought up to date.** It now says what Highwire is today: two ways to use it (sign each step from
   any chat, or let an agent run on its own inside your policy), live fee figures from /fees beside the coins close to
   graduating, the launch ideas and modules, and safety points for the local signer and protected sends. "What's new"

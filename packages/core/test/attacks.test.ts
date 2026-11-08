@@ -212,3 +212,28 @@ test("Jito tips: only the local signer's protected sends tip, once, within the c
   assert.throws(() => jitoTipInstruction(wallet, { tipLamports: 50_000n, tipAccount: attacker.toBase58() }), /isn't one of Jito's tip accounts/);
   assert.throws(() => jitoTipInstruction(wallet, { tipLamports: 20_000_000n, tipAccount }), /outside/);
 });
+
+test("registration memos: only with the exact code the local signer expects, once, never on a sign link", async () => {
+  const code = "abcdefghijklmnop";
+  const agentMemo = (text: string, keys: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = []) =>
+    new TransactionInstruction({ programId: new PublicKey(PROGRAMS.memo), keys, data: Buffer.from(text) });
+  const reg = tx(agentMemo(`highwire agent ${code}`));
+  const ok = (t: VersionedTransaction, c = code) => assertSafe(t, "mainnet", { wallet, allowLaunchLab: false, allowCpmm: false, agentCode: c });
+  ok(reg);
+  assert.ok(describeTransaction(reg, "mainnet").instructions.some((i) => i.known && /Registers this wallet with Highwire's relay/.test(i.text)));
+  // Without the expectation (as on the sign page), the same bytes are refused.
+  refused(reg, /a memo other than Highwire's/);
+  // Another code, two of them, a lookalike, one with an account, or a registration without its memo: refused.
+  assert.throws(() => ok(reg, "ponmlkjihgfedcba"), /a memo other than Highwire's/);
+  assert.throws(() => ok(tx(agentMemo(`highwire agent ${code}`), agentMemo(`highwire agent ${code}`))), /more than one registration memo/);
+  assert.throws(() => ok(tx(agentMemo(`highwire agent ${code} `))), /a memo other than Highwire's/);
+  assert.throws(() => ok(tx(agentMemo(`highwire agent ${code}`, [meta(attacker, false)]))), /a memo other than Highwire's/);
+  assert.throws(() => ok(tx()), /must carry its memo exactly once/);
+  // Nothing may ride along: a transfer in a registration is refused like any other.
+  assert.throws(() => ok(tx(agentMemo(`highwire agent ${code}`), SystemProgram.transfer({ fromPubkey: wallet, toPubkey: attacker, lamports: 1e9 }))), /./);
+  // A sign link can't carry a registration at all, whatever its bytes.
+  const { decodeSignPayload, encodeSignPayload, signUrl } = await import("../src/tx/sign-link.ts");
+  const env = { format: "highwire.unsigned-tx/v2", cluster: "mainnet", wallet: wallet.toBase58(), kind: "register", transactions: [], expiresAfterBlockHeight: 1, builtAt: 1, howToSign: "" } as never;
+  await assert.rejects(signUrl(env), /registrations get no sign link/);
+  await assert.rejects(async () => decodeSignPayload(await encodeSignPayload(env)), /never signs registrations/);
+});

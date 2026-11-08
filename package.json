@@ -5,6 +5,7 @@
   "license": "MIT",
   "workspaces": [
     "packages/core",
+    "packages/relay",
     "packages/agent",
     "packages/mcp",
     "apps/web"

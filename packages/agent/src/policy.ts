@@ -6,11 +6,11 @@ import { CLUSTERS, HigherError, MAX_SLIPPAGE_BPS, solToLamports, type Cluster } 
 // on their machine that no tool can write, so an agent (or text an agent read)
 // can't widen it. Read fresh on every execute, so an edit applies at once.
 
-export const ACTIONS = ["trade", "launch", "claim", "transfer"] as const;
+export const ACTIONS = ["trade", "launch", "claim", "transfer", "register"] as const;
 export type Action = (typeof ACTIONS)[number];
 
 /** "launches", "trades": for refusals. */
-export const plural = (action: Action) => (action === "launch" ? "launches" : `${action}s`);
+export const plural = (action: Action) => (action === "launch" ? "launches" : action === "register" ? "registrations" : `${action}s`);
 
 const address = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, "must be a base58 Solana address");
 

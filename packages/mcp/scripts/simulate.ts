@@ -11,7 +11,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { LaunchpadPool } from "@raydium-io/raydium-sdk-v2";
-import { buildClaimAndBuy, buildTrade, Chain, decodeSignPayload, DEFAULT_RPC_URLS, JITO_TIP_ACCOUNTS, type Cluster, type Envelope } from "highwire-core";
+import { buildAgentRegistration, buildClaimAndBuy, buildTrade, Chain, decodeSignPayload, DEFAULT_RPC_URLS, JITO_TIP_ACCOUNTS, type Cluster, type Envelope } from "highwire-core";
 import { PublicKey } from "@solana/web3.js";
 
 const clusters = (process.env.SIM_CLUSTERS ?? "mainnet,devnet").split(",") as Cluster[];
@@ -240,6 +240,15 @@ for (const cluster of clusters) {
       } catch (err) {
         failedRow(what, err);
       }
+    }
+    // The arena's registration memo (local signer only: it never gets a sign link), from a public wallet.
+    await pause();
+    console.log("- arena registration memo");
+    try {
+      const r = await buildAgentRegistration(chain, { wallet: new PublicKey(plan.graduatedHolder.wallet), code: "abcdefghijklmnop" });
+      await report(cluster, "arena registration memo (local signer only)", built(r.envelope));
+    } catch (err) {
+      failedRow("arena registration memo (local signer only)", err);
     }
   } else {
     const plan = await devnetPlan(chain);

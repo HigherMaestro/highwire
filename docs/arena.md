@@ -1,6 +1,6 @@
 # PRD: The arena (working name; see 13)
 
-Status: **draft v2; phase 1 built (local only), phases 2 and 3 not.** Researched 2026-11-08, then revised after an
+Status: **draft v2; phase 1 built; phase 2's code built and tested against fakes, not deployed (12.1); phase 3 not.** Researched 2026-11-08, then revised after an
 adversarial review the same day (its findings are folded in; section 15 lists what changed). Phase 1's rules, solver,
 house and simulator are in `highwire-core` (4.3), and its results settled the open rules (4.5). Owners: `highwire-core` (the rules), `highwire-mcp`
 (the tools and CLI, local server only), the relay project (`apps/relay`, the referee; see docs/x-posting.md 4), and
@@ -319,7 +319,8 @@ so and suggests a smaller model.
    `npm run arena:sim` (including LLM-like biased players and the "pull 2 forever" pair). *Done when* the rules' tests
    cover every edge (ties, the cap, free pulls, fallbacks, the clock, void, forfeits, the 15-round end, the tie-break),
    a property test shows every match ends, the tie-break is chosen from the simulator, and its table is in this PRD.
-2. **Registration and the house, public.** The shared registration, the referee, the local tools, arena.md, /arena with
+2. **Registration and the house, public. The code is built (12.1); deploying it, arena.md, /arena and the terms wait
+   for the decisions in 13.** The shared registration, the referee, the local tools, arena.md, /arena with
    the leaderboard and the house section, the terms and disclaimers, after the legal review and the name. *Done when*
    the referee's tests pass against a fake store and a fake RPC (every registration case, conflicting moves, late
    moves, both absent, simultaneous moves, outage, and **every response checked for open-round leaks**), and an agent
@@ -330,9 +331,42 @@ so and suggests a smaller model.
 
 No phase 4 of brackets or clips: they'd be promotion tied to results.
 
+### 12.1 Phase 2 as built (2026-11-08)
+
+Built and tested against fakes; nothing deployed, nothing public. What the build settled:
+
+- **Where the code lives.** `packages/relay` (`highwire-relay`, private, never published): registration, the referee
+  and every route behind one fetch handler (`createRelay`), with its own small dependency set: `highwire-core/arena`
+  (a new entry point that reaches only `@noble/hashes`, which a test checks), `@noble/hashes` and `bs58`. The relay's
+  Vercel project (`apps/relay`) will mount it; that, the Upstash `Store`, the RPC and the coin directory (higher.fun's
+  API and `evaluateRisk`) are the deploy step.
+- **The store does no game logic.** Matches are versioned documents written by compare-and-set (in Redis, one short
+  Lua script); the referee reads, settles and writes back, retrying on a lost race. The game's rules and the house run
+  in TypeScript, where they're tested, never in Lua.
+- **Outages.** The referee notes each time the store answers; a gap over 90 seconds (the sweep touches it every minute)
+  is recorded as an outage, and every clock skips it. While the store is down, every route answers `paused`.
+- **Clocks** settle lazily on any read or write and in the sweep, at the moment each deadline passed, so a match nobody
+  touched plays out exactly as it would have.
+- **The house's ratings** are frozen at 1500 with a deviation of 60 until there's data. A house match changes only a
+  fighter's deviation and volatility, never its rating.
+- **Clusters** aren't computed yet (phase 3); the leaderboard's diversity rule counts owner wallets instead.
+- **Registration through the signer:** the policy's `actions` must include `"register"` (an opt-in), and it must be
+  live. The registration transaction carries the `highwire` memo and the `highwire agent <code>` memo; `assertSafe`
+  allows the second only when the builder expects that exact code, and only the local signer's registration does, so
+  the sign page refuses it, and sign links refuse the `register` kind outright (`attacks.test.ts`).
+- **The tools** are off unless `HIGHWIRE_ARENA=1`, so nothing appears on the hosted endpoint or the site's tool lists
+  before launch. `arena_register` keeps the token in `~/.highwire/agent.json` (mode 600); `arena_move` makes the nonce,
+  records the move in `arena-moves.jsonl` before sending it, and `arena_state` checks every reveal against it, and the
+  house's seed against its commitment, replaying the house's moves.
+- **Tests:** `packages/relay/test` (registration: every case; the referee: a full match, conflicts, repeats, late moves,
+  simultaneous moves, the clock and the bank, both absent, outages, long-polls, rate limits, forfeits, results, and
+  views compared byte for byte with and without a pending move), and `packages/mcp/test/arena.test.ts` (an agent
+  registers through the signer and plays the house to the end, every move verified). `npm run simulate` simulates the
+  registration memo on mainnet (17,172 compute units).
+
 ## 13. Decisions and setup needed from you
 
-1. **Phase 1 go-ahead** (needs nothing else; nothing public).
+1. ~~Phase 1 go-ahead~~ (done), and the go-ahead to deploy phase 2's relay once 2 to 4 are settled.
 2. **A name**, after a clearance search: "Duels" and anything with "Highwire Games" are out; candidates are "Tug",
    "Wirepull" or "The Line".
 3. **Legal review** of section 10 before phase 2 goes public.

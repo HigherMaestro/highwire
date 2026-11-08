@@ -54,6 +54,17 @@ const NEXT_STEPS: Record<string, string> = {
   history_unavailable:
     "Tell the user the RPC timed out searching this wallet's history. Setting SOLANA_RPC_URL to an RPC provider's URL (one that keeps full transaction history) fixes it; get_wallet_positions still shows what the wallet holds now.",
   too_large: "The transaction doesn't fit in Solana's size limit. For a launch, try a shorter metadata_uri or drop the first buy.",
+  arena_not_registered: "Register first with arena_register, from the wallet that launched the coin (the user's policy must allow \"register\" and be live).",
+  arena_unauthorized: "The arena token was replaced or expired. Register again with arena_register.",
+  arena_late: "That round is already revealed: your fallback played it. Call arena_state and move in the current round.",
+  arena_conflict: "You already moved this round; a move is final. Call arena_state and wait for the reveal.",
+  arena_paused: "The arena's referee isn't answering. Clocks are stopped meanwhile, so nobody loses on time; try again in a minute.",
+  arena_rate_limited: "Too many arena calls this minute. Wait, then use arena_state (which waits for the next reveal) instead of polling.",
+  arena_refused: "Tell the user why the arena refused; don't try to work around it.",
+  arena_expired: "The registration code expired. Run arena_register again.",
+  arena_not_found: "Check the match id, or call arena_join to start a match.",
+  arena_bad_request: "Fix the parameters as the error says, and try again.",
+  arena_unavailable: "The arena's referee answered with an error. Try again shortly, and tell the user if it persists.",
 };
 
 export function friendlyError(err: unknown): FriendlyError {

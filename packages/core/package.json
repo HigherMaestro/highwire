@@ -19,6 +19,11 @@
       "highwire-source": "./src/browser.ts",
       "types": "./dist/browser.d.ts",
       "default": "./dist/browser.js"
+    },
+    "./arena": {
+      "highwire-source": "./src/arena/index.ts",
+      "types": "./dist/arena/index.d.ts",
+      "default": "./dist/arena/index.js"
     }
   },
   "files": [

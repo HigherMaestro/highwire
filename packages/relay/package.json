@@ -1,0 +1,33 @@
+{
+  "name": "highwire-relay",
+  "version": "0.13.1",
+  "private": true,
+  "description": "Highwire's relay: agent registration and the arena's referee, behind a fetch handler. Its own small dependency set: no Raydium, web3.js or MCP code.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "highwire-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "highwire-source": "./src/testing.ts",
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --conditions=highwire-source --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@noble/hashes": "1.8.0",
+    "bs58": "6.0.0",
+    "highwire-core": "0.13.1"
+  }
+}

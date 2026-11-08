@@ -88,6 +88,7 @@ export function siteOrigin(siteUrl: string = DEFAULT_SITE_URL): string {
  */
 export async function signUrl(env: Envelope, siteUrl: string = DEFAULT_SITE_URL): Promise<string> {
   if (env.kind === "transfer") throw new Error("transfers to other wallets get no sign link");
+  if (env.kind === "register") throw new Error("registrations get no sign link: only the local signer sends them");
   const base = `${siteOrigin(siteUrl)}${SIGN_PATH}#`;
   const plain = await encodeSignPayload(env);
   if (base.length + plain.length <= SIGN_URL_GZIP_THRESHOLD) return base + plain;
@@ -166,6 +167,9 @@ export function parseEnvelope(v: unknown): Envelope {
   // Transfers to other wallets are only ever signed by the user's local signer, inside their allowlist: a sign link
   // anyone can send is no place for one.
   if (e.kind === "transfer") bad("this page never signs transfers to other wallets");
+  // Registrations prove to Highwire's relay that the local signer holds the wallet; signing a stranger's would hand
+  // them the wallet's agent identity.
+  if (e.kind === "register") bad("this page never signs registrations");
   if (!["trade", "launch", "claim"].includes(e.kind as string)) bad("unknown kind");
   const wallet = addr(e.wallet, "wallet");
   const txs = list(e.transactions, "transactions", (t) => t, MAX_ENVELOPE_TRANSACTIONS);

@@ -9,6 +9,7 @@ export * from "./pnl.ts";
 export * from "./positions.ts";
 export * from "./quote.ts";
 export * from "./refresh.ts";
+export * from "./register.ts";
 export * from "./review.ts";
 export * from "./sign-link.ts";
 export * from "./trade.ts";

@@ -53,7 +53,7 @@ export function rpcUrlEnv(env: Env, name = "SOLANA_RPC_URL", warn: (msg: string)
 
 /**
  * Server options from HIGHER_API_URL, SOLANA_RPC_URL, HIGHWIRE_CLUSTER, HIGHWIRE_MAX_SOL_PER_TX, HIGHER_TIMEOUT_MS,
- * HIGHER_RETRIES, HIGHWIRE_SITE_URL and HIGHWIRE_LAUNCH_SECRET.
+ * HIGHER_RETRIES, HIGHWIRE_SITE_URL, HIGHWIRE_LAUNCH_SECRET, HIGHWIRE_ARENA and HIGHWIRE_RELAY_URL.
  */
 export function serverOptionsFromEnv(env: Env = process.env): ServerOptions {
   const maxSol = numberEnv(env, "HIGHWIRE_MAX_SOL_PER_TX");
@@ -67,5 +67,8 @@ export function serverOptionsFromEnv(env: Env = process.env): ServerOptions {
     retries: numberEnv(env, "HIGHER_RETRIES"),
     siteUrl: urlEnv(env, "HIGHWIRE_SITE_URL"),
     launchKeySecret: env.HIGHWIRE_LAUNCH_SECRET || undefined,
+    // The arena isn't public yet: its tools are off unless this is set.
+    arena: env.HIGHWIRE_ARENA === "1",
+    relayUrl: urlEnv(env, "HIGHWIRE_RELAY_URL"),
   };
 }

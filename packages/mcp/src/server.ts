@@ -25,6 +25,7 @@ import { platformInfo, registerPlatformTools } from "./tools/platform.ts";
 import { registerProfileTools } from "./tools/profiles.ts";
 import { registerSafetyTools } from "./tools/safety.ts";
 import { registerLocalTools } from "./tools/execute.ts";
+import { registerArenaTools } from "./tools/arena.ts";
 import { registerTransactionTools } from "./tools/transactions.ts";
 import type { Deps, ExecutionSigner } from "./tools/shared.ts";
 
@@ -108,7 +109,13 @@ export interface ServerOptions {
   fetch?: typeof globalThis.fetch;
   /** Opens the live feed's socket. Default the built-in WebSocket; tests pass a fake. */
   liveSocket?: LiveSocketFactory;
+  /** The arena's tools (docs/arena.md 6). Off by default until the arena is public; HIGHWIRE_ARENA=1 turns them on. */
+  arena?: boolean;
+  /** Highwire's relay. Default https://relay.highwire.fun; HIGHWIRE_RELAY_URL for a local one. */
+  relayUrl?: string;
 }
+
+export const DEFAULT_RELAY_URL = "https://relay.highwire.fun";
 
 export const DEFAULT_MAX_SOL_PER_TX = 10;
 
@@ -137,6 +144,8 @@ export function createDeps(opts: ServerOptions = {}): Deps {
     ...(opts.launchKeySecret ? { attestationSeed: attestationSeed(opts.launchKeySecret) } : {}),
     signer: opts.signer,
     newSession: () => new HigherSession(opts.apiUrl ?? DEFAULT_API_URL, opts.fetch ?? globalThis.fetch),
+    relayUrl: (opts.relayUrl ?? DEFAULT_RELAY_URL).replace(/\/+$/, ""),
+    fetch: opts.fetch ?? ((input, init) => globalThis.fetch(input, init)),
   };
 }
 
@@ -155,6 +164,8 @@ export function createServer(opts: ServerOptions = {}): McpServer {
     registerTransactionTools(server, deps);
     if (!opts.hosted) registerLocalTools(server, deps);
   }
+  // The play tools need the local signer, which the hosted endpoint never has; there only the rules and leaderboard.
+  if (opts.arena) registerArenaTools(server, deps);
   registerPrompts(server);
 
   server.registerResource(

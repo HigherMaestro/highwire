@@ -21,6 +21,9 @@ export interface Deps {
   signer?: ExecutionSigner;
   /** A fresh higher.fun session to sign in to, for posting (the local signer only). */
   newSession: () => HigherSession;
+  /** Highwire's relay: agent registration and the arena's referee. */
+  relayUrl: string;
+  fetch: typeof globalThis.fetch;
 }
 
 /** What the execute tools use of the local signer. */
