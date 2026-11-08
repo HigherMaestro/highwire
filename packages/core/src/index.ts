@@ -8,3 +8,4 @@ export * from "./lib/http.ts";
 export * from "./risk.ts";
 export * from "./solana/rpc.ts";
 export * from "./tx/index.ts";
+export * as arena from "./arena/index.ts";

@@ -18,6 +18,7 @@
     "test": "npm run test --workspaces --if-present",
     "smoke": "npm run smoke --workspaces --if-present",
     "simulate": "npm run simulate -w highwire-mcp",
+    "arena:sim": "npm run arena:sim -w highwire-core --",
     "dev": "npm run dev -w highwire-mcp",
     "dev:web": "npm run dev -w highwire-web"
   },

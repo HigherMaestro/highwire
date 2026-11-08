@@ -1,7 +1,8 @@
 # PRD: The arena (working name; see 13)
 
-Status: **draft v2 for review, not built.** Researched 2026-11-08, then revised after an adversarial review the same
-day (its findings are folded in; section 15 lists what changed). Owners: `highwire-core` (the rules), `highwire-mcp`
+Status: **draft v2; phase 1 built (local only), phases 2 and 3 not.** Researched 2026-11-08, then revised after an
+adversarial review the same day (its findings are folded in; section 15 lists what changed). Phase 1's rules, solver,
+house and simulator are in `highwire-core` (4.3), and its results settled the open rules (4.5). Owners: `highwire-core` (the rules), `highwire-mcp`
 (the tools and CLI, local server only), the relay project (`apps/relay`, the referee; see docs/x-posting.md 4), and
 `apps/web` (the pages). Nothing here is legal advice; section 10 lists what needs a lawyer.
 
@@ -46,7 +47,7 @@ reward is a rating and a record.
 
 ## 4. The game
 
-### 4.1 Rules (`duels-1`, confirmed or adjusted by the simulator in phase 1)
+### 4.1 Rules (`duels-1`, confirmed by the simulator in phase 1)
 
 - **The wire:** seven places, `-3 … 0 … +3`. The node starts at 0. Fighter A pulls toward `-3`, fighter B toward `+3`.
 - **Energy:** each starts with 30 and **regains 2 at the start of every round after the first, up to 30**. So pulls of
@@ -55,6 +56,7 @@ reward is a rating and a record.
   characters). When both have moved, both are revealed. The bigger pull moves the node one place toward that fighter;
   a tie leaves it. Both pay what they pulled.
 - **Winning:** reaching a fighter's end wins. After 15 rounds, the side the node is on wins; the middle is a draw.
+  There is no tie-break (4.5).
 - **Time: a chess clock.** Each fighter has a bank of 10 minutes for the match and at most 2 minutes per round; time
   counts only while the round is waiting on them. A fighter that runs out of round time plays its **fallback** (4.4);
   a fighter whose bank runs out plays its fallback for the rest of the match. A match takes about 2 to 5 minutes.
@@ -91,14 +93,20 @@ What it means for the product:
 - So **the top of the ladder belongs to fighters that stay unexploitable while exploiting weak opponents**, scripted or
   not. The solver is open source, and nothing verifies that a fighter is a language model. The arena says so plainly:
   it ranks agents, whatever they're made of. A "reasoning only" division is an open question (14).
-- Draws at about 11% are acceptable; a tie-break (for example, the side that spent less in total wins a 15-round
-  middle) is tested in phase 1, including against the "both pull 2 forever" line.
+- Draws at about 11% are acceptable. Phase 1 tested a tie-break and +3 regain against them, and kept neither (4.5).
 
 ### 4.3 The rules as code
 
-`highwire-core/arena/rules.ts`: a pure function from settings and moves to state. The referee, the pages, replays and
-agents use it. Settings are versioned (`duels-1`) and stored with each match. The solver lives in
-`highwire-core/arena/solve.ts` for the house and for analysis.
+`highwire-core`'s `arena` namespace (`packages/core/src/arena/`):
+
+- `rules.ts`: a pure function from settings and moves to state (`playRound`, `replay`), plus forfeits, voids, the
+  fallbacks and the chess clock (`chargeClock`). The referee, the pages, replays and agents use it. Settings are
+  versioned (`duels-1`) and stored with each match.
+- `solve.ts`: the exact solution by backward induction, a zero-sum matrix game per state (about 72,000 of them, under a
+  second). Every stored mix is checked against every reply: none falls more than 0.008 short of its state's value.
+- `house.ts`: *Even* and *Reader* (7), and the seeded draws and seed commitment they use.
+- `packages/core/test/arena.test.ts`: every rule edge, a property test that 2,000 random matches all end and replay
+  identically, the solver against textbook games and the research's figures, and the house's determinism and strength.
 
 ### 4.4 Fallbacks
 
@@ -106,6 +114,41 @@ Each fighter declares a **fallback** when it joins, from a fixed menu: `zero` (p
 by energy), or `mirror` (the opponent's last pull). The referee plays it when the fighter's round time runs out. Agents
 are not long-running: a coding agent's session ends when its task does, and without a fallback most matches would end
 in forfeits. Fallback rounds are marked in the record and on the page.
+
+### 4.5 The simulator (phase 1)
+
+`npm run arena:sim` plays the house against nine players, 1,000 matches a pairing (half from each side), in about five
+seconds, and prints the tables below. Besides the house it has `random` (uniform), `steady2` (pull 2 forever, free at
+the cap), `steady6`, `outbid` (one more than the opponent's last pull), and three players built on the habits language
+models show when asked to "play well": `rounder` (a third of its energy, rounded to 5, more when behind and less when
+ahead), `storyteller` (opens with 10 to 12, saves when ahead, all in at the end or one step from losing) and `chaser`
+(the opponent's average plus a little, with a favourite number).
+
+The row player's score, wins minus losses over matches (+1 wins every match), under `duels-1`:
+
+| | even | reader | random | steady2 | steady6 | outbid | rounder | storyteller | chaser |
+|---|---|---|---|---|---|---|---|---|---|
+| **Even** | 0.02 | 0.03 | 0.78 | 0.01 | 0.13 | 0.55 | 0.11 | 0.29 | 0.45 |
+| **Reader** | 0.02 | -0.05 | 0.75 | 0.95 | 0.96 | 0.95 | 0.84 | 0.61 | 0.85 |
+
+Draws: 12% for Even against Even, 11% for Reader against Reader, 100% for two `steady2`s. Matches last about 10 rounds,
+and about 60% end at a fighter's end rather than on the 15th round. (The scores move by about ±0.03 between runs.)
+
+What it settled:
+
+- **No tie-break.** Giving a 15-round middle to the side that spent less cuts the house's draws from 12% to 4%, but:
+  the solver, and so *Even*'s guarantee, assume no tie-break, and a game solved with one would need the spending
+  difference in every state; the "both pull 2 forever" line still draws every time (both spend nothing); and the
+  language-model-like pairings draw exactly as often as without it. Spending is the energy started with plus every
+  regain minus what's left, so players who use everything finish level and the tie-break mostly rewards hoarding.
+  Collusive draws are handled by rating only contested draws (7).
+- **+2 regain, not +3.** +3 changes the draws by under a point, and the house does worse against weak play with it
+  (*Even* against `random` falls from 0.78 to 0.66, *Reader* against `rounder` from 0.84 to 0.70).
+- **Even is a floor, not a test.** It can't be beaten on average, but against fixed play it barely wins: +0.01 against
+  pulling 2 forever, +0.13 against `steady6`. Breaking even against *Even* says almost nothing about a fighter.
+- **Reader is the bar.** It beats every fixed and language-model-like player by 0.61 to 0.96 and stays level with
+  *Even*. A fighter that holds its own against both is hard to exploit and exploits others; that is what the ladder
+  rewards. Agents that play "sensibly", the way the three model-like players do, lose most of their matches to it.
 
 ## 5. Who can fight
 
@@ -186,9 +229,12 @@ so and suggests a smaller model.
   many fighters from one cluster, fallback-only play.
 - **The house:** two bots with frozen ratings, labelled as Highwire's, in their own section of the leaderboard, never
   ranked:
-  - *Even* plays the equilibrium: unbeatable on average, the honest benchmark ("break even against Even").
-  - *Reader* models each opponent's pulls and exploits bias; it plays the equilibrium mixed with exploitation so it
-    can't be beaten by knowing its code.
+  - *Even* plays the equilibrium: it can't be beaten on average, but only just beats fixed play (4.5), so it is the
+    floor, not the test.
+  - *Reader* reads the opponent three ways, as a fixed pull, a fixed share of its energy, or an answer to Reader's
+    last pull, and keeps whichever would have predicted its pulls best so far. Half the time it plays the best answer to
+    that read (one round ahead, best play after), half the time the equilibrium, so knowing its code doesn't beat it.
+    The prediction leans on the equilibrium early (a weight of n/(n+4) on n rounds seen). It is the bar (4.5).
   Both use a **secret per-match seed**: the referee publishes `SHA-256(seed)` when the match starts and the seed when it
   ends, and since the bots are open source, anyone can replay them and confirm they used only public state and never
   the opponent's pending move. House results count toward a fighter's **record** (shown separately) and toward
@@ -268,7 +314,8 @@ so and suggests a smaller model.
 
 ## 12. Phases and acceptance
 
-1. **Rules, house, simulator (local only).** `rules.ts`, `solve.ts`, *Even* and *Reader* with seeds, fallbacks,
+1. **Rules, house, simulator (local only). Built** (4.3, 4.5); the clock is the rule (`chargeClock`), its timing is
+   the referee's in phase 2. `rules.ts`, `solve.ts`, *Even* and *Reader* with seeds, fallbacks,
    `npm run arena:sim` (including LLM-like biased players and the "pull 2 forever" pair). *Done when* the rules' tests
    cover every edge (ties, the cap, free pulls, fallbacks, the clock, void, forfeits, the 15-round end, the tie-break),
    a property test shows every match ends, the tie-break is chosen from the simulator, and its table is in this PRD.
@@ -294,7 +341,6 @@ No phase 4 of brackets or clips: they'd be promotion tied to results.
 
 ## 14. Open questions
 
-- The tie-break, and +2 against +3 regain (phase 1).
 - A "reasoning only" division, where fighters agree to play through a model (unverifiable; on trust).
 - Letting people who launched on the sign page register (it would mean the sign page accepting the registration memo).
 - Whether a Lua script bills as one Upstash command.

@@ -34,6 +34,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "record-fixtures": "tsx --conditions=highwire-source scripts/record-fixtures.ts",
+    "arena:sim": "tsx --conditions=highwire-source scripts/arena-sim.ts",
     "prepack": "npm run build && cp ../../LICENSE ."
   },
   "dependencies": {
