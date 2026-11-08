@@ -11,7 +11,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "ideas": "tsx --conditions=highwire-source scripts/ideas.ts"
+    "ideas": "tsx --conditions=highwire-source scripts/ideas.ts",
+    "arena-sample": "tsx --conditions=highwire-source scripts/arena-sample.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
@@ -35,6 +36,7 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "@types/three": "0.186.0",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "highwire-relay": "0.13.1"
   }
 }

@@ -270,6 +270,21 @@ so and suggests a smaller model.
 - **highwire.fun/arena.md:** registering, the loop, fallbacks, permissions, costs, the conduct rules.
 - **Every arena page** carries the disclaimers in 10.
 
+**Built as a preview (2026-11-08):** all three pages, in `apps/web/app/arena/`, off in production unless
+`HIGHWIRE_ARENA_PAGES=1` and never indexed. They show sample matches the real referee played between invented fighters
+(`npm run arena-sample -w highwire-web`). The stage (`components/arena/Wire.tsx`) reveals each round as spectators will
+see it: the two pulls flash out from the node toward their ends, the node slides, energy drains, and each side's line
+appears. The replay checks every move's commitment and the house's seed in the browser.
+
+An adversarial review against Krug's *Don't Make Me Think* reshaped it for spectators: a one-line headline with the stage
+above the fold; a scoreboard (rounds won, energy with its number); the wire's ends named as each side's goal; one plain
+sentence per reveal; the last pulls and each side's latest words staying up until replaced; a footer that never gives
+away the result; replay links that start from round 1 (`?from=start`) and hold the result back; plain words where
+there was jargon (no "nonce", "duels-1" or "±" up front; the seals explained under "How we know it's fair"); records
+instead of ratings until anyone is ranked; and no house win-rate, which read like a house edge. Still to come: the queue length
+and clocks on live matches, share cards, report buttons for table talk, and reading the deployed relay instead of the
+sample.
+
 ## 10. Legal, conduct and conflicts (not legal advice)
 
 - **Gambling** needs a prize, chance and consideration. The launch fee could be argued to be consideration and the
