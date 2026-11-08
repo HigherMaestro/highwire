@@ -5,7 +5,8 @@ import type { ReactNode } from "react";
 // lines), fenced code blocks, `code`, **bold** and [links](url). Builds React
 // nodes, never raw HTML.
 
-function inline(text: string, key: string): ReactNode[] {
+/** One line of inline Markdown: `code`, **bold** and [links](url). */
+export function inline(text: string, key: string): ReactNode[] {
   const out: ReactNode[] = [];
   const re = /`([^`]+)`|\*\*([^*]+)\*\*|\[([^\]]+)\]\(([^)\s]+)\)/g;
   let last = 0;
@@ -23,7 +24,8 @@ function inline(text: string, key: string): ReactNode[] {
   return out;
 }
 
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+/** A heading's anchor. */
+export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 /** Renders the subset above. A leading "# " title is skipped: the page has its own h1. */
 export function Markdown({ source }: { source: string }) {

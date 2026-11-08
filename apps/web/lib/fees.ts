@@ -44,6 +44,40 @@ export const allFees = cache(async (): Promise<EcosystemFees | null> => {
   }
 });
 
+/** The few figures the home page shows. */
+export interface FeeSummary {
+  feesSol: number;
+  solUsd: number | null;
+  last24hSol: number;
+  creatorsSol: number;
+  coins: number;
+  graduated: number;
+  readAt: string;
+}
+
+/**
+ * The home page's figures, kept for 10 minutes like the fee pages: the home page regenerates every minute, and must not
+ * read the whole chain each time. Null when the read failed while building; a failed refresh keeps the last good figures.
+ */
+export const feeSummary = unstable_cache(
+  async (): Promise<FeeSummary | null> => {
+    const d = await allFees();
+    if (!d) return null;
+    const t = d.totals;
+    return {
+      feesSol: t.feesSol,
+      solUsd: d.solUsd,
+      last24hSol: t.last24h.feesSol,
+      creatorsSol: t.byRecipient.creator,
+      coins: t.coins,
+      graduated: t.graduated,
+      readAt: d.generatedAt,
+    };
+  },
+  ["fee-summary-v1"],
+  { revalidate: 600 },
+);
+
 /** One coin's fees; null when it isn't a higher.fun coin, undefined when it couldn't be read while building. */
 export const coinFees = cache(async (mint: string): Promise<EcosystemFees | null | undefined> => {
   try {

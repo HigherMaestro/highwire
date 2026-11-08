@@ -4106,3 +4106,257 @@ a.card:hover,
 .not-found .lead code {
   font-size: 0.85em;
 }
+
+/* ---------------------------------------------------------------- the home page's sections */
+
+.hero-live .fee-hero-facts {
+  margin-top: 28px;
+}
+
+.hero-fact-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.hero-fact-link:hover,
+.hero-fact-link:focus-visible {
+  border-color: var(--signal);
+}
+
+/* Two ways to use it: two cards side by side, the local one with the wire along its top. */
+.ways {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.way {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 24px 60px -40px rgba(0, 0, 0, 0.7);
+}
+
+:root[data-theme="light"] .way {
+  box-shadow: 0 18px 40px -32px rgba(14, 17, 22, 0.25);
+}
+
+.way-local::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--wire);
+}
+
+.way h3 {
+  margin: 0;
+  font-size: clamp(22px, 2.2vw, 28px);
+  letter-spacing: -0.02em;
+}
+
+.way p {
+  margin: 0;
+}
+
+.way-tag,
+.idea-link-meta,
+.release-date {
+  font-family: var(--font-code);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.way-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.way-points li {
+  position: relative;
+  padding-left: 22px;
+}
+
+.way-points li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 10px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--signal);
+}
+
+:root[data-theme="light"] .way-points li::before {
+  background: #1F5FA8;
+}
+
+.way-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+/* Live on higher.fun. */
+.live-fresh {
+  margin: 14px 0 0;
+}
+
+.live-sub {
+  margin: 48px 0 6px;
+  font-size: 20px;
+}
+
+.live-sub + .muted {
+  margin: 0 0 20px;
+}
+
+/* What's new: one card a release. */
+.releases {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.release {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  text-decoration: none;
+  transition: border-color 0.2s ease;
+}
+
+.release:hover,
+.release:focus-visible {
+  border-color: var(--signal);
+}
+
+.release-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.release-v {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.release-titles {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.release-go {
+  margin-top: auto;
+  font-size: 14px;
+  color: var(--link);
+}
+
+/* Ideas to launch: one row an idea. */
+.idea-rows {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.idea-rows a {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr) auto;
+  gap: 8px 32px;
+  align-items: baseline;
+  padding: 20px 4px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+}
+
+.idea-rows a:hover,
+.idea-rows a:focus-visible {
+  background: var(--surface);
+}
+
+.idea-row-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.idea-row-name strong {
+  font-family: var(--font-display);
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+
+.idea-row-go {
+  color: var(--link);
+  transition: transform 0.2s ease;
+}
+
+.idea-rows a:hover .idea-row-go {
+  transform: translateX(4px);
+}
+
+@media (max-width: 860px) {
+  .ways,
+  .releases {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .way {
+    padding: 22px;
+  }
+
+  .idea-rows a {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .idea-row-go {
+    display: none;
+  }
+}
+
+/* Six coins, and six safety points, sit in two rows of three. */
+@media (min-width: 861px) {
+  #live .coins,
+  #safety .points {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

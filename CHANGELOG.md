@@ -4,6 +4,10 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **The home page, brought up to date.** It now says what Highwire is today: two ways to use it (sign each step from
+  any chat, or let an agent run on its own inside your policy), live fee figures from /fees beside the coins close to
+  graduating, the launch ideas and modules, and safety points for the local signer and protected sends. "What's new"
+  is read from this changelog when the site builds, so it can't fall behind again, and replaces the old roadmap.
 - **The arena's game, in `highwire-core` (local only, nothing public yet).** `arena` exports the rules of `duels-1` as
   pure functions (rounds, replays, forfeits, voids, fallbacks, the chess clock), the game solved exactly, and the
   house's two bots: *Even* plays the equilibrium, and *Reader* reads an opponent as a fixed pull, a fixed share or an
