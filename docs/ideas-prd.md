@@ -166,7 +166,7 @@ ideas/
 
 ## Modules
 
-Added 2026-11-08. Ideas come in two kinds. **Agents** are the whole projects above. **Modules** add one capability to an
+Added 2026-11-07. Ideas come in two kinds. **Agents** are the whole projects above. **Modules** add one capability to an
 agent that already runs, such as buying the dips, posting receipts or a kill switch, and are listed on `/ideas` after
 the agents, each with a page at `/modules/<slug>`.
 
