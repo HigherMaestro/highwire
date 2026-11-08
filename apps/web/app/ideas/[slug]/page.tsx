@@ -8,7 +8,7 @@ import { AmbientWire } from "../../../components/hero/AmbientWire.tsx";
 import { SectionNav } from "../../../components/ideas/SectionNav.tsx";
 import { CopyCommand } from "../../../components/CopyCommand.tsx";
 import { IdeaCalculator, type MarketContext } from "../../../components/ideas/IdeaCalculator.tsx";
-import { agentPrompt, assemble, defaultIdeasDir, deployUrl, fileTree, getIdea, listIdeas, newCommand, readPrd, startCommand } from "../../../lib/ideas.ts";
+import { agentPrompt, assemble, defaultIdeasDir, deployUrl, fileTree, getIdea, listIdeas, modulesFor, newCommand, readPrd, startCommand } from "../../../lib/ideas.ts";
 import { ideaCardFor } from "../../../lib/idea-card.tsx";
 import { Markdown } from "../../../lib/markdown.tsx";
 import { SITE_URL, pageMetadata } from "../../../lib/site.ts";
@@ -95,6 +95,7 @@ export default async function IdeaPage({ params }: Props) {
   const idea = getIdea((await params).slug);
   if (!idea) notFound();
   const all = listIdeas();
+  const modules = modulesFor(idea.slug);
   const index = all.findIndex((i) => i.slug === idea.slug);
   const market = await marketContext();
   const files = [...assemble(idea.slug, { version: VERSION(), siteUrl: SITE_URL }).keys()];
@@ -291,6 +292,19 @@ export default async function IdeaPage({ params }: Props) {
                 </li>
               ))}
             </ol>
+            {modules.length > 0 && (
+              <>
+                <h3 className="idea-other-h">Modules that fit</h3>
+                <p className="muted small">Working code to add once it runs, each with one command.</p>
+                <ul className="plain idea-list">
+                  {modules.map((m) => (
+                    <li key={m.slug}>
+                      <a href={`/modules/${m.slug}`}>{m.title}</a>: {m.oneLiner}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </section>
 
           <section id="faq" className="idea-block" aria-labelledby="faq-title">

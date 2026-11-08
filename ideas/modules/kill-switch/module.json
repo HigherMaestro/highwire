@@ -1,0 +1,38 @@
+{
+  "slug": "kill-switch",
+  "title": "Kill switch",
+  "oneLiner": "Stops your agent the moment something looks wrong: a transaction it didn't send, spending too fast, failing sends, or a drained wallet.",
+  "loop": ["Reads the log", "Checks the chain", "Spots trouble", "Creates STOP"],
+  "uses": ["the audit log", "the STOP file", "the RPC"],
+  "worksWith": ["buyback-coin", "community-treasury", "dip-buyer", "fee-funded-compute", "launch-scout"],
+  "howItWorks": [
+    "On every wake-up of the loop, reads the wallet's balance, Highwire's audit log, and the wallet's own recent transactions on-chain.",
+    "Stops the agent if the wallet signed a transaction Highwire didn't send: the sign that someone else may have the key.",
+    "Stops it too if it spends faster than max_sol_per_hour, sends fail over and over, the policy keeps refusing the agent's own calls, or the balance falls under a floor.",
+    "Stopping means creating the STOP file next to the wallet: Highwire then signs nothing, not a trade, claim, order fill or post.",
+    "It never deletes STOP. The user looks, then deletes it to resume, and the kill switch counts afresh from then."
+  ],
+  "needs": {},
+  "settings": {
+    "file": "kill-switch.json",
+    "notes": {
+      "min_balance_sol": "Stop if the wallet holds less than this. Set it under what the agent keeps on purpose.",
+      "max_sol_per_hour": "Stop if the agent sends more than this in an hour, counted from the audit log.",
+      "max_failed_per_day": "Stop after this many failed sends in a day.",
+      "max_refused_per_hour": "Stop after the policy refuses this many of the agent's own calls in an hour. The order runner's retries don't count.",
+      "foreign_signatures": "Stop if the wallet signed a transaction that isn't in the audit log."
+    }
+  },
+  "scripts": { "test": "tsx --test src/*.test.ts", "kill-switch": "tsx src/kill-switch.ts" },
+  "wire": [
+    "Import checkKillSwitch from ./kill-switch.ts in src/agent.ts.",
+    "Call it first on every wake-up of the loop, inside a try/catch, and log its line when it changes.",
+    "If it returns stopped: true, skip the rest of that wake-up. Highwire would refuse everything anyway; skipping keeps the log quiet."
+  ],
+  "prompt": "Read modules/kill-switch.md, then wire the kill-switch module into src/agent.ts as its \"Wiring it in\" section says. It needs nothing from the policy.",
+  "risks": [
+    "It checks when the loop wakes, every few minutes: it limits damage, it doesn't prevent the first bad transaction. The policy's caps do that.",
+    "If someone else has the key, STOP only stops your agent, not them. Move what's left to a wallet only you control.",
+    "Signing with the same wallet in another app counts as a transaction Highwire didn't send. If that was you, delete STOP."
+  ]
+}

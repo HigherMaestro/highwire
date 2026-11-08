@@ -1,0 +1,9 @@
+{
+  "buy_sol": 0.1,
+  "drop_pct": 15,
+  "keep_sol": 0.1,
+  "cooldown_hours": 12,
+  "reset_rise_pct": 25,
+  "expires_days": 30,
+  "slippage_bps": 500
+}

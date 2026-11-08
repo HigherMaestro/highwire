@@ -164,6 +164,27 @@ ideas/
   temporary `HIGHWIRE_HOME`, with no network sends (the same "verify by simulation only" rule as the rest of
   Highwire).
 
+## Modules
+
+Added 2026-11-08. Ideas come in two kinds. **Agents** are the whole projects above. **Modules** add one capability to an
+agent that already runs, such as buying the dips, posting receipts or a kill switch, and are listed on `/ideas` after
+the agents, each with a page at `/modules/<slug>`.
+
+- **What one is:** `ideas/modules/<slug>/` holds `module.json` (what the page shows: what it does, the agents it fits,
+  what it needs from the policy, its settings, how to wire it in), `MODULE.md` (the spec, with the sections in
+  `MODULE_SECTIONS`) and `files/`, working code and tests copied into the project as they are.
+- **Code, not just a spec.** Unlike an agent's milestones, a module is built and tested here. Its decision is a pure
+  function with unit tests; the rest reads, then acts only through Highwire's command line or tools, inside the policy.
+  It imports only the starter's `src/highwire.ts` and `src/tools.ts` and `highwire-agent`, so it fits any project made
+  from an idea. `npm run ideas -- check` adds each module to an idea it fits, then installs, typechecks and runs its
+  tests.
+- **Adding one:** `highwire add <module>` copies the files and the spec (to `modules/<slug>.md`), adds any
+  `package.json` scripts the project lacks, reads the policy to say what it still needs, and prints the wiring steps
+  and a prompt for the coding agent. It never overwrites a file and never writes the policy. Without the command line,
+  `/modules/<slug>/module.md` has the spec and every file in one page.
+- **Proven first.** A module starts as code running in a real agent (dip buys and the kill switch on the $LGTM agent)
+  before it's generalised here.
+
 ## Pricing
 
 Free in v1. Every project built from an idea launches, trades and claims through Highwire, which earns from the

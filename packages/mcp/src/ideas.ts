@@ -197,3 +197,154 @@ export function assemble(slug: string, opts: { version: string; siteUrl: string;
   }
   return files;
 }
+
+// Modules: one capability to add to an agent that already runs, such as buying the dips or a kill switch. Each is
+// ideas/modules/<slug>/: module.json (what the site shows), MODULE.md (the spec a coding agent follows to wire it in)
+// and files/, working code copied into the project as is by `highwire add <module>`. Module code imports only the
+// starter's own files (src/highwire.ts, src/tools.ts) and Highwire's packages, so it fits any project made from an idea.
+
+export interface ModuleNeeds {
+  /** Policy actions it signs with. */
+  actions?: string[];
+  /** Standing-order kinds it places. */
+  orderKinds?: string[];
+  /** Orders it keeps open at once, beyond the agent's own. */
+  openOrders?: number;
+  /** It posts on the agent's own coin. */
+  posts?: boolean;
+}
+
+export interface Module {
+  slug: string;
+  title: string;
+  oneLiner: string;
+  /** Three or four short steps, for the link preview. */
+  loop: string[];
+  uses: string[];
+  /** The agents (idea slugs) it fits. */
+  worksWith: string[];
+  howItWorks: string[];
+  /** What it needs from the policy; the user adds it. */
+  needs: ModuleNeeds;
+  /** Its settings file, in files/, with one line on each key. */
+  settings: { file: string; notes: Record<string, string> } | null;
+  /** package.json scripts it adds, when the project has none of that name. */
+  scripts: Record<string, string>;
+  /** How to call it from the agent's loop, step by step. */
+  wire: string[];
+  /** What to paste into a coding agent in the project. */
+  prompt: string;
+  risks: string[];
+  /** Where it runs for real today, if anywhere. */
+  liveOn?: string;
+}
+
+/** MODULE.md's sections, in this order. */
+export const MODULE_SECTIONS = ["Summary", "How it works", "Policy", "Settings", "Wiring it in", "Rules", "Done when"];
+
+export const modulesDir = (dir: string) => join(dir, "modules");
+
+export function validateModule(raw: unknown, dirName: string): Module {
+  if (!raw || typeof raw !== "object") throw new Error(`ideas/modules/${dirName}/module.json isn't an object`);
+  const o = raw as Record<string, unknown>;
+  try {
+    const slug = str(o.slug, "slug", 60);
+    if (!SLUG.test(slug) || slug !== dirName) throw new Error("slug must be the folder's name, lowercase words joined by -");
+    const loop = strs(o.loop, "loop", 3);
+    if (loop.length > 4 || loop.some((s) => s.length > LOOP_STEP_MAX)) throw new Error(`loop must be three or four steps of at most ${LOOP_STEP_MAX} characters`);
+    const n = (o.needs ?? {}) as Record<string, unknown>;
+    const needs: ModuleNeeds = {
+      ...(n.actions !== undefined ? { actions: strs(n.actions, "needs.actions") } : {}),
+      ...(n.orderKinds !== undefined ? { orderKinds: strs(n.orderKinds, "needs.orderKinds") } : {}),
+      ...(n.openOrders !== undefined ? { openOrders: Number(n.openOrders) } : {}),
+      ...(n.posts !== undefined ? { posts: n.posts === true } : {}),
+    };
+    if (needs.openOrders !== undefined && (!Number.isInteger(needs.openOrders) || needs.openOrders < 1)) throw new Error("needs.openOrders must be a whole number");
+    const s = o.settings as Record<string, unknown> | null | undefined;
+    const settings = s
+      ? {
+          file: str(s.file, "settings.file", 80),
+          notes: Object.fromEntries(Object.entries((s.notes ?? {}) as Record<string, unknown>).map(([k, v]) => [k, str(v, `settings.notes.${k}`, 300)])),
+        }
+      : null;
+    const scripts = Object.fromEntries(Object.entries((o.scripts ?? {}) as Record<string, unknown>).map(([k, v]) => [k, str(v, `scripts.${k}`, 200)]));
+    return {
+      slug,
+      title: str(o.title, "title", 40),
+      oneLiner: str(o.oneLiner, "oneLiner", 300),
+      loop,
+      uses: strs(o.uses, "uses", 1),
+      worksWith: strs(o.worksWith, "worksWith", 1),
+      howItWorks: strs(o.howItWorks, "howItWorks", 1),
+      needs,
+      settings,
+      scripts,
+      wire: strs(o.wire, "wire", 1),
+      prompt: str(o.prompt, "prompt", 400),
+      risks: strs(o.risks, "risks", 1),
+      ...(o.liveOn !== undefined ? { liveOn: str(o.liveOn, "liveOn", 200) } : {}),
+    };
+  } catch (err) {
+    throw new Error(`ideas/modules/${dirName}/module.json: ${(err as Error).message}`);
+  }
+}
+
+/** Every module, by title. */
+export function listModules(dir: string): Module[] {
+  const root = modulesDir(dir);
+  if (!existsSync(root)) return [];
+  return readdirSync(root)
+    .filter((name) => existsSync(join(root, name, "module.json")))
+    .map((name) => validateModule(JSON.parse(readFileSync(join(root, name, "module.json"), "utf8")), name))
+    .sort((a, b) => a.title.localeCompare(b.title));
+}
+
+export function getModule(slug: string, dir: string): Module | null {
+  return listModules(dir).find((m) => m.slug === slug) ?? null;
+}
+
+export function readModuleSpec(slug: string, dir: string): string {
+  return readFileSync(join(modulesDir(dir), slug, "MODULE.md"), "utf8");
+}
+
+/** Where a module's spec goes in the project, next to its code. */
+export const moduleSpecPath = (slug: string) => `modules/${slug}.md`;
+
+/** The files `highwire add` writes: files/ as is, and the spec at modules/<slug>.md. Paths use /. */
+export function moduleFiles(slug: string, dir: string): Map<string, string> {
+  const base = join(modulesDir(dir), slug, "files");
+  const files = new Map<string, string>();
+  for (const rel of walk(base)) files.set(rel.split("\\").join("/"), readFileSync(join(base, rel), "utf8"));
+  files.set(moduleSpecPath(slug), readModuleSpec(slug, dir));
+  return files;
+}
+
+/** The module as one markdown file, for coding agents without Highwire's command line: the spec, then every file. */
+export function moduleMarkdown(slug: string, dir: string): string {
+  const files = moduleFiles(slug, dir);
+  files.delete(moduleSpecPath(slug));
+  const fence = (path: string) => (path.endsWith(".json") ? "json" : path.endsWith(".ts") ? "ts" : "");
+  const parts = [...files].map(([path, text]) => `### \`${path}\`\n\n\`\`\`\`${fence(path)}\n${text.trimEnd()}\n\`\`\`\`\n`);
+  return `${readModuleSpec(slug, dir).trimEnd()}\n\n## The files\n\nWrite each one at its path in the project, as is. \`npx -y highwire-mcp add ${slug}\` does the same.\n\n${parts.join("\n")}`;
+}
+
+export const moduleUrl = (siteUrl: string, slug: string) => `${siteUrl}/modules/${slug}`;
+
+/**
+ * What a policy still needs for a module, as instructions for the user, or nothing. Reads the policy; never writes it.
+ */
+export function policyGaps(needs: ModuleNeeds, policy: { actions?: string[]; orders?: { kinds?: string[]; max_open?: number }; posts?: unknown }): string[] {
+  const gaps: string[] = [];
+  const missing = (needs.actions ?? []).filter((a) => !(policy.actions ?? []).includes(a));
+  if (missing.length) gaps.push(`add ${missing.map((a) => `"${a}"`).join(", ")} to "actions"`);
+  const kinds = (needs.orderKinds ?? []).filter((k) => !(policy.orders?.kinds ?? []).includes(k));
+  if (kinds.length) {
+    gaps.push(
+      policy.orders
+        ? `add ${kinds.map((k) => `"${k}"`).join(", ")} to "orders" → "kinds"${needs.openOrders ? `, and raise "max_open" by ${needs.openOrders}` : ""}`
+        : `add "orders": { "kinds": [${kinds.map((k) => `"${k}"`).join(", ")}], "max_open": ${needs.openOrders ?? 1} }`,
+    );
+  }
+  if (needs.posts && !policy.posts) gaps.push(`add "posts": { "comments": "own", "chat": false, "max_per_day": 3 }`);
+  return gaps;
+}

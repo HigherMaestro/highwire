@@ -6,7 +6,7 @@ import { TEMPLATE_OWNER, templateRepo, type Idea } from "highwire-mcp/ideas";
 // repositories by scripts/ideas.ts. The loading and assembling live in highwire-mcp (src/ideas.ts), which ships the
 // same folder for `highwire new`; this adds the site's own links. docs/ideas-prd.md is the spec.
 
-export { CALCULATORS, DIFFICULTIES, PRD_SECTIONS, TEMPLATE_OWNER, ideaUrl, templateRepo, validateIdea, type Idea } from "highwire-mcp/ideas";
+export { CALCULATORS, DIFFICULTIES, MODULE_SECTIONS, PRD_SECTIONS, TEMPLATE_OWNER, ideaUrl, moduleSpecPath, moduleUrl, policyGaps, templateRepo, validateIdea, validateModule, type Idea, type Module } from "highwire-mcp/ideas";
 
 /** `next` and the scripts run from apps/web. */
 export const defaultIdeasDir = () => join(/* turbopackIgnore: true */ process.cwd(), "../../ideas");
@@ -14,6 +14,17 @@ export const defaultIdeasDir = () => join(/* turbopackIgnore: true */ process.cw
 export const listIdeas = (dir = defaultIdeasDir()) => shared.listIdeas(dir);
 export const getIdea = (slug: string, dir = defaultIdeasDir()) => shared.getIdea(slug, dir);
 export const readPrd = (slug: string, dir = defaultIdeasDir()) => shared.readPrd(slug, dir);
+export const listModules = (dir = defaultIdeasDir()) => shared.listModules(dir);
+export const getModule = (slug: string, dir = defaultIdeasDir()) => shared.getModule(slug, dir);
+export const readModuleSpec = (slug: string, dir = defaultIdeasDir()) => shared.readModuleSpec(slug, dir);
+export const moduleFiles = (slug: string, dir = defaultIdeasDir()) => shared.moduleFiles(slug, dir);
+export const moduleMarkdown = (slug: string, dir = defaultIdeasDir()) => shared.moduleMarkdown(slug, dir);
+/** The modules that fit an idea. */
+export const modulesFor = (slug: string, dir = defaultIdeasDir()) => shared.listModules(dir).filter((m) => m.worksWith.includes(slug));
+
+/** Adds a module to a project, with Highwire's command line. */
+export const addCommand = (slug: string) => `npx -y highwire-mcp@latest add ${slug}`;
+
 export const assemble = (slug: string, opts: { version: string; siteUrl: string; dir?: string }) =>
   shared.assemble(slug, { ...opts, dir: opts.dir ?? defaultIdeasDir() });
 

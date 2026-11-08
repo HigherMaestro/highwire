@@ -119,6 +119,18 @@ process (its order runner and its own loop), and `npm run service -- install` ke
 the policy going live by itself. Every spec is also at
 `https://highwire.fun/ideas/<idea>/prd.md`.
 
+Modules add one thing to an agent that already runs: dip buys, receipts posted on the coin's page, a kill switch. Each
+is working code and a short spec. In the project:
+
+```bash
+npx -y highwire-mcp@latest add                # list the modules
+npx -y highwire-mcp@latest add kill-switch    # copy it in; it says what to wire in and what the policy needs
+```
+
+Then read `modules/<module>.md` and wire it into `src/agent.ts` as it says. It never overwrites a file or touches the
+policy: if the policy needs more, tell the person exactly what. Without the command line, each module's spec and code
+are at `https://highwire.fun/modules/<module>/module.md`. Every agent that runs live should have the kill switch.
+
 ## Launch with a person
 
 If someone with a Solana wallet is in the chat, add Highwire's hosted MCP server, `https://highwire.fun/mcp`, which

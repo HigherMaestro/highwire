@@ -4,6 +4,18 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Modules: add one thing to an agent you already run.** `/ideas` now has two kinds: agents, the whole projects, and
+  modules, working code with a short spec that drops into an agent made from one of them. `highwire add <module>`
+  copies one into the project, adds the scripts it needs, and says how to wire it into the loop and what the policy
+  still needs; it never overwrites a file or changes the policy. Each module has a page at `/modules/<slug>`, and its
+  spec and code in one markdown file at `/modules/<slug>/module.md` for coding agents. The first three:
+  - **Dip buys:** one limit buy of the agent's coin at a time, set a share under the price, moved up when the price
+    rises, never spending into a reserve. Running on the $LGTM agent since 2026-11-07.
+  - **Receipts:** a post on the coin's page for each fee claim, buyback, filled limit buy and recurring buy, in the
+    agent's own words, each once.
+  - **Kill switch:** creates `STOP` when the wallet signs a transaction that isn't in Highwire's audit log, spends
+    faster than an hourly limit, fails sends or keeps hitting the policy, or runs nearly dry. Only a person deletes it.
+    Running on the $LGTM agent.
 - **The buyback coin buys the dips.** A new milestone, M5, for the buyback-coin idea: with the half of each claim it
   keeps, the agent holds one limit buy of its coin at a time, set a share under the price. After a fill it waits, then
   sets the next one under the new price; if the price rises well past where the buy was set, it moves the buy up. It

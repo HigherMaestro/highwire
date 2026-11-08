@@ -1,0 +1,41 @@
+{
+  "slug": "dip-buys",
+  "title": "Dip buys",
+  "oneLiner": "Buys your agent's coin when it dips, a small fixed amount at a time, with SOL it can spare above a reserve.",
+  "loop": ["Sets one buy", "Waits for a dip", "Fills, cools down", "Follows price up"],
+  "uses": ["limit buys", "the order runner", "quote_trade"],
+  "worksWith": ["buyback-coin", "community-treasury"],
+  "howItWorks": [
+    "Holds one limit buy of the coin at a time: buy_sol of it, once the on-chain price falls drop_pct under the price when the buy was set.",
+    "Highwire's order runner fills it, checking the whole policy, simulating and logging it like any trade.",
+    "After a fill it waits cooldown_hours, then sets the next buy under the price then, so a falling price is bought step by step.",
+    "If the price instead rises reset_rise_pct over where the buy was set, it cancels the buy and sets a new one under the new price.",
+    "It sets a buy only while the wallet would still hold keep_sol after it."
+  ],
+  "needs": { "actions": ["trade"], "orderKinds": ["limit_buy"], "openOrders": 1 },
+  "settings": {
+    "file": "dips.json",
+    "notes": {
+      "buy_sol": "SOL each dip buy spends.",
+      "drop_pct": "How far under the price when it's set a buy fills, in percent.",
+      "keep_sol": "SOL the wallet always keeps: no buy is set that would spend into it.",
+      "cooldown_hours": "How long after a fill (or a failed one) the next buy is set.",
+      "reset_rise_pct": "How far the price must rise over where the buy was set before the buy moves up.",
+      "expires_days": "Each buy expires after this many days; the next wake-up sets a fresh one.",
+      "slippage_bps": "The most slippage a fill may take, in basis points (500 is 5%)."
+    }
+  },
+  "scripts": { "test": "tsx --test src/*.test.ts" },
+  "wire": [
+    "Import tendDips from ./dips.ts in src/agent.ts.",
+    "On every wake-up of the loop, once the coin's mint is known, call tendDips(mint) inside a try/catch, and log the line it returns (once, not on every wake-up when it hasn't changed).",
+    "Nothing else: the order runner that `npm start` already runs fills the buy."
+  ],
+  "prompt": "Read modules/dip-buys.md, then wire the dip-buys module into src/agent.ts as its \"Wiring it in\" section says. Don't change dips.json or the policy; tell me what the policy needs.",
+  "risks": [
+    "A dip can keep falling: each buy can lose value like any trade.",
+    "The policy's daily cap covers dip buys and every other spend together, so a busy day can crowd one out.",
+    "A fill can take days, or never come if the price only rises. That's the module working, not failing."
+  ],
+  "liveOn": "The $LGTM agent, since 2026-11-07"
+}

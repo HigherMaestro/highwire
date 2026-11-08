@@ -2,7 +2,8 @@
 //
 //   npm run ideas -- assemble <slug> <dir>   write one idea's template into <dir>
 //   npm run ideas -- check [slug]            assemble each template, npm install, typecheck, and run its setup against
-//                                            a temporary HIGHWIRE_HOME (needs network for npm; sends nothing)
+//                                            a temporary HIGHWIRE_HOME (needs network for npm; sends nothing); then
+//                                            add each module to an idea it works with, typecheck and run its tests
 //   npm run ideas -- sync [--dry-run] [--message <text>]
 //                                            create HigherMaestro/highwire-idea-<slug> if it's missing, mark it a
 //                                            template, and push the assembled files when they changed. Needs GH_TOKEN
@@ -14,7 +15,7 @@ import { spawnSync, type SpawnSyncOptions } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { assemble, ideaUrl, listIdeas, TEMPLATE_OWNER, templateRepo } from "../lib/ideas.ts";
+import { assemble, ideaUrl, listIdeas, listModules, moduleFiles, TEMPLATE_OWNER, templateRepo } from "../lib/ideas.ts";
 import { SITE_URL } from "../lib/site.ts";
 
 const VERSION = (JSON.parse(readFileSync(join(process.cwd(), "../../packages/mcp/package.json"), "utf8")) as { version: string }).version;
@@ -95,6 +96,37 @@ async function check(only?: string) {
     }
     for (const [what, ok, detail] of rows) {
       console.log(`${ok ? "ok  " : "FAIL"} [${idea.slug}] ${what}${detail ? `\n${detail}` : ""}`);
+      if (!ok) failed++;
+    }
+  }
+  // Each module, added to the first idea it works with: it installs, typechecks and passes its own tests.
+  for (const mod of listModules().filter((m) => !only || m.slug === only)) {
+    const repo = mkdtempSync(join(tmpdir(), `highwire-module-${mod.slug}-`));
+    const rows: [string, boolean, string][] = [];
+    try {
+      write(mod.worksWith[0]!, repo);
+      for (const [rel, content] of moduleFiles(mod.slug)) {
+        mkdirSync(dirname(join(repo, rel)), { recursive: true });
+        writeFileSync(join(repo, rel), content);
+      }
+      const pkg = JSON.parse(readFileSync(join(repo, "package.json"), "utf8"));
+      pkg.scripts = { ...mod.scripts, ...pkg.scripts };
+      writeFileSync(join(repo, "package.json"), JSON.stringify(pkg, null, 2));
+      const install = sh("npm", ["install", "--no-audit", "--no-fund", "--loglevel=error"], { cwd: repo });
+      rows.push(["npm install", install.ok, install.ok ? "" : install.err.slice(-400)]);
+      if (install.ok) {
+        const tc = sh("npm", ["run", "typecheck"], { cwd: repo });
+        rows.push([`typecheck in ${mod.worksWith[0]}`, tc.ok, tc.ok ? "" : tc.out.slice(-600)]);
+        const t = sh("npx", ["tsx", "--test", ...[...moduleFiles(mod.slug).keys()].filter((f) => f.endsWith(".test.ts"))], { cwd: repo });
+        rows.push(["its tests pass", t.ok, t.ok ? "" : (t.out + t.err).slice(-600)]);
+      }
+    } catch (err) {
+      rows.push(["assemble", false, (err as Error).message]);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+    for (const [what, ok, detail] of rows) {
+      console.log(`${ok ? "ok  " : "FAIL"} [module ${mod.slug}] ${what}${detail ? `\n${detail}` : ""}`);
       if (!ok) failed++;
     }
   }

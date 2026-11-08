@@ -3004,3 +3004,48 @@ a.card:hover,
     transform: none;
   }
 }
+
+/* /ideas: agents and modules, two kinds. */
+.idea-kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 28px;
+  max-width: 720px;
+}
+
+.idea-kinds a {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.idea-kinds a:hover,
+.idea-kinds a:focus-visible {
+  border-color: var(--signal);
+}
+
+.idea-kind {
+  scroll-margin-top: 80px;
+}
+
+.idea-kind + .idea-kind {
+  padding-top: 0;
+}
+
+.module-code summary {
+  cursor: pointer;
+  font-family: var(--font-code);
+  font-size: 14px;
+  padding: 10px 0;
+}
+
+.module-code pre {
+  max-height: 520px;
+  overflow: auto;
+}

@@ -231,6 +231,17 @@ npx -y highwire-mcp new dip-buyer       # write one into ./dip-buyer, and git in
 The ideas are a buyback coin, a dip buyer, a launch scout, a community treasury and fee-funded compute. They and the
 starter live in [ideas/](ideas), and ship in the `highwire-mcp` package for `highwire new`.
 
+**Modules** add one thing to an agent you already run, as working code with a short spec: dip buys, receipts on the
+coin's page, and a kill switch that creates `STOP` when the wallet signs something Highwire didn't send, spends too
+fast or keeps failing. In your project:
+
+```bash
+npx -y highwire-mcp add                 # list the modules
+npx -y highwire-mcp add kill-switch     # copy it in, then wire it into src/agent.ts as modules/kill-switch.md says
+```
+
+It never overwrites a file and never changes your policy. They live in [ideas/modules](ideas/modules).
+
 ### Local signer
 
 Off unless you turn it on, and never on the hosted endpoint. It signs only inside a policy you write in
@@ -304,7 +315,7 @@ An npm workspaces monorepo.
 | [packages/agent](packages/agent) | `highwire-agent`: the opt-in local signer: the policy, the keypair loader, the audit log and the executor |
 | [packages/mcp](packages/mcp) | `highwire-mcp`: the MCP server, the `highwire` stdio bin and a stateless HTTP handler |
 | [apps/web](apps/web) | The Next.js site: the sign page at `/sign`, `/docs`, `/ideas`, `/fees`, `/changelog`, `/terms`, `/privacy`, the hosted MCP at `/mcp` and `GET /api/health` |
-| [ideas](ideas) | Launch ideas: the starter skeleton and one folder per idea, assembled into template repositories |
+| [ideas](ideas) | Launch ideas: the starter skeleton and one folder per idea, assembled into template repositories, and `modules/`, which `highwire add` copies into a project |
 
 ## Development
 

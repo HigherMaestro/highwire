@@ -112,3 +112,42 @@ test("the trading calculator's arithmetic", async () => {
   assert.equal(winsToBreakEven(1, -1), 0.5);
   assert.equal(winsToBreakEven(-0.1, -1), null);
 });
+
+test("every module is complete: its spec's sections, its settings, its files and its scripts", async () => {
+  const { listModules, readModuleSpec, moduleFiles, MODULE_SECTIONS, moduleMarkdown } = await import("../lib/ideas.ts");
+  const modules = listModules();
+  assert.ok(modules.length >= 3);
+  const starter = assemble(ideas[0]!.slug, { version: VERSION, siteUrl: "https://highwire.fun" });
+  const starterScripts = JSON.parse(starter.get("package.json") as string).scripts as Record<string, string>;
+  for (const m of modules) {
+    const heads = [...readModuleSpec(m.slug).matchAll(/^## (.+)$/gm)].map((x) => x[1]);
+    assert.deepEqual(heads, MODULE_SECTIONS, m.slug);
+    const files = moduleFiles(m.slug);
+    for (const idea of m.worksWith) {
+      const project = assemble(idea, { version: VERSION, siteUrl: "https://highwire.fun" });
+      for (const rel of files.keys()) assert.ok(!project.has(rel), `${m.slug}'s ${rel} would clash with ${idea}'s own`);
+    }
+    for (const [rel, text] of files) {
+      if (rel.endsWith(".json")) assert.doesNotThrow(() => JSON.parse(text), `${m.slug}/${rel}`);
+      if (rel.endsWith(".ts")) assert.ok(!/from "\.\.?\/(?!highwire\.ts|tools\.ts|[\w-]+\.ts")/.test(text) && !/from "highwire-(core|mcp)"/.test(text), `${m.slug}/${rel} imports only the starter's files and highwire-agent`);
+    }
+    if (m.settings) {
+      const settings = JSON.parse(files.get(m.settings.file)!);
+      assert.deepEqual(Object.keys(m.settings.notes).sort(), Object.keys(settings).sort(), `${m.slug}: a note for each setting`);
+      // The spec shows the same settings the module ships.
+      const shown = /## Settings[\s\S]*?```json\n([\s\S]*?)```/.exec(readModuleSpec(m.slug))?.[1];
+      assert.deepEqual(JSON.parse(shown!), settings, `${m.slug}'s spec shows its ${m.settings.file}`);
+    }
+    for (const [name, cmd] of Object.entries(m.scripts)) {
+      assert.ok(!(name in starterScripts) || starterScripts[name] === cmd, `${m.slug}'s ${name} script would replace the starter's`);
+    }
+    assert.ok(moduleMarkdown(m.slug).includes("## The files"));
+  }
+});
+
+test("example posts in module specs would pass Highwire's post check", async () => {
+  const { listModules, readModuleSpec } = await import("../lib/ideas.ts");
+  for (const m of listModules()) {
+    for (const x of readModuleSpec(m.slug).matchAll(/^- `([^`]+)`$/gm)) assert.doesNotThrow(() => checkPostText(x[1]!, "comment"), `${m.slug}: ${x[1]}`);
+  }
+});

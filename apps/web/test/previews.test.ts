@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { IDEAS_CARD, cardFacts, ideaCard, ideaCardFor, ideasCard, shortSol } from "../lib/idea-card.tsx";
-import { listIdeas } from "../lib/ideas.ts";
+import { IDEAS_CARD, cardFacts, ideaCard, ideaCardFor, ideasCard, moduleCard, moduleCardFor, shortSol } from "../lib/idea-card.tsx";
+import { listIdeas, listModules } from "../lib/ideas.ts";
 import { FEES_CARD, SITE_CARD, pageMetadata } from "../lib/site.ts";
 
 // Link previews: each idea's card fits what idea.json puts on it, and every page has Open Graph and X tags of its
@@ -18,13 +18,17 @@ test("every idea fits its card", () => {
     // validateIdea holds the loop to three or four steps of at most LOOP_STEP_MAX characters.
     assert.ok(idea.loop.length >= 3 && idea.loop.length <= 4, idea.slug);
   }
+  for (const m of listModules()) {
+    assert.ok(`highwire add ${m.slug}`.length <= 40, `${m.slug}: the command runs into the wire`);
+    assert.ok(m.title.length <= 20, `${m.slug}: the title takes more than two lines`);
+  }
   assert.equal(shortSol("about 0.3 SOL, the budget you give it"), "0.3 SOL");
   assert.equal(shortSol("0 SOL, or about 0.3 SOL if it buys"), "0 SOL");
 });
 
 test("the cards render as 1200x630 PNGs, and /ideas's has room for every idea", async () => {
   assert.ok(ideas.length <= 5, "/ideas's card shows five ideas at most");
-  for (const card of [ideaCard(ideas[0]!), ideasCard(ideas)]) {
+  for (const card of [ideaCard(ideas[0]!), ideasCard(ideas), moduleCard(listModules()[0]!)]) {
     const png = Buffer.from(await (await card).arrayBuffer());
     assert.deepEqual([...png.subarray(1, 4)], [...Buffer.from("PNG")]);
     assert.equal(png.readUInt32BE(16), 1200);
@@ -53,6 +57,7 @@ test("the cards pages name are the files that draw them, with their alt text", (
   }
   assert.ok(existsSync(join(process.cwd(), "app/ideas/opengraph-image.tsx")) && IDEAS_CARD.url === "/ideas/opengraph-image");
   assert.ok(existsSync(join(process.cwd(), "app/ideas/[slug]/opengraph-image.tsx")) && ideaCardFor("dip-buyer").url === "/ideas/dip-buyer/opengraph-image");
+  assert.ok(existsSync(join(process.cwd(), "app/modules/[slug]/opengraph-image.tsx")) && moduleCardFor("receipts").url === "/modules/receipts/opengraph-image");
 });
 
 test("every page with metadata of its own goes through pageMetadata", () => {

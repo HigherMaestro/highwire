@@ -1,0 +1,7 @@
+{
+  "min_balance_sol": 0.02,
+  "max_sol_per_hour": 0.5,
+  "max_failed_per_day": 3,
+  "max_refused_per_hour": 5,
+  "foreign_signatures": true
+}

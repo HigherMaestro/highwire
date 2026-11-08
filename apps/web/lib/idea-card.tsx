@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import type { ReactElement } from "react";
-import type { Idea } from "./ideas.ts";
+import type { Idea, Module } from "./ideas.ts";
 import type { Card } from "./site.ts";
 
 // The ideas' link previews, in the family of brand/svg/og-fees.svg: on ink, a name on the left, and on the right the
@@ -37,6 +37,10 @@ export const IDEAS_CARD_ALT = "Highwire's launch ideas: agents you can deploy to
 /** The cards as pages name them in pageMetadata: app/ideas/opengraph-image.tsx and app/ideas/[slug]/opengraph-image.tsx. */
 export const IDEAS_CARD: Card = { url: "/ideas/opengraph-image", alt: IDEAS_CARD_ALT };
 export const ideaCardFor = (slug: string): Card => ({ url: `/ideas/${slug}/opengraph-image`, alt: IDEA_CARD_ALT });
+
+export const MODULE_CARD_ALT = "A Highwire module: its name, what it adds to an agent, and the command that adds it.";
+/** A module page's card: app/modules/[slug]/opengraph-image.tsx. */
+export const moduleCardFor = (slug: string): Card => ({ url: `/modules/${slug}/opengraph-image`, alt: MODULE_CARD_ALT });
 
 /** One card: up to five strands, under an optional heading; `srcX` moves the wire left when their labels are long. */
 function wireCard(o: { label: string; title: string; facts: string; strands: string[]; heading?: string; srcX?: number; labelSize?: number }) {
@@ -125,5 +129,12 @@ export function ideaCard(idea: Idea): Promise<ImageResponse> {
 export function ideasCard(ideas: Idea[]): Promise<ImageResponse> {
   return render(
     wireCard({ label: "LAUNCH IDEAS", title: "Agents you can start today", facts: "Deploy to your GitHub in one click", strands: ideas.map((i) => i.title), srcX: 700, labelSize: 30 }),
+  );
+}
+
+/** A module page's card: its name, what it does, and the command that adds it. */
+export function moduleCard(mod: Module): Promise<ImageResponse> {
+  return render(
+    wireCard({ label: "MODULE", title: mod.title, facts: `highwire add ${mod.slug}`, heading: "WHAT IT DOES", strands: mod.loop, srcX: 700, labelSize: 32 }),
   );
 }
