@@ -277,6 +277,17 @@ test("get_coin_fees breaks one coin's fees down by recipient, measured and compu
   assert.ok(out.namesNote);
 });
 
+test("get_creator_fees lists a creator's coins, what they earned, and what's waiting for them to claim", async () => {
+  const client = await connect({ fetch: fixtureFetch("fees-creator"), retries: 0 });
+  const out = parse(await client.callTool({ name: "get_creator_fees", arguments: { wallet: "3nG8WsVqotPWH74NRUpLwfQ1NMabdorWQ52YvbrVHA2E" } }));
+  assert.ok(out.coins.length >= 1);
+  assert.ok(out.coins.some((c: { mint: string }) => c.mint === "Ea5dBrJZN58yV1nm1Q4DybJNYKeTvwpb2GEkXyW64bUH"));
+  assert.ok(out.earnedSol > 0);
+  assert.equal(out.waitingToClaim.totalSol, Math.round((out.waitingToClaim.curveVaultSol + out.waitingToClaim.poolCreatorFeesSol) * 1e9) / 1e9);
+  assert.match(out.page, /\/fees\/creator\/3nG8Ws/);
+  assert.ok(out.higherFunPayouts);
+});
+
 test("execute_launch only uploads a real image, and never a file from the signer's folder", async () => {
   const paths = signerHome({ ...POLICY_TEMPLATE, cluster: "mainnet", actions: ["launch"] });
   const dir = mkdtempSync(join(tmpdir(), "highwire-img-"));

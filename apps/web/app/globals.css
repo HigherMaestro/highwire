@@ -1454,7 +1454,7 @@ summary:focus-visible,
   font-size: 15px;
 }
 
-/* Ecosystem fees (/fees and /fees/[mint]) */
+/* Ecosystem fees (/fees, /fees/[mint] and /fees/creator/[wallet]) */
 .fees-page {
   padding: 48px 0 80px;
 }
@@ -1653,6 +1653,47 @@ summary:focus-visible,
 .fee-links {
   margin: 0 0 12px;
   padding-left: 20px;
+}
+
+.fee-lookup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.fee-lookup input {
+  flex: 1 1 320px;
+  min-width: 0;
+  font: inherit;
+  font-family: var(--font-code);
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  min-height: 44px;
+}
+
+.fee-lookup input:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 1px;
+}
+
+.fee-lookup input[aria-invalid] {
+  border-color: var(--bad);
+}
+
+.fee-lookup .button {
+  min-height: 44px;
+}
+
+.fee-lookup-error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--bad);
 }
 
 @media (max-width: 640px) {

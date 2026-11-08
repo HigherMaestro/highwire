@@ -3,6 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 import { Chain, DEFAULT_API_URL, HOLDER_AIRDROPS, HigherApi, createHttpConfig, ecosystemFees, type EcosystemFees, type FeeMode, type Recipient } from "highwire-core";
 import type { Flow, FlowScenario, Scenario } from "../components/fees/FeeFlow.tsx";
 import { serverOptionsFromEnv } from "highwire-mcp";
+import { coinLabel } from "./names.ts";
 
 // The fee pages' data: read from mainnet and higher.fun's API on the server. The
 // pages are regenerated in the background at most every 10 minutes (their
@@ -44,6 +45,58 @@ export const coinFees = cache(async (mint: string): Promise<EcosystemFees | null
     return failed(mint, err, undefined);
   }
 });
+
+/** One creator wallet's coins and fees; null when it created no higher.fun coin, undefined when unreadable while building. */
+export const creatorFees = cache(async (wallet: string): Promise<EcosystemFees | null | undefined> => {
+  try {
+    const { chain, api } = sources();
+    const r = await ecosystemFees(chain, api, { creator: wallet });
+    return r.coins.length ? r : null;
+  } catch (err) {
+    return failed(wallet, err, undefined);
+  }
+});
+
+export interface CreatorRow {
+  wallet: string;
+  coins: number;
+  graduated: number;
+  volumeSol: number;
+  earnedSol: number;
+  last24hSol: number;
+  /** The creator's coin that paid them most, by its label (null when it isn't fit to show). */
+  best: { mint: string; ticker: string | null };
+}
+
+/** Creator wallets by what their coins have paid them, highest first. */
+export function topCreators(data: EcosystemFees, n = 10): CreatorRow[] {
+  const by = new Map<string, CreatorRow & { bestSol: number }>();
+  for (const c of data.coins) {
+    const row = by.get(c.creator) ?? { wallet: c.creator, coins: 0, graduated: 0, volumeSol: 0, earnedSol: 0, last24hSol: 0, best: { mint: c.mint, ticker: null }, bestSol: -1 };
+    row.coins++;
+    if (c.status === "graduated") row.graduated++;
+    row.volumeSol += c.volumeSol;
+    row.earnedSol += c.byRecipient.creator;
+    row.last24hSol += c.last24h?.byRecipient.creator ?? 0;
+    if (c.byRecipient.creator > row.bestSol) {
+      row.bestSol = c.byRecipient.creator;
+      row.best = { mint: c.mint, ticker: coinLabel(c).ticker };
+    }
+    by.set(c.creator, row);
+  }
+  return [...by.values()]
+    .filter((r) => r.earnedSol > 0)
+    .sort((a, b) => b.earnedSol - a.earnedSol)
+    .slice(0, n)
+    .map(({ bestSol: _, ...r }) => r);
+}
+
+/** The 24-hour volumes of the coins that traded, for the calculator's sense of scale. */
+export function volumes24h(data: EcosystemFees): number[] {
+  return data.coins.map((c) => c.last24h?.volumeSol ?? 0).filter((v) => v > 0).sort((a, b) => a - b);
+}
+
+export const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 
 export const RECIPIENTS: { key: Recipient; label: string; color: string; note: string }[] = [
   { key: "creator", label: "Creators", color: "#F6A9C4", note: "Curve and pool creator fees, and New school creators' third of the locked-LP fees" },
@@ -88,7 +141,7 @@ export function isMint(s: string): boolean {
   }
 }
 
-export { coinLabel } from "./names.ts";
+export { coinLabel };
 
 /**
  * The fee-flow diagram's four views (curve or pool, New or Old school): each recipient's cut of one trade, from the rates

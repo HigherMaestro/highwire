@@ -2,6 +2,18 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- **/fees shows the last 24 hours, and creators.** Every coin's fees in the last 24 hours, estimated from higher.fun's
+  24-hour volume at the rates of the phase it trades in now, as totals, a column and a sort. A top-creators table ranks
+  creator wallets by what their coins have paid them, and a calculator works out what a coin earns its creator at a
+  daily volume and fee mode you pick, against what higher.fun's coins really traded that day.
+- **`/fees/creator/<wallet>`:** one creator's coins, what they've earned, and what's waiting for them to claim: their
+  curve vault, their pool creator fees, and what higher.fun owes them off-chain. Coin pages link to it, and /fees can
+  look up any wallet.
+- **`get_creator_fees`:** the same for agents. `get_ecosystem_fees` and `get_coin_fees` now include the last 24 hours,
+  and `get_ecosystem_fees` can sort by them (`fees_24h`).
+
 ## 0.12.0 (2026-11-07)
 
 - **Modules: add one thing to an agent you already run.** `/ideas` now has two kinds: agents, the whole projects, and

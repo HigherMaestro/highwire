@@ -81,10 +81,10 @@ export default async function CoinFeesPage({ params }: Props) {
                     <span className="stat-label">to holders, as airdrops</span>
                   </li>
                 ) : null}
-                {c.volume24hSol != null ? (
+                {c.last24h ? (
                   <li>
-                    <span className="stat-n">{sol(c.volume24hSol)} SOL</span>
-                    <span className="stat-label">traded in 24 hours</span>
+                    <span className="stat-n">{sol(c.last24h.feesSol)} SOL</span>
+                    <span className="stat-label">in fees in 24 hours, from {sol(c.last24h.volumeSol)} SOL traded (estimated)</span>
                   </li>
                 ) : null}
               </ul>
@@ -160,7 +160,9 @@ export default async function CoinFeesPage({ params }: Props) {
                     {c.feeMode === "rewards" ? (
                       <li>
                         <span className="stat-n">{sol(data.waiting.creatorCurveSol)} SOL</span>
-                        <span className="stat-label">curve creator fees in the creator's vault (all their coins)</span>
+                        <span className="stat-label">
+                          curve creator fees in the creator's vault (<a href={`/fees/creator/${c.creator}`}>all their coins</a>)
+                        </span>
                       </li>
                     ) : null}
                   </ul>
@@ -175,7 +177,9 @@ export default async function CoinFeesPage({ params }: Props) {
                   <ul className="stats">
                     <li>
                       <span className="stat-n">{sol(data.waiting.creatorCurveSol)} SOL</span>
-                      <span className="stat-label">curve creator fees in the creator's vault (all their coins)</span>
+                      <span className="stat-label">
+                          curve creator fees in the creator's vault (<a href={`/fees/creator/${c.creator}`}>all their coins</a>)
+                        </span>
                     </li>
                   </ul>
                 </section>
@@ -214,6 +218,9 @@ export default async function CoinFeesPage({ params }: Props) {
                   </li>
                   <li>
                     <a href={`https://solscan.io/token/${c.mint}`}>The coin on Solscan</a>
+                  </li>
+                  <li>
+                    <a href={`/fees/creator/${c.creator}`}>Everything the creator earned</a>, across their coins
                   </li>
                   <li>
                     <a href={`https://solscan.io/account/${c.creator}`}>The creator's wallet on Solscan</a>

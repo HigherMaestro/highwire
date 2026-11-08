@@ -65,5 +65,7 @@ export async function runScenario(name: Scenario, fetch: typeof globalThis.fetch
       return { fees: await ecosystemFees(chain, api, { only: [NEW_SCHOOL_GRADUATED, CLAIM_COIN, CURVE_COIN].map((m) => m.toBase58()) }) };
     case "fees-coin":
       return { fees: await ecosystemFees(chain, api, { only: [NEW_SCHOOL_GRADUATED.toBase58()] }) };
+    case "fees-creator":
+      return { fees: await ecosystemFees(chain, api, { creator: CREATOR.toBase58() }) };
   }
 }

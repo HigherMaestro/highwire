@@ -187,7 +187,7 @@ export const TOOL_GROUPS: { id: string; title: string; blurb: string; tools: str
     id: "fees",
     title: "Fees",
     blurb: "What higher.fun's coins have paid, and who got it: the numbers behind highwire.fun/fees.",
-    tools: ["get_ecosystem_fees", "get_coin_fees"],
+    tools: ["get_ecosystem_fees", "get_coin_fees", "get_creator_fees"],
   },
   {
     id: "trade",

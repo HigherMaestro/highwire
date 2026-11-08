@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Chain, coinUrl, DEFAULT_RPC_URLS, ecosystemFees, NotFoundError, type CoinFees, type EcosystemFees } from "highwire-core";
 import { run } from "../result.ts";
-import { READ_ONLY, mint, type Deps } from "./shared.ts";
+import { READ_ONLY, mint, wallet, type Deps } from "./shared.ts";
 
 // The fees higher.fun's coins have paid and who got them: the same numbers as highwire.fun/fees. Curve fees are
 // measured on-chain; pool fees are computed from volume at the on-chain rates, and every line says which.
@@ -25,11 +25,16 @@ function summarizeCoinFees(c: CoinFees, siteUrl: string) {
     volumeSol: c.volumeSol,
     totalFeesSol: c.totalFeesSol,
     byRecipient: c.byRecipient,
+    last24h: c.last24h,
   };
 }
 
+const LAST_24H_NOTE =
+  "last24h is estimated: higher.fun's 24-hour volume for the coin (curve and pool trades), at the rates of the phase it trades in now.";
+
 const SORTS = {
   fees: (c: CoinFees) => c.totalFeesSol,
+  fees_24h: (c: CoinFees) => c.last24h?.feesSol ?? 0,
   volume: (c: CoinFees) => c.volumeSol,
   creator: (c: CoinFees) => c.byRecipient.creator,
   higher: (c: CoinFees) => c.byRecipient["higher.fun"],
@@ -46,11 +51,12 @@ export function registerFeeTools(server: McpServer, deps: Deps) {
       title: "Get ecosystem fees",
       description:
         "Every fee higher.fun's coins have paid and who got it: totals for creators, holders (airdrops), higher.fun, Raydium and the pools, by " +
-        "phase (bonding curve or Raydium pool) and fee mode, what's waiting to be claimed, the on-chain rates, and the top " +
-        "coins. The same numbers as highwire.fun/fees. Curve fees are measured on-chain; pool fees are computed from volume.",
+        "phase (bonding curve or Raydium pool) and fee mode, the last 24 hours (estimated), what's waiting to be claimed, the " +
+        "on-chain rates, and the top coins. The same numbers as highwire.fun/fees. Curve fees are measured on-chain; pool " +
+        "fees are computed from volume.",
       inputSchema: {
         top: z.number().int().min(1).max(100).default(20).describe("How many coins to list, highest first."),
-        sort: z.enum(["fees", "volume", "creator", "higher"]).default("fees").describe("What to rank the coins by."),
+        sort: z.enum(["fees", "fees_24h", "volume", "creator", "higher"]).default("fees").describe("What to rank the coins by."),
       },
       annotations: { title: "Get ecosystem fees", ...READ_ONLY },
     },
@@ -73,6 +79,7 @@ export function registerFeeTools(server: McpServer, deps: Deps) {
           waitingToBeClaimed: r.waiting,
           ratesPct: r.rates,
           namesNote: NAMES_NOTE,
+          last24hNote: LAST_24H_NOTE,
           coins: [...r.coins].sort((a, b) => key(b) - key(a)).slice(0, top).map((c) => summarizeCoinFees(c, deps.siteUrl)),
           method:
             "Curve: Raydium's fee counter in each coin's LaunchLab pool gives its exact curve volume; the platform and creator " +
@@ -111,6 +118,46 @@ export function registerFeeTools(server: McpServer, deps: Deps) {
           pool: c.pool,
           holderAirdrops: c.holders,
           ...(c.feeMode === "rewards" ? { creatorCurveVaultSol: r.waiting.creatorCurveSol } : {}),
+          creatorPage: `${deps.siteUrl}/fees/creator/${c.creator}`,
+          last24hNote: LAST_24H_NOTE,
+          ...(r.warnings.length ? { warnings: r.warnings } : {}),
+        };
+      }),
+  );
+
+  server.registerTool(
+    "get_creator_fees",
+    {
+      title: "Get creator fees",
+      description:
+        "What a creator wallet's higher.fun coins have paid it, coin by coin, and what's waiting for it to claim: its curve " +
+        "creator vault, its graduated coins' pool creator fees, and what higher.fun owes it off-chain. The same numbers as " +
+        "highwire.fun/fees/creator/<wallet>. To claim, use build_claim_creator_fees.",
+      inputSchema: { wallet },
+      annotations: { title: "Get creator fees", ...READ_ONLY },
+    },
+    ({ wallet }) =>
+      run(async () => {
+        const r = await ecosystemFees(chain, api, { creator: wallet });
+        if (!r.coins.length) throw new NotFoundError(`${wallet} hasn't created a coin on higher.fun`, { status: 404 });
+        const curve = r.waiting.creatorCurveSol;
+        const pool = r.waiting.creatorPoolSol;
+        return {
+          wallet,
+          readAt: r.generatedAt,
+          page: `${deps.siteUrl}/fees/creator/${wallet}`,
+          solUsd: r.solUsd,
+          earnedSol: r.totals.byRecipient.creator,
+          earnedLast24hSol: Math.round(r.coins.reduce((n, c) => n + (c.last24h?.byRecipient.creator ?? 0), 0) * 1e9) / 1e9,
+          waitingToClaim: { totalSol: Math.round((curve + pool) * 1e9) / 1e9, curveVaultSol: curve, poolCreatorFeesSol: pool },
+          vaultNote:
+            "LaunchLab keeps one creator vault per wallet across every launchpad built on it, so curveVaultSol also holds this " +
+            "wallet's fees from coins on other launchpads, and can exceed what it earned on higher.fun. One claim collects it all.",
+          higherFunPayouts: r.creatorPayouts ?? null,
+          totals: r.totals,
+          namesNote: NAMES_NOTE,
+          last24hNote: LAST_24H_NOTE,
+          coins: r.coins.map((c) => ({ ...summarizeCoinFees(c, deps.siteUrl), creatorSol: c.byRecipient.creator, poolCreatorWaitingSol: c.pool?.creatorWaitingSol ?? null })),
           ...(r.warnings.length ? { warnings: r.warnings } : {}),
         };
       }),

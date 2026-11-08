@@ -26,5 +26,5 @@ export const LAUNCH_URI = "https://highwire.fun/sim/metadata.json";
 /** A fixed address to launch for (an X account's wallet, in real use). Empty, so the launch funds it. Never funded. */
 export const LAUNCH_FOR = Keypair.fromSeed(createHash("sha256").update("highwire simulation launch-for creator").digest()).publicKey;
 
-export const SCENARIOS = ["buy-curve", "sell-curve", "buy-graduated", "sell-graduated", "launch-rewards", "claim", "positions", "positions-mints", "transfer-sol", "transfer-coin", "fees", "fees-coin", "launch-for"] as const;
+export const SCENARIOS = ["buy-curve", "sell-curve", "buy-graduated", "sell-graduated", "launch-rewards", "claim", "positions", "positions-mints", "transfer-sol", "transfer-coin", "fees", "fees-coin", "fees-creator", "launch-for"] as const;
 export type Scenario = (typeof SCENARIOS)[number];

@@ -12,11 +12,14 @@ export interface FeeRow {
   feesSol: number;
   creatorSol: number;
   higherSol: number;
+  /** Estimated fees in the last 24 hours; null when higher.fun lists no 24-hour volume. */
+  fees24hSol: number | null;
   createdAt: string | null;
 }
 
 const SORTS = {
   fees: { label: "Most fees", key: (r: FeeRow) => r.feesSol },
+  today: { label: "Most fees, last 24 hours", key: (r: FeeRow) => r.fees24hSol ?? 0 },
   volume: { label: "Most volume", key: (r: FeeRow) => r.volumeSol },
   creator: { label: "Most to creator", key: (r: FeeRow) => r.creatorSol },
   newest: { label: "Newest", key: (r: FeeRow) => (r.createdAt ? Date.parse(r.createdAt) : 0) },
@@ -78,6 +81,9 @@ export function FeeTable({ rows }: { rows: FeeRow[] }) {
                 Fees (SOL)
               </th>
               <th scope="col" className="num">
+                Last 24h
+              </th>
+              <th scope="col" className="num">
                 To creator
               </th>
               <th scope="col" className="num">
@@ -102,6 +108,9 @@ export function FeeTable({ rows }: { rows: FeeRow[] }) {
                 <td data-label="Fees (SOL)" className="num">
                   <strong>{fmt(r.feesSol)}</strong>
                 </td>
+                <td data-label="Last 24h" className="num">
+                  {r.fees24hSol ? fmt(r.fees24hSol) : <span className="muted">–</span>}
+                </td>
                 <td data-label="To creator" className="num">
                   {fmt(r.creatorSol)}
                 </td>
@@ -112,7 +121,7 @@ export function FeeTable({ rows }: { rows: FeeRow[] }) {
             ))}
             {list.length === 0 ? (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={7} className="muted">
                   No higher.fun coin matches “{q}”.
                 </td>
               </tr>

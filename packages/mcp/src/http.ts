@@ -55,6 +55,7 @@ export const TOOL_COSTS: Record<string, (args: Record<string, unknown>) => numbe
   // Every higher.fun coin's pools, read on-chain (cached for a few minutes per instance), or one coin's.
   get_ecosystem_fees: () => 10,
   get_coin_fees: () => 3,
+  get_creator_fees: () => 3,
   // Holds a socket to higher.fun open for up to 50 seconds.
   watch_market: () => 5,
 };

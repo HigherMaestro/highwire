@@ -53,6 +53,7 @@ export const READ_TOOLS = [
   "get_coin_holders",
   "get_coin_trades",
   "get_creator_coins",
+  "get_creator_fees",
   "get_ecosystem_fees",
   "get_featured_coin",
   "get_leaderboard",

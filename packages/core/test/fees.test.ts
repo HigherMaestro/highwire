@@ -4,9 +4,11 @@ import { readFileSync } from "node:fs";
 import { replayFetch, type Recording } from "./replay.ts";
 import { runScenario } from "./run-scenario.ts";
 import type { ecosystemFees } from "../src/tx/fees.ts";
-import { CLAIM_COIN, CURVE_COIN, NEW_SCHOOL_GRADUATED } from "./scenarios.ts";
+import { CLAIM_COIN, CREATOR, CURVE_COIN, NEW_SCHOOL_GRADUATED, TRADER } from "./scenarios.ts";
 
 const recording: Recording = JSON.parse(readFileSync(new URL("./fixtures/fees.json", import.meta.url), "utf8"));
+
+const creatorRecording: Recording = JSON.parse(readFileSync(new URL("./fixtures/fees-creator.json", import.meta.url), "utf8"));
 
 const close = (a: number, b: number, what: string) => assert.ok(Math.abs(a - b) < 1e-6, `${what}: ${a} vs ${b}`);
 
@@ -108,4 +110,59 @@ test("fees: a creator who gave their fees to holders: their lines go to holders,
   close(c.byRecipient["higher.fun"], base.byRecipient["higher.fun"], "nothing beyond the creator's fees, so higher.fun's lines stand");
   assert.ok(c.lines.filter((l) => l.to === "holders").every((l) => l.label.endsWith(", given to holders")));
   close(c.totalFeesSol, base.totalFeesSol, "no new fee");
+});
+
+test("fees: the last 24 hours price each coin's 24-hour volume at the rates of the phase it trades in now", async () => {
+  const r = await runScenario("fees", replayFetch(recording));
+  const fees = r && "fees" in r ? r.fees : undefined;
+  assert.ok(fees);
+  for (const c of fees.coins) {
+    if (!c.last24h) {
+      assert.ok(c.volume24hSol == null || c.status === "migrating", `${c.ticker} has 24-hour volume but no 24-hour fees`);
+      continue;
+    }
+    assert.equal(c.last24h.volumeSol, c.volume24hSol);
+    const phase = c.status === "graduated" ? "pool" : "curve";
+    const rate = c.lines.filter((l) => l.phase === phase).reduce((n, l) => n + l.ratePct, 0);
+    // Line rates are rounded to six decimals in the output, so allow for it.
+    const want = (c.last24h.volumeSol * rate) / 100;
+    assert.ok(Math.abs(c.last24h.feesSol - want) <= Math.max(1e-6, want * 1e-5), `${c.ticker} 24h fees: ${c.last24h.feesSol} vs ${want}`);
+    close(Object.values(c.last24h.byRecipient).reduce((n, v) => n + v, 0), c.last24h.feesSol, `${c.ticker} 24h recipients`);
+  }
+  close(fees.totals.last24h.feesSol, fees.coins.reduce((n, c) => n + (c.last24h?.feesSol ?? 0), 0), "24h totals");
+  // On the curve a New school trade pays 1%; in the pool, 0.3%.
+  const si = fees.coins.find((c) => c.mint === CURVE_COIN.toBase58())!;
+  if (si.last24h && si.last24h.volumeSol > 0) close(si.last24h.feesSol / si.last24h.volumeSol, 0.01, "curve rate");
+  const high = fees.coins.find((c) => c.mint === NEW_SCHOOL_GRADUATED.toBase58())!;
+  assert.ok(high.last24h);
+  close(high.last24h.feesSol / high.last24h.volumeSol, 0.003, "pool rate");
+  assert.equal(high.last24h.byRecipient.holders, 0);
+});
+
+test("fees: a creator's coins, found by their wallet, with their curve vault's fees waiting", async () => {
+  const r = (await runScenario("fees-creator", replayFetch(creatorRecording))) as { fees: Awaited<ReturnType<typeof ecosystemFees>> };
+  const fees = r.fees;
+  assert.ok(fees.coins.length >= 1);
+  assert.ok(fees.coins.every((c) => c.creator === CREATOR.toBase58()));
+  assert.ok(fees.coins.some((c) => c.mint === CLAIM_COIN.toBase58()));
+  close(fees.totals.feesSol, fees.coins.reduce((n, c) => n + c.totalFeesSol, 0), "totals");
+  assert.ok(fees.waiting.creatorCurveSol >= 0);
+  assert.ok(fees.creatorPayouts && fees.creatorPayouts.paidOutSol >= 0 && fees.creatorPayouts.pendingSol >= 0);
+});
+
+test("fees: a wallet that created no coins costs one request to higher.fun, and nothing on-chain", async () => {
+  const { Chain } = await import("../src/tx/chain.ts");
+  const { HigherApi } = await import("../src/higher/api.ts");
+  const { createHttpConfig } = await import("../src/lib/http.ts");
+  const { ecosystemFees } = await import("../src/tx/fees.ts");
+  const seen: string[] = [];
+  const fetch = (async (input: string | URL | Request) => {
+    seen.push(String(input));
+    return new Response(JSON.stringify({ items: [], nextCursor: null }), { headers: { "content-type": "application/json" } });
+  }) as typeof globalThis.fetch;
+  const chain = new Chain({ cluster: "mainnet", rpcUrl: "https://rpc.invalid", fetch });
+  const api = new HigherApi(createHttpConfig({ baseUrl: "https://api.higher.fun", fetch, retries: 0 }));
+  const r = await ecosystemFees(chain, api, { creator: TRADER.toBase58() });
+  assert.equal(r.coins.length, 0);
+  assert.deepEqual(seen, [`https://api.higher.fun/users/${TRADER.toBase58()}/coins`]);
 });

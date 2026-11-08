@@ -4,7 +4,9 @@ import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { FeeTable, type FeeRow } from "../../components/fees/FeeTable.tsx";
 import { FeeFlow } from "../../components/fees/FeeFlow.tsx";
 import { SplitBar } from "../../components/fees/SplitBar.tsx";
-import { MODE_LABEL, allFees, coinLabel, flowScenarios, pctOf, sol, updatedAt, usd } from "../../lib/fees.ts";
+import { EarningsCalculator } from "../../components/fees/EarningsCalculator.tsx";
+import { WalletLookup } from "../../components/fees/WalletLookup.tsx";
+import { MODE_LABEL, allFees, coinLabel, flowScenarios, pctOf, short, sol, topCreators, updatedAt, usd, volumes24h } from "../../lib/fees.ts";
 import { FEES_CARD, pageMetadata } from "../../lib/site.ts";
 
 export const revalidate = 600;
@@ -59,9 +61,13 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
     feesSol: c.totalFeesSol,
     creatorSol: c.byRecipient.creator,
     higherSol: c.byRecipient["higher.fun"],
+    fees24hSol: c.last24h?.feesSol ?? null,
     createdAt: c.createdAt,
   }));
   const rate = data.rates;
+  const day = t.last24h;
+  const scenarios = flowScenarios(data);
+  const creators = topCreators(data, 10);
   return (
     <>
       <ul className="stats fee-stats">
@@ -83,9 +89,34 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
         </li>
       </ul>
 
+      <section className="fee-section" aria-labelledby="today">
+        <h2 id="today">The last 24 hours</h2>
+        <p className="muted fee-section-lede">
+          Estimated: each coin's 24-hour volume on higher.fun, at the rates of the phase it trades in now.
+        </p>
+        <ul className="stats">
+          <li>
+            <span className="stat-n">{sol(day.feesSol)} SOL</span>
+            <span className="stat-label">in fees{usd(day.feesSol, data.solUsd) ? ` · ${usd(day.feesSol, data.solUsd)}` : ""}</span>
+          </li>
+          <li>
+            <span className="stat-n">{sol(day.byRecipient.creator)} SOL</span>
+            <span className="stat-label">to creators{usd(day.byRecipient.creator, data.solUsd) ? ` · ${usd(day.byRecipient.creator, data.solUsd)}` : ""}</span>
+          </li>
+          <li>
+            <span className="stat-n">{sol(day.volumeSol)} SOL</span>
+            <span className="stat-label">traded</span>
+          </li>
+          <li>
+            <span className="stat-n">{day.coinsTraded.toLocaleString("en-US")}</span>
+            <span className="stat-label">coins traded, of {t.coins.toLocaleString("en-US")}</span>
+          </li>
+        </ul>
+      </section>
+
       <section className="fee-section" aria-labelledby="flow">
         <h2 id="flow">How a trade's fee splits</h2>
-        <FeeFlow scenarios={flowScenarios(data)} />
+        <FeeFlow scenarios={scenarios} />
       </section>
 
       <section className="fee-section" aria-labelledby="split">
@@ -136,7 +167,7 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
           </li>
           <li>
             <span className="stat-n">{sol(w.creatorCurveSol)} SOL</span>
-            <span className="stat-label">curve creator fees, in creators' vaults</span>
+            <span className="stat-label">curve creator fees, in creators' vaults (which also hold their fees from other LaunchLab launchpads)</span>
           </li>
           <li>
             <span className="stat-n">{sol(w.higherCurveSol)} SOL</span>
@@ -148,7 +179,73 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
           </li>
         </ul>
         <p className="muted small">
-          Creators can claim theirs with Highwire's <a href="/docs#build_claim_creator_fees">build_claim_creator_fees</a>.
+          Creators can claim theirs with Highwire's <a href="/docs#build_claim_creator_fees">build_claim_creator_fees</a>, or
+          look up their wallet below.
+        </p>
+      </section>
+
+      <section className="fee-section" aria-labelledby="creators">
+        <h2 id="creators">Top creators</h2>
+        <p className="muted fee-section-lede">Creator wallets by what their coins have paid them, across every coin they made.</p>
+        <WalletLookup />
+        <div className="table-wrap">
+          <table className="params fees">
+            <thead>
+              <tr>
+                <th scope="col">Creator</th>
+                <th scope="col" className="num">
+                  Coins
+                </th>
+                <th scope="col">Best coin</th>
+                <th scope="col" className="num">
+                  Volume (SOL)
+                </th>
+                <th scope="col" className="num">
+                  Earned (SOL)
+                </th>
+                <th scope="col" className="num">
+                  Last 24h
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {creators.map((r) => (
+                <tr key={r.wallet}>
+                  <td data-label="Creator">
+                    <a href={`/fees/creator/${r.wallet}`} className="mono-wrap">
+                      {short(r.wallet)}
+                    </a>
+                  </td>
+                  <td data-label="Coins" className="num">
+                    {r.coins}
+                    {r.graduated ? <span className="muted"> ({r.graduated} graduated)</span> : null}
+                  </td>
+                  <td data-label="Best coin">
+                    <a href={`/fees/${r.best.mint}`}>{r.best.ticker ? `$${r.best.ticker}` : short(r.best.mint)}</a>
+                  </td>
+                  <td data-label="Volume (SOL)" className="num">
+                    {sol(r.volumeSol)}
+                  </td>
+                  <td data-label="Earned (SOL)" className="num">
+                    <strong>{sol(r.earnedSol)}</strong>
+                  </td>
+                  <td data-label="Last 24h" className="num">
+                    {r.last24hSol > 0 ? sol(r.last24hSol) : <span className="muted">–</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="fee-section" aria-labelledby="earn">
+        <h2 id="earn">What a coin earns its creator</h2>
+        <p className="muted fee-section-lede">Pick a fee mode and a daily volume.</p>
+        <EarningsCalculator scenarios={scenarios} volumes={volumes24h(data)} solUsd={data.solUsd} />
+        <p className="muted small">
+          To launch one from an agent, give it <a href="/skill.md">highwire.fun/skill.md</a>. To start from a working agent
+          that spends its fees, see <a href="/ideas">ideas</a>.
         </p>
       </section>
 
@@ -184,6 +281,15 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
             what's waiting in it (on-chain), taken out of higher.fun's share, or the creator's when they gave theirs.
           </li>
           <li>
+            <strong>The last 24 hours, estimated.</strong> higher.fun's 24-hour volume for each coin, which counts curve and
+            pool trades alike, priced at the rates of the phase the coin trades in now. A coin that graduated during the day
+            is priced at pool rates throughout.
+          </li>
+          <li>
+            <strong>Creators.</strong> A creator is the wallet each coin's curve names as its creator: the one that launched
+            it, or the one it was launched for. Earned is every creator line above, claimed or not.
+          </li>
+          <li>
             <strong>Not counted:</strong> launch fees (about {sol(t.launchFeesSol)} SOL at today's 0.02 SOL each), higher.fun's
             1% of supply from graduated Old school coins, and network fees.
           </li>
@@ -192,6 +298,10 @@ function Ecosystem({ data }: { data: NonNullable<Awaited<ReturnType<typeof allFe
           Last read {updatedAt(data.generatedAt)}. Highwire isn't affiliated with higher.fun; these are our reading of public
           on-chain data, not higher.fun's accounts.
           {data.warnings.length ? ` ${data.warnings.join(" ")}` : ""}
+        </p>
+        <p className="muted small">
+          Agents can read the same numbers through Highwire's MCP: <a href="/docs#get_ecosystem_fees">get_ecosystem_fees</a>,{" "}
+          <a href="/docs#get_coin_fees">get_coin_fees</a> and <a href="/docs#get_creator_fees">get_creator_fees</a>.
         </p>
       </section>
     </>

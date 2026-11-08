@@ -49,6 +49,7 @@ execute tools sign and send only inside it. Dry run until the policy says `"live
 | `rug_check` | On-chain authorities plus higher.fun's safety data, rolled into a verdict |
 | `get_ecosystem_fees` | Every fee higher.fun's coins have paid and who got it, by phase and fee mode, what's waiting to be claimed, and the top coins: the numbers behind highwire.fun/fees |
 | `get_coin_fees` | One coin's fees, line by line: who got each, measured on-chain or computed from volume, and what's waiting |
+| `get_creator_fees` | What a creator wallet's coins have paid it, coin by coin, and what's waiting for it to claim |
 
 **Transactions (hosted and local):**
 
@@ -123,7 +124,7 @@ refreshes the blockhash and changes nothing else); launch links, whose new mint 
 
 ### Hosted
 
-Nothing to install, no key. The hosted server has all 26 tools; the build tools only return unsigned transactions and a
+Nothing to install, no key. The hosted server has all 27 tools; the build tools only return unsigned transactions and a
 sign link.
 
 **Claude Code**

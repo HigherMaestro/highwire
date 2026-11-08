@@ -56,6 +56,11 @@ export interface CoinFees {
   poolVolumeSol: number | null;
   volumeSol: number;
   volume24hSol: number | null;
+  /**
+   * The last 24 hours: higher.fun's 24-hour volume (curve and pool trades) at the rates of the phase the coin is in now.
+   * Computed, not measured; null when the volume isn't listed or the coin is between phases.
+   */
+  last24h: { volumeSol: number; feesSol: number; byRecipient: Record<Recipient, number> } | null;
   totalFeesSol: number;
   byRecipient: Record<Recipient, number>;
   lines: FeeFlow[];
@@ -87,6 +92,8 @@ export interface EcosystemFees {
     byMode: Record<FeeMode, { coins: number; volumeSol: number; feesSol: number }>;
     /** 0.02 SOL per coin at today's launch fee: an estimate, since it isn't recorded per coin. */
     launchFeesSol: number;
+    /** The coins' `last24h` added up, and how many traded. */
+    last24h: { volumeSol: number; feesSol: number; byRecipient: Record<Recipient, number>; coinsTraded: number };
   };
   /** What sits in the vaults right now, waiting to be claimed. */
   waiting: {
@@ -96,6 +103,11 @@ export interface EcosystemFees {
     /** In coins' holder-airdrop wallets, not yet paid out. */
     holdersSol: number;
   };
+  /**
+   * Read for one creator only: what higher.fun has paid them off-chain (their third of the locked-LP fees) and what it
+   * owes; null when higher.fun's API didn't answer.
+   */
+  creatorPayouts?: { paidOutSol: number; pendingSol: number } | null;
   /** The rates the computed lines use, as read on-chain, in percent. */
   rates: {
     curve: Record<FeeMode, { raydium: number; platform: number; creator: number }>;
@@ -108,6 +120,8 @@ const PPM = 1_000_000n;
 const big = (v: { toString(): string }) => BigInt(v.toString());
 const pct = (ppm: bigint) => Number(ppm) / 10_000;
 const LAUNCH_FEE_SOL = 0.02;
+/** Pages of a creator's coins read from higher.fun's API (a page is up to 100 coins, as listCoins). */
+const MAX_CREATOR_PAGES = 5;
 /** Coin records read for holder airdrops on a full read: each is a request to higher.fun's API. */
 const MAX_AIRDROP_READS = 150;
 
@@ -150,8 +164,11 @@ async function lifetimeVolume(api: HigherApi, mint: string): Promise<bigint> {
   }
 }
 
-/** Reads and works out the fees for every higher.fun coin, or only `only` (mints). Mainnet only. */
-export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?: string[] } = {}): Promise<EcosystemFees> {
+/**
+ * Reads and works out the fees for every higher.fun coin, or only `only` (mints), or only the coins `creator` (a wallet)
+ * created. Mainnet only.
+ */
+export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?: string[]; creator?: string } = {}): Promise<EcosystemFees> {
   const warnings: string[] = [];
   const program = chain.key("launchLabProgram");
   const platforms = [chain.key("rewardsPlatform"), chain.key("classicPlatform")];
@@ -159,6 +176,7 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
   // Every pool on higher.fun's two platforms (or the named coins').
   type Found = { mint: PublicKey; state: ReturnType<typeof LaunchpadPool.decode> };
   let found: Found[];
+  let creatorListing: Map<string, Coin> | null = null;
   if (opts.only) {
     const mints = opts.only.map((m) => new PublicKey(m));
     const infos = await chain.connection.getMultipleAccountsInfo(mints.map((m) => chain.launchPoolId(m)));
@@ -167,6 +185,30 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
       if (!info || !info.owner.equals(program)) return;
       const state = LaunchpadPool.decode(info.data);
       if (platforms.some((p) => p.equals(state.platformId))) found.push({ mint: mints[i]!, state });
+    });
+  } else if (opts.creator) {
+    // higher.fun lists the coins a wallet created, which costs one request for a wallet that made none; each listed coin
+    // is then read on-chain, and kept only if its curve names this wallet as its creator.
+    const creator = new PublicKey(opts.creator);
+    const mints: PublicKey[] = [];
+    creatorListing = new Map();
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_CREATOR_PAGES; page++) {
+      const res = await api.userCoins(creator.toBase58(), cursor);
+      for (const c of res.items) {
+        mints.push(new PublicKey(c.mint));
+        creatorListing.set(c.mint, c);
+      }
+      if (!res.nextCursor) break;
+      cursor = res.nextCursor;
+      if (page === MAX_CREATOR_PAGES - 1) warnings.push(`Only this wallet's ${mints.length} most recent coins are counted.`);
+    }
+    const infos = await inChunks(mints.map((m) => chain.launchPoolId(m)), 99, (ids) => chain.connection.getMultipleAccountsInfo(ids));
+    found = [];
+    infos.forEach((info, i) => {
+      if (!info || !info.owner.equals(program)) return;
+      const state = LaunchpadPool.decode(info.data);
+      if (state.creator.equals(creator) && platforms.some((p) => p.equals(state.platformId))) found.push({ mint: mints[i]!, state });
     });
   } else {
     found = [];
@@ -181,8 +223,9 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
     }
   }
   found = found.filter((f) => f.state.mintB.equals(WSOL));
-  // Not a higher.fun coin: one read was enough to say so. A page asked about any address must stay this cheap.
-  if (opts.only && found.length === 0) return emptyFees(warnings);
+  // Not a higher.fun coin (or no coins by that wallet): one read was enough to say so. A page asked about any address must
+  // stay this cheap.
+  if ((opts.only || opts.creator) && found.length === 0) return emptyFees(warnings);
 
   // The rates, on-chain: each LaunchLab config's trade fee, each platform's fees, the CPMM fee tier.
   const configIds = [...new Set(found.map((f) => f.state.configId.toBase58()))].map((k) => new PublicKey(k));
@@ -200,14 +243,14 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
     if (info) tradeRate.set(c.toBase58(), big(LaunchpadConfig.decode(info.data).tradeFeeRate));
   });
 
-  const listed = opts.only ? new Map<string, Coin>() : await listedCoins(api, warnings);
+  const listed = opts.only ? new Map<string, Coin>() : (creatorListing ?? (await listedCoins(api, warnings)));
   const airdrops = new Map<string, CoinAirdrops>();
   if (opts.only) {
-    for (const m of opts.only) {
+    await pooled(opts.only, 4, async (m) => {
       const c = await api.coin(m).catch(() => null);
       if (c) listed.set(m, c);
       if (c?.airdrops?.wallet) airdrops.set(m, c.airdrops);
-    }
+    });
   } else {
     // Only a coin's own record says where its airdrops go, one request each, and higher.fun's API limits bursts. So:
     // New school coins that have traded since airdrops began, most recently traded first, at most MAX_AIRDROP_READS.
@@ -287,6 +330,13 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
     (r) => r.usd,
     () => null,
   );
+  const lamportsOf = (v: string) => lamportsNumber(BigInt(v.split(".")[0] || "0"));
+  const creatorPayouts = opts.creator
+    ? await api.earnings(opts.creator).then(
+        (e) => ({ paidOutSol: lamportsOf(e.paidOut), pendingSol: lamportsOf(e.pendingPayout) }),
+        () => null,
+      )
+    : undefined;
 
   const coins: CoinFees[] = found.map((f) => {
     const mint = f.mint.toBase58();
@@ -395,6 +445,16 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
     const byRecipient: Record<Recipient, number> = { "higher.fun": 0, creator: 0, holders: 0, Raydium: 0, liquidity: 0 };
     for (const l of lines) byRecipient[l.to] += l.sol;
     const totalFees = lines.reduce((n, l) => n + l.sol, 0);
+    // The last 24 hours, at the rates of the phase the coin trades in now.
+    const volume24h = listing?.volume24h ? lamportsNumber(BigInt(listing.volume24h.split(".")[0] || "0")) : null;
+    const nowPhase = status === "graduated" ? "pool" : status === "curve" ? "curve" : null;
+    let last24h: CoinFees["last24h"] = null;
+    if (volume24h != null && nowPhase && (nowPhase === "curve" || p)) {
+      const by: Record<Recipient, number> = { "higher.fun": 0, creator: 0, holders: 0, Raydium: 0, liquidity: 0 };
+      for (const l of lines) if (l.phase === nowPhase) by[l.to] += (volume24h * l.ratePct) / 100;
+      const rounded = mapValues(by, round9);
+      last24h = { volumeSol: volume24h, feesSol: round9(Object.values(by).reduce((a, b) => a + b, 0)), byRecipient: rounded };
+    }
     return {
       mint,
       name: listing?.name ?? null,
@@ -406,7 +466,8 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
       curveVolumeSol: lamportsNumber(curveVolume),
       poolVolumeSol: poolVolume == null ? (status === "graduated" ? null : 0) : lamportsNumber(poolVolume),
       volumeSol: lamportsNumber(curveVolume + (poolVolume ?? 0n)),
-      volume24hSol: listing?.volume24h ? Number(BigInt(listing.volume24h.split(".")[0] || "0")) / 1e9 : null,
+      volume24hSol: volume24h,
+      last24h,
       totalFeesSol: round9(totalFees),
       byRecipient: mapValues(byRecipient, round9),
       lines: lines.map((l) => ({ ...l, sol: round9(l.sol), ratePct: Math.round(l.ratePct * 1e6) / 1e6 })),
@@ -450,6 +511,18 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
       },
       byMode: { rewards: modeTotals("rewards"), classic: modeTotals("classic") },
       launchFeesSol: round9(coins.length * LAUNCH_FEE_SOL),
+      last24h: {
+        volumeSol: sum((c) => c.last24h?.volumeSol ?? 0),
+        feesSol: sum((c) => c.last24h?.feesSol ?? 0),
+        byRecipient: {
+          "higher.fun": sum((c) => c.last24h?.byRecipient["higher.fun"] ?? 0),
+          creator: sum((c) => c.last24h?.byRecipient.creator ?? 0),
+          holders: sum((c) => c.last24h?.byRecipient.holders ?? 0),
+          Raydium: sum((c) => c.last24h?.byRecipient.Raydium ?? 0),
+          liquidity: sum((c) => c.last24h?.byRecipient.liquidity ?? 0),
+        },
+        coinsTraded: coins.filter((c) => (c.last24h?.volumeSol ?? 0) > 0).length,
+      },
     },
     waiting: {
       higherCurveSol: lamportsNumber(higherCurveWaiting),
@@ -457,6 +530,7 @@ export async function ecosystemFees(chain: Chain, api: HigherApi, opts: { only?:
       creatorPoolSol: sum((c) => c.pool?.creatorWaitingSol ?? 0),
       holdersSol: sum((c) => c.holders?.waitingSol ?? 0),
     },
+    ...(creatorPayouts !== undefined ? { creatorPayouts } : {}),
     rates: {
       curve: { rewards: curveRates("rewards"), classic: curveRates("classic") },
       pool: {
@@ -487,6 +561,7 @@ function emptyFees(warnings: string[]): EcosystemFees {
       byPhase: { curve: 0, pool: 0 },
       byMode: { rewards: { coins: 0, volumeSol: 0, feesSol: 0 }, classic: { coins: 0, volumeSol: 0, feesSol: 0 } },
       launchFeesSol: 0,
+      last24h: { volumeSol: 0, feesSol: 0, byRecipient: zero, coinsTraded: 0 },
     },
     waiting: { higherCurveSol: 0, creatorCurveSol: 0, creatorPoolSol: 0, holdersSol: 0 },
     rates: {
