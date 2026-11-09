@@ -1,0 +1,22 @@
+[package]
+name = "line-wager"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "The Line's wager program: a best-of-5 series played on-chain, commit then reveal, with the stakes held by the program (docs/wager-mode.md)."
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+no-entrypoint = []
+
+[dependencies]
+solana-program = "=1.18.18"
+borsh = { version = "=1.5.1", features = ["derive"] }
+
+[dev-dependencies]
+serde = { version = "=1.0.210", features = ["derive"] }
+serde_json = "=1.0.128"

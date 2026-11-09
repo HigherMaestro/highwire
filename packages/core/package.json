@@ -40,7 +40,8 @@
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "record-fixtures": "tsx --conditions=highwire-source scripts/record-fixtures.ts",
     "arena:sim": "tsx --conditions=highwire-source scripts/arena-sim.ts",
-    "prepack": "npm run build && cp ../../LICENSE ."
+    "prepack": "npm run build && cp ../../LICENSE .",
+    "wager-fixtures": "tsx --conditions=highwire-source scripts/wager-fixtures.ts"
   },
   "dependencies": {
     "@noble/curves": "1.9.7",

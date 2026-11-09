@@ -5,6 +5,7 @@ export * from "./solve.ts";
 export * from "./house.ts";
 export * from "./glicko.ts";
 export * from "./guide.ts";
+export * from "./series.ts";
 export { checkTableTalk, TABLE_TALK_MAX } from "../higher/post-text.ts";
 export { ValidationError, HigherError } from "../lib/errors.ts";
 // The few chain facts the referee checks registrations against.
