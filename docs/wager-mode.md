@@ -299,7 +299,13 @@ Each wager series has a program-derived account (PDA) holding both stakes. Only 
 it, and only to:
 1. the winner (the pot less the fee),
 2. both players (a refund: a drawn series, a void, a series that never started, a timeout, or an emergency refund),
-3. the fee account (the fee only, and only on a decided series).
+3. the fee account (the fee only, and only on a decided series, retirements included);
+4. the incinerator, for a player's own share when the runtime won't credit that player's wallet (it was turned into a
+   program, say). Burning it means no payee can hold the other player's payout hostage, and nobody profits.
+
+A fee the fee account can't take (it's empty and the fee is under its rent-exempt minimum) goes to the winner, so
+Highwire's own setup never holds a payout. Tiers are at least 0.01 SOL, so a payout to a player who emptied their
+wallet is always above the rent minimum. `open` takes A's stake only from a plain system wallet.
 
 There is no instruction that sends staked lamports anywhere else. **One authority can reach an open series**, and only
 to refund it: `freeze_and_refund` (7.2), callable by the 2-of-3 multisig alone, which returns both stakes in full and
@@ -359,8 +365,9 @@ hosted side never holds a key that moves users' money (AGENTS.md, "The hosted en
   series only), the rules version.
 - `Series` (one per wager, PDA from `["series", series_id]`): both players' wallets, the tier, the **fee snapshotted at
   open**, the state, the rules version, the ticket's key id, the current match's open round (commitments, reveals, the
-  node, energies, each side's bank), **each side's fallback as a commitment** (7.2.5), a 32-byte digest per finished
-  match, the five match results, the deadline of the current phase, and the slot of the last change.
+  node, energies, each side's bank), **each side's fallback as a commitment** (7.2.5), the five match results, when
+  the current phase opened (its deadlines follow from it), and the Unix time of the last change (the emergency refund's
+  clock). Per-round history is in the transactions, not the account.
 - No account per round. Every revealed round is emitted as an event; the indexer keeps them (7.5).
 
 **Instructions**
@@ -375,7 +382,7 @@ hosted side never holds a key that moves users' money (AGENTS.md, "The hosted en
 | `timeout()` | anyone, after a deadline | in a commit phase, only once **every** side still to commit is past its own deadline (so nothing about one side is published while the other can still move); each late side then owes its fallback (7.2.5). In a reveal phase after the window: a missed reveal forfeits the match (7.2.1); both missed: a void |
 | `settle()` | anyone, once the series is decided | pays the winner and the snapshotted fee, or refunds; closes the account, rent to the opener; decrements the open-stake counter |
 | `retire()` | a player | forfeits the series |
-| `emergency_refund()` | anyone, if the series hasn't changed for 24 hours | refunds both stakes in full and closes the account, whatever its layout version, except a decided series, which only settles (so the loser can't take its stake back by waiting a day) |
+| `emergency_refund()` | anyone, if the series hasn't changed for 24 hours | refunds both stakes in full and closes the account, whatever its layout version, except a series that is decided or that the timeouts already due would decide: that only settles (so the loser can't take its stake back by waiting a day) |
 | `freeze_and_refund()` | the multisig only | refunds both stakes in full and closes the account (6.3) |
 
 #### 7.2.1 Committed but never revealed
@@ -414,7 +421,8 @@ The on-chain clock is a different clock from the free referee's, and it is the r
 - **A side's bank is charged** the gap between its commit phase opening and its commit landing: so its thinking, plus
   inclusion latency, plus any lateness of the transaction that opened the phase. Players are told so.
 - Validator clocks drift by seconds, at times tens of seconds *(uncertain on the worst case)*; round limits stay at 2
-  minutes, and the reveal window never goes under 1 minute.
+  minutes, and the reveal window is between 1 minute and 1 hour (the program refuses anything else). The ceiling keeps
+  every window far below the emergency refund's 24 hours, so withholding a reveal can never be waited out.
 - A side that's late lands nothing; anyone may call `timeout()`. Highwire runs a crank (7.5), but nothing depends on it:
   either player can crank, and the one ahead has every reason to.
 - The browser's replay uses this model, not the free referee's (`match.ts`).
@@ -527,8 +535,11 @@ Wagering goes **only** through the local signer, inside the owner's policy file,
   a 48-hour timelock on upgrades, announced on the site; **new series are paused for the whole timelock**, so no series
   spans an upgrade, and `emergency_refund` (24 hours without a change) covers any that does. *(Open: freezing the
   upgrade authority after the audit and a stable period.)*
-- The `Config` authority can only: pause new series, change tiers within the program's hard cap, set the fee within
-  its hard cap (new series only), rotate the ticket key, and `freeze_and_refund` an open series (6.3).
+- The `Config` authority can only: pause new series, change tiers, the per-side cap and the open-stake cap within the
+  program's hard caps, set the fee and the fee account within the fee's hard cap (new series only), rotate the ticket
+  key, hand authority to another key, and `freeze_and_refund` a series (6.3). The freeze refunds both stakes in full
+  whatever the state, a decided but unsettled series included (settling is open to anyone, so a winner who settles
+  promptly is never exposed to it); the terms say so.
 - **The matchmaker's ticket key** is the one key in the site. A stolen one can pair **ineligible** players (sanctioned,
   under-age, excluded, self-excluded) and pair a victim with a chosen shark, bypassing clusters and caps: legal exposure
   and harm, not stolen stakes. So: it lives in its own secret, every ticket is logged, the program records each series'
@@ -813,6 +824,23 @@ changed:
 - **Marked "verify" for counsel**, as the reviewer couldn't confirm them: the Florida action against Stake.us (August
   2026), the Anjouan revocation (July 2026), the Curaçao crypto guideline (June 2026), and the state skill-contest
   lists.
+
+### 17.1 The program's audit (step 2)
+
+An adversarial audit of `programs/line-wager` found no way to take a stake. It found ways to hold one, each now fixed and
+covered by a test in `tests/program.rs`:
+- **A payee could block every payout (high).** A player who turned its wallet into a program (empty it, deploy at that
+  address) made the runtime refuse every credit to it, so `settle`, the emergency refund and the freeze all failed, and
+  the other player's winnings and the open-stake reservation were stuck for good. Now a share the runtime won't credit
+  burns in the incinerator, so the other player is still paid (6.3), and `open` takes A's stake only from a plain
+  wallet.
+- **A small fee into an empty fee account blocked `settle`.** That fee now goes to the winner, and tiers are at least
+  0.01 SOL.
+- **A reveal window of a day could be waited out** by the emergency refund. The window is now capped at an hour.
+- **The emergency refund could skip a timeout that was already due** and refund a series that timeout would have
+  decided. It now plays the due timeouts first and refuses if they decide the series.
+- The spec now matches the code on the authority's powers, the freeze on a decided series, and what the series account
+  holds.
 
 ## Sources
 

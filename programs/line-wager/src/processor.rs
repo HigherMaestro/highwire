@@ -4,14 +4,17 @@
 //! - a player is whoever signed, matched against the two wallets stored at open, never a value in instruction data;
 //! - the authority can pause new series, change limits within hard caps, rotate the ticket key and freeze-and-refund,
 //!   and nothing else: it can't touch an open series' moves or pay anyone but the players;
-//! - an account that's done is closed, its rent to player A, who paid it.
+//! - an account that's done is closed, its rent to player A, who paid it;
+//! - no payee can block a payout: a share the runtime won't credit (an executable or loader-owned account) burns.
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
+    bpf_loader, bpf_loader_deprecated,
     bpf_loader_upgradeable::{self, UpgradeableLoaderState},
     clock::Clock,
     entrypoint::ProgramResult,
+    incinerator, loader_v4,
     program::{invoke, invoke_signed},
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -23,7 +26,7 @@ use solana_program::{
 use crate::error::{series as series_err, WagerError};
 use crate::instruction::{ConfigInit, ConfigUpdate, WagerInstruction};
 use crate::rules::{Fallback, DUELS_1};
-use crate::series::{Reveal, Series, PLAYER_A, PLAYER_B, SERIES_DRAW};
+use crate::series::{Reveal, Series, PLAYER_A, PLAYER_B};
 use crate::state::*;
 use crate::ticket::{self, Ticket};
 
@@ -117,9 +120,30 @@ fn pay(from: &AccountInfo, to: &AccountInfo, lamports: u64) -> ProgramResult {
     Ok(())
 }
 
+/// Whether the runtime would refuse to credit this account: a program, or anything a loader owns. A player can turn its
+/// own wallet into one (empty it, then deploy a program at its address), and without this check that would block every
+/// payout that touches it, the other player's included.
+const NATIVE_LOADER: Pubkey = solana_program::pubkey!("NativeLoader1111111111111111111111111111111");
+
+fn uncreditable(acc: &AccountInfo) -> bool {
+    acc.executable || [bpf_loader_upgradeable::ID, bpf_loader::ID, bpf_loader_deprecated::ID, loader_v4::ID, NATIVE_LOADER].contains(acc.owner)
+}
+
+fn incinerator_account<'a, 'b>(acc: &'a AccountInfo<'b>) -> Result<&'a AccountInfo<'b>, ProgramError> {
+    if *acc.key != incinerator::ID {
+        return Err(WagerError::NotIncinerator.into());
+    }
+    Ok(acc)
+}
+
+/// Pays a player, or burns the share if the runtime won't credit them.
+fn pay_player<'a>(from: &AccountInfo<'a>, to: &AccountInfo<'a>, burn: &AccountInfo<'a>, lamports: u64) -> ProgramResult {
+    pay(from, if uncreditable(to) { burn } else { to }, lamports)
+}
+
 /// Closes a series account: every remaining lamport (its rent, and anything sent to it by mistake) to `to`.
-fn close(series: &AccountInfo, to: &AccountInfo) -> ProgramResult {
-    pay(series, to, series.lamports())?;
+fn close<'a>(series: &AccountInfo<'a>, to: &AccountInfo<'a>, burn: &AccountInfo<'a>) -> ProgramResult {
+    pay_player(series, to, burn, series.lamports())?;
     series.data.borrow_mut().fill(0);
     series.realloc(0, false)?;
     series.assign(&system_program::ID);
@@ -136,10 +160,10 @@ fn check_limits(c: &ConfigInit) -> ProgramResult {
     if c.fee_bps > FEE_BPS_HARD_MAX {
         return Err(WagerError::BadFee.into());
     }
-    if c.max_stake > STAKE_HARD_MAX || c.tiers.iter().any(|t| *t > c.max_stake) {
+    if c.max_stake > STAKE_HARD_MAX || c.tiers.iter().any(|t| *t > c.max_stake || (*t != 0 && *t < STAKE_HARD_MIN)) {
         return Err(WagerError::OverStakeCap.into());
     }
-    if c.reveal_seconds < 60 {
+    if !(60..=REVEAL_SECONDS_MAX).contains(&c.reveal_seconds) {
         return Err(WagerError::BadInstruction.into());
     }
     Ok(())
@@ -295,7 +319,8 @@ fn open(
     let series_acc = next_account_info(it)?;
     let ixs = next_account_info(it)?;
     let system = next_account_info(it)?;
-    if !player_a.is_signer || *system.key != system_program::ID {
+    // A plain wallet: something that pays its stake from its own lamports, and that can be paid.
+    if !player_a.is_signer || *system.key != system_program::ID || *player_a.owner != system_program::ID || uncreditable(player_a) {
         return Err(WagerError::NotAPlayer.into());
     }
     let mut c = load_config(program_id, config_acc)?;
@@ -393,6 +418,7 @@ fn cancel(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     let config_acc = next_account_info(it)?;
     let series_acc = next_account_info(it)?;
     let player_a = next_account_info(it)?;
+    let burn = incinerator_account(next_account_info(it)?)?;
     let h = load_header(program_id, series_acc)?;
     if h.status != STATUS_OPEN {
         return Err(WagerError::WrongStatus.into());
@@ -405,7 +431,7 @@ fn cancel(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
         return Err(WagerError::NotYet.into());
     }
     release(config_acc, program_id, h.stake.checked_mul(2).ok_or(WagerError::Math)?)?;
-    close(series_acc, player_a)
+    close(series_acc, player_a, burn)
 }
 
 // ---------------------------------------------------------------- playing
@@ -455,6 +481,7 @@ fn settle(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     let player_a = next_account_info(it)?;
     let player_b = next_account_info(it)?;
     let fee_acc = next_account_info(it)?;
+    let burn = incinerator_account(next_account_info(it)?)?;
     let s = load_series(program_id, series_acc)?;
     let h = &s.header;
     if h.status != STATUS_LIVE {
@@ -465,20 +492,27 @@ fn settle(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
         return Err(WagerError::WrongPayee.into());
     }
     let pot = h.stake.checked_mul(2).ok_or(WagerError::Math)?;
-    match (ending.winner, ending.reason) {
-        (None, SERIES_DRAW) | (None, _) => {
-            pay(series_acc, player_a, h.stake)?;
-            pay(series_acc, player_b, h.stake)?;
+    match ending.winner {
+        None => {
+            pay_player(series_acc, player_a, burn, h.stake)?;
+            pay_player(series_acc, player_b, burn, h.stake)?;
         }
-        (Some(w), _) => {
-            let fee = ((pot as u128) * (h.fee_bps as u128) / 10_000) as u64;
+        Some(w) => {
+            let mut fee = ((pot as u128) * (h.fee_bps as u128) / 10_000) as u64;
+            // A fee the fee account can't take (it's empty and the fee is under its rent-exempt minimum, or it isn't
+            // creditable) goes to the winner: Highwire's own setup must never hold a winner's payout.
+            let fee_ok = !uncreditable(fee_acc)
+                && fee_acc.lamports().checked_add(fee).ok_or(WagerError::Math)? >= Rent::get()?.minimum_balance(fee_acc.data_len());
+            if !fee_ok {
+                fee = 0;
+            }
             let winner = if w == PLAYER_A { player_a } else { player_b };
-            pay(series_acc, winner, pot.checked_sub(fee).ok_or(WagerError::Math)?)?;
+            pay_player(series_acc, winner, burn, pot.checked_sub(fee).ok_or(WagerError::Math)?)?;
             pay(series_acc, fee_acc, fee)?;
         }
     }
     release(config_acc, program_id, pot)?;
-    close(series_acc, player_a)
+    close(series_acc, player_a, burn)
 }
 
 /// Refunds both stakes in full and closes the series: anyone after 24 hours without a change (unless it's over and only
@@ -495,38 +529,55 @@ fn refund_all(program_id: &Pubkey, accounts: &[AccountInfo], by_authority: bool)
         let series_acc = next_account_info(it)?;
         let player_a = next_account_info(it)?;
         let player_b = next_account_info(it)?;
-        return refund(program_id, config_acc, series_acc, player_a, player_b, false);
+        let burn = incinerator_account(next_account_info(it)?)?;
+        return refund(program_id, config_acc, series_acc, player_a, player_b, burn, false);
     }
     let series_acc = next_account_info(it)?;
     let config_acc = next_account_info(it)?;
     let player_a = next_account_info(it)?;
     let player_b = next_account_info(it)?;
-    refund(program_id, config_acc, series_acc, player_a, player_b, true)
+    let burn = incinerator_account(next_account_info(it)?)?;
+    refund(program_id, config_acc, series_acc, player_a, player_b, burn, true)
 }
 
-fn refund<'a>(program_id: &Pubkey, config_acc: &AccountInfo<'a>, series_acc: &AccountInfo<'a>, player_a: &AccountInfo<'a>, player_b: &AccountInfo<'a>, after_idle: bool) -> ProgramResult {
+fn refund<'a>(
+    program_id: &Pubkey,
+    config_acc: &AccountInfo<'a>,
+    series_acc: &AccountInfo<'a>,
+    player_a: &AccountInfo<'a>,
+    player_b: &AccountInfo<'a>,
+    burn: &AccountInfo<'a>,
+    after_idle: bool,
+) -> ProgramResult {
     let h = load_header(program_id, series_acc)?;
     if *player_a.key != h.player_a || *player_b.key != h.player_b {
         return Err(WagerError::WrongPayee.into());
     }
-    if after_idle && now()?.saturating_sub(h.last_change) < EMERGENCY_AFTER_SECONDS {
+    let t = now()?;
+    if after_idle && t.saturating_sub(h.last_change) < EMERGENCY_AFTER_SECONDS {
         return Err(WagerError::NotYet.into());
     }
-    // A series that's over settles: an idle 24 hours mustn't let the loser take back what they lost. Only a series this
-    // version can't read at all (a layout change) is refunded unread.
+    // A series that's over, or that the timeouts already due would decide, settles: an idle 24 hours mustn't let the
+    // loser take back what they lost. Only a series this version can't read at all (a layout change) is refunded unread.
     if after_idle && h.status == STATUS_LIVE {
-        if let Ok(s) = SeriesAccount::deserialize(&mut &series_acc.data.borrow()[..]) {
-            if s.series.map_or(false, |x| x.ending.is_some()) {
+        if let Ok(SeriesAccount { series: Some(mut s), .. }) = SeriesAccount::deserialize(&mut &series_acc.data.borrow()[..]) {
+            // Each timeout either ends a match, opens a phase at `t` (so the next is StillOpen) or fails: a handful at most.
+            for _ in 0..16 {
+                if s.ending.is_some() || s.timeout(t).is_err() {
+                    break;
+                }
+            }
+            if s.ending.is_some() {
                 return Err(WagerError::Decided.into());
             }
         }
     }
     match h.status {
         STATUS_OPEN => {}
-        STATUS_LIVE => pay(series_acc, player_b, h.stake)?,
+        STATUS_LIVE => pay_player(series_acc, player_b, burn, h.stake)?,
         _ => return Err(WagerError::WrongStatus.into()),
     }
     release(config_acc, program_id, h.stake.checked_mul(2).ok_or(WagerError::Math)?)?;
     // A's stake and the rent go back to A.
-    close(series_acc, player_a)
+    close(series_acc, player_a, burn)
 }

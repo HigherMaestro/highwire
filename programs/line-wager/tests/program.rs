@@ -8,6 +8,8 @@ use line_wager::processor::series_address;
 use line_wager::rules::{SIDE_A, SIDE_B};
 use line_wager::series::{move_commitment, side_of, Series, PHASE_COMMIT, PHASE_REVEAL, PLAYER_A, PLAYER_B};
 use line_wager::state::{Config, SeriesAccount, CONFIG_SEED, EMERGENCY_AFTER_SECONDS, STATUS_LIVE, STATUS_OPEN};
+use solana_sdk::account::{AccountSharedData, WritableAccount};
+use solana_sdk::incinerator;
 use line_wager::ticket::Ticket;
 use solana_program_test::{processor, BanksClientError, ProgramTest, ProgramTestContext};
 use solana_sdk::{
@@ -225,7 +227,8 @@ impl Env {
     }
 
     async fn settle(&mut self, id: &[u8; 32]) -> Option<Failure> {
-        let accounts = self.payout_accounts(id, self.fee);
+        let mut accounts = self.payout_accounts(id, self.fee);
+        accounts.push(burn());
         self.send(vec![ix(WagerInstruction::Settle, accounts)], &[]).await
     }
 
@@ -235,6 +238,7 @@ impl Env {
             AccountMeta::new(config_address(), false),
             AccountMeta::new(series_address(&program_id(), id).0, false),
             AccountMeta::new(refund_to, false),
+            burn(),
         ];
         let caller = clone(caller);
         let signers: Vec<&Keypair> = if signs { vec![&caller] } else { vec![] };
@@ -244,6 +248,7 @@ impl Env {
     async fn emergency(&mut self, id: &[u8; 32]) -> Option<Failure> {
         let mut accounts = self.payout_accounts(id, self.fee);
         accounts.pop();
+        accounts.push(burn());
         self.send(vec![ix(WagerInstruction::EmergencyRefund, accounts)], &[]).await
     }
 
@@ -254,6 +259,7 @@ impl Env {
             AccountMeta::new(series_address(&program_id(), id).0, false),
             AccountMeta::new(self.a.pubkey(), false),
             AccountMeta::new(self.b.pubkey(), false),
+            burn(),
         ];
         let signer = clone(signer);
         self.send(vec![ix(WagerInstruction::FreezeAndRefund, accounts)], &[&signer]).await
@@ -295,6 +301,25 @@ impl Env {
     }
 }
 
+fn burn() -> AccountMeta {
+    AccountMeta::new(incinerator::ID, false)
+}
+
+/// A wallet turned into a program: a player can do this to its own address (empty it, then deploy a program there).
+fn make_executable(env: &mut Env, who: Pubkey) {
+    let mut acc = AccountSharedData::new(SOL, 36, &bpf_loader_upgradeable::ID);
+    acc.set_executable(true);
+    env.ctx.set_account(&who, &acc);
+}
+
+/// Payout accounts with `who` read-only: the runtime won't load an executable account as writable.
+fn read_only(mut accounts: Vec<AccountMeta>, who: Pubkey) -> Vec<AccountMeta> {
+    for m in accounts.iter_mut().filter(|m| m.pubkey == who) {
+        *m = AccountMeta::new_readonly(who, false);
+    }
+    accounts
+}
+
 fn clone(k: &Keypair) -> Keypair {
     Keypair::from_bytes(&k.to_bytes()).unwrap()
 }
@@ -311,6 +336,10 @@ async fn only_the_upgrade_authority_initialises_the_config_once() {
     assert_eq!(env.init_config(&authority, ConfigInit { fee_bps: 501, ..init.clone() }).await, Some((0, code(WagerError::BadFee))));
     assert_eq!(env.init_config(&authority, ConfigInit { max_stake: 11 * SOL, ..init.clone() }).await, Some((0, code(WagerError::OverStakeCap))));
     assert_eq!(env.init_config(&authority, ConfigInit { tiers: [2 * SOL, 0, 0, 0], ..init.clone() }).await, Some((0, code(WagerError::OverStakeCap))));
+    // A tier so small its payout could be refused into an empty wallet; a reveal window long enough to wait out.
+    assert_eq!(env.init_config(&authority, ConfigInit { tiers: [SOL / 1000, 0, 0, 0], ..init.clone() }).await, Some((0, code(WagerError::OverStakeCap))));
+    assert_eq!(env.init_config(&authority, ConfigInit { reveal_seconds: 3601, ..init.clone() }).await, Some((0, code(WagerError::BadInstruction))));
+    assert_eq!(env.init_config(&authority, ConfigInit { reveal_seconds: 59, ..init.clone() }).await, Some((0, code(WagerError::BadInstruction))));
     assert_eq!(env.init_config(&authority, init.clone()).await, None);
     assert_eq!(env.init_config(&authority, init).await, Some((0, code(WagerError::AlreadyInitialised))));
     let c = env.config().await;
@@ -522,8 +551,13 @@ async fn a_series_played_out_pays_the_winner_less_the_fee() {
     // Both sides were played: A took side b in match 1.
     assert_eq!((side_of(PLAYER_A, 0), side_of(PLAYER_A, 1)), (SIDE_A, SIDE_B));
     // Paid to the payees fixed at open, nowhere else.
-    let accounts = env.payout_accounts(&id, stranger.pubkey());
-    assert_eq!(env.send(vec![ix(WagerInstruction::Settle, accounts)], &[]).await, Some((0, code(WagerError::WrongPayee))));
+    let mut accounts = env.payout_accounts(&id, stranger.pubkey());
+    accounts.push(burn());
+    assert_eq!(env.send(vec![ix(WagerInstruction::Settle, accounts.clone())], &[]).await, Some((0, code(WagerError::WrongPayee))));
+    // And burns only into the incinerator.
+    let mut accounts = env.payout_accounts(&id, env.fee);
+    accounts.push(AccountMeta::new(stranger.pubkey(), false));
+    assert_eq!(env.send(vec![ix(WagerInstruction::Settle, accounts)], &[]).await, Some((0, code(WagerError::NotIncinerator))));
     assert_eq!(env.settle(&id).await, None);
     let fee = 2 * STAKE * FEE_BPS as u64 / 10_000;
     assert_eq!(env.balance(env.a.pubkey()).await, a0 + 2 * STAKE - fee + rent);
@@ -656,5 +690,146 @@ async fn refunds_go_only_to_the_two_players() {
     let mut accounts = env.payout_accounts(&t.series_id, env.fee);
     accounts.pop();
     accounts[3] = AccountMeta::new(env.stranger.pubkey(), false);
+    accounts.push(burn());
     assert_eq!(env.send(vec![ix(WagerInstruction::EmergencyRefund, accounts)], &[]).await, Some((0, code(WagerError::WrongPayee))));
+}
+
+// ---------------------------------------------------------------- nobody can block a payout (audit, finding 1 and 2)
+
+#[tokio::test]
+async fn a_player_who_turns_its_wallet_into_a_program_burns_only_its_own_share() {
+    let mut env = Env::ready().await;
+    // A concedes, then makes its wallet a program, hoping to hold B's winnings for ever.
+    let t = env.live(50).await;
+    let a = clone(&env.a);
+    assert_eq!(env.play(&a, &t.series_id, WagerInstruction::Retire).await, None);
+    let who = env.a.pubkey();
+    make_executable(&mut env, who);
+    let b0 = env.balance(env.b.pubkey()).await;
+    let mut accounts = read_only(env.payout_accounts(&t.series_id, env.fee), env.a.pubkey());
+    accounts.push(burn());
+    assert_eq!(env.send(vec![ix(WagerInstruction::Settle, accounts)], &[]).await, None);
+    let fee = 2 * STAKE * FEE_BPS as u64 / 10_000;
+    assert_eq!(env.balance(env.b.pubkey()).await, b0 + 2 * STAKE - fee);
+    assert_eq!(env.balance(env.a.pubkey()).await, SOL, "A's rent burned, not paid");
+    assert!(env.series(&t.series_id).await.is_none());
+    assert_eq!(env.config().await.open_stake, 0);
+}
+
+#[tokio::test]
+async fn refunds_and_the_freeze_still_pay_the_other_player() {
+    let mut env = Env::ready().await;
+    let rent = env.rent().await;
+    // B turns program mid-series: the emergency refund still returns A's stake and rent, and burns B's.
+    let t = env.live(51).await;
+    let who = env.b.pubkey();
+    make_executable(&mut env, who);
+    env.set_time(T0 + EMERGENCY_AFTER_SECONDS).await;
+    let a0 = env.balance(env.a.pubkey()).await;
+    let mut accounts = read_only(env.payout_accounts(&t.series_id, env.fee), env.b.pubkey());
+    accounts.pop();
+    accounts.push(burn());
+    assert_eq!(env.send(vec![ix(WagerInstruction::EmergencyRefund, accounts)], &[]).await, None);
+    assert_eq!(env.balance(env.a.pubkey()).await, a0 + STAKE + rent);
+    assert_eq!(env.config().await.open_stake, 0);
+}
+
+#[tokio::test]
+async fn the_freeze_pays_b_when_a_is_a_program() {
+    let mut env = Env::ready().await;
+    let t = env.live(52).await;
+    let who = env.a.pubkey();
+    make_executable(&mut env, who);
+    let b0 = env.balance(env.b.pubkey()).await;
+    let authority = clone(&env.authority);
+    let accounts = vec![
+        AccountMeta::new_readonly(authority.pubkey(), true),
+        AccountMeta::new(config_address(), false),
+        AccountMeta::new(series_address(&program_id(), &t.series_id).0, false),
+        AccountMeta::new_readonly(env.a.pubkey(), false),
+        AccountMeta::new(env.b.pubkey(), false),
+        burn(),
+    ];
+    assert_eq!(env.send(vec![ix(WagerInstruction::FreezeAndRefund, accounts)], &[&authority]).await, None);
+    assert_eq!(env.balance(env.b.pubkey()).await, b0 + STAKE);
+}
+
+#[tokio::test]
+async fn only_a_plain_wallet_opens() {
+    let mut env = Env::ready().await;
+    // Pre-funding the series address can't stand in for A's own stake from a wallet that isn't a plain one.
+    let t = env.ticket([53; 32]);
+    let addr = series_address(&program_id(), &t.series_id).0;
+    let stranger = clone(&env.stranger);
+    assert_eq!(env.send(vec![system_instruction::transfer(&stranger.pubkey(), &addr, SOL)], &[&stranger]).await, None);
+    let mut acc = AccountSharedData::new(SOL, 0, &Pubkey::new_unique());
+    acc.set_executable(false);
+    env.ctx.set_account(&env.a.pubkey(), &acc);
+    assert_eq!(env.open(&t).await, Some((1, code(WagerError::NotAPlayer))));
+}
+
+#[tokio::test]
+async fn a_fee_the_fee_account_cant_take_goes_to_the_winner() {
+    let mut env = Env::ready().await;
+    // The fee account doesn't exist, and 2.5% of the 0.01 SOL tier's pot is under an empty account's rent minimum.
+    env.ctx.set_account(&env.fee, &AccountSharedData::default());
+    let t = Ticket { stake: SOL / 100, ..env.ticket([54; 32]) };
+    assert_eq!(env.open(&t).await, None);
+    assert_eq!(env.accept(&t).await, None);
+    let a = clone(&env.a);
+    assert_eq!(env.play(&a, &t.series_id, WagerInstruction::Retire).await, None);
+    let b0 = env.balance(env.b.pubkey()).await;
+    assert_eq!(env.settle(&t.series_id).await, None);
+    assert_eq!(env.balance(env.b.pubkey()).await, b0 + 2 * t.stake);
+    assert_eq!(env.balance(env.fee).await, 0);
+    // A fee large enough to make it rent-exempt is taken as usual.
+    let t = Ticket { stake: SOL, ..env.ticket([55; 32]) };
+    assert_eq!(env.open(&t).await, None);
+    assert_eq!(env.accept(&t).await, None);
+    assert_eq!(env.play(&a, &t.series_id, WagerInstruction::Retire).await, None);
+    assert_eq!(env.settle(&t.series_id).await, None);
+    assert_eq!(env.balance(env.fee).await, 2 * SOL * FEE_BPS as u64 / 10_000);
+}
+
+// ---------------------------------------------------------------- the emergency refund can't skip a due timeout (finding 5)
+
+/// Both commit, B reveals, A withholds its reveal: the timeout after the window forfeits A's match.
+async fn a_withholds(env: &mut Env, id: &[u8; 32]) {
+    let s = env.series(id).await.unwrap().series.unwrap();
+    let (m, r) = (s.match_index, s.game.rounds + 1);
+    let (a, b) = (clone(&env.a), clone(&env.b));
+    let nb = [m + 2; 32];
+    let hb = move_commitment(id, m, r, side_of(PLAYER_B, m), 3, &nb);
+    assert_eq!(env.play(&a, id, WagerInstruction::Commit { round: r, hash: [m + 9; 32] }).await, None);
+    assert_eq!(env.play(&b, id, WagerInstruction::Commit { round: r, hash: hb }).await, None);
+    assert_eq!(env.play(&b, id, WagerInstruction::Reveal { pull: 3, nonce: nb }).await, None);
+}
+
+#[tokio::test]
+async fn the_emergency_refund_never_skips_a_timeout_that_decides_the_series() {
+    let mut env = Env::ready().await;
+    let t = env.live(56).await;
+    let id = t.series_id;
+    // B goes 2-0 up on A's withheld reveals, then A withholds a third and goes quiet for a day.
+    let mut now = T0;
+    for _ in 0..2 {
+        a_withholds(&mut env, &id).await;
+        now += 121;
+        env.set_time(now).await;
+        assert_eq!(env.timeout(&id).await, None);
+    }
+    a_withholds(&mut env, &id).await;
+    env.set_time(now + EMERGENCY_AFTER_SECONDS).await;
+    // The timeout already due makes it 3-0: it settles to B, it isn't refunded.
+    assert_eq!(env.emergency(&id).await, Some((0, code(WagerError::Decided))));
+    assert_eq!(env.timeout(&id).await, None);
+    assert_eq!(env.series(&id).await.unwrap().series.unwrap().ending.unwrap().winner, Some(PLAYER_B));
+    assert_eq!(env.settle(&id).await, None);
+
+    // One withheld reveal at 0-0 decides nothing, so a day's silence does refund.
+    env.set_time(T0).await;
+    let t = env.live(57).await;
+    a_withholds(&mut env, &t.series_id).await;
+    env.set_time(T0 + EMERGENCY_AFTER_SECONDS).await;
+    assert_eq!(env.emergency(&t.series_id).await, None);
 }

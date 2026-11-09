@@ -27,6 +27,8 @@ pub enum WagerError {
     Math = 19,
     /// The series is over: it settles, it isn't refunded.
     Decided = 20,
+    /// Payouts may burn only into the incinerator.
+    NotIncinerator = 21,
     // SeriesError codes: 100 +
     Series = 100,
 }

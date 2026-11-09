@@ -13,6 +13,15 @@ pub const SERIES_SEED: &[u8] = b"series";
 /// Hard limits no config can exceed (docs/wager-mode.md 6.2, 6.4).
 pub const FEE_BPS_HARD_MAX: u16 = 500;
 pub const STAKE_HARD_MAX: u64 = 10_000_000_000; // 10 SOL a side
+/// Every tier is at least this (0.01 SOL), so every payout to a player is above the rent-exempt minimum of an empty
+/// wallet, and a player who empties their wallet can't make a payout fail.
+pub const STAKE_HARD_MIN: u64 = 10_000_000;
+/// The reveal window's ceiling. It must stay far below EMERGENCY_AFTER_SECONDS, or a player could withhold a reveal
+/// until the emergency refund hands both stakes back (docs/wager-mode.md 7.2.1).
+pub const REVEAL_SECONDS_MAX: u32 = 3600;
+const _: () = assert!(
+    (crate::rules::DUELS_1.round_seconds + crate::rules::DUELS_1.bank_seconds + REVEAL_SECONDS_MAX) as i64 * 4 < EMERGENCY_AFTER_SECONDS
+);
 pub const TIERS: usize = 4;
 
 /// A series with no change for this long can be refunded by anyone (docs/wager-mode.md 7.7).

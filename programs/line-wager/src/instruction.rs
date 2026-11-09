@@ -31,6 +31,8 @@ pub struct ConfigUpdate {
     pub open_stake_cap: Option<u64>,
 }
 
+/// Every instruction that pays out takes the incinerator last: a payee the runtime won't credit (a wallet turned into a
+/// program, say) has its share burned there rather than blocking the payout for the other player.
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum WagerInstruction {
     /// Once, by the program's upgrade authority. [payer & upgrade authority (s, w), config (w), program data, system program]
@@ -42,7 +44,7 @@ pub enum WagerInstruction {
     Open { series_id: [u8; 32], player_b: Pubkey, stake: u64, accept_deadline: i64, expiry: i64, key_id: u16, fallback_hash: [u8; 32] },
     /// Player B stakes, with the same ticket; round 1 opens. [player B (s, w), config (w), series (w), instructions sysvar, system program]
     Accept { fallback_hash: [u8; 32] },
-    /// B never accepted: A at any time, or anyone after the deadline. Refunds A. [caller (s), config (w), series (w), player A (w)]
+    /// B never accepted: A at any time, or anyone after the deadline. Refunds A. [caller (s), config (w), series (w), player A (w), incinerator (w)]
     Cancel,
     /// [player (s), series (w)]
     Commit { round: u8, hash: [u8; 32] },
@@ -52,12 +54,12 @@ pub enum WagerInstruction {
     RevealFallback { kind: u8, pull: u8, salt: [u8; 32] },
     /// Anyone, after a deadline. [series (w)]
     Timeout,
-    /// Anyone, once the series is over: pays the winner and the fee, or refunds a draw. [series (w), config (w), player A (w), player B (w), fee account (w)]
+    /// Anyone, once the series is over: pays the winner and the fee, or refunds a draw. [series (w), config (w), player A (w), player B (w), fee account (w), incinerator (w)]
     Settle,
     /// [player (s), series (w)]
     Retire,
-    /// Anyone, after 24 hours without a change: refunds both stakes in full. [series (w), config (w), player A (w), player B (w)]
+    /// Anyone, after 24 hours without a change: refunds both stakes in full. [series (w), config (w), player A (w), player B (w), incinerator (w)]
     EmergencyRefund,
-    /// The authority only: refunds both stakes in full (sanctions, a court order). [authority (s), config (w), series (w), player A (w), player B (w)]
+    /// The authority only: refunds both stakes in full (sanctions, a court order). [authority (s), config (w), series (w), player A (w), player B (w), incinerator (w)]
     FreezeAndRefund,
 }
