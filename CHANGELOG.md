@@ -2,6 +2,15 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- **Connect, for every client.** The Connect section (on the home page and /docs) now covers fourteen clients, one at a
+  time: Claude, Claude Code, Codex, Cursor, VS Code, Gemini CLI, Windsurf / Devin, Zed, Goose, Hermes Agent, OpenClaw,
+  Cline, Continue and ChatGPT. Each shows how to connect (a one-click link where the client has one, otherwise its
+  command or config) and, where it runs local servers, the local server with the signer for an agent that acts on its
+  own. Every format was checked against the client's own docs, and Streamable HTTP is spelled each client's way.
+  `#connect-<client>` links open on one client.
+
 ## 0.14.2 (2026-11-09)
 
 - **A sixth launch idea: Line fighter.** An agent that launches its coin and plays it in The Line: it registers once,

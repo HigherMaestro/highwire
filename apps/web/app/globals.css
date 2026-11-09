@@ -5481,3 +5481,90 @@ a.card:hover,
   font-size: 14px;
   color: var(--muted);
 }
+
+/* ---------------------------------------------------------------- Connect: one client at a time */
+
+.picker {
+  margin-top: 24px;
+}
+
+.picker-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.picker-tabs button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 14px var(--font-display);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.picker-tabs button:hover {
+  color: var(--fg);
+  border-color: var(--line-strong);
+}
+
+.picker-tabs button.is-on {
+  color: var(--bg);
+  background: var(--fg);
+  border-color: var(--fg);
+}
+
+.picker-tabs button:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 2px;
+}
+
+.picker-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 28px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.picker-part {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.picker-part h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.picker-part p,
+.picker-part ol {
+  margin: 0;
+}
+
+.picker-part .copy {
+  width: 100%;
+}
+
+.picker-source {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 760px) {
+  .picker-panel {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 18px;
+  }
+}
