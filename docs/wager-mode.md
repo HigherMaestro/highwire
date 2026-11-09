@@ -375,7 +375,7 @@ hosted side never holds a key that moves users' money (AGENTS.md, "The hosted en
 | `timeout()` | anyone, after a deadline | in a commit phase, only once **every** side still to commit is past its own deadline (so nothing about one side is published while the other can still move); each late side then owes its fallback (7.2.5). In a reveal phase after the window: a missed reveal forfeits the match (7.2.1); both missed: a void |
 | `settle()` | anyone, once the series is decided | pays the winner and the snapshotted fee, or refunds; closes the account, rent to the opener; decrements the open-stake counter |
 | `retire()` | a player | forfeits the series |
-| `emergency_refund()` | anyone, if the series hasn't changed for 24 hours | refunds both stakes in full and closes the account, whatever the series' state or layout version |
+| `emergency_refund()` | anyone, if the series hasn't changed for 24 hours | refunds both stakes in full and closes the account, whatever its layout version, except a decided series, which only settles (so the loser can't take its stake back by waiting a day) |
 | `freeze_and_refund()` | the multisig only | refunds both stakes in full and closes the account (6.3) |
 
 #### 7.2.1 Committed but never revealed
@@ -399,7 +399,9 @@ ending.
 - **Parity is tested, not assumed:** `npm run test:program` has a generator in `highwire-core` write 2,000 random series a
   seed (about 300,000 events: players present, slow and absent; every fault on purpose; moves exactly on deadlines;
   moves after the end), refuses to write them unless every branch is hit, and the Rust replays every event, comparing
-  acceptance, the error's kind and the whole state after it; then it builds for SBF. Known-answer vectors pin both
+  acceptance, the error's kind and the whole state after it. Then `tests/program.rs` drives every instruction under
+  solana-program-test with real Ed25519 tickets and exact lamport accounting, twice: natively, and against the built
+  SBF binary, under real compute limits (the heaviest instruction uses about 15,000 units). Known-answer vectors pin both
   hashes in both languages. W1's acceptance runs five seeds (10,000 series). There's no CI in this repository yet; until
   there is, `npm run test:program` runs before every commit that touches either side.
 - The rules version is stored in each series; a program upgrade can't change an open series' rules.
@@ -558,11 +560,14 @@ gambles on the owner.
   people who run the referee and the program know too much. They may play each other in the closed beta (W2) only.
 - **Self-exclusion and cooling-off** (11) are checked at the same point as eligibility, against the identity, not the
   wallet, so a new wallet doesn't reset them.
-- **The matchmaking ticket.** When the referee pairs two eligible fighters it signs a short ticket (series ID, both
-  wallets, tier, acceptance deadline, expiry, the pair's weekly count) that `open` and `accept` must carry; the program
-  verifies it with Solana's Ed25519 instruction and instruction introspection, checking the program ID and every
-  offset and index (the class of bug behind Wormhole and later audit findings). The opener can't choose the deadline;
-  the ticket sets it. A stolen ticket key is serious but bounded (7.7).
+- **The matchmaking ticket.** When the referee pairs two eligible fighters it signs a short ticket (a domain tag, the
+  program ID, series ID, both wallets, stake, acceptance deadline, expiry and key id; the pair's weekly count joins it
+  with the referee) that `open` and `accept` must carry; the program verifies it with Solana's Ed25519 instruction and
+  instruction introspection, checking the program ID and every offset and index (the class of bug behind Wormhole and
+  later audit findings). Naming the program keeps a devnet ticket off mainnet if a key were ever shared. The opener
+  can't choose the deadline; the ticket sets it. A ticket isn't spent: once its series closes, the same two players
+  could open it again until it expires, so expiries are minutes, and B must still accept. A stolen ticket key is
+  serious but bounded (7.7).
 - **Identity data is a new kind of data for this project.** Liveness checks are biometric (special-category data under
   the GDPR): a data protection impact assessment is a W0 deliverable, with the lawful basis (a licensed operator's
   legal obligation), retention and deletion rules, and the provider's transfers. The identity-to-wallet map is the most

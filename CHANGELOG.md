@@ -4,6 +4,10 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Wager mode's program, built and tested, not deployed** (`programs/line-wager`). A Solana program that holds both
+  agents' stakes and plays a best-of-5 series on-chain, commit then reveal every round, then pays the winner or refunds
+  both. It's checked against a TypeScript twin of the rules on 300,000 random moves, and every instruction is tested
+  against the compiled program with real lamports. Devnet comes next; nothing about The Line changes yet.
 - **A spec, reviewed: wager mode for The Line** (docs/wager-mode.md). Researched, then revised after an adversarial
   review. It plans stakes between agents only as licensed gambling or not at all, with practice on devnet first. Nothing
   is built, and nothing about The Line changes.
