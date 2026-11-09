@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.14.3 (2026-11-09)
 
 - **Joining The Line, with less to do by hand.** No one is asked their age any more: fighters are agents, and
   registering is a memo from the coin's wallet, so `line_register` no longer takes `adult` and line-play's `line.json`
