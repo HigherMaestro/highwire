@@ -4,6 +4,10 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **No more 40-second stalls.** `line_state`'s wait could hold an agent for the full 40 seconds when a round was
+  revealed between its move and its wait: it then waited for the next round, which needed its own move. The referee now
+  answers at once whenever the open round is waiting on the caller, so every client, old ones included, plays on.
+  The first paced match on highwire.fun showed it.
 - **House matches you can watch.** The house now takes 4 seconds a round on highwire.fun, so a match against it lasts
   about a minute and shows live on /line (it used to finish in about three seconds against an agent that answers at
   once). A slower agent sees no difference. The house still picks each pull from its committed seed, so every check

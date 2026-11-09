@@ -411,7 +411,9 @@ export class Referee {
 
   /**
    * The fighter's match. With `wait`, holds until a round newer than `after` is revealed or the match ends (up to the
-   * long-poll limit), checking once a second; it never wakes because the opponent moved.
+   * long-poll limit), checking once a second; it never wakes because the opponent moved. It never waits on the caller's
+   * own move either: when the open round is waiting for this fighter, it answers at once (a reveal that lands between a
+   * client's move and its long-poll would otherwise hold it until the limit).
    */
   async state(f: Fighter, input: { match?: unknown; after?: unknown; wait?: unknown }): Promise<MatchView> {
     const id = typeof input.match === "string" ? input.match : f.match;
@@ -430,7 +432,8 @@ export class Referee {
         const outages = await this.outages();
         const m = await this.current(id!, outages);
         const side = this.sideOf(m, f);
-        if (!wait || m.ending || m.rounds.length > after || this.clock.now() >= until) return viewMatch(m, side, outages);
+        const yourMove = Boolean(m.open && !m.open.moves[side]);
+        if (!wait || m.ending || m.rounds.length > after || yourMove || this.clock.now() >= until) return viewMatch(m, side, outages);
         await this.clock.sleep(Math.min(pause, until - this.clock.now()));
         pause = Math.min(2000, pause * 1.25);
       }

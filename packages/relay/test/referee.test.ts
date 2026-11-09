@@ -228,20 +228,48 @@ test("an outage stops the clocks: moves are refused while it lasts, and nobody l
   assert.ok(ok.body.self.bank >= 600 - 31 - 61, `${ok.body.self.bank}`);
 });
 
-test("a long-poll wakes only on a reveal, waits at most 40 seconds, and only one runs at a time", async () => {
+test("a long-poll wakes only on a reveal, never waits on the caller's own move, waits at most 40 seconds, and only one runs at a time", async () => {
   const { r, token, view } = await setup();
-  // Nothing new: it waits the full 40 seconds (the fake clock moves as it sleeps) and returns the same round.
+  // The open round is waiting for this fighter: nothing to wait for, so it answers at once, even asked for a later
+  // round (a reveal can land between a client's move and its long-poll).
   const t0 = r.clock.now();
-  const waited = await r.call("GET", `/api/arena/state?match=${view.id}&after=0&wait=1`, undefined, token);
-  assert.equal(waited.status, 200);
-  assert.equal(waited.body.round, 1);
-  assert.ok(r.clock.now() - t0 >= 40_000 && r.clock.now() - t0 < 42_000, `${r.clock.now() - t0}`);
-  // Already something newer than `after`: no wait.
-  await move(r, token, view, 1);
+  const mine = await r.call("GET", `/api/arena/state?match=${view.id}&after=3&wait=1`, undefined, token);
+  assert.equal(mine.status, 200);
+  assert.equal(mine.body.round, 1);
+  assert.equal(r.clock.now(), t0, "no wait on your own move");
+  // Moved, against a house that takes its time: it waits for the reveal, and no longer.
+  const { createRelay } = await import("../src/http.ts");
+  const paced = createRelay({ store: r.store, clock: r.clock, rpc: r.rpc, coins: r.coins, referee: { housePaceMs: 10_000 } });
+  const pcall = async (method: string, path: string, body?: unknown) =>
+    (await (await paced.fetch(new Request(`https://relay.test${path}`, { method, headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: body === undefined ? undefined : JSON.stringify(body) }))).json()) as any;
+  await pcall("POST", "/api/arena/retire");
+  const pv = await pcall("POST", "/api/arena/join", { fallback: "steady:2", opponent: "reader" });
+  await pcall("POST", "/api/arena/move", { match: pv.id, round: 1, pull: 1, nonce: nonce(), line: "" });
   const t1 = r.clock.now();
+  const revealed = await pcall("GET", `/api/arena/state?match=${pv.id}&after=0&wait=1`);
+  assert.equal(revealed.rounds.length, 1);
+  assert.ok(r.clock.now() - t1 >= 9_000 && r.clock.now() - t1 <= 12_000, `woke on the reveal: ${r.clock.now() - t1}`);
+  // Moved, and the reveal never comes within the limit: it waits the full 40 seconds and returns the same round.
+  await pcall("POST", "/api/arena/retire");
+  const slow = createRelay({ store: r.store, clock: r.clock, rpc: r.rpc, coins: r.coins, referee: { housePaceMs: 100_000 } });
+  const scall = async (method: string, path: string, body?: unknown) =>
+    (await (await slow.fetch(new Request(`https://relay.test${path}`, { method, headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: body === undefined ? undefined : JSON.stringify(body) }))).json()) as any;
+  const sv = await scall("POST", "/api/arena/join", { fallback: "steady:2", opponent: "reader" });
+  await scall("POST", "/api/arena/move", { match: sv.id, round: 1, pull: 1, nonce: nonce(), line: "" });
+  const t2 = r.clock.now();
+  const waited = await scall("GET", `/api/arena/state?match=${sv.id}&after=0&wait=1`);
+  assert.equal(waited.round, 1);
+  assert.equal(waited.rounds.length, 0);
+  assert.ok(r.clock.now() - t2 >= 40_000 && r.clock.now() - t2 < 42_000, `${r.clock.now() - t2}`);
+  await scall("POST", "/api/arena/retire");
+  // Already something newer than `after`: no wait.
+  const fresh = await r.call("POST", "/api/arena/join", { fallback: "steady:2", opponent: "reader" }, token);
+  Object.assign(view, fresh.body);
+  await move(r, token, view, 1);
+  const t3 = r.clock.now();
   const quick = await r.call("GET", `/api/arena/state?match=${view.id}&after=0&wait=1`, undefined, token);
   assert.equal(quick.body.rounds.length, 1);
-  assert.equal(r.clock.now(), t1);
+  assert.equal(r.clock.now(), t3);
   // A second long-poll while one is open is refused.
   await r.store.cas(`arena:poll:${MINT}`, 0, 1, 45);
   const second = await r.call("GET", `/api/arena/state?match=${view.id}&after=5&wait=1`, undefined, token);
