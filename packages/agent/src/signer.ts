@@ -262,6 +262,9 @@ export class LocalSigner {
       if (env.wallet !== this.wallet || env.cluster !== intent.cluster) throw new UnsafeTransactionError("the transactions aren't for this signer's wallet and cluster");
       const failed = env.transactions.find((t) => !t.simulation.ok && !t.simulation.skipped);
       if (failed) throw new HigherError(`Transaction ${failed.index + 1} (${failed.label}) failed simulation: ${failed.simulation.error}`, { code: "simulation_failed" });
+      if (intent.action === "wager" && (intent.wager?.kind === "open" || intent.wager?.kind === "accept") && stopped(this.paths.stopWagers)) {
+        throw new HigherError(`No new wagers: ${this.paths.stopWagers} exists. Open series still play out.`, { code: "signer_stopped" });
+      }
       const refusal = checkPolicy(policy, intent, this.audit.spentSince(intent.cluster));
       if (refusal) throw refused(refusal.rule, refusal.reason);
       const route = routeOf(policy, intent.action);

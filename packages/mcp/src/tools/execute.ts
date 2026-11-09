@@ -86,7 +86,7 @@ export const LIST_ONLY_SIGNER: ExecutionSigner = {
     throw new ValidationError("This server has no local signer.", { code: "no_signer" });
   },
   jitoTip: () => Promise.reject(new ValidationError("This server has no local signer.", { code: "no_signer" })),
-  paths: { home: "", policy: "", audit: "", stop: "", lock: "", orders: "", ordersRunner: "", wallet: "", agent: "", arenaMoves: "" },
+  paths: { home: "", policy: "", audit: "", stop: "", lock: "", orders: "", ordersRunner: "", wallet: "", agent: "", arenaMoves: "", stopWagers: "", wagerSecrets: "", wagerRunner: "" },
 };
 
 /** The coin's creator, from its pool on-chain, not from higher.fun's API. null when it can't be read. */

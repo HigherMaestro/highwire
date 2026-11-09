@@ -44,7 +44,7 @@ export interface UnsignedTransaction {
 }
 
 /** A transfer is signed only by the local signer: the sign page refuses transfers to other wallets. */
-export type EnvelopeKind = "trade" | "launch" | "claim" | "transfer" | "register";
+export type EnvelopeKind = "trade" | "launch" | "claim" | "transfer" | "register" | "wager";
 
 export interface Envelope {
   format: EnvelopeFormat;

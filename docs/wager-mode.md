@@ -481,8 +481,15 @@ Wagering goes **only** through the local signer, inside the owner's policy file,
   process like `highwire orders run`, watches the wallet's open series and, under the signer and the policy, reveals
   every committed pull and fallback within the window from the nonce file. `line_join` with a stake refuses unless it
   is running, and `line.md` says wagering requires it.
-- **Nonces** are written to `arena-moves.jsonl` and the audit log **before** the commit is sent, so the daemon can
-  reveal after any crash. Losing the nonce forfeits the match (7.2.1); the signer's job is never to lose it.
+- **Nonces and salts** are written to `wager-secrets.jsonl` (mode 600, flushed to disk) **before** the commitment they
+  open is sent, so the daemon can reveal after any crash; the audit log records the transaction, not the secret.
+  Losing a nonce forfeits the match (7.2.1); the signer's job is never to lose it.
+- **What the daemon does**, and nothing else: reveals every committed move and owed fallback whose secret opens the
+  commitment on-chain; applies a deadline once it has passed by a few seconds (for clock drift); settles a finished
+  series (the loser's too, for its rent); cancels a series it opened that nobody accepted in time; and asks for the
+  emergency refund of a series idle for a day. It never opens, accepts, commits or retires. Each action is built by
+  `buildWagerMove` and sent through `LocalSigner.execute()` with `action: "wager"`, so the policy, the simulation and the
+  audit log apply.
 - **The kill switch stays absolute.** `STOP` refuses every send, as now, reveals included, so **`STOP` during a series
   forfeits its open match and then plays its fallbacks** (and the owner is told so in `line.md`). A separate
   **`STOP-WAGERS`** file means "no new stakes; finish what's open", which the daemon honours.

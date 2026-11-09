@@ -6,7 +6,7 @@ import { CLUSTERS, HigherError, MAX_SLIPPAGE_BPS, solToLamports, type Cluster } 
 // on their machine that no tool can write, so an agent (or text an agent read)
 // can't widen it. Read fresh on every execute, so an edit applies at once.
 
-export const ACTIONS = ["trade", "launch", "claim", "transfer", "register"] as const;
+export const ACTIONS = ["trade", "launch", "claim", "transfer", "register", "wager"] as const;
 export type Action = (typeof ACTIONS)[number];
 
 /** "launches", "trades": for refusals. */
@@ -63,6 +63,22 @@ export const PolicySchema = z
      * can't be sandwiched, and one that would fail costs nothing. With "fallback": "rpc", a refused Jito send goes the
      * ordinary way instead; the default, "none", sends nothing.
      */
+    /**
+     * Wagering on The Line (docs/wager-mode.md 7.3), with "wager" in actions. Without it, no wagers. Each stake is one of
+     * `tiers` (SOL a side, at most `max_stake_sol`), counted gross toward max_sol_per_tx and max_sol_per_day; at most
+     * `max_open` series at once, counted on-chain. Retiring a staked series needs `allow_retire`. Only the owner edits
+     * this: `highwire add` never offers "wager".
+     */
+    wagers: z
+      .object({
+        max_stake_sol: z.number().positive().max(10),
+        max_open: z.number().int().min(1).max(10).default(1),
+        tiers: z.array(z.number().positive().max(10)).min(1),
+        allow_retire: z.boolean().default(false),
+      })
+      .strict()
+      .refine((w) => w.tiers.every((t) => t <= w.max_stake_sol), { message: "every tier must be at most max_stake_sol", path: ["tiers"] })
+      .optional(),
     send: z
       .object({
         route: z.enum(["rpc", "jito"]).default("rpc"),
@@ -157,6 +173,11 @@ export interface Intent {
   recipient?: string;
   /** Other actions it needs too: a claim and buyback is a claim and a trade. */
   also?: Action[];
+  /**
+   * A wager's instruction; for open and accept, the stake a side (lamports) and how many series the wallet already
+   * has open on-chain (undefined: they couldn't be counted, so it's refused).
+   */
+  wager?: { kind: string; stake?: bigint; openSeries?: number };
 }
 
 export interface Refusal {
@@ -184,6 +205,21 @@ export function checkPolicy(policy: Policy, intent: Intent, spentToday: bigint):
   if (intent.action === "trade" && policy.creators) {
     if (!intent.creator) return no("creators.allow", "the coin's creator couldn't be found, and the policy only allows some creators");
     if (!policy.creators.allow.includes(intent.creator)) return no("creators.allow", `the coin's creator ${intent.creator} isn't on the policy's allow list`);
+  }
+  if (intent.action === "wager") {
+    const w = policy.wagers;
+    if (!w) return no("wagers", "the policy has no wagers section, so it doesn't allow wagering");
+    const kind = intent.wager?.kind;
+    if (!kind) return no("wagers", "the wager's instruction isn't known");
+    if (kind === "open" || kind === "accept") {
+      const stake = intent.wager?.stake;
+      if (stake === undefined || !w.tiers.some((t) => solToLamports(t) === stake)) return no("wagers.tiers", `the stake isn't one of the policy's tiers (${w.tiers.join(", ")} SOL)`);
+      if (stake > solToLamports(w.max_stake_sol)) return no("wagers.max_stake_sol", `the stake is over the policy's ${w.max_stake_sol} SOL`);
+      const open = intent.wager?.openSeries;
+      if (open === undefined) return no("wagers.max_open", "the wallet's open series couldn't be counted on-chain");
+      if (open >= w.max_open) return no("wagers.max_open", `${open} series already open, the policy's most`);
+    }
+    if (kind === "retire" && !w.allow_retire) return no("wagers.allow_retire", "the policy doesn't allow retiring from a staked series");
   }
   if (intent.action === "transfer" && (!intent.recipient || !policy.transfer_allowlist.includes(intent.recipient))) {
     return no("transfer_allowlist", `${intent.recipient ?? "the recipient"} isn't on the policy's transfer allowlist`);

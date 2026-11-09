@@ -17,6 +17,18 @@ import {
 } from "../higher/constants.ts";
 import { HigherError } from "../lib/errors.ts";
 import { formatLamports, formatTokens } from "./units.ts";
+import {
+  decodeEd25519,
+  decodeWager,
+  ED25519_PROGRAM_ID,
+  INCINERATOR,
+  seriesAddress,
+  ticketMessage,
+  wagerConfigAddress,
+  wagerProgram,
+  type WagerKind,
+  type WagerTicket,
+} from "./wager-codec.ts";
 
 // Decodes a transaction's instructions into plain language and checks them
 // against what the user asked for: the same review higher.fun's web app runs
@@ -131,6 +143,8 @@ export interface DecodedTransaction {
   claims: { kind: "curve" | "pool"; from: string }[];
   /** Creator-lock assignments: the pool and the locked amount in base units. */
   locks: { pool: string; beneficiary: string; amount: bigint }[];
+  /** The Line's wager instructions: the series account, and for `open` the stake a side, in lamports. */
+  wagers: { kind: string; series: string; stake?: bigint }[];
   computeUnitLimit?: number;
   microLamportsPerCu?: bigint;
 }
@@ -176,7 +190,9 @@ export function describeTransaction(
     launches: [],
     claims: [],
     locks: [],
+    wagers: [],
   };
+  const wagerId = wagerProgram(cluster)?.toBase58();
 
   for (const ix of resolveInstructions(tx, lookupTables)) {
     const program = ix.programId.toBase58();
@@ -277,6 +293,31 @@ export function describeTransaction(
         out.claims.push({ kind: "pool", from: k(2) });
         known(`Collect the pool creator fees of Raydium CPMM pool ${k(2)} into ${k(8)} and ${k(9)}`);
       } else unknown("CPMM instruction");
+    } else if (program === ED25519_PROGRAM_ID) {
+      const e = decodeEd25519(d);
+      if (e) known(`Check the matchmaker's signature (key ${e.key}) on a wager ticket for The Line`);
+      else unknown("Ed25519 instruction");
+    } else if (wagerId !== undefined && program === wagerId) {
+      const wg = decodeWager(d);
+      if (!wg) unknown("wager instruction");
+      else {
+        const series = k(wg.kind === "open" || wg.kind === "accept" || wg.kind === "cancel" ? 2 : wg.kind === "timeout" || wg.kind === "settle" || wg.kind === "emergencyRefund" ? 0 : 1);
+        out.wagers.push({ kind: wg.kind, series, ...(wg.kind === "open" ? { stake: wg.stake } : {}) });
+        const text: Record<string, string> = {
+          open: wg.kind === "open" ? `Stake ${formatLamports(wg.stake)} SOL and open a best-of-5 wager series on The Line against ${wg.playerB} (series account ${series})` : "",
+          accept: `Stake the series' amount and accept wager series ${series} on The Line`,
+          cancel: `Cancel wager series ${series}, which was never accepted, refunding its opener`,
+          commit: wg.kind === "commit" ? `Commit a hidden move for round ${wg.round} of wager series ${series}` : "",
+          reveal: wg.kind === "reveal" ? `Reveal a pull of ${wg.pull} in wager series ${series}` : "",
+          revealFallback: `Reveal this player's fallback in wager series ${series}`,
+          timeout: `Apply a passed deadline in wager series ${series}`,
+          settle: `Settle wager series ${series}: pay the winner (less the fee) or refund both`,
+          retire: `Retire from wager series ${series}, conceding it and its stake`,
+          emergencyRefund: `Refund both stakes of wager series ${series}, idle for 24 hours`,
+        };
+        if (text[wg.kind]) known(text[wg.kind]!);
+        else unknown(`wager instruction (${wg.kind})`);
+      }
     } else if (program === PROGRAMS.memo) {
       // Never echo another memo's text: on the signing page it would be a stranger's words in Highwire's voice.
       const agent = agentMemoCode(ix);
@@ -347,6 +388,13 @@ export interface Expectations {
    * page, which never sets it, refuses one).
    */
   agentCode?: string;
+  /**
+   * A wager on The Line: exactly one wager-program instruction of this kind, for this series, signed by the wallet; for
+   * `open` and `accept`, immediately after the Ed25519 check of exactly this ticket by this key, and for `open` this
+   * stake. Only the local signer's wagers set it; without it no wager or Ed25519 instruction is allowed (so the sign
+   * page, which never sets it, refuses them).
+   */
+  wager?: { kind: WagerKind; seriesId: string; ticket?: WagerTicket; ticketKey?: PublicKey };
 }
 
 /**
@@ -399,6 +447,9 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
   let agentMemos = 0;
   let transfers = 0;
   let tips = 0;
+  let wagers = 0;
+  let ticketChecks = 0;
+  const wagerId = wagerProgram(cluster);
   const send = exp.transfer;
   const staticKeys = new Set(keys.map((k) => k.toBase58()));
   const writable = (k: PublicKey) => {
@@ -547,6 +598,80 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
         if (key(3).toBase58() !== a.cpmmConfig) fail(`instruction ${i + 1}: creator fee collect outside higher.fun's fee tier`);
         if (!ownAta(8, 6, 10) || !ownAta(9, 7, 11)) fail(`instruction ${i + 1}: creator fee collect into an account that isn't the wallet's`);
       } else fail(`instruction ${i + 1}: a CPMM instruction Highwire does not build`);
+    } else if (p === ED25519_PROGRAM_ID) {
+      const wx = exp.wager;
+      if (!wx || !wagerId || (wx.kind !== "open" && wx.kind !== "accept") || !wx.ticket || !wx.ticketKey) {
+        return fail(`instruction ${i + 1}: an Ed25519 check, which only a wager's open or accept carries`);
+      }
+      const e = decodeEd25519(d);
+      if (!e) fail(`instruction ${i + 1}: an Ed25519 check that isn't exactly one signature inside itself`);
+      if (e!.key !== wx.ticketKey.toBase58()) fail(`instruction ${i + 1}: the ticket isn't signed by the matchmaker's key`);
+      if (!e!.message.equals(ticketMessage(wagerId, wx.ticket))) fail(`instruction ${i + 1}: the ticket isn't this series' ticket`);
+      if (ixs[i + 1]?.programId.equals(wagerId) !== true) fail(`instruction ${i + 1}: the ticket check isn't immediately before the wager`);
+      if (++ticketChecks > 1) fail(`instruction ${i + 1}: more than one ticket check`);
+    } else if (wagerId && p === wagerId.toBase58()) {
+      const wx = exp.wager;
+      if (!wx) return fail(`instruction ${i + 1}: a wager on The Line, which only the local signer's wagers make`);
+      const wg = decodeWager(d);
+      if (!wg || wg.kind !== wx.kind) return fail(`instruction ${i + 1}: not the wager instruction this flow builds`);
+      const series = seriesAddress(wagerId, wx.seriesId);
+      const config = wagerConfigAddress(wagerId);
+      const at = (n: number, want: PublicKey, what: string) => {
+        if (!key(n).equals(want)) fail(`instruction ${i + 1}: the wager's ${what} isn't the expected one`);
+      };
+      const signedByWallet = (n: number) => {
+        at(n, wallet, "player");
+        if (!required.some((s) => s.equals(wallet))) fail(`instruction ${i + 1}: the wallet doesn't sign the wager`);
+      };
+      const burns = () => at(ix.keys.length - 1, new PublicKey(INCINERATOR), "burn account");
+      switch (wg.kind) {
+        case "open":
+        case "accept":
+          signedByWallet(0);
+          at(1, config, "config");
+          at(2, series, "series account");
+          at(3, new PublicKey("Sysvar1nstructions1111111111111111111111111"), "instructions sysvar");
+          at(4, new PublicKey(PROGRAMS.system), "system program");
+          if (ix.keys.length !== 5) fail(`instruction ${i + 1}: a wager with unexpected accounts`);
+          if (ticketChecks !== 1) fail(`instruction ${i + 1}: an ${wg.kind} without its ticket check just before it`);
+          if (wg.kind === "open") {
+            const t = wx.ticket;
+            if (!t) return fail(`instruction ${i + 1}: an open without its ticket`);
+            if (wg.seriesId !== t.seriesId || wg.playerB !== t.playerB || wg.stake !== t.stake || wg.acceptDeadline !== t.acceptDeadline || wg.expiry !== t.expiry || wg.keyId !== t.keyId) {
+              fail(`instruction ${i + 1}: the open doesn't match its ticket`);
+            }
+            if (t.playerA !== w || t.playerB === w) fail(`instruction ${i + 1}: the ticket isn't for this wallet against another`);
+          }
+          break;
+        case "cancel":
+          signedByWallet(0);
+          at(1, config, "config");
+          at(2, series, "series account");
+          burns();
+          break;
+        case "commit":
+        case "reveal":
+        case "revealFallback":
+        case "retire":
+          signedByWallet(0);
+          at(1, series, "series account");
+          if (ix.keys.length !== 2) fail(`instruction ${i + 1}: a wager move with unexpected accounts`);
+          break;
+        case "timeout":
+          at(0, series, "series account");
+          if (ix.keys.length !== 1) fail(`instruction ${i + 1}: a timeout with unexpected accounts`);
+          break;
+        case "settle":
+        case "emergencyRefund":
+          // The program pays only the players and fee account recorded at open; these are just where it looks.
+          at(0, series, "series account");
+          at(1, config, "config");
+          burns();
+          break;
+        default:
+          fail(`instruction ${i + 1}: a wager instruction Highwire never builds`);
+      }
+      if (++wagers > 1) fail(`instruction ${i + 1}: more than one wager instruction`);
     } else if (p === PROGRAMS.memo) {
       if (isHighwireMemo(ix)) {
         if (++memos > 1) fail(`instruction ${i + 1}: more than one Highwire memo`);
@@ -560,6 +685,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
   if (exp.highwireFee?.lamports !== undefined && exp.highwireFee.lamports > 0n && highwireFees !== 1) fail("Highwire's trade fee must be paid exactly once");
   if (exp.jitoTip && tips !== 1) fail("a protected send must tip exactly once");
   if (exp.agentCode !== undefined && agentMemos !== 1) fail("a registration must carry its memo exactly once");
+  if (exp.wager && wagers !== 1) fail("a wager must carry its instruction exactly once");
 }
 
 /** Default compute limits, re-exported for the builders. */

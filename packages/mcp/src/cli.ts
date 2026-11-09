@@ -8,6 +8,7 @@ import { runClaim, runLaunch, runPolicyInit, runPost, runWallet } from "./launch
 import { runNew } from "./new-cli.ts";
 import { runAdd } from "./add-cli.ts";
 import { runOrders } from "./orders-cli.ts";
+import { runLine } from "./line-cli.ts";
 import { runWatch } from "./watch.ts";
 
 const args = process.argv.slice(2);
@@ -38,10 +39,10 @@ if (args[0] === "add") {
     : undefined;
   process.exit(await runAdd(args.slice(1), { ...io, ask }));
 }
-if (args[0] === "watch" || args[0] === "orders") {
+if (args[0] === "watch" || args[0] === "orders" || args[0] === "line") {
   const ctl = new AbortController();
   process.once("SIGINT", () => ctl.abort());
-  const code = await (args[0] === "watch" ? runWatch : runOrders)(args.slice(1), {
+  const code = await (args[0] === "watch" ? runWatch : args[0] === "line" ? runLine : runOrders)(args.slice(1), {
     apiUrl: serverOptionsFromEnv().apiUrl,
     ...io,
     signal: ctl.signal,
@@ -82,6 +83,8 @@ Commands:
   highwire orders limit-buy  buy a coin once its price falls to a level (--mint, --sol, --price or --drop-pct)
   highwire orders claim    claim creator fees on a schedule (--every-hours 24), and optionally buy back with them
   highwire orders list     the open orders; highwire orders cancel <id> cancels one
+  highwire line run        the reveal daemon for The Line's wager series (devnet): reveals, deadlines, settling
+  highwire line series     the wallet's wager series on-chain
 
 Without a local signer Highwire never signs: build tools return unsigned transactions and a sign_url for your own
 wallet. With one, it signs only inside your policy, and only sends when the policy says "live": true.`);

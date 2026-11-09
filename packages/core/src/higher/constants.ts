@@ -116,7 +116,7 @@ export const GRADUATED_POOL = {
 export const LAUNCH_FEE_CAP_LAMPORTS = 50_000_000n;
 /** Priority fee: the 75th percentile of recent fees on the accounts touched, clamped to this range. */
 export const PRIORITY_FEE_MICRO_LAMPORTS = { min: 50_000, max: 2_000_000 } as const;
-export const COMPUTE_UNITS = { create: 600_000, curveTrade: 300_000, poolSwap: 300_000, claim: 200_000, transfer: 60_000, register: 30_000 } as const;
+export const COMPUTE_UNITS = { create: 600_000, curveTrade: 300_000, poolSwap: 300_000, claim: 200_000, transfer: 60_000, register: 30_000, wager: 60_000 } as const;
 
 /** SPL Memo v2. Every transaction Highwire builds carries one memo with HIGHWIRE_MEMO, so its transactions can be counted on-chain. */
 export const MEMO_PROGRAM_ID = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";

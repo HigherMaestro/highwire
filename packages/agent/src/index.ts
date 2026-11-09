@@ -7,3 +7,5 @@ export * from "./lock.ts";
 export * from "./orders.ts";
 export * from "./runner.ts";
 export * from "./jito.ts";
+export * from "./wager-secrets.ts";
+export * from "./wager-runner.ts";

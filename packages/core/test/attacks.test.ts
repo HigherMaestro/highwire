@@ -237,3 +237,55 @@ test("registration memos: only with the exact code the local signer expects, onc
   await assert.rejects(signUrl(env), /registrations get no sign link/);
   await assert.rejects(async () => decodeSignPayload(await encodeSignPayload(env)), /never signs registrations/);
 });
+
+test("wagers: only the local signer's, exactly as expected; never on the sign page or a sign link", async () => {
+  const { ed25519 } = await import("@noble/curves/ed25519");
+  const { ComputeBudgetProgram } = await import("@solana/web3.js");
+  const w = await import("../src/tx/wager-codec.ts");
+  const program = new PublicKey(w.WAGER_PROGRAM_IDS.devnet!);
+  const secret = new Uint8Array(32).fill(7);
+  const ticketKey = new PublicKey(ed25519.getPublicKey(secret));
+  const ticket = { seriesId: "55".repeat(32), playerA: wallet.toBase58(), playerB: attacker.toBase58(), stake: 100_000_000n, acceptDeadline: 1_300, expiry: 1_600, keyId: 1 };
+  const check = (t = ticket, key = secret) => w.ticketCheck(program, t, new PublicKey(ed25519.getPublicKey(key)), ed25519.sign(w.ticketMessage(program, t), key));
+  const open = (t = ticket, signer = wallet) => w.wagerInstruction(program, signer, t.seriesId, { kind: "open", ticket: t, fallbackHash: "44".repeat(32) });
+  const expectOpen = { wallet, allowLaunchLab: false, allowCpmm: false, wager: { kind: "open" as const, seriesId: ticket.seriesId, ticket, ticketKey } };
+  const ok = (t: VersionedTransaction, exp: object = expectOpen) => assertSafe(t, "devnet", { wallet, ...exp } as never);
+  const no = (t: VersionedTransaction, why: RegExp, exp: object = expectOpen) => assert.throws(() => ok(t, exp), why);
+
+  ok(tx(check(), open()));
+  assert.ok(describeTransaction(tx(check(), open()), "devnet").instructions.some((i) => i.known && /Stake 0.1 SOL and open a best-of-5 wager series/.test(i.text)));
+  // The sign page never expects a wager, so it refuses the ticket check and the wager alike.
+  no(tx(check(), open()), /an Ed25519 check, which only a wager's open or accept carries/, {});
+  no(tx(open()), /a wager on The Line, which only the local signer's wagers make/, {});
+  // A ticket signed by another key, for another stake or series, or not immediately before the open.
+  no(tx(check(ticket, new Uint8Array(32).fill(9)), open()), /isn't signed by the matchmaker's key/);
+  no(tx(check({ ...ticket, stake: 1_000_000_000n }), open()), /isn't this series' ticket/);
+  no(tx(check(), ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }), open()), /isn't immediately before the wager/);
+  no(tx(open()), /without its ticket check/);
+  // An open whose data disagrees with its ticket (a bigger stake than the ticket's), or for another wallet.
+  no(tx(check(), open({ ...ticket, stake: 1_000_000_000n })), /doesn't match its ticket/);
+  no(tx(check(), open(ticket, attacker)), /player isn't the expected one|unexpected signer/);
+  // Another kind than the flow builds, two wager instructions, or another series' account.
+  const retire = (id = ticket.seriesId) => w.wagerInstruction(program, wallet, id, { kind: "retire" });
+  const expectCommit = { wager: { kind: "commit", seriesId: ticket.seriesId } };
+  no(tx(retire()), /not the wager instruction this flow builds/, expectCommit);
+  const commit = (id = ticket.seriesId) => w.wagerInstruction(program, wallet, id, { kind: "commit", round: 1, hash: "66".repeat(32) });
+  ok(tx(commit()), expectCommit);
+  no(tx(commit(), commit()), /more than one wager instruction/, expectCommit);
+  no(tx(commit("77".repeat(32))), /series account isn't the expected one/, expectCommit);
+  // A payout must name the incinerator as its burn account, not someone's wallet.
+  const parties = { playerA: wallet, playerB: attacker, feeAccount: attacker };
+  const settle = w.wagerInstruction(program, wallet, ticket.seriesId, { kind: "settle" }, parties);
+  const expectSettle = { wager: { kind: "settle", seriesId: ticket.seriesId } };
+  ok(tx(settle), expectSettle);
+  const swapped = new TransactionInstruction({ programId: program, keys: settle.keys.map((k, i) => (i === settle.keys.length - 1 ? meta(attacker) : k)), data: settle.data });
+  no(tx(swapped), /burn account isn't the expected one/, expectSettle);
+  // The admin instructions are never built, whatever the expectation says.
+  const freeze = new TransactionInstruction({ programId: program, keys: [], data: Buffer.from([w.WAGER_TAGS.freezeAndRefund]) });
+  no(tx(freeze), /Highwire never builds/, { wager: { kind: "freezeAndRefund", seriesId: ticket.seriesId } });
+  // A sign link can't carry a wager at all.
+  const { decodeSignPayload, encodeSignPayload, signUrl } = await import("../src/tx/sign-link.ts");
+  const env = { format: "highwire.unsigned-tx/v2", cluster: "devnet", wallet: wallet.toBase58(), kind: "wager", transactions: [], expiresAfterBlockHeight: 1, builtAt: 1, howToSign: "" } as never;
+  await assert.rejects(signUrl(env), /wagers get no sign link/);
+  await assert.rejects(async () => decodeSignPayload(await encodeSignPayload(env)), /never signs wagers/);
+});

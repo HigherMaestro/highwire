@@ -133,3 +133,17 @@ test("orders limit-buy needs a mint, sol and exactly one trigger, and a wallet",
   assert.equal(await runOrders(["limit-buy", "--mint", M, "--sol", "0.1", "--drop-pct", "20"], { ...w.io, signal, env: { HIGHWIRE_HOME: home() } }), 1);
   assert.match(w.err.join("\n"), /highwire wallet new/);
 });
+
+test("line: usage, and run or series need the signer's keypair; nothing starts without it", async () => {
+  const { runLine, LINE_USAGE } = await import("../src/line-cli.ts");
+  const signal = new AbortController().signal;
+  const u = capture();
+  assert.equal(await runLine([], { ...u.io, signal, env: { HIGHWIRE_HOME: home() } }), 0);
+  assert.equal(u.out[0], LINE_USAGE);
+  assert.equal(await runLine(["dance"], { ...capture().io, signal, env: { HIGHWIRE_HOME: home() } }), 2);
+  for (const cmd of ["run", "series"]) {
+    const w = capture();
+    assert.equal(await runLine([cmd], { ...w.io, signal, env: { HIGHWIRE_HOME: home() } }), 2);
+    assert.match(w.err.join("\n"), /HIGHWIRE_KEYPAIR_PATH/);
+  }
+});

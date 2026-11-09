@@ -24,6 +24,12 @@ export interface AgentPaths {
   agent: string;
   /** Every arena move sent, with its nonce, so each reveal can be checked against what was sent. */
   arenaMoves: string;
+  /** "No new stakes; finish what's open": refuses opening and accepting wagers, nothing else (docs/wager-mode.md 7.3). */
+  stopWagers: string;
+  /** Every wager move's nonce and every fallback's salt, mode 600, written before the commit is sent. Losing one forfeits a match. */
+  wagerSecrets: string;
+  /** Held by the one `highwire line run` process (the reveal daemon). */
+  wagerRunner: string;
 }
 
 export function agentPaths(env: Record<string, string | undefined> = process.env): AgentPaths {
@@ -39,5 +45,8 @@ export function agentPaths(env: Record<string, string | undefined> = process.env
     wallet: join(home, "wallet.json"),
     agent: join(home, "agent.json"),
     arenaMoves: join(home, "arena-moves.jsonl"),
+    stopWagers: join(home, "STOP-WAGERS"),
+    wagerSecrets: join(home, "wager-secrets.jsonl"),
+    wagerRunner: join(home, "wager-runner.lock"),
   };
 }
