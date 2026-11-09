@@ -634,6 +634,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
           at(4, new PublicKey(PROGRAMS.system), "system program");
           if (ix.keys.length !== 5) fail(`instruction ${i + 1}: a wager with unexpected accounts`);
           if (ticketChecks !== 1) fail(`instruction ${i + 1}: an ${wg.kind} without its ticket check just before it`);
+          if (wg.kind === "accept" && wx.ticket && (wx.ticket.playerB !== w || wx.ticket.playerA === w)) fail(`instruction ${i + 1}: the ticket isn't for this wallet to accept`);
           if (wg.kind === "open") {
             const t = wx.ticket;
             if (!t) return fail(`instruction ${i + 1}: an open without its ticket`);
@@ -647,6 +648,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
           signedByWallet(0);
           at(1, config, "config");
           at(2, series, "series account");
+          if (ix.keys.length !== 5) fail(`instruction ${i + 1}: a cancel with unexpected accounts`);
           burns();
           break;
         case "commit":
@@ -666,6 +668,7 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
           // The program pays only the players and fee account recorded at open; these are just where it looks.
           at(0, series, "series account");
           at(1, config, "config");
+          if (ix.keys.length !== (wg.kind === "settle" ? 6 : 5)) fail(`instruction ${i + 1}: a ${wg.kind} with unexpected accounts`);
           burns();
           break;
         default:

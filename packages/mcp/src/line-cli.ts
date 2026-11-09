@@ -1,6 +1,6 @@
 import { lstatSync } from "node:fs";
 import { agentPaths, holdProcessLock, loadPolicy, lockHolder, WagerRunner, WagerSecrets, type LocalSigner, type WagerAction } from "highwire-agent";
-import { buildWagerMove, lamportsNumber, listWalletSeries, type Chain, type WagerMoveRequest } from "highwire-core";
+import { buildWagerMove, lamportsNumber, listWalletSeries, readSeriesMany, type Chain, type SeriesAccountData, type WagerMoveRequest } from "highwire-core";
 import { serverOptionsFromEnv } from "./env.ts";
 import { createDeps } from "./server.ts";
 import { signerFromEnv } from "./signer-env.ts";
@@ -77,11 +77,38 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
         `Watching ${signer.wallet}'s wager series on ${deps.chain.cluster}, ${policy.live ? "live" : 'dry run ("live": false: nothing is sent, so nothing is revealed)'}. ` +
           `${policy.actions.includes("wager") && policy.wagers ? "" : 'The policy doesn\'t allow wagers ("wager" in actions and a wagers section), so every action will be refused. '}Ctrl-C to stop.`,
       );
+      const secrets = new WagerSecrets(paths.wagerSecrets);
+      // Two sources, so a node that throttles getProgramAccounts doesn't leave the daemon blind: the wallet's series by
+      // owner, and every series the secrets file holds a commitment for, by id.
+      let listFailures = 0;
+      const list = async (): Promise<SeriesAccountData[]> => {
+        const byId = await readSeriesMany(deps.chain, secrets.seriesIds());
+        let scanned: SeriesAccountData[] = [];
+        try {
+          scanned = await listWalletSeries(deps.chain, signer.publicKey);
+          listFailures = 0;
+        } catch (err) {
+          if (++listFailures % 20 === 1) io.err(`WARNING the RPC refused getProgramAccounts (${err instanceof Error ? err.message : String(err)}): only series with a saved secret are watched. Use an RPC that allows it.`);
+        }
+        const all = new Map(byId.map((s) => [s.header.seriesId, s]));
+        for (const s of scanned) all.set(s.header.seriesId, s);
+        return [...all.values()];
+      };
       const runner = new WagerRunner({
         wallet: signer.wallet,
-        list: () => listWalletSeries(deps.chain, signer.publicKey),
+        list,
+        idle: () => {
+          try {
+            const p = loadPolicy(paths.policy);
+            if (!p.live) return 'the policy is a dry run ("live": false), so nothing is revealed';
+            if (!p.actions.includes("wager") || !p.wagers) return 'the policy doesn\'t allow wagers ("wager" in actions and a wagers section)';
+            return null;
+          } catch (err) {
+            return err instanceof Error ? err.message : String(err);
+          }
+        },
         act: (id, action) => actOnSeries(deps.chain, signer, id, action),
-        secrets: new WagerSecrets(paths.wagerSecrets),
+        secrets,
         stopped: () => {
           try {
             lstatSync(paths.stop);

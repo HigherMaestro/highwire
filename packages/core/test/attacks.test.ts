@@ -280,6 +280,11 @@ test("wagers: only the local signer's, exactly as expected; never on the sign pa
   ok(tx(settle), expectSettle);
   const swapped = new TransactionInstruction({ programId: program, keys: settle.keys.map((k, i) => (i === settle.keys.length - 1 ? meta(attacker) : k)), data: settle.data });
   no(tx(swapped), /burn account isn't the expected one/, expectSettle);
+  // A payout with an extra account, or an accept of a ticket naming another wallet as B.
+  const padded = new TransactionInstruction({ programId: program, keys: [...settle.keys, meta(attacker)], data: settle.data });
+  no(tx(padded), /settle with unexpected accounts/, expectSettle);
+  const accept = w.wagerInstruction(program, wallet, ticket.seriesId, { kind: "accept", fallbackHash: "44".repeat(32) });
+  no(tx(check(), accept), /isn't for this wallet to accept/, { wager: { kind: "accept", seriesId: ticket.seriesId, ticket, ticketKey } });
   // The admin instructions are never built, whatever the expectation says.
   const freeze = new TransactionInstruction({ programId: program, keys: [], data: Buffer.from([w.WAGER_TAGS.freezeAndRefund]) });
   no(tx(freeze), /Highwire never builds/, { wager: { kind: "freezeAndRefund", seriesId: ticket.seriesId } });

@@ -185,6 +185,15 @@ export interface Refusal {
   reason: string;
 }
 
+/** Opening and accepting stake; every other wager instruction is a move that spends only its network fee. */
+export const STAKE_KINDS: readonly string[] = ["open", "accept"];
+
+/**
+ * A wager move (a reveal, a timeout, a settle...): exempt from the daily limit, because an open series must always be
+ * able to reveal and settle (a refused reveal forfeits the match, and so the stake). The signer bounds its fee instead.
+ */
+export const isWagerMove = (intent: Intent) => intent.action === "wager" && intent.solOut === 0n && !!intent.wager && !STAKE_KINDS.includes(intent.wager.kind);
+
 /** The first rule the intent breaks, or null when the policy allows it. `spentToday` is the last 24 hours, in lamports. */
 export function checkPolicy(policy: Policy, intent: Intent, spentToday: bigint): Refusal | null {
   const no = (rule: string, reason: string): Refusal => ({ rule, reason });
@@ -197,7 +206,7 @@ export function checkPolicy(policy: Policy, intent: Intent, spentToday: bigint):
   const perTx = solToLamports(policy.max_sol_per_tx);
   if (intent.solOut > perTx) return no("max_sol_per_tx", `it spends more than the policy's ${policy.max_sol_per_tx} SOL per transaction`);
   const perDay = solToLamports(policy.max_sol_per_day);
-  if (spentToday + intent.solOut > perDay) return no("max_sol_per_day", `it would take the last 24 hours past the policy's ${policy.max_sol_per_day} SOL`);
+  if (!isWagerMove(intent) && spentToday + intent.solOut > perDay) return no("max_sol_per_day", `it would take the last 24 hours past the policy's ${policy.max_sol_per_day} SOL`);
   if (intent.mint && (intent.action === "trade" || intent.action === "transfer")) {
     if (policy.coins?.deny?.includes(intent.mint)) return no("coins.deny", `the policy denies coin ${intent.mint}`);
     if (policy.coins?.allow && !policy.coins.allow.includes(intent.mint)) return no("coins.allow", `coin ${intent.mint} isn't on the policy's allow list`);

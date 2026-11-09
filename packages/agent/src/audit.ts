@@ -43,6 +43,10 @@ export interface AuditEntry {
   route?: string;
   tip?: string;
   bundle?: string;
+  /** A wager's series account. */
+  series?: string;
+  /** A wager's instruction ("open", "reveal", ...). */
+  wager?: string;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -113,6 +117,17 @@ export class AuditLog {
       total += BigInt(e.lamports);
     }
     return total;
+  }
+
+  /**
+   * Series this wallet staked in (open or accept sent) in the last `ms`: on-chain counts can lag a send that hasn't
+   * confirmed yet, so the open-series count adds these.
+   */
+  stakedSeriesSince(cluster: Cluster, ms: number): string[] {
+    const since = this.now().getTime() - ms;
+    return this.entries()
+      .filter((e) => e.action === "wager" && e.outcome === "sent" && e.cluster === cluster && (e.wager === "open" || e.wager === "accept") && e.series && Date.parse(e.time) >= since)
+      .map((e) => e.series!);
   }
 
   /** Posts sent in the last 24 hours, for the policy's daily cap: each counts once (its "sent" line), up or not. */

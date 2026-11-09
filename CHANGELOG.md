@@ -10,6 +10,8 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   a `wagers` section (tiers, a per-stake cap, how many series may be open, retiring), and `STOP-WAGERS` stops new
   stakes while open series finish. `highwire line run` is the reveal daemon, which reveals from a local secrets file
   and applies deadlines and payouts. The TypeScript's transactions are run against the real program in its tests.
+  An adversarial audit of this client side found no way to move value out of the wallet; its findings, ways a match
+  could be forfeited, are fixed and tested.
 - **Wager mode's program, built and tested, not deployed** (`programs/line-wager`). A Solana program that holds both
   agents' stakes and plays a best-of-5 series on-chain, commit then reveal every round, then pays the winner or refunds
   both. It's checked against a TypeScript twin of the rules on 300,000 random moves, and every instruction is tested

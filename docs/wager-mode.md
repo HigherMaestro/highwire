@@ -467,7 +467,14 @@ Wagering goes **only** through the local signer, inside the owner's policy file,
   ```
   Stakes count **gross**, when they're sent, toward `max_sol_per_tx` and `max_sol_per_day`, from the audit log as every
   send does; winnings never free up room the same day (no chasing). `max_open` is checked against the chain (the
-  wallet's open series), not the audit log, which never learns outcomes. Without the section, no wagers.
+  wallet's open series), not the audit log, which never learns outcomes, plus stakes sent in the last ten minutes that
+  the chain may not show yet, counted under the execute lock so two stakes can't both fit. Without the section, no
+  wagers.
+- **The signer reads every wager from its bytes**: the instruction, an open's stake from its data and an accept's from
+  the series account. What the caller says is checked against them, never trusted, so an open can't pass as a reveal.
+- **Moves aren't held to the daily limit** (a reveal, a timeout, a settle): refusing one would forfeit the match, and
+  so the stake. Each is capped instead at 0.001 SOL of fees, still logged and counted, and none waits for the execute
+  lock, so a slow trade in another process can't make a reveal miss its window.
 - **Staking is an execute.** `line_join` with a `stake` takes `confirm: z.literal(true)`, carries the `EXECUTE`
   annotations, and sends `open` or `accept` through `LocalSigner.execute()` with `action: "wager"` and `solOut` equal to
   the stake, so the policy, the simulation, the audit log and the kill switch all apply.
@@ -486,8 +493,12 @@ Wagering goes **only** through the local signer, inside the owner's policy file,
   Losing a nonce forfeits the match (7.2.1); the signer's job is never to lose it.
 - **What the daemon does**, and nothing else: reveals every committed move and owed fallback whose secret opens the
   commitment on-chain; applies a deadline once it has passed by a few seconds (for clock drift); settles a finished
-  series (the loser's too, for its rent); cancels a series it opened that nobody accepted in time; and asks for the
-  emergency refund of a series idle for a day. It never opens, accepts, commits or retires. Each action is built by
+  series (the loser's too, for its rent); cancels a series it opened that nobody accepted, 90 seconds past the
+  deadline (the program lets A cancel any time, so an early cancel would cost a series B could still accept); and asks
+  for the emergency refund of a series idle for a day. Past a reveal window it stops trying the reveal and applies the
+  timeout. It finds series both by `getProgramAccounts` and by the ids in the secrets file, runs them side by side,
+  backs off on failures, survives any one failing, and does nothing while the policy is a dry run or can't wager.
+  The tools that commit (step 5) must never return a nonce or a salt. It never opens, accepts, commits or retires. Each action is built by
   `buildWagerMove` and sent through `LocalSigner.execute()` with `action: "wager"`, so the policy, the simulation and the
   audit log apply.
 - **The kill switch stays absolute.** `STOP` refuses every send, as now, reveals included, so **`STOP` during a series
@@ -848,6 +859,17 @@ covered by a test in `tests/program.rs`:
   decided. It now plays the due timeouts first and refuses if they decide the series.
 - The spec now matches the code on the authority's powers, the freeze on a decided series, and what the series account
   holds.
+
+### 17.2 The client's audit (step 3)
+
+An adversarial audit of the builders, the checks, the policy, the secrets file and the daemon found no way for a sign
+link, a stranger or an opponent to get a wager signed or move value out of the wallet. It found ways to forfeit
+matches, each fixed and tested in `packages/agent/test/wager.test.ts`: the daily limit could refuse the daemon's reveals
+(moves are now exempt and fee-capped); past a reveal window the daemon retried a dead reveal instead of the timeout; a
+torn line in the secrets file lost the next secret; one exception ended the daemon; a reveal could wait up to 90
+seconds for another process's lock; and the signer trusted the caller's word for a wager's kind, stake and open count.
+Smaller ones: cancelling on the local clock, retrying without backoff, relying on `getProgramAccounts` alone, and loose
+account counts in `assertSafe`. Still to come: `highwire policy explain` (7.3).
 
 ## Sources
 

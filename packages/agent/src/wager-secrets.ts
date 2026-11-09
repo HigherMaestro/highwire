@@ -1,4 +1,4 @@
-import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, writeSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, fstatSync, fsyncSync, mkdirSync, openSync, readFileSync, readSync, writeSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname } from "node:path";
 import { arena } from "highwire-core";
@@ -41,29 +41,65 @@ export class WagerSecrets {
   constructor(readonly path: string) {}
 
   private append(entry: Secret) {
-    mkdirSync(dirname(this.path), { recursive: true });
-    const fd = openSync(this.path, "a", 0o600);
+    mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
+    const fresh = !existsSync(this.path);
+    const fd = openSync(this.path, "a+", 0o600);
     try {
-      writeSync(fd, `${JSON.stringify(entry)}\n`);
+      // A crash mid-write leaves a torn last line: start on a new one, or this secret would be lost with it.
+      const size = fstatSync(fd).size;
+      const last = Buffer.alloc(1);
+      const torn = size > 0 && readSync(fd, last, 0, 1, size - 1) === 1 && last[0] !== 0x0a;
+      writeSync(fd, `${torn ? "\n" : ""}${JSON.stringify(entry)}\n`);
       fsyncSync(fd);
     } finally {
       closeSync(fd);
     }
     chmodSync(this.path, 0o600);
+    if (fresh) {
+      // The file's own directory entry, so a new file survives a crash too.
+      try {
+        const dir = openSync(dirname(this.path), "r");
+        try {
+          fsyncSync(dir);
+        } finally {
+          closeSync(dir);
+        }
+      } catch {
+        /* not every platform can sync a directory */
+      }
+    }
   }
 
+  /** Every well-formed entry: anything else (a torn line, a stray value) is skipped, never thrown. */
   private all(): Secret[] {
     if (!existsSync(this.path)) return [];
+    const hex = (v: unknown) => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
+    const byte = (v: unknown) => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 255;
     const out: Secret[] = [];
     for (const line of readFileSync(this.path, "utf8").split("\n")) {
       if (!line.trim()) continue;
+      let v: unknown;
       try {
-        out.push(JSON.parse(line) as Secret);
+        v = JSON.parse(line);
       } catch {
-        /* a torn last line from a crash: skip it */
+        continue;
+      }
+      if (!v || typeof v !== "object") continue;
+      const e = v as Record<string, unknown>;
+      if (!hex(e.series) || !hex(e.hash) || typeof e.time !== "string") continue;
+      const fb = e.fallback as Record<string, unknown> | undefined;
+      if (e.type === "move" && hex(e.nonce) && byte(e.match) && byte(e.round) && byte(e.pull) && (e.side === "a" || e.side === "b")) out.push(e as unknown as WagerMoveSecret);
+      else if (e.type === "fallback" && hex(e.salt) && (e.player === "A" || e.player === "B") && fb && typeof fb === "object" && ["zero", "steady", "mirror"].includes(fb.kind as string) && byte(fb.pull)) {
+        out.push(e as unknown as WagerFallbackSecret);
       }
     }
     return out;
+  }
+
+  /** The series this file holds secrets for, from entries newer than `sinceMs` ago: the daemon reads these by id too. */
+  seriesIds(sinceMs = 14 * 24 * 60 * 60 * 1000): string[] {
+    const since = Date.now() - sinceMs;
+    return [...new Set(this.all().filter((e) => Date.parse(e.time) >= since).map((e) => e.series))];
   }
 
   /** A fresh salt for this player's fallback in this series, saved; returns the commitment to send at open or accept. */
@@ -72,6 +108,7 @@ export class WagerSecrets {
     const hash = arena.fallbackCommitment(series, player, toArena(fallback), salt);
     const entry: WagerFallbackSecret = { type: "fallback", series, player, fallback, salt, hash, time: new Date().toISOString() };
     this.append(entry);
+    if (!this.fallback(series, player, hash)) throw new Error(`the fallback's salt didn't read back from ${this.path}, so nothing was sent`);
     return entry;
   }
 
@@ -81,6 +118,7 @@ export class WagerSecrets {
     const hash = arena.moveCommitment(series, match, round, side, pull, nonce);
     const entry: WagerMoveSecret = { type: "move", series, match, round, side, pull, nonce, hash, time: new Date().toISOString() };
     this.append(entry);
+    if (!this.move(series, hash)) throw new Error(`the move's nonce didn't read back from ${this.path}, so nothing was sent`);
     return entry;
   }
 

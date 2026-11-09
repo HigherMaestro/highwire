@@ -45,6 +45,24 @@ export async function readSeries(chain: Chain, seriesId: string): Promise<Series
   return decodeSeriesAccount(acc.data);
 }
 
+/** Several series by id, in one call; the ones with no account (never opened, or closed) are left out. */
+export async function readSeriesMany(chain: Chain, seriesIds: string[]): Promise<SeriesAccountData[]> {
+  const p = program(chain);
+  const out: SeriesAccountData[] = [];
+  for (let i = 0; i < seriesIds.length; i += 100) {
+    const infos = await chain.connection.getMultipleAccountsInfo(seriesIds.slice(i, i + 100).map((id) => seriesAddress(p, id)), "confirmed");
+    for (const acc of infos) {
+      if (!acc || !acc.owner.equals(p) || acc.data.length === 0) continue;
+      try {
+        out.push(decodeSeriesAccount(acc.data));
+      } catch {
+        /* not a series account */
+      }
+    }
+  }
+  return out;
+}
+
 /** Every series this wallet is a player in, open or live. */
 export async function listWalletSeries(chain: Chain, wallet: PublicKey): Promise<SeriesAccountData[]> {
   const p = program(chain);

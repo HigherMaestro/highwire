@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type Connection } from "@solana/web3.js";
-import { arena, decodeSeriesAccount, ENVELOPE_FORMAT, HOW_TO_SIGN, solToLamports, type Envelope, type SeriesAccountData } from "highwire-core";
+import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type Connection, type TransactionInstruction } from "@solana/web3.js";
+import { ed25519 } from "@noble/curves/ed25519";
+import { arena, decodeSeriesAccount, ENVELOPE_FORMAT, HOW_TO_SIGN, solToLamports, ticketCheck, ticketMessage, WAGER_PROGRAM_IDS, wagerInstruction, type Envelope, type SeriesAccountData } from "highwire-core";
 import {
   agentPaths,
+  CANCEL_MARGIN_SECONDS,
   checkPolicy,
   DEADLINE_MARGIN_SECONDS,
   GENESIS_HASHES,
@@ -16,6 +18,7 @@ import {
   PolicySchema,
   WagerRunner,
   WagerSecrets,
+  withFileLock,
   type Intent,
   type Policy,
 } from "../src/index.ts";
@@ -56,10 +59,21 @@ test("the policy allows a wager only inside its wagers section", () => {
   assert.ok(!(POLICY_TEMPLATE.actions as string[]).includes("wager"));
 });
 
-function envelopeFor(wallet: PublicKey): Envelope {
-  const tx = new VersionedTransaction(
-    new TransactionMessage({ payerKey: wallet, recentBlockhash: PublicKey.default.toBase58(), instructions: [SystemProgram.transfer({ fromPubkey: wallet, toPubkey: wallet, lamports: 0 })] }).compileToV0Message(),
-  );
+// Real wager transactions: the signer reads the kind and the stake from the bytes, not from the caller.
+const codec = JSON.parse(readFileSync(new URL("../../core/test/fixtures/wager-codec.json", import.meta.url), "utf8"));
+const program = new PublicKey(WAGER_PROGRAM_IDS.devnet!);
+const ticketSecret = new Uint8Array(32).fill(7);
+const other = Keypair.generate().publicKey;
+
+function wagerEnvelope(wallet: PublicKey, kind: "open" | "accept" | "reveal" | "timeout", seriesId = "55".repeat(32), stakeSol = 0.1): Envelope {
+  let ixs: TransactionInstruction[];
+  if (kind === "open" || kind === "accept") {
+    const [a, b] = kind === "open" ? [wallet, other] : [other, wallet];
+    const t = { seriesId, playerA: a.toBase58(), playerB: b.toBase58(), stake: solToLamports(stakeSol), acceptDeadline: 1, expiry: 2, keyId: 1 };
+    const check = ticketCheck(program, t, new PublicKey(ed25519.getPublicKey(ticketSecret)), ed25519.sign(ticketMessage(program, t), ticketSecret));
+    ixs = [check, wagerInstruction(program, wallet, seriesId, kind === "open" ? { kind, ticket: t, fallbackHash: "44".repeat(32) } : { kind, fallbackHash: "44".repeat(32) })];
+  } else ixs = [wagerInstruction(program, wallet, seriesId, kind === "reveal" ? { kind, pull: 1, nonce: "22".repeat(32) } : { kind })];
+  const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: PublicKey.default.toBase58(), instructions: ixs }).compileToV0Message());
   return {
     format: ENVELOPE_FORMAT,
     cluster: "devnet",
@@ -68,7 +82,7 @@ function envelopeFor(wallet: PublicKey): Envelope {
     transactions: [
       {
         index: 0,
-        label: "a wager",
+        label: `a wager ${kind}`,
         base64: Buffer.from(tx.serialize()).toString("base64"),
         encoding: "base64",
         version: 0,
@@ -90,32 +104,80 @@ function envelopeFor(wallet: PublicKey): Envelope {
   };
 }
 
-const fakeConnection = () =>
+/** A fake RPC: `spend` is what the simulation shows leaving the wallet; the series to accept is the codec file's (0.1 SOL a side). */
+const fakeConnection = (o: { spend?: number } = {}) =>
   ({
     getGenesisHash: async () => GENESIS_HASHES.devnet,
     getBalance: async () => 2e9,
-    simulateTransaction: async () => ({ value: { err: null, logs: [], accounts: [{ lamports: 2e9 }] } }),
+    simulateTransaction: async () => ({ value: { err: null, logs: [], accounts: [{ lamports: 2e9 - (o.spend ?? 5_000) }] } }),
     sendRawTransaction: async () => "sig",
     confirmTransaction: async () => ({ value: { err: null } }),
     getLatestBlockhash: async () => ({ blockhash: PublicKey.default.toBase58(), lastValidBlockHeight: 200 }),
     getTransaction: async () => null,
+    getProgramAccounts: async () => [],
+    getAccountInfo: async () => ({ data: Buffer.from(codec.seriesAccount, "hex"), owner: program, executable: false, lamports: 1 }),
   }) as unknown as Connection;
 
-test("STOP-WAGERS refuses new stakes and lets open series play out; STOP refuses everything", async () => {
+const live = (over: Partial<Policy> = {}) => {
   const paths = agentPaths({ HIGHWIRE_HOME: home() });
-  writeFileSync(paths.policy, JSON.stringify(policy({ live: true })));
-  const signer = new LocalSigner(Keypair.generate(), paths);
-  const env = envelopeFor(signer.publicKey);
-  const reveal: Intent = { action: "wager", cluster: "devnet", solOut: 0n, wager: { kind: "reveal" } };
+  writeFileSync(paths.policy, JSON.stringify(policy({ live: true, ...over })));
+  return { paths, signer: new LocalSigner(Keypair.generate(), paths) };
+};
+const ask = (kind?: string, sol = 0): Intent => ({ action: "wager", cluster: "devnet", solOut: solToLamports(sol), ...(kind ? { wager: { kind } } : {}) });
+
+test("STOP-WAGERS refuses new stakes and lets open series play out; STOP refuses everything", async () => {
+  const { paths, signer } = live();
   writeFileSync(paths.stopWagers, "");
-  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: stake(0.1), envelope: env }), /No new wagers/);
-  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: stake(0.1, 0, "accept"), envelope: env }), /No new wagers/);
-  assert.equal((await signer.execute(fakeConnection(), { tool: "t", intent: reveal, envelope: env })).status, "sent");
+  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: ask("open"), envelope: wagerEnvelope(signer.publicKey, "open") }), /No new wagers/);
+  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: ask("accept"), envelope: wagerEnvelope(signer.publicKey, "accept") }), /No new wagers/);
+  assert.equal((await signer.execute(fakeConnection(), { tool: "t", intent: ask("reveal"), envelope: wagerEnvelope(signer.publicKey, "reveal") })).status, "sent");
   writeFileSync(paths.stop, "");
-  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: reveal, envelope: env }), (e: { code?: string }) => e.code === "signer_stopped");
+  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: ask("reveal"), envelope: wagerEnvelope(signer.publicKey, "reveal") }), (e: { code?: string }) => e.code === "signer_stopped");
   const log = readFileSync(paths.audit, "utf8");
   assert.match(log, /"action":"wager"/);
   assert.match(log, /No new wagers/);
+});
+
+test("the signer takes a wager's kind and stake from its bytes and the chain, never the caller's word", async () => {
+  const { signer } = live();
+  // An open that calls itself a reveal (which would skip STOP-WAGERS, the tiers and max_open) is refused.
+  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: ask("reveal"), envelope: wagerEnvelope(signer.publicKey, "open") }), /a wager open, not the reveal it says/);
+  // With no kind or stake said at all, the open's own stake is checked: 0.05 SOL isn't a tier.
+  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: ask(), envelope: wagerEnvelope(signer.publicKey, "open", "66".repeat(32), 0.05) }), /isn't one of the policy's tiers/);
+  // An accept's stake is the series account's (0.1 SOL here), so a policy of 0.01-SOL wagers refuses it.
+  const small = live({ wagers: { max_stake_sol: 0.01, max_open: 1, tiers: [0.01], allow_retire: false } });
+  await assert.rejects(small.signer.execute(fakeConnection(), { tool: "t", intent: ask("accept"), envelope: wagerEnvelope(small.signer.publicKey, "accept") }), /isn't one of the policy's tiers/);
+  // A move that says it stakes is refused too.
+  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: ask("reveal", 0.1), envelope: wagerEnvelope(signer.publicKey, "reveal") }), /stakes nothing/);
+  // Something that isn't one wager instruction isn't a wager.
+  const plain = wagerEnvelope(signer.publicKey, "reveal");
+  const tx = new VersionedTransaction(new TransactionMessage({ payerKey: signer.publicKey, recentBlockhash: PublicKey.default.toBase58(), instructions: [SystemProgram.transfer({ fromPubkey: signer.publicKey, toPubkey: other, lamports: 1 })] }).compileToV0Message());
+  plain.transactions[0]!.base64 = Buffer.from(tx.serialize()).toString("base64");
+  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: ask("reveal"), envelope: plain }), /exactly one wager instruction/);
+});
+
+test("two stakes at once can't both fit under max_open: each counts the other once it's sent", async () => {
+  const { paths, signer } = live();
+  const results = await Promise.allSettled(["77", "88"].map((id) => signer.execute(fakeConnection({ spend: 104_000_000 }), { tool: "t", intent: ask("open"), envelope: wagerEnvelope(signer.publicKey, "open", id.repeat(32)) })));
+  assert.deepEqual(results.map((r) => r.status).sort(), ["fulfilled", "rejected"]);
+  assert.match(String((results.find((r) => r.status === "rejected") as PromiseRejectedResult).reason), /1 series already open/);
+  assert.match(readFileSync(paths.audit, "utf8"), /"wager":"open".*"series":"/);
+});
+
+test("moves are never refused by the daily limit, only by their own fee cap, and never wait for the lock", async () => {
+  const { paths, signer } = live({ max_sol_per_day: 0.105 });
+  // The stake uses the whole day (0.1 SOL and the rent).
+  assert.equal((await signer.execute(fakeConnection({ spend: 104_000_000 }), { tool: "t", intent: ask("open"), envelope: wagerEnvelope(signer.publicKey, "open") })).status, "sent");
+  // The reveal still goes: refusing it would forfeit the match.
+  assert.equal((await signer.execute(fakeConnection({ spend: 10_000 }), { tool: "t", intent: ask("reveal"), envelope: wagerEnvelope(signer.publicKey, "reveal") })).status, "sent");
+  // But a "move" that spends more than a fee is refused.
+  await assert.rejects(signer.execute(fakeConnection({ spend: 2_000_000 }), { tool: "t", intent: ask("timeout"), envelope: wagerEnvelope(signer.publicKey, "timeout") }), /over its 0.001 SOL fee cap/);
+  // Another process holding the execute lock for a while doesn't hold up a reveal.
+  const held = withFileLock(paths.lock, () => new Promise((r) => setTimeout(r, 1_500)));
+  const t0 = Date.now();
+  assert.equal((await signer.execute(fakeConnection(), { tool: "t", intent: ask("reveal"), envelope: wagerEnvelope(signer.publicKey, "reveal") })).status, "sent");
+  assert.ok(Date.now() - t0 < 1_000, "the reveal didn't wait");
+  await held;
 });
 
 test("the secrets file keeps every nonce and salt, owner-only, and finds them only by their commitment", () => {
@@ -141,7 +203,6 @@ test("the secrets file keeps every nonce and salt, owner-only, and finds them on
 
 // A live series from the shared codec file: A is key 5, B key 6; match 0 (A on side a), round 2's commit phase opened at
 // 1140, nobody committed yet; B's fallback is public (steady 9).
-const codec = JSON.parse(readFileSync(new URL("../../core/test/fixtures/wager-codec.json", import.meta.url), "utf8"));
 const base = (): SeriesAccountData => decodeSeriesAccount(Buffer.from(codec.seriesAccount, "hex"));
 const A = new PublicKey(new Uint8Array(32).fill(5)).toBase58();
 const B = new PublicKey(new Uint8Array(32).fill(6)).toBase58();
@@ -199,9 +260,10 @@ test("the daemon settles a finished series, cancels an unaccepted one after its 
   s.series!.ending = { winner: "B", reason: 1 };
   assert.deepEqual(nextWagerAction(s, A, 1_141, none).action, { kind: "settle" }, "the loser settles too: its rent comes back");
   const open: SeriesAccountData = { header: { ...base().header, status: "open" }, series: null };
-  assert.equal(nextWagerAction(open, A, open.header.acceptDeadline, none).action, null);
-  assert.deepEqual(nextWagerAction(open, A, open.header.acceptDeadline + 1 + M, none).action, { kind: "cancel" });
-  assert.equal(nextWagerAction(open, B, open.header.acceptDeadline + 1 + M, none).action, null, "only the opener cancels");
+  // The program lets A cancel any time, so the daemon waits well past the deadline: B may still accept on a lagging chain clock.
+  assert.equal(nextWagerAction(open, A, open.header.acceptDeadline + CANCEL_MARGIN_SECONDS, none).action, null);
+  assert.deepEqual(nextWagerAction(open, A, open.header.acceptDeadline + CANCEL_MARGIN_SECONDS + 1, none).action, { kind: "cancel" });
+  assert.equal(nextWagerAction(open, B, open.header.acceptDeadline + CANCEL_MARGIN_SECONDS + 1, none).action, null, "only the opener cancels");
   // A series nobody can move (both committed, before any deadline) after a day without a change.
   const idle = base();
   idle.series!.round[0].hash = "88".repeat(32);
@@ -240,4 +302,76 @@ test("the runner acts once per state, retries after a failure, and stops at the 
   fail = false;
   assert.deepEqual(await runner.tick(), []);
   assert.equal(acted.length, 1);
+});
+
+test("past the reveal window the daemon stops revealing and applies the timeout, secret or not", () => {
+  const secrets = new WagerSecrets(join(home(), "s.jsonl"));
+  const s = base();
+  const mine = secrets.newMove(s.header.seriesId, 0, 2, "a", 3);
+  s.series!.phase = "reveal";
+  s.series!.round[0] = { hash: mine.hash, owesFallback: false, pull: null };
+  s.series!.round[1] = { hash: "77".repeat(32), owesFallback: false, pull: null };
+  const end = 1_140 + 120;
+  assert.equal(nextWagerAction(s, A, end + M, secrets).action?.kind, "reveal", "still worth trying at the window's edge");
+  assert.deepEqual(nextWagerAction(s, A, end + 1 + M, secrets).action, { kind: "timeout" });
+  // With no secret, it warns while the window is open, and still cranks the timeout once it's past.
+  assert.match(nextWagerAction(s, A, end, none).warning ?? "", /no saved nonce/);
+  assert.deepEqual(nextWagerAction(s, A, end + 1 + M, none).action, { kind: "timeout" });
+});
+
+test("a torn line or a stray value in the secrets file never loses the next secret or stops the reader", () => {
+  const path = join(home(), "s.jsonl");
+  const secrets = new WagerSecrets(path);
+  const id = "11".repeat(32);
+  const first = secrets.newMove(id, 0, 1, "a", 2);
+  writeFileSync(path, readFileSync(path, "utf8") + '{"type":"move","ser');
+  const next = secrets.newMove(id, 0, 2, "a", 3);
+  assert.deepEqual(secrets.move(id, next.hash), next, "written on its own line");
+  writeFileSync(path, readFileSync(path, "utf8") + 'null\n42\n{"type":"move","series":"zz"}\n');
+  assert.deepEqual(secrets.move(id, first.hash), first);
+  assert.deepEqual(secrets.seriesIds(), [id]);
+});
+
+test("the runner survives any failure, keeps other series going, backs off, and idles on a policy that can't wager", async () => {
+  const done = base();
+  done.series!.ending = { winner: "A", reason: 1 };
+  const other = base();
+  other.header = { ...other.header, seriesId: "99".repeat(32) };
+  other.series!.ending = { winner: "B", reason: 1 };
+  const acted: string[] = [];
+  const logs: string[] = [];
+  let idle: string | null = "the policy is a dry run";
+  const runner = new WagerRunner({
+    wallet: A,
+    list: async () => [done, other],
+    act: async (id, a) => {
+      acted.push(`${id.slice(0, 2)}:${a.kind}`);
+      if (id.startsWith("11")) throw new Error("simulation failed");
+      return "sent";
+    },
+    secrets: {
+      move: () => undefined,
+      fallback: () => {
+        throw new TypeError("a bad line");
+      },
+    },
+    stopped: () => false,
+    idle: () => idle,
+    log: (l) => logs.push(l),
+    now: () => 1_141,
+  });
+  assert.deepEqual(await runner.tick(), []);
+  assert.deepEqual(acted, [], "idle: nothing sent");
+  assert.match(logs.join("\n"), /not acting: the policy is a dry run/);
+  idle = null;
+  await runner.tick();
+  await runner.tick();
+  assert.deepEqual(acted.sort(), ["11:settle", "99:settle"], "one failing series doesn't block the other; it waits before a retry");
+  // An exception inside a decision is logged, not thrown.
+  const owes = base();
+  owes.series!.phase = "reveal";
+  owes.series!.round[0] = { hash: null, owesFallback: true, pull: null };
+  const r2 = new WagerRunner({ wallet: A, list: async () => [owes], act: async () => "sent", secrets: { move: () => undefined, fallback: () => { throw new TypeError("a bad line"); } }, stopped: () => false, log: (l) => logs.push(l), now: () => 1_141 });
+  assert.deepEqual(await r2.tick(), []);
+  assert.match(logs.join("\n"), /a bad line/);
 });

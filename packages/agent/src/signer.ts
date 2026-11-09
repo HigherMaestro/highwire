@@ -1,10 +1,14 @@
 import { lstatSync } from "node:fs";
 import { Buffer } from "node:buffer";
-import { VersionedTransaction, type Connection, type Keypair } from "@solana/web3.js";
+import { PublicKey, VersionedTransaction, type Connection, type Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
 import { ed25519 } from "@noble/curves/ed25519";
 import {
   checkPostText,
+  decodeSeriesAccount,
+  describeTransaction,
+  SERIES_PLAYER_OFFSETS,
+  wagerProgram,
   checkSignInMessage,
   HigherError,
   isRefreshable,
@@ -24,7 +28,7 @@ import { AuditLog, type AuditAction } from "./audit.ts";
 import { jitoClient, JitoRejected, tipFor, type JitoClient } from "./jito.ts";
 import { withFileLock } from "./lock.ts";
 import type { AgentPaths } from "./paths.ts";
-import { checkPolicy, loadPolicy, plural, policyWarnings, type Action, type Intent, type Policy } from "./policy.ts";
+import { checkPolicy, isWagerMove, loadPolicy, plural, policyWarnings, STAKE_KINDS, type Action, type Intent, type Policy } from "./policy.ts";
 
 // The local signer: signs and sends what Highwire built, for the one wallet whose
 // keypair the user pointed it at, and only inside the user's policy. Dry run
@@ -55,6 +59,8 @@ export interface ExecuteRequest {
   envelope: Envelope;
   /** The standing order this fills, for the audit log. */
   order?: string;
+  /** A wager's series account, for the audit log (set by the signer from the bytes). */
+  series?: string;
 }
 
 export interface ExecutedTransaction {
@@ -114,6 +120,23 @@ export const GENESIS_HASHES: Record<Cluster, string> = {
  * opens, and network and priority fees. Everything the wallet actually spends still counts against the daily limit.
  */
 export const RENT_AND_FEE_ALLOWANCE_LAMPORTS = 30_000_000n;
+
+/**
+ * The most a wager move (a reveal, a timeout, a settle...) may spend: its network fee, with the priority fee at
+ * Highwire's cap. Moves are exempt from the daily limit (a refused reveal forfeits the match), not from this.
+ */
+export const WAGER_MOVE_FEE_CAP_LAMPORTS = 1_000_000n;
+
+/** How long a stake that was sent counts as an open series, whether or not the chain shows it yet. */
+const RECENT_STAKE_MS = 10 * 60 * 1000;
+
+/** What a wager envelope does, read from its bytes: one transaction, one wager instruction. */
+export function wagerFacts(env: Envelope, cluster: Cluster): { kind: string; series: string; stake?: bigint } {
+  if (env.transactions.length !== 1) throw new UnsafeTransactionError("a wager is exactly one transaction");
+  const d = describeTransaction(VersionedTransaction.deserialize(Buffer.from(env.transactions[0]!.base64, "base64")), cluster);
+  if (d.wagers.length !== 1) throw new UnsafeTransactionError("the transaction doesn't carry exactly one wager instruction");
+  return d.wagers[0]!;
+}
 
 /** The kill switch: a STOP file, or anything else at that path, even a dangling link. */
 function stopped(path: string): boolean {
@@ -217,6 +240,15 @@ export class LocalSigner {
 
   /** Checks the built envelope against the policy, then signs and sends it, or dry-runs it. */
   execute(connection: Connection, req: ExecuteRequest): Promise<ExecuteResult> {
+    // A wager move spends only its capped fee and is exempt from the daily limit, so it needn't wait for the lock: a
+    // reveal queued behind a slow trade could miss its window and forfeit the match.
+    if (req.intent.action === "wager") {
+      try {
+        if (!STAKE_KINDS.includes(wagerFacts(req.envelope, req.intent.cluster).kind)) return this.executeNow(connection, req);
+      } catch {
+        /* not a readable wager: executeNow refuses it, in turn */
+      }
+    }
     // One at a time in this process, and across processes through the lock file.
     const run = this.queue.then(() => withFileLock(this.paths.lock, () => this.executeNow(connection, req)));
     this.queue = run.catch(() => undefined);
@@ -224,7 +256,7 @@ export class LocalSigner {
   }
 
   private log(
-    req: Pick<ExecuteRequest, "tool" | "intent" | "order">,
+    req: Pick<ExecuteRequest, "tool" | "intent" | "order" | "series">,
     outcome: "refused" | "dry_run" | "sent" | "confirmed" | "failed" | "not_landed",
     extra: { lamports?: bigint; label?: string; signature?: string; reason?: string; route?: string; tip?: bigint; bundle?: string } = {},
   ) {
@@ -246,6 +278,8 @@ export class LocalSigner {
       ...(extra.route ? { route: extra.route } : {}),
       ...(extra.tip !== undefined ? { tip: extra.tip.toString() } : {}),
       ...(extra.bundle ? { bundle: extra.bundle } : {}),
+      ...(req.intent.wager ? { wager: req.intent.wager.kind } : {}),
+      ...(req.series ? { series: req.series } : {}),
     });
   }
 
@@ -254,11 +288,51 @@ export class LocalSigner {
     this.audit.append({ tool, action: order.kind === "fee_claim" ? "claim" : "trade", cluster: order.cluster, wallet: this.wallet, outcome: "order", sol: "0", lamports: "0", ...(order.mint ? { mint: order.mint } : {}), order: order.id, reason });
   }
 
+  /** The wallet's series on-chain (open or live), plus stakes it sent recently that the chain may not show yet. */
+  private async openSeries(connection: Connection, cluster: Cluster): Promise<number> {
+    const program = wagerProgram(cluster);
+    if (!program) throw refused("wagers", `wagering isn't deployed on ${cluster}`);
+    const seen = new Set<string>(this.audit.stakedSeriesSince(cluster, RECENT_STAKE_MS));
+    for (const offset of [SERIES_PLAYER_OFFSETS.A, SERIES_PLAYER_OFFSETS.B]) {
+      const accounts = await connection.getProgramAccounts(program, { commitment: "confirmed", filters: [{ memcmp: { offset, bytes: this.wallet } }] });
+      for (const a of accounts) seen.add(a.pubkey.toBase58());
+    }
+    return seen.size;
+  }
+
+  /**
+   * A wager's intent, from the transaction's bytes and the chain rather than the caller: its instruction, the stake (an
+   * open's from its data, an accept's from the series account), and for a stake, the wallet's open series counted now,
+   * under the lock.
+   */
+  private async wagerIntent(connection: Connection, req: ExecuteRequest): Promise<Intent> {
+    const { intent } = req;
+    const f = wagerFacts(req.envelope, intent.cluster);
+    if (intent.wager?.kind && intent.wager.kind !== f.kind) throw new UnsafeTransactionError(`the transaction is a wager ${f.kind}, not the ${intent.wager.kind} it says`);
+    if (!STAKE_KINDS.includes(f.kind)) {
+      if (intent.solOut !== 0n) throw new UnsafeTransactionError("a wager move stakes nothing");
+      return { ...intent, wager: { kind: f.kind } };
+    }
+    let stake = f.stake;
+    if (f.kind === "accept") {
+      const acc = await connection.getAccountInfo(new PublicKey(f.series), "confirmed");
+      if (!acc) throw refused("wagers", "the series to accept isn't on-chain");
+      stake = decodeSeriesAccount(Buffer.from(acc.data)).header.stake;
+    }
+    const solOut = stake !== undefined && stake > intent.solOut ? stake : intent.solOut;
+    return { ...intent, solOut, wager: { kind: f.kind, stake, openSeries: await this.openSeries(connection, intent.cluster) } };
+  }
+
   private async executeNow(connection: Connection, req: ExecuteRequest): Promise<ExecuteResult> {
-    const { intent, envelope: env } = req;
+    let { intent } = req;
+    const env = req.envelope;
     let policy: Policy;
     try {
       policy = this.checkStatic(intent.action, intent.cluster);
+      if (intent.action === "wager") {
+        intent = await this.wagerIntent(connection, req);
+        req = { ...req, intent, series: wagerFacts(env, intent.cluster).series };
+      }
       if (env.wallet !== this.wallet || env.cluster !== intent.cluster) throw new UnsafeTransactionError("the transactions aren't for this signer's wallet and cluster");
       const failed = env.transactions.find((t) => !t.simulation.ok && !t.simulation.skipped);
       if (failed) throw new HigherError(`Transaction ${failed.index + 1} (${failed.label}) failed simulation: ${failed.simulation.error}`, { code: "simulation_failed" });
@@ -333,10 +407,14 @@ export class LocalSigner {
         // What the simulation shows leaving the wallet, and never less than the intended spend on the first transaction.
         const floor = sent.length === 0 ? intent.solOut : 0n;
         const cost = simulated > floor ? simulated : floor;
+        const move = isWagerMove(intent);
+        if (move && cost > WAGER_MOVE_FEE_CAP_LAMPORTS) {
+          throw refused("wagers", `a wager move would spend ${lamportsNumber(cost)} SOL, over its ${lamportsNumber(WAGER_MOVE_FEE_CAP_LAMPORTS)} SOL fee cap`);
+        }
         if (charged + cost > perTx) {
           throw refused("max_sol_per_tx", `it would spend ${lamportsNumber(charged + cost)} SOL, rent and fees included, past the policy's ${policy.max_sol_per_tx} SOL per transaction (plus ${lamportsNumber(RENT_AND_FEE_ALLOWANCE_LAMPORTS)} SOL for rent and fees)`);
         }
-        if (this.audit.spentSince(intent.cluster) + cost > perDay) {
+        if (!move && this.audit.spentSince(intent.cluster) + cost > perDay) {
           throw refused("max_sol_per_day", `it would take the last 24 hours past the policy's ${policy.max_sol_per_day} SOL, rent and fees included`);
         }
 
