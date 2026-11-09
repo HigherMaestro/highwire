@@ -6,7 +6,6 @@ import type { Chain } from "./chain.ts";
 import { finish, priorityFee, type Finished } from "./envelope.ts";
 import {
   decodeSeriesAccount,
-  decodeWager,
   decodeWagerConfig,
   SERIES_PLAYER_OFFSETS,
   seriesAddress,
@@ -237,39 +236,59 @@ export async function buildWagerMove(chain: Chain, req: WagerMoveRequest): Promi
 
 /** Where a series stands, for the referee's records and ratings (docs/wager-mode.md 7.4, 7.5). */
 export type SeriesOutcome =
-  | { state: "none" | "open" | "live" | "unknown" }
+  | { state: "none" | "open" | "live" }
   | { state: "closed"; how: "settled"; winner: "A" | "B" | null }
   | { state: "closed"; how: "cancelled" | "refunded" };
 
+const EVENT_TAG = "line-wager";
+
 /**
- * Reads a series' state from the chain: its account while it's open or live; once closed, the transaction that closed
- * it. A settle's winner is whoever it paid at least one and a half stakes (the pot less a fee of at most 5%); a draw
- * refunds each about one stake. A share burned because its wallet couldn't be credited reads as a draw.
+ * The wager program's closing event for this series in a transaction's log, if there is one (processor.rs `announce`):
+ * a `Program data:` line inside one of the program's own frames, so no other program can forge one (a program's own
+ * output is always prefixed, and a frame is the runtime's "invoke" line), naming this series, so no other series'
+ * transaction can stand in for it. Covers a settle made through another program too.
  */
-export async function seriesOutcome(chain: Chain, seriesId: string, players: { playerA: string; playerB: string; stake: bigint }): Promise<SeriesOutcome> {
+export function closingEvent(logs: readonly string[], programId: string, seriesId: string): Extract<SeriesOutcome, { state: "closed" }> | null {
+  const stack: string[] = [];
+  for (const line of logs) {
+    if (line.startsWith("Log truncated")) return null;
+    const invoke = /^Program (\S+) invoke \[\d+\]$/.exec(line);
+    if (invoke) {
+      stack.push(invoke[1]!);
+      continue;
+    }
+    if (/^Program \S+ (success|failed)/.test(line)) {
+      stack.pop();
+      continue;
+    }
+    if (!line.startsWith("Program data: ") || stack[stack.length - 1] !== programId) continue;
+    const parts = line.slice("Program data: ".length).split(" ").map((p) => Buffer.from(p, "base64"));
+    if (parts.length !== 4 || parts[0]!.toString("utf8") !== EVENT_TAG || parts[1]!.length !== 1 || parts[3]!.length !== 1) continue;
+    if (parts[2]!.toString("hex") !== seriesId) continue;
+    const kind = parts[1]![0];
+    const outcome = parts[3]![0];
+    if (kind === 1) return { state: "closed", how: "settled", winner: outcome === 0 ? "A" : outcome === 1 ? "B" : null };
+    if (kind === 2) return { state: "closed", how: "cancelled" };
+    if (kind === 3) return { state: "closed", how: "refunded" };
+  }
+  return null;
+}
+
+/**
+ * Reads a series' state from the chain: its account while it's open or live; once it's gone, the wager program's own
+ * closing event in the series' recent transactions (the newest 50). "none": no account and no closing event found,
+ * whether it never opened or its closing is out of reach; the referee tells the two apart by what it saw before.
+ */
+export async function seriesOutcome(chain: Chain, seriesId: string): Promise<SeriesOutcome> {
   const p = program(chain);
   const live = await readSeries(chain, seriesId);
   if (live) return { state: live.header.status };
-  const sigs = await chain.connection.getSignaturesForAddress(seriesAddress(p, seriesId), { limit: 25 }, "confirmed");
-  if (sigs.length === 0) return { state: "none" };
+  const sigs = await chain.connection.getSignaturesForAddress(seriesAddress(p, seriesId), { limit: 50 }, "confirmed");
   for (const sig of sigs) {
     if (sig.err) continue;
     const tx = await chain.connection.getTransaction(sig.signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" });
-    if (!tx?.meta) return { state: "unknown" };
-    const keys = tx.transaction.message.staticAccountKeys.map((k) => k.toBase58());
-    for (const ix of tx.transaction.message.compiledInstructions) {
-      if (keys[ix.programIdIndex] !== p.toBase58()) continue;
-      const kind = decodeWager(Buffer.from(ix.data))?.kind;
-      if (kind === "cancel") return { state: "closed", how: "cancelled" };
-      if (kind === "emergencyRefund" || kind === "freezeAndRefund") return { state: "closed", how: "refunded" };
-      if (kind !== "settle") continue;
-      const delta = (who: string) => {
-        const i = keys.indexOf(who);
-        return i < 0 ? 0n : BigInt(tx.meta!.postBalances[i]!) - BigInt(tx.meta!.preBalances[i]!);
-      };
-      const won = (players.stake * 3n) / 2n;
-      return { state: "closed", how: "settled", winner: delta(players.playerA) >= won ? "A" : delta(players.playerB) >= won ? "B" : null };
-    }
+    const found = closingEvent(tx?.meta?.logMessages ?? [], p.toBase58(), seriesId);
+    if (found) return found;
   }
-  return { state: "unknown" };
+  return { state: "none" };
 }

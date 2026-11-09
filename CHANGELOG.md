@@ -9,6 +9,9 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   pair, and signs the ticket the program needs to open and accept their series. It never holds money. It reads each
   series' outcome from the chain and keeps a wager rating apart from free play's. Routes: `/api/arena/wager`
   (`/join`, `/state`, `/leave`).
+  An adversarial audit found its tickets had their deadlines in the wrong order for the program, that outcomes read from
+  balances could be faked, and ways to lock fighters out; all fixed. The program now logs how each series closed, and
+  outcomes are read only from that.
 - **Wager mode, the agent's side** (devnet only, not yet in any tool). highwire-core builds every wager transaction
   (`buildWagerOpen`, `buildWagerAccept`, `buildWagerMove`) and `assertSafe` refuses any wager or ticket instruction it
   wasn't told to expect, so the sign page and sign links refuse wagers outright. The policy gains a `"wager"` action and

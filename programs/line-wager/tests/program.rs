@@ -138,6 +138,18 @@ impl Env {
         failure(self.ctx.banks_client.process_transaction(tx).await)
     }
 
+    /// Sends `ixs` and returns the log of a successful transaction.
+    async fn logs(&mut self, mut ixs: Vec<Instruction>, signers: &[&Keypair]) -> Vec<String> {
+        self.nonce += 1;
+        ixs.push(ComputeBudgetInstruction::set_compute_unit_limit(1_400_000 - self.nonce));
+        let mut all: Vec<&Keypair> = vec![&self.ctx.payer];
+        all.extend_from_slice(signers);
+        let tx = Transaction::new_signed_with_payer(&ixs, Some(&self.ctx.payer.pubkey()), &all, self.ctx.last_blockhash);
+        let r = self.ctx.banks_client.process_transaction_with_metadata(tx).await.unwrap();
+        assert!(r.result.is_ok(), "{:?}", r.result);
+        r.metadata.unwrap().log_messages
+    }
+
     async fn init_config(&mut self, payer: &Keypair, init: ConfigInit) -> Option<Failure> {
         let pd = Pubkey::find_program_address(&[program_id().as_ref()], &bpf_loader_upgradeable::ID).0;
         let i = ix(
@@ -832,4 +844,53 @@ async fn the_emergency_refund_never_skips_a_timeout_that_decides_the_series() {
     a_withholds(&mut env, &t.series_id).await;
     env.set_time(T0 + EMERGENCY_AFTER_SECONDS).await;
     assert_eq!(env.emergency(&t.series_id).await, None);
+}
+
+// ---------------------------------------------------------------- the closing events (docs/wager-mode.md 7.5)
+
+/// The `Program data:` line a closing announces: "line-wager", the kind, the series id, the outcome, each base64.
+fn event(kind: u8, id: &[u8; 32], outcome: u8) -> String {
+    const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let enc = |b: &[u8]| {
+        let mut out = String::new();
+        for c in b.chunks(3) {
+            let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+            for i in 0..4 {
+                out.push(if i <= c.len() { B64[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+            }
+        }
+        out
+    };
+    format!("Program data: {} {} {} {}", enc(b"line-wager"), enc(&[kind]), enc(id), enc(&[outcome]))
+}
+
+#[tokio::test]
+async fn every_closing_announces_how_the_series_ended() {
+    // Logs are captured only when the built program runs: natively, `sol_log_data` goes to stdout.
+    if std::env::var("SBF_OUT_DIR").is_err() {
+        return;
+    }
+    let mut env = Env::ready().await;
+    // A settle to B (A retired).
+    let t = env.live(60).await;
+    let a = clone(&env.a);
+    assert_eq!(env.play(&a, &t.series_id, WagerInstruction::Retire).await, None);
+    let mut accounts = env.payout_accounts(&t.series_id, env.fee);
+    accounts.push(burn());
+    let logs = env.logs(vec![ix(WagerInstruction::Settle, accounts)], &[]).await;
+    assert!(logs.contains(&event(1, &t.series_id, 1)), "{logs:#?}");
+    // A cancel.
+    let t = env.ticket([61; 32]);
+    assert_eq!(env.open(&t).await, None);
+    let accounts = vec![AccountMeta::new_readonly(a.pubkey(), true), AccountMeta::new(config_address(), false), AccountMeta::new(series_address(&program_id(), &t.series_id).0, false), AccountMeta::new(a.pubkey(), false), burn()];
+    let logs = env.logs(vec![ix(WagerInstruction::Cancel, accounts)], &[&a]).await;
+    assert!(logs.contains(&event(2, &t.series_id, 255)), "{logs:#?}");
+    // A refund.
+    let t = env.live(62).await;
+    env.set_time(T0 + EMERGENCY_AFTER_SECONDS).await;
+    let mut accounts = env.payout_accounts(&t.series_id, env.fee);
+    accounts.pop();
+    accounts.push(burn());
+    let logs = env.logs(vec![ix(WagerInstruction::EmergencyRefund, accounts)], &[]).await;
+    assert!(logs.contains(&event(3, &t.series_id, 255)), "{logs:#?}");
 }

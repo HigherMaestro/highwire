@@ -15,6 +15,7 @@ use solana_program::{
     clock::Clock,
     entrypoint::ProgramResult,
     incinerator, loader_v4,
+    log::sol_log_data,
     program::{invoke, invoke_signed},
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -148,6 +149,21 @@ fn close<'a>(series: &AccountInfo<'a>, to: &AccountInfo<'a>, burn: &AccountInfo<
     series.realloc(0, false)?;
     series.assign(&system_program::ID);
     Ok(())
+}
+
+/// How a series closed, announced as a `Program data:` log line (docs/wager-mode.md 7.5): "line-wager", the kind, the
+/// series id and the outcome. Readers take it only from this program's own frames of the log, so no other program can
+/// forge one, and it names the series, so no other series' transaction can stand in for it.
+pub const EVENT_TAG: &[u8] = b"line-wager";
+pub const CLOSED_SETTLED: u8 = 1;
+pub const CLOSED_CANCELLED: u8 = 2;
+pub const CLOSED_REFUNDED: u8 = 3;
+/// The outcome byte of a settle: the winning player (0 A, 1 B), or 2 for a draw. 255 for anything else.
+pub const OUTCOME_DRAW: u8 = 2;
+pub const OUTCOME_NONE: u8 = 255;
+
+fn announce(kind: u8, series_id: &[u8; 32], outcome: u8) {
+    sol_log_data(&[EVENT_TAG, &[kind], series_id, &[outcome]]);
 }
 
 fn release(config_acc: &AccountInfo, program_id: &Pubkey, lamports: u64) -> ProgramResult {
@@ -431,6 +447,7 @@ fn cancel(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
         return Err(WagerError::NotYet.into());
     }
     release(config_acc, program_id, h.stake.checked_mul(2).ok_or(WagerError::Math)?)?;
+    announce(CLOSED_CANCELLED, &h.series_id, OUTCOME_NONE);
     close(series_acc, player_a, burn)
 }
 
@@ -512,6 +529,7 @@ fn settle(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
         }
     }
     release(config_acc, program_id, pot)?;
+    announce(CLOSED_SETTLED, &h.series_id, ending.winner.unwrap_or(OUTCOME_DRAW));
     close(series_acc, player_a, burn)
 }
 
@@ -578,6 +596,7 @@ fn refund<'a>(
         _ => return Err(WagerError::WrongStatus.into()),
     }
     release(config_acc, program_id, h.stake.checked_mul(2).ok_or(WagerError::Math)?)?;
+    announce(CLOSED_REFUNDED, &h.series_id, OUTCOME_NONE);
     // A's stake and the rent go back to A.
     close(series_acc, player_a, burn)
 }

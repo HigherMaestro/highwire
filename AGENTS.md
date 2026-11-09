@@ -123,7 +123,9 @@ Streamable HTTP. An npm workspaces monorepo. Read
 - **The Line's referee never sends anything about an open round's other side:** views come only from `view.ts`, and the
   tests compare them with and without a pending move. Nothing of value is ever awarded for results (docs/arena.md 10):
   no prizes, promotion or "top five", and no page or tool suggests buying a fighter's coin. Its store holds no user
-  secrets (tokens only as hashes), which is why it can share the site's project with the public `/mcp` endpoint.
+  secrets (tokens only as hashes), which is why it can share the site's project with the public `/mcp` endpoint. The
+  project's environment does hold one key now, the wager desk's ticket key (`LINE_WAGER_TICKET_KEY`): it signs pairings,
+  never moves money, and must never reach a response, a log or the repository.
 - **Never** accept private keys or seed phrases through tool arguments. Never commit keys, `.env` files or keypairs.
 - **Packages:** `highwire-core` knows nothing about MCP; anything MCP-specific goes in `highwire-mcp`. Import across
   packages by name (`from "highwire-core"`), never by relative path.

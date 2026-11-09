@@ -527,14 +527,23 @@ Wagering goes **only** through the local signer, inside the owner's policy file,
   and the pair's weekly count change together; owners are the registering wallets (the identity stand-in until
   identities exist); `minQueue` is 4 by default and a deployment can lower it for a quiet devnet; each entry waits a
   random 2 to 10 seconds before it can pair. The weekly cap is the referee's: the program doesn't keep a per-pair
-  counter (a stolen ticket key could exceed it, which 7.7 already bounds). No-show penalties aren't built. The desk
-  reads each series' outcome from the chain (`seriesOutcome` in highwire-core: the account while it plays, then the
-  transaction that closed it) and rates decided and drawn series on a wager rating kept apart from free play's. The
+  counter (a stolen ticket key could exceed it, which 7.7 already bounds). No-show penalties aren't built. A ticket
+  lives 5 minutes with one time for both sides (the program refuses an accept deadline past the expiry), and A is
+  told to open at once. The desk reads each series' outcome from the chain (`seriesOutcome` in highwire-core: the
+  account while it plays, then the program's own closing event) and rates settled series, draws included, on a wager
+  rating kept apart from free play's. Every stall ends: a ticket never used expires (10 minutes past its time, for a
+  lagging chain clock); a series B never accepted frees both, and either side's daemon cancels it on-chain; one that
+  went live and then vanished without a closing event the desk could find closes unrated after an hour. The
   site turns it on only with `LINE_WAGER_TICKET_KEY` (the ticket key's secret, in the site's environment and nowhere
   else) and `LINE_WAGER_KEY_ID`; `LINE_WAGER_TIERS` and `LINE_WAGER_MIN_QUEUE` tune it.
 
 ### 7.5 The indexer and the pages
 
+- **The closing event:** `settle`, `cancel` and the refunds each log one `Program data:` line: "line-wager", how it
+  closed (1 settled, 2 cancelled, 3 refunded), the series id and the outcome (the winning player 0 or 1, 2 a draw).
+  Readers take it only from the program's own frames of the log (by the runtime's invoke lines), so no other program
+  can forge one, and only for the series it names. The winner is never inferred from balances: anyone can send lamports
+  to a series account, or bundle a transfer with a settle.
 - An indexer (Helius webhooks or a small RPC poller in the site) turns program events into the pages' match data:
   wager matches show on `/line` with their series score, and replay from chain.
 - **Events aren't durable** (RPC log retention is short), so the indexer backfills by walking each series' transactions
@@ -879,6 +888,17 @@ torn line in the secrets file lost the next secret; one exception ended the daem
 seconds for another process's lock; and the signer trusted the caller's word for a wager's kind, stake and open count.
 Smaller ones: cancelling on the local clock, retrying without backoff, relying on `getProgramAccounts` alone, and loose
 account counts in `assertSafe`. Still to come: `highwire policy explain` (7.3).
+
+### 17.3 The matchmaker's audit (step 4)
+
+An adversarial audit of the wager desk found that no ticket it signed would have opened a series: it set the accept
+deadline after the expiry, which the program refuses (and its own test asserted the wrong order). Fixed, with the
+deadlines now equal. It also found that the outcome reader, which inferred the winner from balance changes, could be
+made to report the wrong winner, a draw or a cancel, or nothing at all: the program now logs a closing event and the
+reader takes only that (the tests cover forged, misattributed, nested, buried and truncated logs). And it found ways
+to lock fighters out for good: a series whose closing couldn't be read, a store failure half way through ticketing or
+closing, an opener who never cancels, a stale pairing note, two joins at once. Each now ends or can't happen, and is
+tested in `packages/relay/test/wager.test.ts`. Settings the desk can't sign with are refused when it's made.
 
 ## Sources
 

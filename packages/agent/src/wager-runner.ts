@@ -38,8 +38,9 @@ export function nextWagerAction(s: SeriesAccountData, wallet: string, now: numbe
   if (!me) return { action: null };
   const past = (deadline: number) => now >= deadline + DEADLINE_MARGIN_SECONDS;
   if (h.status === "open") {
-    // B can accept up to the deadline; after it, A gets its stake back.
-    return { action: me === "A" && now > h.acceptDeadline + CANCEL_MARGIN_SECONDS ? { kind: "cancel" } : null };
+    // B can accept up to the deadline; after it, A gets its stake back. Either side's daemon sends the cancel (the
+    // program lets anyone, after the deadline), so an opener who walks away can't keep the other waiting.
+    return { action: now > h.acceptDeadline + CANCEL_MARGIN_SECONDS ? { kind: "cancel" } : null };
   }
   const x = s.series;
   if (!x) return { action: null };

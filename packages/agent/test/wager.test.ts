@@ -263,7 +263,7 @@ test("the daemon settles a finished series, cancels an unaccepted one after its 
   // The program lets A cancel any time, so the daemon waits well past the deadline: B may still accept on a lagging chain clock.
   assert.equal(nextWagerAction(open, A, open.header.acceptDeadline + CANCEL_MARGIN_SECONDS, none).action, null);
   assert.deepEqual(nextWagerAction(open, A, open.header.acceptDeadline + CANCEL_MARGIN_SECONDS + 1, none).action, { kind: "cancel" });
-  assert.equal(nextWagerAction(open, B, open.header.acceptDeadline + CANCEL_MARGIN_SECONDS + 1, none).action, null, "only the opener cancels");
+  assert.deepEqual(nextWagerAction(open, B, open.header.acceptDeadline + CANCEL_MARGIN_SECONDS + 1, none).action, { kind: "cancel" }, "B too, after the deadline: the program refunds A either way");
   // A series nobody can move (both committed, before any deadline) after a day without a change.
   const idle = base();
   idle.series!.round[0].hash = "88".repeat(32);

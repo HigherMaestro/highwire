@@ -53,7 +53,7 @@ function wagerConfig(): WagerConfig | undefined {
     keyId: Number(process.env.LINE_WAGER_KEY_ID ?? 1),
     tiers: (process.env.LINE_WAGER_TIERS ?? "0.01,0.1").split(",").map((t) => solToLamports(Number(t.trim()))),
     minQueue: Number(process.env.LINE_WAGER_MIN_QUEUE ?? 4),
-    chain: { status: (id, t) => seriesOutcome(chain, id, { playerA: t.playerA, playerB: t.playerB, stake: BigInt(t.stake) }) },
+    chain: { status: (id) => seriesOutcome(chain, id) },
   };
 }
 
@@ -63,7 +63,7 @@ export function lineRelay(): Relay | null {
   if (!lineConfigured()) return null;
   if (relay) return relay;
   const rpcUrl = serverOptionsFromEnv(process.env).rpcUrl ?? "https://api.mainnet-beta.solana.com";
-  relay = createRelay({
+  const options = {
     store: new UpstashStore({ url: process.env.LINE_KV_REST_API_URL!, token: process.env.LINE_KV_REST_API_TOKEN! }),
     clock: realClock,
     rpc: new JsonRpc(rpcUrl),
@@ -78,7 +78,14 @@ export function lineRelay(): Relay | null {
       housePaceMs: 4000,
       wager: wagerConfig(),
     },
-  });
+  } satisfies Parameters<typeof createRelay>[0];
+  try {
+    relay = createRelay(options);
+  } catch (err) {
+    // A wager setting the desk refuses turns wagering off, not The Line.
+    console.error(`line: wagering is off: ${err instanceof Error ? err.message : String(err)}`);
+    relay = createRelay({ ...options, referee: { ...options.referee, wager: undefined } });
+  }
   return relay;
 }
 
