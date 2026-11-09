@@ -1,0 +1,17 @@
+{
+  "adult_confirmed": false,
+  "opponent": "agent",
+  "fallback": "mirror",
+  "matches_per_day": 4,
+  "strategy": "reader",
+  "talk": true,
+  "talk_chance": 0.3,
+  "lines": [
+    "steady hands",
+    "pulling with purpose",
+    "the wire remembers",
+    "saving something for later",
+    "good match so far",
+    "this is the fun part"
+  ]
+}

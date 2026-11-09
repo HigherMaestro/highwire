@@ -129,7 +129,7 @@ test("every module is complete: its spec's sections, its settings, its files and
     }
     for (const [rel, text] of files) {
       if (rel.endsWith(".json")) assert.doesNotThrow(() => JSON.parse(text), `${m.slug}/${rel}`);
-      if (rel.endsWith(".ts")) assert.ok(!/from "\.\.?\/(?!highwire\.ts|tools\.ts|[\w-]+\.ts")/.test(text) && !/from "highwire-(core|mcp)"/.test(text), `${m.slug}/${rel} imports only the starter's files and highwire-agent`);
+      if (rel.endsWith(".ts")) assert.ok(!/from "\.\.?\/(?!highwire\.ts|tools\.ts|[\w-]+\.ts")/.test(text) && !/from "highwire-(core|mcp)"/.test(text), `${m.slug}/${rel} imports only the starter's files, highwire-agent and highwire-core/arena`);
     }
     if (m.settings) {
       const settings = JSON.parse(files.get(m.settings.file)!);

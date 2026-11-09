@@ -14,7 +14,7 @@ export interface MarketContext {
   solUsd: number | null;
 }
 
-export type CalculatorKind = "buyback" | "compute" | "trading" | "treasury";
+export type CalculatorKind = "buyback" | "compute" | "trading" | "treasury" | "line";
 
 const fmt = (n: number, d = n >= 100 ? 0 : n >= 10 ? 1 : n >= 1 ? 2 : 3) =>
   n > 0 && n < Math.pow(10, -d) ? `<${Math.pow(10, -d).toFixed(d)}` : n.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: 0 });
@@ -91,6 +91,33 @@ function TradingCalculator() {
   );
 }
 
+/** The Line: what starting costs in SOL, and what playing costs if the agent thinks with a model. Nothing is won. */
+function LineCalculator({ solUsd: startUsd }: { solUsd: number | null }) {
+  const [firstBuy, setFirstBuy] = useState(0.01);
+  const [perDay, setPerDay] = useState(4);
+  const [modelUsd, setModelUsd] = useState(0);
+  const solUsd = startUsd ?? 150;
+  const start = 0.02 + 0.025 + firstBuy + 0.000005;
+  const month = perDay * 30 * modelUsd;
+  const rows: [string, string][] = [
+    ["SOL to start", `${fmt(start, 3)} SOL (about $${fmt(start * solUsd, 0)})`],
+    ["Registering on The Line", "one network fee, about 0.000005 SOL"],
+    ["Matches a month", fmt(perDay * 30, 0)],
+    ["Playing, on-chain", "nothing"],
+    ["A model, a month", modelUsd ? `about $${fmt(month, 0)}` : "nothing: the default strategy is code"],
+  ];
+  return (
+    <div className="calc">
+      <div className="calc-fields">
+        <Field label="First buy at launch" value={firstBuy} onChange={setFirstBuy} min={0} max={0.1} step={0.005} suffix="SOL" hint="Optional. The launch fee (0.02 SOL) and about 0.025 SOL of rent and network fees come on top." />
+        <Field label="Matches a day" value={perDay} onChange={setPerDay} min={0} max={24} step={1} suffix="matches" />
+        <Field label="Model cost per match" value={modelUsd} onChange={setModelUsd} min={0} max={3} step={0.05} suffix="$" hint="0 for the default strategy. With a frontier model, roughly $0.30 to $2 a match (an estimate)." />
+      </div>
+      <Out rows={rows} note={<>The Line awards nothing: no prizes, no betting. A record says nothing about a coin, and isn&apos;t a reason to buy one.</>} />
+    </div>
+  );
+}
+
 export function IdeaCalculator({ kind, market }: { kind: CalculatorKind; market: MarketContext }) {
   const start = Math.round(Math.min(500, Math.max(10, market.medianVolumeSol ?? 50)));
   const [volume, setVolume] = useState(start);
@@ -102,6 +129,7 @@ export function IdeaCalculator({ kind, market }: { kind: CalculatorKind; market:
   const [recipients, setRecipients] = useState(2);
 
   if (kind === "trading") return <TradingCalculator />;
+  if (kind === "line") return <LineCalculator solUsd={market.solUsd} />;
 
   const creator = (volume * CREATOR_PCT) / 100;
   const holders = (volume * HOLDERS_PCT) / 100;

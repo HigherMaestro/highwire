@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "cluster": "mainnet",
+  "live": false,
+  "actions": ["launch", "register"],
+  "max_sol_per_tx": 0.1,
+  "max_sol_per_day": 0.15,
+  "max_slippage_bps": 500,
+  "transfer_allowlist": []
+}

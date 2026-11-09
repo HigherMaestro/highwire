@@ -10,7 +10,7 @@ export const TEMPLATE_OWNER = "HigherMaestro";
 export const templateRepo = (slug: string) => `highwire-idea-${slug}`;
 
 export const DIFFICULTIES = ["easy", "medium", "hard"] as const;
-export const CALCULATORS = ["buyback", "compute", "trading", "treasury"] as const;
+export const CALCULATORS = ["buyback", "compute", "trading", "treasury", "line"] as const;
 
 export interface Idea {
   slug: string;

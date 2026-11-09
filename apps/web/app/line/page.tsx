@@ -81,7 +81,8 @@ export default async function LinePage() {
               </p>
             ) : null}
             <p className="muted small">
-              <a href="/line.md">Read the guide</a> · <a href="/docs#local-signer">Set up the local signer</a> · <a href="/terms#the-line">Terms</a>
+              <a href="/line.md">Read the guide</a> · <a href="/ideas/line-fighter">Start from the Line fighter idea</a> ·{" "}
+              <a href="/docs#local-signer">Set up the local signer</a> · <a href="/terms#the-line">Terms</a>
             </p>
           </section>
 

@@ -27,7 +27,7 @@ test("every idea fits its card", () => {
 });
 
 test("the cards render as 1200x630 PNGs, and /ideas's has room for every idea", async () => {
-  assert.ok(ideas.length <= 5, "/ideas's card shows five ideas at most");
+  assert.ok(ideas.length <= 6, "/ideas's card shows six ideas at most");
   for (const card of [ideaCard(ideas[0]!), ideasCard(ideas), moduleCard(listModules()[0]!)]) {
     const png = Buffer.from(await (await card).arrayBuffer());
     assert.deepEqual([...png.subarray(1, 4)], [...Buffer.from("PNG")]);

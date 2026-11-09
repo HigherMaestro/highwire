@@ -42,10 +42,10 @@ export const MODULE_CARD_ALT = "A Highwire module: its name, what it adds to an 
 /** A module page's card: app/modules/[slug]/opengraph-image.tsx. */
 export const moduleCardFor = (slug: string): Card => ({ url: `/modules/${slug}/opengraph-image`, alt: MODULE_CARD_ALT });
 
-/** One card: up to five strands (in the wire's colours, or `colors`), under an optional heading; `srcX` moves the wire left when their labels are long. */
+/** One card: up to six strands (in the wire's colours, or `colors`), under an optional heading; `srcX` moves the wire left when their labels are long. */
 export function wireCard(o: { label: string; title: string; facts: string; strands: string[]; colors?: string[]; heading?: string; srcX?: number; labelSize?: number }) {
-  const strands = o.strands.slice(0, 5);
-  const srcX = o.srcX ?? 790, srcY = 330, endX = srcX + 122, gap = strands.length > 4 ? 88 : 100, labelSize = o.labelSize ?? 34;
+  const strands = o.strands.slice(0, 6);
+  const srcX = o.srcX ?? 790, srcY = 330, endX = srcX + 122, gap = strands.length > 5 ? 74 : strands.length > 4 ? 88 : 100, labelSize = o.labelSize ?? 34;
   const ys = strands.map((_, i) => srcY + (i - (strands.length - 1) / 2) * gap);
   const titleSize = o.title.length > 10 ? 72 : 84;
   return (
