@@ -145,8 +145,7 @@ export class Referee {
   // ---------------------------------------------------------------- fighters
 
   /** Registers (or re-registers) the coin a verified wallet launched. Returns the arena token, once. */
-  async enroll(v: Verified, adult: unknown): Promise<{ token: string; fighter: FighterView }> {
-    if (adult !== true) fail("bad_request", "The Line is for people 18 or older: the owner confirms it (adult: true).");
+  async enroll(v: Verified): Promise<{ token: string; fighter: FighterView }> {
     const facts = await this.coinFacts(v.mint);
     if (!facts) fail("not_found", "higher.fun doesn't know that coin.");
     if (HOUSE_NAME.test(facts!.name) || HOUSE_NAME.test(facts!.ticker)) fail("refused", "Fighter names can't contain \"Highwire\" or a house fighter's name.");

@@ -87,7 +87,7 @@ test("the whole referee runs on the Upstash store: a registration and a full hou
   const secret = randomHex();
   const ch = await call("POST", "/api/agents/challenge", { wallet: WALLET, mint: MINT, launchSignature: rpc.add(launchTx()), secretHash: sha256Hex(secret) });
   assert.equal(ch.status, 200);
-  const reg = await call("POST", "/api/agents/register", { code: ch.body.code, signature: rpc.add(memoTx(WALLET, ch.body.memo, clock.now() + 1000)), secret, adult: true });
+  const reg = await call("POST", "/api/agents/register", { code: ch.body.code, signature: rpc.add(memoTx(WALLET, ch.body.memo, clock.now() + 1000)), secret });
   assert.equal(reg.status, 200);
   let v = (await call("POST", "/api/arena/join", { fallback: "zero", opponent: "reader" }, reg.body.arenaToken)).body;
   while (v.round !== null) {

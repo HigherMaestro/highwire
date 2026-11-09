@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createInterface } from "node:readline/promises";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { serverOptionsFromEnv } from "./env.ts";
 import { createServer, VERSION } from "./server.ts";
@@ -21,7 +22,22 @@ if (args[0] === "launch") process.exit(await runLaunch(args.slice(1), io));
 if (args[0] === "claim") process.exit(await runClaim(args.slice(1), io));
 if (args[0] === "post") process.exit(await runPost(args.slice(1), io));
 if (args[0] === "new") process.exit(await runNew(args.slice(1), io));
-if (args[0] === "add") process.exit(await runAdd(args.slice(1), io));
+if (args[0] === "add") {
+  // Its questions need a person at a terminal: without one (a coding agent, a pipe) it asks nothing.
+  const ask = process.stdin.isTTY && process.stdout.isTTY
+    ? async (question: string) => {
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        try {
+          return await rl.question(question);
+        } catch {
+          return ""; // Ctrl-D or Ctrl-C at the question is a no
+        } finally {
+          rl.close();
+        }
+      }
+    : undefined;
+  process.exit(await runAdd(args.slice(1), { ...io, ask }));
+}
 if (args[0] === "watch" || args[0] === "orders") {
   const ctl = new AbortController();
   process.once("SIGINT", () => ctl.abort());
@@ -52,7 +68,8 @@ Local signer (off unless HIGHWIRE_KEYPAIR_PATH is set):
 
 Commands:
   highwire new <idea>      start a project from one of highwire.fun's launch ideas (highwire new lists them)
-  highwire add <module>    add a module (dip buys, receipts, a kill switch) to that project (highwire add lists them)
+  highwire add <module>    add a module (dip buys, receipts, a kill switch, Line play) to that project (highwire add lists them);
+                           at a terminal it asks before adding "register" to your policy and for the module's confirmations
   highwire policy init     write a starting policy: devnet, dry run, small limits
                            (--launch: mainnet launches and claims; --devnet to try it there first; --live to send)
   highwire wallet new      make your own wallet for launching (~/.highwire/wallet.json); wallet address prints it

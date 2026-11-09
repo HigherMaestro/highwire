@@ -127,7 +127,7 @@ test("registration goes through the user's policy: refused without \"register\",
   const w = world();
   const key = Keypair.generate();
   const launch = w.rpc.add(launchTx({ payer: key.publicKey.toBase58() }));
-  const args = { mint: MINT, launch_signature: launch, adult: true, confirm: true };
+  const args = { mint: MINT, launch_signature: launch, confirm: true };
 
   const noRegister = await connect(w, { signer: new LocalSigner(key, home({ ...POLICY, actions: ["trade"] })) });
   const refused = await call(noRegister, "line_register", args);
@@ -155,6 +155,7 @@ test("an agent registers through the signer, plays the house to the end, and eve
   assert.equal(early.body.code, "line_not_registered");
 
   const launch = w.rpc.add(launchTx({ payer: signer.wallet }));
+  // Line play from 0.14 still passes adult: true: the tool ignores it.
   const reg = await call(client, "line_register", { mint: MINT, launch_signature: launch, adult: true, confirm: true });
   assert.equal(reg.isError, false, reg.text);
   assert.equal(reg.body.registered, true);

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { DUELS_1, houseMove, playRound, startMatch, type MatchState } from "highwire-core/arena";
 import { choosePull, playMatch, stateOf, talk, type LineSettings, type MatchView } from "./line.ts";
 
-const settings: LineSettings = { adult_confirmed: false, opponent: "agent", fallback: "mirror", matches_per_day: 4, strategy: "reader", talk: true, talk_chance: 0.3, lines: ["hi"] };
+const settings: LineSettings = { opponent: "agent", fallback: "mirror", matches_per_day: 4, strategy: "reader", talk: true, talk_chance: 0.3, lines: ["hi"] };
 
 function view(m: MatchState, side: "a" | "b"): MatchView {
   const them = side === "a" ? "b" : "a";

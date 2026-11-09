@@ -9,7 +9,7 @@ import type { Store } from "./store.ts";
 // Vercel project in production, an in-process call in tests and in the local server's end-to-end check.
 //
 //   POST /api/agents/challenge     { wallet, mint, launchSignature, secretHash }
-//   POST /api/agents/register      { code, signature, secret, adult: true }  -> { arenaToken, fighter }
+//   POST /api/agents/register      { code, signature, secret }  -> { arenaToken, fighter }  (0.14's `adult` is ignored)
 //   GET  /api/arena/rules
 //   POST /api/arena/join           { fallback, opponent?, wait? }             (token) waits up to 40s to be paired
 //   GET  /api/arena/queue          how many fighters are waiting
@@ -81,7 +81,7 @@ export function createRelay(o: RelayOptions): Relay {
       await limitCaller(req, "register", 20);
       const b = await body(req);
       const v = await registration.verify(b);
-      const { token, fighter: f } = await referee.enroll(v, b.adult);
+      const { token, fighter: f } = await referee.enroll(v);
       return json({ arenaToken: token, fighter: f });
     }
     if (m === "GET" && path === "/api/arena/rules") return json(arenaGuide(), 200, "public, s-maxage=3600");

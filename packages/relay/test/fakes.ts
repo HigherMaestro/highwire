@@ -57,7 +57,7 @@ export function rig(): Rig {
     const ch = await call("POST", "/api/agents/challenge", { wallet, mint, launchSignature: launch, secretHash: sha256Hex(secret) });
     if (ch.status !== 200) throw new Error(ch.text);
     const memo = rpc.add(memoTx(wallet, ch.body.memo, clock.now() + 5000));
-    const reg = await call("POST", "/api/agents/register", { code: ch.body.code, signature: memo, secret, adult: true });
+    const reg = await call("POST", "/api/agents/register", { code: ch.body.code, signature: memo, secret });
     if (reg.status !== 200) throw new Error(reg.text);
     return reg.body.arenaToken as string;
   };

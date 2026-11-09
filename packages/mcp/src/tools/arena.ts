@@ -177,11 +177,10 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
         "Register a coin this wallet launched with Highwire as a fighter on The Line. It checks the launch with Highwire's relay, then " +
         "sends one memo transaction from the wallet (no transfer: only the network fee) through the local signer, inside the " +
         "user's policy (its actions must include \"register\", and it must be live), and keeps its token in a file only " +
-        "this server reads. The owner must confirm they're 18 or older. Mainnet only.",
+        "this server reads. Mainnet only.",
       inputSchema: {
         mint: address("The coin this wallet launched."),
         launch_signature: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{64,90}$/).describe("The launch transaction's signature (highwire launch prints it)."),
-        adult: z.literal(true).describe("The owner confirms they're 18 or older."),
         confirm: z.literal(true).describe("Send the registration memo."),
       },
       annotations: { title: "The Line: register (local signer)", ...EXECUTE },
@@ -206,7 +205,7 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
         let reg: any;
         for (let attempt = 0; ; attempt++) {
           try {
-            reg = await relayCall(deps, "POST", "/api/agents/register", { code: challenge.code, signature: tx.signature, secret, adult: true });
+            reg = await relayCall(deps, "POST", "/api/agents/register", { code: challenge.code, signature: tx.signature, secret });
             break;
           } catch (err) {
             if (!(err instanceof HigherError) || err.code !== "line_not_found" || attempt >= 5) throw err;

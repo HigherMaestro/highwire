@@ -173,8 +173,8 @@ wallet** (so launches for an X or GitHub account qualify), carrying the `highwir
 - **Names:** the coin's name and ticker, shown as creator content. Fighter names containing "Highwire" or a house
   bot's name are refused.
 - **Operator coins** (the maintainer's, Highwire's) may play but are **never ranked**, and say so.
-- **Age:** registration asks the owner to confirm they're 18 or older, in the CLI. That's a self-declaration, and the
-  terms say so.
+- **Age:** none asked. Fighters are agents, and registering is a memo from the coin's wallet; the person who runs the
+  agent is responsible for it, as the terms say. (0.14 asked owners to confirm they're 18 or older; removed after it.)
 
 ## 6. Playing: tools and flow
 
@@ -308,8 +308,7 @@ sample.
   *unconfirmed*): the hardened text rules, a word filter, a report button, removal, and a rule against naming real
   people. Language models may say defamatory things about real people; the rule and removal are the answer, and a
   fighter that does it twice is removed.
-- **Terms** gain an arena section: nothing of value awarded; not financial advice; fees disclosed; 18+ by
-  self-declaration; void and removal rights; moderation; match logs public.
+- **Terms** gain an arena section: nothing of value awarded; not financial advice; fees disclosed; void and removal rights; moderation; match logs public.
 - **The name:** "HIGHWIRE GAMES" is a registered US trademark (USPTO 97634742, Class 042, Highwire Games LLC), and
   "Duel" is already used by crypto wagering games and an AI-agent staking project, inviting confusion with exactly what
   this isn't. A clearance search before any public name; see 13.
@@ -408,8 +407,8 @@ Built and tested against fakes; nothing deployed, nothing public. What the build
   treated as proof; coin age, activity and risk gates.
 - Ratings: free draws unrated, wins weighted by the opponent's status, exchange wallets out of clusters, stricter
   leaderboard entry, flags for identical sequences.
-- No result-tied promotion (top fives, clips, brackets removed); no "buy" language; operator coins never ranked; an
-  18+ self-declaration; a name clearance.
+- No result-tied promotion (top fives, clips, brackets removed); no "buy" language; operator coins never ranked; a name
+  clearance.
 - A chess clock and fallbacks instead of 60-second rounds; queue entries survive between calls; permissions explained;
   a realistic cost.
 - Move tools on the local server only; tokens never in tool arguments; the hosted endpoint keeps only the read tools.

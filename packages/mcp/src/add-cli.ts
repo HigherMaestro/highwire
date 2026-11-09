@@ -1,13 +1,19 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { PolicySchema } from "highwire-agent";
 import { getModule, listModules, moduleFiles, moduleSpecPath, moduleUrl, policyGaps } from "./ideas.ts";
 import { bundledIdeasDir } from "./new-cli.ts";
 
 // `highwire add <module> [dir]`: one of highwire.fun's modules, copied into a project made from a launch idea. Writes
 // only files that aren't there yet (or are already the same), adds the package.json scripts the module needs when the
-// project has none of that name, and says what the policy still needs. It reads the policy and never writes it.
+// project has none of that name, and says what the policy still needs.
+//
+// When a person runs it at a terminal and the module needs a policy action that moves no money (ASKABLE_ACTIONS:
+// "register", one memo for the network fee), it asks them whether to add it, so joining needs no hand edit. The change
+// waits for a typed yes. It never asks without a terminal or with --json, never adds an action that trades, launches,
+// claims or transfers, never touches "live" or a limit, and no MCP tool can reach it.
 
 const SITE_URL = "https://highwire.fun";
 
@@ -17,8 +23,13 @@ export const ADD_USAGE = `highwire add: add a module to a project made from a la
   highwire add <module> [dir]    copy the module into dir (default: here), then say how to wire it in
                                  and what your policy needs
   --json                         the list, or what was written, as JSON
+  --no-ask                       don't ask anything; just say what's left
 
-It never overwrites a file and never changes your policy.`;
+It never overwrites a file. If the module needs a policy action that moves no money (like "register"), at a terminal
+it asks whether to add it; nothing else in your policy changes. Run it again any time to answer.`;
+
+/** The policy actions `highwire add` may offer to add on a person's yes: ones that move no money. Anything else is a hand edit. */
+export const ASKABLE_ACTIONS = ["register"];
 
 export interface AddIo {
   out: (line: string) => void;
@@ -27,6 +38,29 @@ export interface AddIo {
   ideasDir?: string;
   cwd?: string;
   env?: Record<string, string | undefined>;
+  /** Asks a person a question at a terminal and returns their answer. Absent when no one is there to answer. */
+  ask?: (question: string) => Promise<string>;
+}
+
+const yes = (answer: string) => /^\s*y(es)?\s*$/i.test(answer);
+
+/** Adds actions to the policy file, changing nothing else in it, and only if the result is still a valid policy. */
+export function addPolicyActions(path: string, actions: string[]): void {
+  const text = readFileSync(path, "utf8");
+  const raw = JSON.parse(text) as { actions?: string[] };
+  const have = raw.actions ?? [];
+  const next = { ...raw, actions: [...have, ...actions.filter((a) => !have.includes(a))] };
+  const parsed = PolicySchema.safeParse(next);
+  if (!parsed.success) throw new Error(`the policy wouldn't be valid: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
+  writeJson(path, next, text);
+}
+
+/** Writes JSON in the old file's indentation and mode, through a temporary file so a crash never leaves half of it. */
+function writeJson(path: string, value: unknown, old: string): void {
+  const indent = /^\s*\{\n(\s+)/.exec(old)?.[1]?.length ?? 2;
+  const tmp = `${path}.tmp-${process.pid}`;
+  writeFileSync(tmp, JSON.stringify(value, null, indent) + "\n", { mode: statSync(path).mode & 0o777 });
+  renameSync(tmp, path);
 }
 
 /** Where the project keeps its wallet and policy: what src/highwire.ts names, as the starter writes it. */
@@ -40,7 +74,7 @@ export function projectHome(dir: string, env: Record<string, string | undefined>
 export async function runAdd(argv: string[], io: AddIo): Promise<number> {
   let parsed;
   try {
-    parsed = parseArgs({ args: argv, allowPositionals: true, options: { json: { type: "boolean" }, help: { type: "boolean" } } });
+    parsed = parseArgs({ args: argv, allowPositionals: true, options: { json: { type: "boolean" }, help: { type: "boolean" }, "no-ask": { type: "boolean" } } });
   } catch (err) {
     io.err(`highwire add: ${(err as Error).message}\n\n${ADD_USAGE}`);
     return 2;
@@ -119,13 +153,34 @@ export async function runAdd(argv: string[], io: AddIo): Promise<number> {
 
   const home = projectHome(dir, io.env ?? process.env);
   const policyPath = join(home, "policy.json");
-  let gaps: string[] | null = null;
+  let gaps: string[] | null = null;  // what the policy still needs, or null when there's no policy yet
   try {
     gaps = policyGaps(mod.needs, JSON.parse(readFileSync(policyPath, "utf8")));
   } catch {
     gaps = null;
   }
   const spec = moduleSpecPath(mod.slug);
+
+  // What waits on the owner: the actions they may add here.
+  const askable = (): string[] => {
+    if (gaps === null) return [];
+    const have = (JSON.parse(readFileSync(policyPath, "utf8")) as { actions?: string[] }).actions ?? [];
+    return (mod.needs.actions ?? []).filter((a) => ASKABLE_ACTIONS.includes(a) && !have.includes(a));
+  };
+  const asked: string[] = [];
+  if (io.ask && !values.json && !values["no-ask"]) {
+    const missing = askable();
+    if (missing.length) {
+      const list = missing.map((a) => `"${a}"`).join(", ");
+      const answer = await io.ask(`Your policy (${policyPath}) doesn't allow ${list} yet, which ${mod.title} needs (it moves no money: one memo, the network fee only). Add it? [y/N] `);
+      if (yes(answer)) {
+        addPolicyActions(policyPath, missing);
+        asked.push(`Added ${list} to your policy's actions. Nothing else in it changed.`);
+        gaps = policyGaps(mod.needs, JSON.parse(readFileSync(policyPath, "utf8")));
+      } else asked.push(`Left your policy as it was.`);
+    }
+  }
+  const waiting = askable();
 
   if (values.json) {
     io.out(JSON.stringify({ module: mod.slug, dir, written, unchanged: same, scriptsAdded: added, scriptsKept: kept, policy: policyPath, policyNeeds: gaps, wire: mod.wire, prompt: mod.prompt }, null, 2));
@@ -143,6 +198,10 @@ export async function runAdd(argv: string[], io: AddIo): Promise<number> {
       : gaps.length
         ? `Your policy (${policyPath}) still needs, and only you can change it: ${gaps.join("; ")}.`
         : `Your policy (${policyPath}) already allows what the module needs.`,
+    ...asked,
+    ...(waiting.length && !asked.length
+      ? [`To add ${waiting.map((a) => `"${a}"`).join(", ")} without editing the file: run \`npx highwire-mcp add ${mod.slug}\` yourself, in a terminal, and answer y.`]
+      : []),
     "",
     "Wire it in (the full spec is " + spec + "):",
     ...mod.wire.map((w, i) => `  ${i + 1}. ${w}`),

@@ -1,5 +1,4 @@
 {
-  "adult_confirmed": false,
   "opponent": "agent",
   "fallback": "mirror",
   "matches_per_day": 4,

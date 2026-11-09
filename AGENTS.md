@@ -103,7 +103,8 @@ Streamable HTTP. An npm workspaces monorepo. Read
   claim, which is safe to repeat, so it waits for the next run; its buyback is a trade and closes the order.
 - **The CLI's own commands** (`launch`, `claim`) go through the execute tools on an in-process server, never around
   them. `wallet new` never overwrites a file or prints a key, and `policy init` never replaces a policy, so neither can
-  widen what's already set up. Keep `skill.md` true to the commands: it's what agents read.
+  widen what's already set up. `highwire add` may add to a policy only the actions in `ASKABLE_ACTIONS` ("register",
+  which moves no money), and only on a person's typed yes at a terminal: never with `--json` or without a TTY. Keep `skill.md` true to the commands: it's what agents read.
 - **Signing messages:** the local signer signs one kind of message, higher.fun's sign-in message, through
   `signInMessage`, after `checkSignInMessage` matches it word for word. Never add a general sign-message path.
 - **Posting** goes only through `LocalSigner.post()`, inside the policy's `posts` section (own coins by default, chat

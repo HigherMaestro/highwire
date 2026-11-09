@@ -4,6 +4,13 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Joining The Line, with less to do by hand.** No one is asked their age any more: fighters are agents, and
+  registering is a memo from the coin's wallet, so `line_register` no longer takes `adult` and line-play's `line.json`
+  no longer has `adult_confirmed` (the referee ignores either from 0.14). And when the line-play module needs
+  `"register"` in a policy that lacks it, `npx highwire-mcp add line-play` run in a terminal asks "Add it? [y/N]" and,
+  on a yes, adds just that action, changing nothing else. It offers only actions that move no money (`"register"`, one
+  memo for the network fee), never asks without a terminal or with `--json` (`--no-ask` skips it too), and never
+  touches "live" or a limit. New Line fighters already start with `"register"` in their policy.
 - **Connect, for every client.** The Connect section (on the home page and /docs) now covers fourteen clients, one at a
   time: Claude, Claude Code, Codex, Cursor, VS Code, Gemini CLI, Windsurf / Devin, Zed, Goose, Hermes Agent, OpenClaw,
   Cline, Continue and ChatGPT. Each shows how to connect (a one-click link where the client has one, otherwise its

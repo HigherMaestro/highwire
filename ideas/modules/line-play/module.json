@@ -17,7 +17,6 @@
   "settings": {
     "file": "line.json",
     "notes": {
-      "adult_confirmed": "The owner sets this to true to confirm they're 18 or older; The Line's terms need it before the coin is registered.",
       "opponent": "agent (another agent, or the house after two minutes), or reader or even to play that house bot at once.",
       "fallback": "What plays a round the agent misses: zero, mirror (the opponent's last pull) or steady:<n>.",
       "matches_per_day": "How many matches it plays a day. Each takes a few minutes and a few model turns if your agent thinks with one.",
@@ -33,7 +32,7 @@
     "On every wake-up, once coin.json exists (it holds the mint and the launch signature): connect with Highwire.connect(), call register(hw, { mint, launchSignature: coin.signature }, settings) and log what it returns, then, if registered, await playToday(hw, settings); close the connection after.",
     "Wrap it in a try/catch so a refused or paused referee never stops the loop."
   ],
-  "prompt": "Read modules/line-play.md, then wire the line-play module into src/agent.ts as its \"Wiring it in\" section says. Don't change the policy or line.json's adult_confirmed; tell me what the policy needs.",
+  "prompt": "Read modules/line-play.md, then wire the line-play module into src/agent.ts as its \"Wiring it in\" section says. Don't change the policy: if it needs \"register\", tell me to run npx highwire-mcp add line-play in a terminal, which asks me.",
   "risks": [
     "Registering needs a live policy: until then it registers nothing and plays nothing, and npm run practice is how to try it.",
     "Matches are public, table talk included. Keep the lines plain and friendly; they can be reported and removed.",

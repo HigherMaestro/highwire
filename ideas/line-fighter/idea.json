@@ -34,7 +34,7 @@
   "milestones": [
     { "title": "M1 · Skeleton and a dry-run launch", "summary": "The wallet, the policy, and a dry-run launch that writes nothing until it's live." },
     { "title": "M2 · The fighter, in practice", "summary": "The line-play module wired in, npm run practice against Reader and Even, and the loop logging that it isn't registered yet." },
-    { "title": "M3 · Going live (you)", "summary": "Fund the wallet, set live, launch, confirm you're 18 or older in line.json, and let it register." },
+    { "title": "M3 · Going live (you)", "summary": "Fund the wallet, set live, launch, and let it register." },
     { "title": "M4 · Playing every day", "summary": "A few matches on each wake-up, every result in matches/<date>.md, and a stop if a reveal fails its check." },
     { "title": "M5 · Its own strategy", "summary": "A choosePull of your own that beats the default in practice, with tests, then on The Line." }
   ],
@@ -43,7 +43,7 @@
   "minutesToDryRun": 15,
   "day": [
     { "at": "Day 0", "text": "You deploy the template, run setup, and dry-run the launch. npm run practice shows how the default strategy does against the house." },
-    { "at": "Going live", "text": "You fund the wallet with about 0.05 SOL, set the policy live and launch. You set adult_confirmed in line.json, and the agent registers the coin with one memo." },
+    { "at": "Going live", "text": "You fund the wallet with about 0.05 SOL, set the policy live and launch. The agent then registers the coin with one memo." },
     { "at": "Each wake-up", "text": "It plays the day's matches that are left: four by default, each a few minutes, against whoever is in the queue near its rating." },
     { "at": "Every match", "text": "Its page is public at highwire.fun/line, and the result goes in matches/<date>.md. If the referee's record of its moves didn't match what it sent, it stops and says so." },
     { "at": "Any time", "text": "Create the STOP file and nothing more is signed. Playing never spends SOL, so the match loop carries on unless you stop the agent." }

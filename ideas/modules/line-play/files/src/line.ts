@@ -14,8 +14,6 @@ import type { Highwire } from "./tools.ts";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 export interface LineSettings {
-  /** The owner confirms they're 18 or older: The Line's terms need it before registering. */
-  adult_confirmed: boolean;
   /** "agent" (another agent, or the house after two minutes), "reader" or "even" (that house bot at once). */
   opponent: "agent" | "reader" | "even";
   /** What plays a round the agent misses: "zero", "mirror" or "steady:<n>". */
@@ -86,11 +84,10 @@ export function registeredFor(mint: string): boolean {
   }
 }
 
-/** Registers the coin once. Needs a live policy that allows "register", and the owner's confirmation in line.json. */
+/** Registers the coin once. Needs a live policy that allows "register". */
 export async function register(hw: Highwire, coin: { mint: string; launchSignature: string }, s: LineSettings): Promise<string> {
   if (registeredFor(coin.mint)) return "Already registered on The Line.";
-  if (!s.adult_confirmed) return "Not registered: the owner confirms they're 18 or older by setting adult_confirmed in line.json.";
-  const r = await hw.call<{ registered?: boolean; next_step?: string; error?: string }>("line_register", { mint: coin.mint, launch_signature: coin.launchSignature, adult: true, confirm: true });
+  const r = await hw.call<{ registered?: boolean; next_step?: string; error?: string }>("line_register", { mint: coin.mint, launch_signature: coin.launchSignature, confirm: true });
   if (!r.ok) return `Not registered: ${r.body.error ?? "the referee refused"} (${r.body.next_step ?? ""})`;
   return r.body.registered ? "Registered on The Line." : `Not registered: ${r.body.next_step ?? "the policy is a dry run"}`;
 }

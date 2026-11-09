@@ -21,6 +21,7 @@ test("a Highwire launch paid for by the wallet registers, and the token works", 
   assert.match(res.body.code, /^[a-z2-7]{16}$/);
   assert.equal(res.body.memo, `highwire agent ${res.body.code}`);
   const memo = r.rpc.add(memoTx(WALLET, res.body.memo, r.clock.now() + 20_000));
+  // 0.14 clients still send adult: true; it is accepted and ignored.
   const reg = await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret, adult: true });
   assert.equal(reg.status, 200, reg.text);
   assert.match(reg.body.arenaToken, /^[0-9a-f]{64}$/);
@@ -31,7 +32,7 @@ test("a Highwire launch paid for by the wallet registers, and the token works", 
   const join = await r.call("POST", "/api/arena/join", { fallback: "zero", opponent: "reader" }, reg.body.arenaToken);
   assert.equal(join.status, 200, join.text);
   // The code is used up.
-  const again = await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret, adult: true });
+  const again = await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret });
   assert.equal(again.body.code, "expired");
 });
 
@@ -78,10 +79,10 @@ test("a stranger who sees the memo on-chain can't register with it: the secret s
   const r = rig();
   const { res, secret } = await challenge(r);
   const memo = r.rpc.add(memoTx(WALLET, res.body.memo, r.clock.now() + 10_000));
-  const stolen = await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret: randomHex(), adult: true });
+  const stolen = await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret: randomHex() });
   assert.equal(stolen.status, 401);
   // The real signer still can.
-  assert.equal((await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret, adult: true })).status, 200);
+  assert.equal((await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret })).status, 200);
 });
 
 test("the memo must come from the wallet, carry this code, and land within 10 minutes", async () => {
@@ -96,19 +97,19 @@ test("the memo must come from the wallet, carry this code, and land within 10 mi
     const r = rig();
     const { res, secret } = await challenge(r);
     const memo = r.rpc.add(make(res.body.code, r.clock.now()));
-    const reg = await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret, adult: true });
+    const reg = await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret });
     assert.equal(reg.status, 403, `${name}: ${reg.text}`);
     assert.match(reg.body.error, why, name);
   }
   // A memo the RPC doesn't have yet: try again later.
   const r = rig();
   const { res, secret } = await challenge(r);
-  const notYet = await r.call("POST", "/api/agents/register", { code: res.body.code, signature: "4".repeat(88), secret, adult: true });
+  const notYet = await r.call("POST", "/api/agents/register", { code: res.body.code, signature: "4".repeat(88), secret });
   assert.equal(notYet.status, 404);
   // An expired code.
   r.clock.advance(601_000);
   const memo = r.rpc.add(memoTx(WALLET, res.body.memo, r.clock.now()));
-  assert.equal((await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret, adult: true })).body.code, "expired");
+  assert.equal((await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret })).body.code, "expired");
 });
 
 test("registering again replaces the token at once, keeping the fighter's record", async () => {
@@ -124,11 +125,11 @@ test("registering again replaces the token at once, keeping the fighter's record
   assert.equal((await r.call("POST", "/api/arena/join", { fallback: "zero", opponent: "reader" }, second)).status, 200);
 });
 
-test("the owner confirms they're 18 or older, and names can't pose as Highwire or the house", async () => {
+test("an agent registers with no age question (0.14's adult flag is ignored), and names can't pose as Highwire or the house", async () => {
   const r = rig();
   const { res, secret } = await challenge(r);
   const memo = r.rpc.add(memoTx(WALLET, res.body.memo, r.clock.now()));
-  assert.equal((await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret })).status, 400);
+  assert.equal((await r.call("POST", "/api/agents/register", { code: res.body.code, signature: memo, secret })).status, 200);
   for (const name of ["Highwire Official", "The Reader", "even"]) {
     const s = rig();
     s.coins.coins.get(MINT)!.name = name;

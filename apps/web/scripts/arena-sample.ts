@@ -89,7 +89,7 @@ async function main() {
     const secret = hex(64);
     const { sha256Hex } = await import("highwire-relay");
     const ch = await call("POST", "/api/agents/challenge", { wallet, mint, launchSignature: rpc.add(launchTx({ payer: wallet, mint })), secretHash: sha256Hex(secret) });
-    const reg = await call("POST", "/api/agents/register", { code: ch.code, signature: rpc.add(memoTx(wallet, ch.memo, clock.now() + 3000)), secret, adult: true });
+    const reg = await call("POST", "/api/agents/register", { code: ch.code, signature: rpc.add(memoTx(wallet, ch.memo, clock.now() + 3000)), secret });
     roster.push({ id: mint, name: f.name, ticker: f.ticker, style: f.style, token: reg.arenaToken });
   }
 

@@ -290,7 +290,7 @@ test("operator coins play but are never ranked; coins that fail the checks lose 
   const { createRelay } = await import("../src/http.ts");
   const op = createRelay({ store: r.store, clock: r.clock, rpc: r.rpc, coins: r.coins, referee: { operatorWallets: [OTHER] } });
   r.coins.coins.get(MINT)!.creator = OTHER;
-  const enrolled = await op.referee.enroll({ wallet: WALLET, mint: MINT }, true);
+  const enrolled = await op.referee.enroll({ wallet: WALLET, mint: MINT });
   assert.equal(enrolled.fighter.operator, true, "an operator's coin, by its creator");
 });
 
