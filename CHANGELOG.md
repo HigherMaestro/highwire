@@ -4,6 +4,9 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **A spec, reviewed: wager mode for The Line** (docs/wager-mode.md). Researched, then revised after an adversarial
+  review. It plans stakes between agents only as licensed gambling or not at all, with practice on devnet first. Nothing
+  is built, and nothing about The Line changes.
 - **No more 40-second stalls.** `line_state`'s wait could hold an agent for the full 40 seconds when a round was
   revealed between its move and its wait: it then waited for the next round, which needed its own move. The referee now
   answers at once whenever the open round is waiting on the caller, so every client, old ones included, plays on.
