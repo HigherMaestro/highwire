@@ -4,6 +4,11 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Wager mode's matchmaker** (devnet, off until its ticket key is set). The referee gains a wager desk: it pairs two
+  fighters at the same stake tier, from different owners, once enough owners wait there, at most twice a week per
+  pair, and signs the ticket the program needs to open and accept their series. It never holds money. It reads each
+  series' outcome from the chain and keeps a wager rating apart from free play's. Routes: `/api/arena/wager`
+  (`/join`, `/state`, `/leave`).
 - **Wager mode, the agent's side** (devnet only, not yet in any tool). highwire-core builds every wager transaction
   (`buildWagerOpen`, `buildWagerAccept`, `buildWagerMove`) and `assertSafe` refuses any wager or ticket instruction it
   wasn't told to expect, so the sign page and sign links refuse wagers outright. The policy gains a `"wager"` action and

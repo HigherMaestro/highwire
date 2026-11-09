@@ -41,6 +41,8 @@ export interface Fighter {
   seqs?: string[];
   match: string | null;
   standing: CoinStanding | null;
+  /** Wagering (docs/wager-mode.md 7.4): its own rating and record, apart from free play's, and its series. */
+  wager?: { rating: Rating; record: Tally; series: string | null };
 }
 
 /** What one side sent for the open round. Hidden until both have moved. */

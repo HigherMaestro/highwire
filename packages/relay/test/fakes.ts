@@ -1,5 +1,6 @@
 import { FakeClock } from "../src/clock.ts";
 import { createRelay, type Relay } from "../src/http.ts";
+import type { RefereeConfig } from "../src/arena/referee.ts";
 import { randomHex, sha256Hex } from "../src/registration.ts";
 import { MemoryStore } from "../src/store.ts";
 import { FakeCoins, FakeRpc, launchTx, memoTx, MINT, WALLET } from "../src/testing.ts";
@@ -25,12 +26,12 @@ export interface Rig {
 
 export const CRON = "cron-secret";
 
-export function rig(): Rig {
+export function rig(referee?: RefereeConfig): Rig {
   const clock = new FakeClock();
   const store = new MemoryStore(clock);
   const rpc = new FakeRpc();
   const coins = new FakeCoins(clock.now());
-  const relay = createRelay({ store, clock, rpc, coins, cronSecret: CRON });
+  const relay = createRelay({ store, clock, rpc, coins, cronSecret: CRON, referee });
   const call: Rig["call"] = async (method, path, body, token) => {
     const res = await relay.fetch(
       new Request(`https://relay.test${path}`, {

@@ -18,6 +18,7 @@ import { update, type Store } from "../store.ts";
 import { applyMove, contested, forfeitMatch, newAgentMatch, newHouseMatch, settle } from "./match.ts";
 import type { CoinStanding, Fighter, Match, Outage, Tally } from "./types.ts";
 import { viewFighter, viewMatch, type FighterView, type MatchView } from "./view.ts";
+import { WagerDesk, type WagerConfig } from "./wager.ts";
 
 // The arena's referee (docs/arena.md 6 to 8): fighters and their tokens, matches against the house, moves, long-polls
 // that wake only on reveals, the lazy clock and its sweep, outages that stop clocks, results and the leaderboard.
@@ -54,6 +55,8 @@ export interface RefereeConfig {
   longPollMs?: number;
   /** How long the house takes over each round, in ms, so a match against it can be watched (default 0: at once). */
   housePaceMs?: number;
+  /** Wagering's matchmaking and tickets (docs/wager-mode.md 7.4). Off without it. */
+  wager?: WagerConfig;
 }
 
 const HOUSE_RATINGS: Record<HouseBot, Rating> = {
@@ -113,6 +116,8 @@ export class Referee {
   private units: number;
   private longPollMs: number;
   private housePaceMs: number;
+  /** The wager desk, when wagering is configured. */
+  readonly wager: WagerDesk | null;
 
   constructor(
     private store: Store,
@@ -126,6 +131,7 @@ export class Referee {
     this.units = config.unitsPerMinute ?? 120;
     this.longPollMs = config.longPollMs ?? 40_000;
     this.housePaceMs = config.housePaceMs ?? 0;
+    this.wager = config.wager ? new WagerDesk(store, clock, config.wager, (f, units) => this.spend(f, units)) : null;
   }
 
   // ---------------------------------------------------------------- outages

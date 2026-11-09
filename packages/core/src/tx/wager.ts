@@ -6,6 +6,7 @@ import type { Chain } from "./chain.ts";
 import { finish, priorityFee, type Finished } from "./envelope.ts";
 import {
   decodeSeriesAccount,
+  decodeWager,
   decodeWagerConfig,
   SERIES_PLAYER_OFFSETS,
   seriesAddress,
@@ -232,4 +233,43 @@ export async function buildWagerMove(chain: Chain, req: WagerMoveRequest): Promi
     simulate: req.simulate,
     txs: [{ tx, label: `${LABELS[kind]} (wager series ${req.seriesId.slice(0, 8)})`, expect: { wallet: req.wallet, allowLaunchLab: false, allowCpmm: false, wager: { kind, seriesId: req.seriesId } } }],
   });
+}
+
+/** Where a series stands, for the referee's records and ratings (docs/wager-mode.md 7.4, 7.5). */
+export type SeriesOutcome =
+  | { state: "none" | "open" | "live" | "unknown" }
+  | { state: "closed"; how: "settled"; winner: "A" | "B" | null }
+  | { state: "closed"; how: "cancelled" | "refunded" };
+
+/**
+ * Reads a series' state from the chain: its account while it's open or live; once closed, the transaction that closed
+ * it. A settle's winner is whoever it paid at least one and a half stakes (the pot less a fee of at most 5%); a draw
+ * refunds each about one stake. A share burned because its wallet couldn't be credited reads as a draw.
+ */
+export async function seriesOutcome(chain: Chain, seriesId: string, players: { playerA: string; playerB: string; stake: bigint }): Promise<SeriesOutcome> {
+  const p = program(chain);
+  const live = await readSeries(chain, seriesId);
+  if (live) return { state: live.header.status };
+  const sigs = await chain.connection.getSignaturesForAddress(seriesAddress(p, seriesId), { limit: 25 }, "confirmed");
+  if (sigs.length === 0) return { state: "none" };
+  for (const sig of sigs) {
+    if (sig.err) continue;
+    const tx = await chain.connection.getTransaction(sig.signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" });
+    if (!tx?.meta) return { state: "unknown" };
+    const keys = tx.transaction.message.staticAccountKeys.map((k) => k.toBase58());
+    for (const ix of tx.transaction.message.compiledInstructions) {
+      if (keys[ix.programIdIndex] !== p.toBase58()) continue;
+      const kind = decodeWager(Buffer.from(ix.data))?.kind;
+      if (kind === "cancel") return { state: "closed", how: "cancelled" };
+      if (kind === "emergencyRefund" || kind === "freezeAndRefund") return { state: "closed", how: "refunded" };
+      if (kind !== "settle") continue;
+      const delta = (who: string) => {
+        const i = keys.indexOf(who);
+        return i < 0 ? 0n : BigInt(tx.meta!.postBalances[i]!) - BigInt(tx.meta!.preBalances[i]!);
+      };
+      const won = (players.stake * 3n) / 2n;
+      return { state: "closed", how: "settled", winner: delta(players.playerA) >= won ? "A" : delta(players.playerB) >= won ? "B" : null };
+    }
+  }
+  return { state: "unknown" };
 }

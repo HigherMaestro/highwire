@@ -76,3 +76,38 @@ test("the ticket message is the program's: domain, program, series, players, sta
   assert.ok(m.subarray(22, 54).equals(program.toBuffer()));
   assert.equal(m.readUInt16LE(174), 4);
 });
+
+test("a series' outcome: its account while it plays, then the transaction that closed it", async () => {
+  const { Keypair, TransactionMessage, VersionedTransaction } = await import("@solana/web3.js");
+  const { seriesOutcome, wagerInstruction } = await import("../src/tx/wager.ts");
+  const program = new PublicKey(WAGER_PROGRAM_IDS.devnet!);
+  const [a, b, fee, crank] = [Keypair.generate().publicKey, Keypair.generate().publicKey, Keypair.generate().publicKey, Keypair.generate().publicKey] as const;
+  const id = h(0x11);
+  const stake = 100_000_000n;
+  const closing = (kind: "settle" | "cancel" | "emergencyRefund", deltas: [bigint, bigint]) => {
+    const ix = wagerInstruction(program, crank, id, { kind } as never, { playerA: a, playerB: b, feeAccount: fee });
+    const message = new TransactionMessage({ payerKey: crank, recentBlockhash: PublicKey.default.toBase58(), instructions: [ix] }).compileToV0Message();
+    const keys = message.staticAccountKeys.map((k) => k.toBase58());
+    const pre = keys.map(() => 1_000_000_000);
+    const post = keys.map((k, i) => pre[i]! + Number(k === a.toBase58() ? deltas[0] : k === b.toBase58() ? deltas[1] : 0n));
+    return { transaction: new VersionedTransaction(message), meta: { preBalances: pre, postBalances: post } };
+  };
+  const chain = (opts: { account?: Buffer; history?: ReturnType<typeof closing>[] }) =>
+    ({
+      cluster: "devnet",
+      connection: {
+        getAccountInfo: async () => (opts.account ? { data: opts.account, owner: program } : null),
+        getSignaturesForAddress: async () => (opts.history ?? []).map((_, i) => ({ signature: `s${i}`, err: null })),
+        getTransaction: async (sig: string) => opts.history?.[Number(sig.slice(1))] ?? null,
+      },
+    }) as never;
+  const players = { playerA: a.toBase58(), playerB: b.toBase58(), stake };
+  assert.deepEqual(await seriesOutcome(chain({ account: Buffer.from(file.seriesAccount, "hex") }), id, players), { state: "live" });
+  assert.deepEqual(await seriesOutcome(chain({}), id, players), { state: "none" });
+  const won = 2n * stake - 5_000_000n;
+  assert.deepEqual(await seriesOutcome(chain({ history: [closing("settle", [won, 4_000_000n])] }), id, players), { state: "closed", how: "settled", winner: "A" });
+  assert.deepEqual(await seriesOutcome(chain({ history: [closing("settle", [4_000_000n, won])] }), id, players), { state: "closed", how: "settled", winner: "B" });
+  assert.deepEqual(await seriesOutcome(chain({ history: [closing("settle", [stake + 4_000_000n, stake])] }), id, players), { state: "closed", how: "settled", winner: null });
+  assert.deepEqual(await seriesOutcome(chain({ history: [closing("cancel", [stake, 0n])] }), id, players), { state: "closed", how: "cancelled" });
+  assert.deepEqual(await seriesOutcome(chain({ history: [closing("emergencyRefund", [stake, stake])] }), id, players), { state: "closed", how: "refunded" });
+});

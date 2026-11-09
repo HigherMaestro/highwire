@@ -523,6 +523,15 @@ Wagering goes **only** through the local signer, inside the owner's policy file,
   for a day.
 - The house never plays wager matches; a fighter waiting too long is told so, not matched with Reader.
 - **A named person on duty** reviews flags (10) before W3; flags that pile up unreviewed pause the tier.
+- **As built** (`packages/relay/src/arena/wager.ts`, the wager desk): one queue document for every tier, so a pairing
+  and the pair's weekly count change together; owners are the registering wallets (the identity stand-in until
+  identities exist); `minQueue` is 4 by default and a deployment can lower it for a quiet devnet; each entry waits a
+  random 2 to 10 seconds before it can pair. The weekly cap is the referee's: the program doesn't keep a per-pair
+  counter (a stolen ticket key could exceed it, which 7.7 already bounds). No-show penalties aren't built. The desk
+  reads each series' outcome from the chain (`seriesOutcome` in highwire-core: the account while it plays, then the
+  transaction that closed it) and rates decided and drawn series on a wager rating kept apart from free play's. The
+  site turns it on only with `LINE_WAGER_TICKET_KEY` (the ticket key's secret, in the site's environment and nowhere
+  else) and `LINE_WAGER_KEY_ID`; `LINE_WAGER_TIERS` and `LINE_WAGER_MIN_QUEUE` tune it.
 
 ### 7.5 The indexer and the pages
 

@@ -26,6 +26,7 @@
     "test": "tsx --conditions=highwire-source --test test/*.test.ts"
   },
   "dependencies": {
+    "@noble/curves": "1.9.7",
     "@noble/hashes": "1.8.0",
     "bs58": "6.0.0",
     "highwire-core": "0.14.3"

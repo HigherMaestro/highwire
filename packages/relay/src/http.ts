@@ -20,6 +20,10 @@ import type { Store } from "./store.ts";
 //   GET  /api/arena/fighter/<mint>
 //   GET  /api/arena/leaderboard
 //   GET  /api/arena/sweep          the cron: with CRON_SECRET set it needs the secret, otherwise once per 30 seconds
+//   GET  /api/arena/wager          the wager program, cluster, tiers and ticket key (404 when wagering is off)
+//   POST /api/arena/wager/join     { stake: "<lamports a side>", wait? }      (arena token) waits up to 40s to be paired
+//   GET  /api/arena/wager/state                                               (arena token) the fighter's series
+//   POST /api/arena/wager/leave                                               (arena token) leaves the queue
 //   GET  /api/arena/admin/flags (cheating signals), POST /api/arena/admin/hide { match, round, side } (legal takedowns)
 //                                  (LINE_ADMIN_TOKEN; off without it)
 
@@ -92,6 +96,15 @@ export function createRelay(o: RelayOptions): Relay {
     }
     if (m === "POST" && path === "/api/arena/move") return json(await referee.move(await fighter(req), await body(req)));
     if (m === "POST" && path === "/api/arena/retire") return json(await referee.retire(await fighter(req)));
+    if (path === "/api/arena/wager" || path.startsWith("/api/arena/wager/")) {
+      const desk = referee.wager;
+      if (!desk) throw new RelayError("not_found", "Wagering isn't open.");
+      if (m === "GET" && path === "/api/arena/wager") return json(desk.info(), 200, "public, s-maxage=60");
+      if (m === "POST" && path === "/api/arena/wager/join") return json(await desk.join(await fighter(req), await body(req)));
+      if (m === "GET" && path === "/api/arena/wager/state") return json(await desk.state(await fighter(req)));
+      if (m === "POST" && path === "/api/arena/wager/leave") return json(await desk.leave(await fighter(req)));
+      throw new RelayError("not_found", "No such route.");
+    }
     if (m === "GET" && path === "/api/arena/queue") return json({ waiting: await referee.queueSize() }, 200, "public, s-maxage=5");
     if (m === "GET" && path === "/api/arena/leaderboard") return json(await referee.leaderboard(), 200, "public, s-maxage=30");
     const match = /^\/api\/arena\/match\/([0-9a-f]{24})$/.exec(path);
@@ -104,7 +117,8 @@ export function createRelay(o: RelayOptions): Relay {
       } else if ((await o.store.cas("arena:sweep-lock", 0, 1, 30)) === null) {
         return json({ skipped: "a sweep ran in the last 30 seconds" });
       }
-      return json(await referee.sweep());
+      const swept = await referee.sweep();
+      return json(referee.wager ? { ...swept, wagers: await referee.wager.sweep() } : swept);
     }
     if (path.startsWith("/api/arena/admin/")) {
       if (!o.adminToken || bearer(req) !== o.adminToken) throw new RelayError("not_found", "No such route.");

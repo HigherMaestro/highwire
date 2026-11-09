@@ -1,6 +1,6 @@
-import { createHttpConfig, DEFAULT_API_URL, evaluateRisk, HigherApi, HIGHWIRE_WALLET, NotFoundError, SolanaRpc } from "highwire-core";
+import { Chain, createHttpConfig, DEFAULT_API_URL, evaluateRisk, HigherApi, HIGHWIRE_WALLET, NotFoundError, seriesOutcome, SolanaRpc, solToLamports, WAGER_PROGRAM_IDS } from "highwire-core";
 import { serverOptionsFromEnv } from "highwire-mcp";
-import { createRelay, JsonRpc, realClock, UpstashStore, type CoinDirectory, type Relay } from "highwire-relay";
+import { createRelay, JsonRpc, realClock, UpstashStore, type CoinDirectory, type Relay, type WagerConfig } from "highwire-relay";
 
 // The Line's referee, hosted in the site (docs/arena.md 8): highwire-relay over the Upstash database Vercel connected
 // as LINE_*, mainnet's RPC for registrations, and higher.fun's API with the rug check for coins. Null until the
@@ -36,6 +36,27 @@ function coinDirectory(rpcUrl: string): CoinDirectory {
   };
 }
 
+/**
+ * Wagering's matchmaker (docs/wager-mode.md 7.4), on devnet: on only with LINE_WAGER_TICKET_KEY (the ticket key's
+ * 32-byte Ed25519 secret, hex, held only in the site's environment) and the key id the program's config holds for it.
+ * LINE_WAGER_TIERS lists the tiers in SOL; LINE_WAGER_MIN_QUEUE how many owners must wait at a tier before it pairs.
+ */
+function wagerConfig(): WagerConfig | undefined {
+  const secret = process.env.LINE_WAGER_TICKET_KEY;
+  const programId = WAGER_PROGRAM_IDS.devnet;
+  if (!secret || !/^[0-9a-f]{64}$/i.test(secret) || !programId) return undefined;
+  const chain = new Chain({ cluster: "devnet", rpcUrl: process.env.LINE_WAGER_RPC_URL || undefined });
+  return {
+    programId,
+    cluster: "devnet",
+    ticketSecret: Uint8Array.from(Buffer.from(secret, "hex")),
+    keyId: Number(process.env.LINE_WAGER_KEY_ID ?? 1),
+    tiers: (process.env.LINE_WAGER_TIERS ?? "0.01,0.1").split(",").map((t) => solToLamports(Number(t.trim()))),
+    minQueue: Number(process.env.LINE_WAGER_MIN_QUEUE ?? 4),
+    chain: { status: (id, t) => seriesOutcome(chain, id, { playerA: t.playerA, playerB: t.playerB, stake: BigInt(t.stake) }) },
+  };
+}
+
 let relay: Relay | null = null;
 
 export function lineRelay(): Relay | null {
@@ -55,6 +76,7 @@ export function lineRelay(): Relay | null {
       operatorWallets: [HIGHWIRE_WALLET, ...(process.env.LINE_OPERATOR_WALLETS ?? "").split(",").map((w) => w.trim()).filter(Boolean)],
       // The house takes 4 seconds a round, so a match against it lasts about a minute and /line can show it live.
       housePaceMs: 4000,
+      wager: wagerConfig(),
     },
   });
   return relay;
