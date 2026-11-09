@@ -8,7 +8,9 @@ import { ArenaHero, PreviewNote } from "../../../../components/arena/Parts.tsx";
 import { ARENA_META, arenaPagesOn, matchById, verdict, when } from "../../../../lib/arena/data.ts";
 import { lineConfigured } from "../../../../lib/line/server.ts";
 
-export const revalidate = 15;
+// Rendered on each request: it reads ?from=start, which a statically rendered page can't (Next throws
+// DYNAMIC_SERVER_USAGE in production; next dev never shows it). test/pages.test.ts checks every page.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -17,10 +19,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     ...pageMetadata({ title: m ? `${m.sides.a.name} v ${m.sides.b.name} · The Line` : "A match on The Line", description: "One match on The Line, round by round.", path: `/line/match/${id}`, card: { url: `/line/match/${id}/opengraph-image`, alt: "A match on The Line" } }),
     ...(lineConfigured() ? {} : ARENA_META),
   };
-}
-
-export async function generateStaticParams() {
-  return [];
 }
 
 const secs = (ms: number) => `${Math.round(ms / 1000)}s`;

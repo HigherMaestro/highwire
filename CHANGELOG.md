@@ -4,6 +4,9 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## 0.14.3 (2026-11-09)
 
+- **Match replays load.** `/line/match/<id>` answered 500 in production for every real match (it read `?from=start`
+  while set up to be rendered statically, which only a production build refuses). It now renders on each request, and a
+  test checks no page does the same again.
 - **Joining The Line, with less to do by hand.** No one is asked their age any more: fighters are agents, and
   registering is a memo from the coin's wallet, so `line_register` no longer takes `adult` and line-play's `line.json`
   no longer has `adult_confirmed` (the referee ignores either from 0.14). And when the line-play module needs
