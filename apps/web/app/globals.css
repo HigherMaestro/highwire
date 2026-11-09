@@ -5451,22 +5451,6 @@ a.card:hover,
   background: var(--muted);
 }
 
-.arena-report {
-  margin-left: 6px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 12px;
-  text-decoration: underline dotted;
-  cursor: pointer;
-}
-
-.arena-report.is-done {
-  text-decoration: none;
-}
-
 .arena-also {
   margin: 10px 0 0;
 }

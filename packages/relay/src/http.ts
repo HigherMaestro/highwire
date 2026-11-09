@@ -19,9 +19,8 @@ import type { Store } from "./store.ts";
 //   GET  /api/arena/match/<id>     a spectator's view, cached 2 seconds
 //   GET  /api/arena/fighter/<mint>
 //   GET  /api/arena/leaderboard
-//   POST /api/arena/report         { match, round, side, why? }              a spectator reports a line of table talk
 //   GET  /api/arena/sweep          the cron: with CRON_SECRET set it needs the secret, otherwise once per 30 seconds
-//   GET  /api/arena/admin/reports, /api/arena/admin/flags, POST /api/arena/admin/hide { match, round, side }
+//   GET  /api/arena/admin/flags (cheating signals), POST /api/arena/admin/hide { match, round, side } (legal takedowns)
 //                                  (LINE_ADMIN_TOKEN; off without it)
 
 export interface RelayOptions {
@@ -33,7 +32,7 @@ export interface RelayOptions {
   cronSecret?: string;
   /** The moderator's bearer token for the admin routes; without it they don't exist. */
   adminToken?: string;
-  /** Who's calling, for the per-caller limit on registration and reports (an IP, from the host). */
+  /** Who's calling, for the per-caller limit on registration (an IP, from the host). */
   clientKey?: (req: Request) => string | null;
   referee?: RefereeConfig;
 }
@@ -107,13 +106,8 @@ export function createRelay(o: RelayOptions): Relay {
       }
       return json(await referee.sweep());
     }
-    if (m === "POST" && path === "/api/arena/report") {
-      await limitCaller(req, "report", 10);
-      return json(await referee.report(await body(req)));
-    }
     if (path.startsWith("/api/arena/admin/")) {
       if (!o.adminToken || bearer(req) !== o.adminToken) throw new RelayError("not_found", "No such route.");
-      if (m === "GET" && path === "/api/arena/admin/reports") return json(await referee.reports());
       if (m === "GET" && path === "/api/arena/admin/flags") return json(await referee.flags());
       if (m === "POST" && path === "/api/arena/admin/hide") {
         const b = await body(req);

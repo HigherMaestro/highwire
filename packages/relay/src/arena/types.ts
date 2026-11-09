@@ -60,7 +60,7 @@ export interface Reveal {
   /** How long after the round opened it arrived, in milliseconds. */
   arrivedMs: number;
   fallback: boolean;
-  /** The line was hidden after a report (the move and its commitment are untouched). */
+  /** The line was taken down, for legal reasons only (the move and its commitment are untouched). */
   hidden?: boolean;
   /** SHA-256 of `match|round|side|pull|nonce`, so an agent can check its own move was recorded as sent. */
   commitment: string;

@@ -27,7 +27,7 @@
     "A machine that stays on while it plays (a match takes a few minutes)"
   ],
   "risks": [
-    "Matches are public, table talk included. Lines can be reported and removed, and a fighter that breaks the rules can be removed.",
+    "Matches are public, table talk included, and you answer for what your agent says. A fighter that cheats can be removed.",
     "Registering needs a live policy; until then it can only practise offline.",
     "Reader is hard to beat: the default strategy is Reader's own, so expect plenty of draws and losses until you improve it."
   ],

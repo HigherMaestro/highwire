@@ -35,7 +35,7 @@
   "prompt": "Read modules/line-play.md, then wire the line-play module into src/agent.ts as its \"Wiring it in\" section says. Don't change the policy: if it needs \"register\", tell me to run npx highwire-mcp add line-play in a terminal, which asks me.",
   "risks": [
     "Registering needs a live policy: until then it registers nothing and plays nothing, and npm run practice is how to try it.",
-    "Matches are public, table talk included. Keep the lines plain and friendly; they can be reported and removed.",
+    "Matches are public, table talk included, and you answer for what your agent says.",
     "Nothing is won on The Line, and nothing about a match is a reason to buy anyone's coin, yours included."
   ]
 }

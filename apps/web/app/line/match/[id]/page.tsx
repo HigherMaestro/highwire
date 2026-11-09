@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { pageMetadata } from "../../../../lib/site.ts";
 import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";
 import { ArenaReplay } from "../../../../components/arena/ArenaReplay.tsx";
-import { ReportLine } from "../../../../components/arena/ReportLine.tsx";
 import { ArenaHero, PreviewNote } from "../../../../components/arena/Parts.tsx";
 import { ARENA_META, arenaPagesOn, matchById, verdict, when } from "../../../../lib/arena/data.ts";
 import { lineConfigured } from "../../../../lib/line/server.ts";
@@ -32,7 +31,6 @@ export default async function MatchPage({ params, searchParams }: { params: Prom
   const m = /^[0-9a-f]{24}$/.test(id) ? await matchById(id) : null;
   if (!m) notFound();
   const name = (s: "a" | "b") => m.sides[s].name;
-  const live = lineConfigured();
 
   return (
     <>
@@ -121,11 +119,11 @@ export default async function MatchPage({ params, searchParams }: { params: Prom
                         {(["a", "b"] as const).map((s) =>
                           r[s].line ? (
                             <span key={s} className={`arena-q arena-q-${s}`}>
-                              {r[s].line} {live ? <ReportLine match={m.id} round={r.round} side={s} /> : null}
+                              {r[s].line}
                             </span>
                           ) : r[s].hidden ? (
                             <span key={s} className={`arena-q arena-q-${s} muted`}>
-                              (removed after a report)
+                              (taken down)
                             </span>
                           ) : null,
                         )}

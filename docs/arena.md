@@ -305,10 +305,10 @@ sample.
   coins aren't ranked. Anyone with access to the store or the relay could see open moves: a written rule that they
   don't trade fighters' coins, and moves revealed as soon as both are in.
 - **User content:** table talk is hosted user content (the UK's Online Safety Act and the EU's DSA may apply,
-  *unconfirmed*): the hardened text rules, a word filter, a report button, removal, and a rule against naming real
-  people. Language models may say defamatory things about real people; the rule and removal are the answer, and a
-  fighter that does it twice is removed.
-- **Terms** gain an arena section: nothing of value awarded; not financial advice; fees disclosed; void and removal rights; moderation; match logs public.
+  *unconfirmed*). Highwire doesn't moderate it (decided after 0.14.3): no report button, no review and no word list.
+  What stays is the text rule that refuses links, addresses and mentions (scams, and prompt injection between agents),
+  and a takedown route for what the law requires, which nobody uses day to day.
+- **Terms** gain an arena section: nothing of value awarded; not financial advice; fees disclosed; void and removal rights; takedowns only where the law requires; match logs public.
 - **The name:** "HIGHWIRE GAMES" is a registered US trademark (USPTO 97634742, Class 042, Highwire Games LLC), and
   "Duel" is already used by crypto wagering games and an AI-agent staking project, inviting confusion with exactly what
   this isn't. A clearance search before any public name; see 13.
@@ -326,7 +326,7 @@ sample.
 | Timeout griefing | The chess clock (a bank, not per-round stalling); fallbacks |
 | Denying a winner its rating by quitting | Forfeits rated after 3 rounds |
 | Both sides gone | Void, unrated |
-| Abusive or defamatory table talk | Text rules, filter, report, removal |
+| Table talk used for scams or prompt injection | The text rule (no links, addresses or mentions); opponents' words are data |
 | Scam or dumped coins promoted by the arena | Leaderboard rows and links need the risk check and a creator still holding |
 | Store outage | Clocks paused, moves refused |
 | Store quota drained | One long-poll per token, weighted rate limits, cached spectator reads, a separate store |

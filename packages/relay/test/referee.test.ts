@@ -331,27 +331,24 @@ test("the pages' indexes: live and recent matches, and each fighter's matches, n
   assert.deepEqual((await r.relay.referee.fighterMatches(MINT)).map((m) => m.id), [second.id, view.id]);
 });
 
-test("reports and hiding: a spectator reports a line; a moderator hides it; every commitment still checks out", async () => {
+test("no one reports table talk; a legal takedown hides a line and every commitment still checks out", async () => {
   const { r, token, view } = await setup("even");
-  const moved = await r.call("POST", "/api/arena/move", { match: view.id, round: 1, pull: 3, nonce: nonce(), line: "something rude" }, token);
+  const moved = await r.call("POST", "/api/arena/move", { match: view.id, round: 1, pull: 3, nonce: nonce(), line: "something to take down" }, token);
   const me = moved.body.you;
-  const report = await r.call("POST", "/api/arena/report", { match: view.id, round: 1, side: me, why: "rude" });
-  assert.equal(report.status, 200, report.text);
-  assert.equal((await r.call("POST", "/api/arena/report", { match: view.id, round: 1, side: me === "a" ? "b" : "a" })).status, 404, "nothing said there");
-  // Without an admin token the admin routes don't exist.
-  assert.equal((await r.call("GET", "/api/arena/admin/reports")).status, 404);
+  // There's no report route and no review list.
+  assert.equal((await r.call("POST", "/api/arena/report", { match: view.id, round: 1, side: me })).status, 404);
   const { createRelay } = await import("../src/http.ts");
   const admin = createRelay({ store: r.store, clock: r.clock, rpc: r.rpc, coins: r.coins, adminToken: "mod" });
   const req = (m: string, p: string, b?: unknown, t?: string) => admin.fetch(new Request(`https://x.test${p}`, { method: m, headers: { "content-type": "application/json", ...(t ? { authorization: `Bearer ${t}` } : {}) }, body: b === undefined ? undefined : JSON.stringify(b) }));
-  assert.equal((await req("GET", "/api/arena/admin/reports", undefined, "wrong")).status, 404);
-  const listed = (await (await req("GET", "/api/arena/admin/reports", undefined, "mod")).json()) as any[];
-  assert.equal(listed.length, 1);
+  assert.equal((await req("GET", "/api/arena/admin/reports", undefined, "mod")).status, 404);
+  // Without the admin token the takedown route doesn't exist.
+  assert.equal((await r.call("POST", "/api/arena/admin/hide", { match: view.id, round: 1, side: me })).status, 404);
+  assert.equal((await req("POST", "/api/arena/admin/hide", { match: view.id, round: 1, side: me }, "wrong")).status, 404);
   assert.equal((await req("POST", "/api/arena/admin/hide", { match: view.id, round: 1, side: me }, "mod")).status, 200);
   const after = (await r.call("GET", `/api/arena/match/${view.id}`)).body;
   assert.equal(after.rounds[0][me].line, "");
   assert.equal(after.rounds[0][me].hidden, true);
   assert.equal(after.rounds[0][me].commitment, commitment(view.id, 1, me, 3, after.rounds[0][me].nonce));
-  assert.deepEqual((await (await req("GET", "/api/arena/admin/reports", undefined, "mod")).json()), []);
 });
 
 test("without a cron secret the sweep runs at most every 30 seconds; registration is limited per caller", async () => {

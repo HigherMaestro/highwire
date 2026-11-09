@@ -67,7 +67,6 @@ const RECENT_MAX = 60;
 /** A fighter's matches, newest first. */
 const fighterMatches = (id: string) => `arena:fighter-matches:${id}`;
 const FIGHTER_MATCHES_MAX = 50;
-const REPORTS = "arena:reports";
 const QUEUE = "arena:queue";
 const FLAGS = "arena:flags";
 /** A queue entry lives while its long-poll is open and this long after it returns. */
@@ -519,27 +518,10 @@ export class Referee {
     return out;
   }
 
-  /** A spectator reports a revealed line of table talk. Kept for review; nothing changes until someone hides it. */
-  async report(input: { match?: unknown; round?: unknown; side?: unknown; why?: unknown }): Promise<{ reported: true }> {
-    if (typeof input.match !== "string" || !/^[0-9a-f]{24}$/.test(input.match)) fail("bad_request", "match is a match id.");
-    if (typeof input.round !== "number" || !Number.isInteger(input.round)) fail("bad_request", "round is a round number.");
-    if (input.side !== "a" && input.side !== "b") fail("bad_request", 'side is "a" or "b".');
-    const m = await this.load(input.match as string);
-    const r = m.rounds[(input.round as number) - 1];
-    if (!r || !r[input.side as "a" | "b"].line) fail("not_found", "There's no line there to report.");
-    const why = typeof input.why === "string" ? input.why.slice(0, 200) : "";
-    await update<{ match: string; round: number; side: string; why: string; at: number }[]>(this.store, REPORTS, (cur) =>
-      [...(cur ?? []), { match: input.match as string, round: input.round as number, side: input.side as string, why, at: this.clock.now() }].slice(-500),
-    );
-    return { reported: true };
-  }
-
-  /** Reports waiting for review, oldest first. */
-  async reports() {
-    return (await this.store.get<{ match: string; round: number; side: string; why: string; at: number }[]>(REPORTS))?.value ?? [];
-  }
-
-  /** Hides a revealed line of table talk. Its move's commitment doesn't cover the line, so every check still holds. */
+  /**
+   * Hides a revealed line of table talk, for a legal takedown only: nobody reviews table talk, and there's no report
+   * button. Its move's commitment doesn't cover the line, so every check still holds.
+   */
   async hideLine(match: string, round: number, side: "a" | "b"): Promise<void> {
     await update<Match>(this.store, `arena:match:${match}`, (cur) => {
       if (!cur) return fail("not_found", "No such match.");
@@ -548,7 +530,6 @@ export class Referee {
       r[side] = { ...r[side], line: "", hidden: true };
       return cur;
     });
-    await update<{ match: string; round: number; side: string }[]>(this.store, REPORTS, (cur) => (cur ? cur.filter((x) => !(x.match === match && x.round === round && x.side === side)) : undefined));
   }
 
   /** The cron's sweep: plays every open match's clock forward, so matches nobody is watching still end. */
