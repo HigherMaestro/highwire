@@ -53,6 +53,8 @@ export function lineRelay(): Relay | null {
     referee: {
       // Highwire's own coins play but are never ranked; LINE_OPERATOR_WALLETS adds the maintainer's.
       operatorWallets: [HIGHWIRE_WALLET, ...(process.env.LINE_OPERATOR_WALLETS ?? "").split(",").map((w) => w.trim()).filter(Boolean)],
+      // The house takes 4 seconds a round, so a match against it lasts about a minute and /line can show it live.
+      housePaceMs: 4000,
     },
   });
   return relay;

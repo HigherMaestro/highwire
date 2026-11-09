@@ -364,3 +364,49 @@ test("without a cron secret the sweep runs at most every 30 seconds; registratio
   for (let i = 0; i < 22; i++) last = (await open.fetch(new Request("https://x.test/api/agents/challenge", { method: "POST", body: "{}" }))).status;
   assert.equal(last, 429);
 });
+
+test("a paced house: a quick move waits for the house's pace, a slow one doesn't, and the match still checks out", async () => {
+  const r = rig();
+  const token = await r.register();
+  const { createRelay } = await import("../src/http.ts");
+  const paced = createRelay({ store: r.store, clock: r.clock, rpc: r.rpc, coins: r.coins, referee: { housePaceMs: 4000 } });
+  const call = async (method: string, path: string, body?: unknown) => {
+    const res = await paced.fetch(new Request(`https://relay.test${path}`, { method, headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: body === undefined ? undefined : JSON.stringify(body) }));
+    return (await res.json()) as any;
+  };
+  let view = await call("POST", "/api/arena/join", { fallback: "steady:2", opponent: "reader" });
+  const me: Side = view.you;
+  const house: Side = view.house.side;
+
+  // Round 1: moved at once, nothing is revealed until the house's four seconds are up.
+  view = await call("POST", "/api/arena/move", { match: view.id, round: 1, pull: 3, nonce: nonce(), line: "" });
+  assert.equal(view.rounds.length, 0);
+  assert.equal(view.round, 1);
+  r.clock.advance(3999);
+  assert.equal((await call("GET", `/api/arena/state?match=${view.id}`)).rounds.length, 0, "not a millisecond early");
+  r.clock.advance(1);
+  view = await call("GET", `/api/arena/state?match=${view.id}`);
+  assert.equal(view.rounds.length, 1);
+  assert.equal(view.rounds[0][house].arrivedMs, 4000);
+  assert.equal(view.round, 2);
+
+  // Round 2: a fighter slower than the pace is revealed the moment it moves.
+  r.clock.advance(6000);
+  view = await call("POST", "/api/arena/move", { match: view.id, round: 2, pull: 2, nonce: nonce(), line: "" });
+  assert.equal(view.rounds.length, 2);
+
+  // The rest at once, each round waiting out the pace; the finished match replays from the seed.
+  while (view.round !== null) {
+    view = await call("POST", "/api/arena/move", { match: view.id, round: view.round, pull: Math.min(2, view.energy[me]), nonce: nonce(), line: "" });
+    r.clock.advance(4000);
+    view = await call("GET", `/api/arena/state?match=${view.id}`);
+  }
+  assert.ok(view.ending.reason);
+  assert.equal(seedCommitment(view.house.seed), view.house.seedCommitment);
+  let s = startMatch(DUELS_1);
+  for (const round of view.rounds) {
+    assert.equal(round[house].pull, houseMove("reader", s, house, view.house.seed), `round ${round.round}`);
+    for (const side of ["a", "b"] as const) assert.equal(round[side].commitment, commitment(view.id, round.round, side, round[side].pull, round[side].nonce));
+    s = replay(DUELS_1, view.rounds.slice(0, round.round).map((x: any) => [x.a.pull, x.b.pull]));
+  }
+});

@@ -52,6 +52,8 @@ export interface RefereeConfig {
   unitsPerMinute?: number;
   /** How long a long-poll waits for the next reveal, in ms. Under the MCP SDK's 60-second default. */
   longPollMs?: number;
+  /** How long the house takes over each round, in ms, so a match against it can be watched (default 0: at once). */
+  housePaceMs?: number;
 }
 
 const HOUSE_RATINGS: Record<HouseBot, Rating> = {
@@ -110,6 +112,7 @@ export class Referee {
   private house: Record<HouseBot, Rating>;
   private units: number;
   private longPollMs: number;
+  private housePaceMs: number;
 
   constructor(
     private store: Store,
@@ -122,6 +125,7 @@ export class Referee {
     this.house = config.houseRatings ?? HOUSE_RATINGS;
     this.units = config.unitsPerMinute ?? 120;
     this.longPollMs = config.longPollMs ?? 40_000;
+    this.housePaceMs = config.housePaceMs ?? 0;
   }
 
   // ---------------------------------------------------------------- outages
@@ -382,7 +386,7 @@ export class Referee {
   private async startHouse(f: Fighter, fallback: NonNullable<ReturnType<typeof parseFallback>>, bot: HouseBot, outages: Outage[]): Promise<MatchView> {
     const now = this.clock.now();
     const id = randomHex(12);
-    const m = newHouseMatch({ id, rules: this.rules, now, fighter: { id: f.id, name: f.name, fallback }, fighterSide: Math.random() < 0.5 ? "a" : "b", bot, seed: randomHex(32) });
+    const m = newHouseMatch({ id, rules: this.rules, now, fighter: { id: f.id, name: f.name, fallback }, fighterSide: Math.random() < 0.5 ? "a" : "b", bot, seed: randomHex(32), paceMs: this.housePaceMs });
     // Claim the fighter first, so two joins at once can't make two matches.
     let taken: string | null = null;
     await update<Fighter>(this.store, `arena:fighter:${f.id}`, (cur) => {

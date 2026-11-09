@@ -62,6 +62,8 @@ export interface NewHouseMatch {
   fighterSide: Side;
   bot: HouseBot;
   seed: string;
+  /** The house moves this long after each round opens (default 0, at once). */
+  paceMs?: number;
 }
 
 export function newHouseMatch(o: NewHouseMatch): Match {
@@ -74,7 +76,7 @@ export function newHouseMatch(o: NewHouseMatch): Match {
     rules: o.rules,
     createdAt: o.now,
     sides: o.fighterSide === "a" ? { a: fighterSide, b: house } : { a: house, b: fighterSide },
-    house: { bot: o.bot, side: houseSide, seedCommitment: seedCommitment(o.seed), seed: o.seed },
+    house: { bot: o.bot, side: houseSide, seedCommitment: seedCommitment(o.seed), seed: o.seed, ...(o.paceMs ? { paceMs: o.paceMs } : {}) },
     rounds: [],
     open: null,
     ending: null,
@@ -108,7 +110,10 @@ export function newAgentMatch(o: NewAgentMatch): Match {
 /** The house's nonce for a round: derived from the seed, so it's checkable once the seed is revealed. */
 export const houseNonce = (seed: string, round: number) => hex(sha256(text(`highwire-arena|nonce|${seed}|${round}`))).slice(0, 32);
 
-/** Opens the next round at `at`: the house moves now, and so does any side whose bank has run out. */
+/**
+ * Opens the next round at `at`: the house picks its pull now (from the state and its seed) but its move arrives after
+ * its pace, so a round is never revealed sooner; any side whose bank has run out moves now.
+ */
 function openRound(m: Match, at: number): void {
   const state = stateOf(m);
   const round = m.rounds.length + 1;
@@ -117,7 +122,7 @@ function openRound(m: Match, at: number): void {
     const s = m.sides[side];
     if (s.kind === "house" && m.house) {
       const pull = houseMove(m.house.bot, state, side, m.house.seed);
-      m.open.moves[side] = { pull, nonce: houseNonce(m.house.seed, round), line: "", arrivedAt: at, fallback: false };
+      m.open.moves[side] = { pull, nonce: houseNonce(m.house.seed, round), line: "", arrivedAt: at + (m.house.paceMs ?? 0), fallback: false };
     } else if (s.bankOut) {
       m.open.moves[side] = fallbackMove(s, state, side, at);
     }
@@ -190,7 +195,10 @@ export function settle(m: Match, now: number, outages: Outage[]): boolean {
       changed = true;
     }
     if (!o.moves.a || !o.moves.b) break;
-    resolve(m, Math.max(o.moves.a.arrivedAt, o.moves.b.arrivedAt));
+    // A move can arrive in the future (the house's pace): the round waits for it.
+    const at = Math.max(o.moves.a.arrivedAt, o.moves.b.arrivedAt);
+    if (at > now) break;
+    resolve(m, at);
     changed = true;
   }
   return changed;
@@ -227,7 +235,7 @@ export function applyMove(m: Match, side: Side, input: MoveInput, now: number, o
   s.bank = charge.bank;
   s.bankOut = charge.bankOut;
   o.moves[side] = { pull: input.pull as number, nonce, line: input.line, arrivedAt: now, fallback: false };
-  if (o.moves.a && o.moves.b) resolve(m, now);
+  if (o.moves.a && o.moves.b && Math.max(o.moves.a.arrivedAt, o.moves.b.arrivedAt) <= now) resolve(m, now);
   return { repeated: false };
 }
 

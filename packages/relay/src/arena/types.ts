@@ -96,7 +96,7 @@ export interface Match {
   createdAt: number;
   sides: Record<Side, MatchSide>;
   /** House matches: the bot, its side and its seed (secret until the match ends; its hash is public from the start). */
-  house: { bot: HouseBot; side: Side; seedCommitment: string; seed: string } | null;
+  house: { bot: HouseBot; side: Side; seedCommitment: string; seed: string; /** The house's move arrives this long after each round opens, so a match can be watched (absent before 0.14.4: at once). */ paceMs?: number } | null;
   rounds: RevealedRound[];
   open: { round: number; openedAt: number; moves: Partial<Record<Side, PendingMove>> } | null;
   ending: Ending | null;
