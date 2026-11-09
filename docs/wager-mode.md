@@ -139,8 +139,10 @@ From `npm run arena:sim` (1,000 matches a pairing, each side half the time; a sc
   draws (a series level after five matches is a draw). *(Open: first-to-3 with replays; 16.)*
 - **Settlement:** the series winner takes both stakes, less the fee (6.4). A drawn series and a void (both absent)
   refund both stakes in full; the series account's rent goes back to whoever opened it.
-- **Timeouts:** exactly free play's chess clock. A side that misses a commit plays its fallback; a side whose bank runs
-  out plays its fallback for the rest of the **series**; both absent is a void. No new "lose on time" rule.
+- **Timeouts:** free play's chess clock: a move must land before the round's time (or the bank) runs out, never on it.
+  A side that misses a commit plays its fallback; banks refill each match, but a side whose bank runs out plays its
+  fallback for the rest of the **series** (so an absent opponent costs one match of waiting, not five); both banks out
+  voids every remaining match. No new "lose on time" rule.
 - **One new ending, wager-only, in the rules version:** a side that commits and doesn't reveal within the reveal window
   **forfeits the match** (7.2.1). It's the price of hiding moves on-chain.
 - **Retiring** forfeits the series, and needs the owner's say-so (7.3).
@@ -368,9 +370,9 @@ hosted side never holds a key that moves users' money (AGENTS.md, "The hosted en
 | `open(ticket)` | player A | verifies the matchmaker's ticket (8): series ID, both wallets, tier, acceptance deadline, expiry; creates the series, deposits A's stake, snapshots the fee, records A's fallback commitment |
 | `accept(ticket)` | player B, before the ticket's deadline | deposits B's stake and records B's fallback commitment; round 1 opens |
 | `cancel()` | player A, or anyone after the deadline | if B never accepted: refunds A, closes the account |
-| `commit(round, hash)` | a side, while its commit phase is open | `SHA-256(series ‖ match ‖ round ‖ side ‖ pull ‖ nonce)` with a 32-byte nonce (pulls run only 0 to 30, so a short nonce could be brute-forced); charges the side's bank |
+| `commit(round, hash)` | a side, strictly before its deadline | `SHA-256(series_id ‖ match ‖ round ‖ side ‖ pull ‖ nonce)`: 32 bytes, then four single bytes, then a 32-byte nonce (pulls run only 0 to 30, so a short nonce could be brute-forced); charges the side's bank |
 | `reveal(round, pull, nonce)` | each side, after both commits, within the reveal window | checks the hash; when both are revealed, plays the round with the rules and opens the next |
-| `timeout()` | anyone, after a deadline | a missed commit: the side's fallback applies (7.2.5); a missed reveal: the side forfeits the match (7.2.1); both absent: a void |
+| `timeout()` | anyone, after a deadline | in a commit phase, only once **every** side still to commit is past its own deadline (so nothing about one side is published while the other can still move); each late side then owes its fallback (7.2.5). In a reveal phase after the window: a missed reveal forfeits the match (7.2.1); both missed: a void |
 | `settle()` | anyone, once the series is decided | pays the winner and the snapshotted fee, or refunds; closes the account, rent to the opener; decrements the open-stake counter |
 | `retire()` | a player | forfeits the series |
 | `emergency_refund()` | anyone, if the series hasn't changed for 24 hours | refunds both stakes in full and closes the account, whatever the series' state or layout version |
@@ -394,10 +396,12 @@ ending.
 
 - `playRound`, the clock and the fallbacks are ported from `packages/core/src/arena/rules.ts` to Rust, as a library the
   program calls, plus the wager-only endings (the missed reveal; the series).
-- **Parity is tested, not assumed:** a fixture generator in `highwire-core` writes 10,000 random series (moves,
-  fallbacks, missed commits, missed reveals, forfeits, voids) under **the on-chain clock model** (7.2.3), with their
-  TypeScript results; the Rust tests replay every one and compare state after every round. The same fixtures run in
-  CI for every change to either side.
+- **Parity is tested, not assumed:** `npm run test:program` has a generator in `highwire-core` write 2,000 random series a
+  seed (about 300,000 events: players present, slow and absent; every fault on purpose; moves exactly on deadlines;
+  moves after the end), refuses to write them unless every branch is hit, and the Rust replays every event, comparing
+  acceptance, the error's kind and the whole state after it; then it builds for SBF. Known-answer vectors pin both
+  hashes in both languages. W1's acceptance runs five seeds (10,000 series). There's no CI in this repository yet; until
+  there is, `npm run test:program` runs before every commit that touches either side.
 - The rules version is stored in each series; a program upgrade can't change an open series' rules.
 
 #### 7.2.3 Time on-chain
@@ -416,19 +420,24 @@ The on-chain clock is a different clock from the free referee's, and it is the r
 #### 7.2.4 Compute and size
 
 - A `reveal` does one SHA-256 (a syscall) and one round of integer rules: well under the 200,000 compute-unit default.
-- The series account is fixed-size (the open round, the fallback commitments, five digests and results, the clocks): a
-  few hundred bytes, rent about 0.003 SOL *(estimate)*, returned to the opener at close.
+- The series state is at most 249 bytes in Borsh (`SERIES_MAX_LEN`, pinned by a test against every fixture state);
+  its `Option`s make it variable, so the account is allocated at the maximum and read with `deserialize`, which ignores
+  the unused tail. Step 2 adds the wallets, tier, stake, fee and ticket key id around it. Rent about 0.003 SOL
+  *(estimate)*, returned to the opener at close.
 
 #### 7.2.5 Fallbacks without leaking them
 
 In free play a fallback is private to its side, and the referee holds a fallback move hidden until both are in. On-chain
 that has to be kept deliberately:
-- At `open` and `accept`, each side commits to its fallback (`SHA-256(series ‖ side ‖ fallback ‖ salt)`), not the
-  fallback itself.
+- At `open` and `accept`, each **player** commits to its fallback (`SHA-256("fb" ‖ series_id ‖ player ‖ kind ‖ pull ‖
+  salt)`, with 32 fresh random bytes of salt per series: the fallback space is about 300 values, so a reused salt would
+  let an opponent who saw one revealed fallback brute-force the next series'), not the fallback itself. One fallback
+  per player per series, since sides alternate.
 - At a missed commit, `timeout()` records only that the fallback applies; the side's **reveal daemon** reveals the
   fallback and its salt in the reveal window, and the program computes the pull from public state at resolution,
   after the other side's commit is in. Not revealing it is a missed reveal (7.2.1).
-- Once used, a fallback is public for the rest of the match, as in free play; the spec and `line.md` say so.
+- Once revealed, a fallback is public for the rest of the **series**, and later missed commits play it at once with no
+  reveal; the spec and `line.md` say so.
 
 ### 7.3 The agent side: the policy, the signer and the reveal daemon
 
@@ -467,8 +476,10 @@ Wagering goes **only** through the local signer, inside the owner's policy file,
 - **The kill switch stays absolute.** `STOP` refuses every send, as now, reveals included, so **`STOP` during a series
   forfeits its open match and then plays its fallbacks** (and the owner is told so in `line.md`). A separate
   **`STOP-WAGERS`** file means "no new stakes; finish what's open", which the daemon honours.
-- **Retiring a staked series** needs `wagers.allow_retire: true` in the policy, which only the owner can set; the agent
-  alone can't forfeit a pot.
+- **Retiring a staked series** needs `wagers.allow_retire: true` in the policy, which only the owner can set. That gate is
+  narrower than it looks: an agent can still forfeit matches by committing and never revealing. What stops that is the
+  reveal daemon, which reveals every committed move unconditionally and takes no instruction from the agent (only
+  `STOP` halts it).
 
 ### 7.4 Matchmaking
 

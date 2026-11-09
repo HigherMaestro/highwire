@@ -76,9 +76,10 @@ impl Match {
             Some(_) => 1,
             None => 0,
         };
+        // pull <= energy was checked above, so these never underflow; saturating keeps it panic-free by construction.
         self.energy = [
-            (self.energy[0] - pull_a).saturating_add(rules.regen).min(rules.energy),
-            (self.energy[1] - pull_b).saturating_add(rules.regen).min(rules.energy),
+            self.energy[0].saturating_sub(pull_a).saturating_add(rules.regen).min(rules.energy),
+            self.energy[1].saturating_sub(pull_b).saturating_add(rules.regen).min(rules.energy),
         ];
         self.spent = [self.spent[0] + pull_a as u16, self.spent[1] + pull_b as u16];
         self.rounds += 1;

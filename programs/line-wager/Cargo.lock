@@ -818,7 +818,6 @@ name = "line-wager"
 version = "0.1.0"
 dependencies = [
  "borsh 1.5.1",
- "serde",
  "serde_json",
  "solana-program",
 ]

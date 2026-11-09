@@ -1,6 +1,8 @@
 //! A wager series: the program's state machine, ported from packages/core/src/arena/series.ts (which is the twin the
 //! pages replay and the parity fixtures come from). Five matches, two phases a round (commit, then reveal), committed
-//! fallbacks, and a missed reveal forfeiting the match (docs/wager-mode.md 7.2). Times are whole seconds.
+//! fallbacks, a missed reveal forfeiting the match, and a bank-out lasting the rest of the series (docs/wager-mode.md
+//! 7.2). Times are whole seconds, never before the phase they act in. Nothing here panics on any input: a player value
+//! is checked, never used to index unchecked, and every error is a `SeriesError`.
 
 use crate::rules::{charge_clock, Fallback, Match, Rules, SIDE_A, SIDE_B};
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -77,6 +79,21 @@ pub enum SeriesError {
     WrongFallback,
     BadReveal,
     IllegalPull,
+    BadPlayer,
+    ClockBackward,
+    /// An invariant broke (unreachable by construction); the instruction fails rather than guessing.
+    Internal,
+}
+
+/// The most bytes a `Series` takes in Borsh (every Option filled); accounts are allocated at this size and read with
+/// `BorshDeserialize::deserialize`, which ignores the unused tail (`try_from_slice` would refuse it).
+pub const SERIES_MAX_LEN: usize = 249;
+
+fn check_player(player: u8) -> Result<usize, SeriesError> {
+    if player > PLAYER_B {
+        return Err(SeriesError::BadPlayer);
+    }
+    Ok(player as usize)
 }
 
 /// Player A takes side a in matches 0, 2 and 4, side b in 1 and 3.
@@ -134,11 +151,12 @@ impl Series {
             results: [None; 5],
             ending: None,
         };
-        s.open_commit(at);
+        // Both banks are full at the start, so this can't void a match or fail.
+        let _ = s.open_commit(at);
         s
     }
 
-    fn open_commit(&mut self, at: i64) {
+    fn open_commit(&mut self, at: i64) -> Result<(), SeriesError> {
         self.phase = PHASE_COMMIT;
         self.phase_opened_at = at;
         self.round = [SideRound::default(); 2];
@@ -147,9 +165,11 @@ impl Series {
                 self.round[side as usize].owes_fallback = true;
             }
         }
+        // Both banks out: neither side is there, so the match is void, as in free play.
         if self.round[0].owes_fallback && self.round[1].owes_fallback {
-            self.end_match(MatchResult { winner: None, reason: crate::series::VOID }, at);
+            return self.end_match(MatchResult { winner: None, reason: VOID }, at);
         }
+        Ok(())
     }
 
     pub fn commit_deadline(&self, side: u8) -> i64 {
@@ -161,9 +181,9 @@ impl Series {
         self.phase_opened_at + self.reveal_seconds as i64
     }
 
-    fn maybe_reveal(&mut self, at: i64) {
+    fn maybe_reveal(&mut self, at: i64) -> Result<(), SeriesError> {
         if !(committed_or_owed(&self.round[0]) && committed_or_owed(&self.round[1])) {
-            return;
+            return Ok(());
         }
         self.phase = PHASE_REVEAL;
         self.phase_opened_at = at;
@@ -176,16 +196,21 @@ impl Series {
             }
         }
         if self.round[0].pull.is_some() && self.round[1].pull.is_some() {
-            self.resolve(at);
+            return self.resolve(at);
         }
+        Ok(())
     }
 
     pub fn commit(&mut self, player: u8, round: u8, hash: [u8; 32], at: i64) -> Result<(), SeriesError> {
+        let pi = check_player(player)?;
         if self.ending.is_some() {
             return Err(SeriesError::Over);
         }
         if self.phase != PHASE_COMMIT {
             return Err(SeriesError::WrongPhase);
+        }
+        if at < self.phase_opened_at {
+            return Err(SeriesError::ClockBackward);
         }
         if round != self.game.rounds + 1 {
             return Err(SeriesError::WrongRound);
@@ -194,24 +219,28 @@ impl Series {
         if committed_or_owed(&self.round[side as usize]) {
             return Err(SeriesError::AlreadyCommitted);
         }
-        if at > self.commit_deadline(side) {
+        // As free play's clock: a move must land before the round's time (or the bank) runs out, never on it.
+        if at >= self.commit_deadline(side) {
             return Err(SeriesError::TooLate);
         }
-        let waited = (at - self.phase_opened_at).max(0) as u32;
-        let (bank, out) = charge_clock(&self.rules, self.bank[player as usize], waited);
-        self.bank[player as usize] = bank;
-        self.bank_out[player as usize] = out;
+        let waited = u32::try_from(at - self.phase_opened_at).map_err(|_| SeriesError::Internal)?;
+        let (bank, out) = charge_clock(&self.rules, self.bank[pi], waited);
+        self.bank[pi] = bank;
+        self.bank_out[pi] = out;
         self.round[side as usize].hash = Some(hash);
-        self.maybe_reveal(at);
-        Ok(())
+        self.maybe_reveal(at)
     }
 
     pub fn reveal(&mut self, player: u8, input: Reveal, at: i64) -> Result<(), SeriesError> {
+        let pi = check_player(player)?;
         if self.ending.is_some() {
             return Err(SeriesError::Over);
         }
         if self.phase != PHASE_REVEAL {
             return Err(SeriesError::WrongPhase);
+        }
+        if at < self.phase_opened_at {
+            return Err(SeriesError::ClockBackward);
         }
         if at > self.reveal_deadline() {
             return Err(SeriesError::TooLate);
@@ -226,10 +255,10 @@ impl Series {
                 if !r.owes_fallback {
                     return Err(SeriesError::NoFallbackOwed);
                 }
-                if !fallback.valid() || fallback_commitment(&self.series_id, player, &fallback, &salt) != self.fallback_hash[player as usize] {
+                if !fallback.valid() || fallback_commitment(&self.series_id, player, &fallback, &salt) != self.fallback_hash[pi] {
                     return Err(SeriesError::WrongFallback);
                 }
-                self.fallback[player as usize] = Some(fallback);
+                self.fallback[pi] = Some(fallback);
                 fallback.pull_for(&self.game, side)
             }
             Reveal::Pull { pull, nonce } => {
@@ -247,31 +276,34 @@ impl Series {
         };
         self.round[side as usize].pull = Some(pull);
         if self.round[0].pull.is_some() && self.round[1].pull.is_some() {
-            self.resolve(at);
+            self.resolve(at)?;
         }
         Ok(())
     }
 
-    fn resolve(&mut self, at: i64) {
-        let (a, b) = (self.round[0].pull.unwrap_or(0), self.round[1].pull.unwrap_or(0));
-        // Both pulls are legal by construction (checked at reveal, or a fallback's capped pull).
-        let _ = self.game.play_round(&self.rules, a, b);
+    fn resolve(&mut self, at: i64) -> Result<(), SeriesError> {
+        let (a, b) = match (self.round[0].pull, self.round[1].pull) {
+            (Some(a), Some(b)) => (a, b),
+            _ => return Err(SeriesError::Internal),
+        };
+        // Both pulls are legal by construction (checked at reveal, or a fallback's capped pull); if not, fail loudly.
+        self.game.play_round(&self.rules, a, b).map_err(|_| SeriesError::Internal)?;
         match self.game.ending {
             Some(e) => {
                 let winner = e.winner.map(|side| player_of(side, self.match_index));
-                self.end_match(MatchResult { winner, reason: e.reason }, at);
+                self.end_match(MatchResult { winner, reason: e.reason }, at)
             }
             None => self.open_commit(at),
         }
     }
 
-    fn end_match(&mut self, result: MatchResult, at: i64) {
+    fn end_match(&mut self, result: MatchResult, at: i64) -> Result<(), SeriesError> {
         let played = self.results.iter().filter(|r| r.is_some()).count();
-        self.results[played] = Some(result);
+        *self.results.get_mut(played).ok_or(SeriesError::Internal)? = Some(result);
         let played = played as u8 + 1;
         let wins = |p: u8| self.results.iter().filter(|r| matches!(r, Some(MatchResult { winner: Some(w), .. }) if *w == p)).count() as u8;
         let (a, b) = (wins(PLAYER_A), wins(PLAYER_B));
-        let left = MATCHES - played;
+        let left = MATCHES.checked_sub(played).ok_or(SeriesError::Internal)?;
         if a > b + left {
             self.ending = Some(SeriesEnding { winner: Some(PLAYER_A), reason: DECIDED });
         } else if b > a + left {
@@ -284,39 +316,49 @@ impl Series {
             });
         }
         if self.ending.is_some() {
-            return;
+            return Ok(());
         }
         self.match_index += 1;
         self.game = Match::start(&self.rules);
-        self.bank = [self.rules.bank_seconds, self.rules.bank_seconds];
-        self.bank_out = [false, false];
-        self.open_commit(at);
+        // Banks refill each match, but a side whose bank ran out stays on its fallback for the rest of the series.
+        for p in 0..2 {
+            self.bank[p] = if self.bank_out[p] { 0 } else { self.rules.bank_seconds };
+        }
+        self.open_commit(at)
     }
 
-    /// Anyone, after a deadline: a missed commit owes its fallback; a missed reveal forfeits the match (both: void).
+    /// Anyone, after a deadline. In a commit phase it applies only once every side that hasn't committed is past its
+    /// own deadline (so nothing about one side is published while the other can still move); each late side then owes
+    /// its fallback. In a reveal phase past the window, a side that hasn't revealed forfeits the match (both: void).
     pub fn timeout(&mut self, at: i64) -> Result<(), SeriesError> {
         if self.ending.is_some() {
             return Err(SeriesError::Over);
         }
+        if at < self.phase_opened_at {
+            return Err(SeriesError::ClockBackward);
+        }
         if self.phase == PHASE_COMMIT {
-            let mut changed = false;
+            let late: [bool; 2] = [!committed_or_owed(&self.round[0]), !committed_or_owed(&self.round[1])];
+            if !late[0] && !late[1] {
+                return Err(SeriesError::NothingDue);
+            }
             for side in [SIDE_A, SIDE_B] {
-                if committed_or_owed(&self.round[side as usize]) || at <= self.commit_deadline(side) {
+                if late[side as usize] && at < self.commit_deadline(side) {
+                    return Err(SeriesError::StillOpen);
+                }
+            }
+            for side in [SIDE_A, SIDE_B] {
+                if !late[side as usize] {
                     continue;
                 }
                 let p = player_of(side, self.match_index) as usize;
-                let waited = (self.commit_deadline(side) - self.phase_opened_at) as u32;
+                let waited = u32::try_from(self.commit_deadline(side) - self.phase_opened_at).map_err(|_| SeriesError::Internal)?;
                 let (bank, out) = charge_clock(&self.rules, self.bank[p], waited);
                 self.bank[p] = bank;
                 self.bank_out[p] = out;
                 self.round[side as usize].owes_fallback = true;
-                changed = true;
             }
-            if !changed {
-                return Err(SeriesError::NothingDue);
-            }
-            self.maybe_reveal(at);
-            return Ok(());
+            return self.maybe_reveal(at);
         }
         if at <= self.reveal_deadline() {
             return Err(SeriesError::StillOpen);
@@ -326,13 +368,14 @@ impl Series {
         let result = match (missed_a, missed_b) {
             (true, true) => MatchResult { winner: None, reason: VOID },
             (true, false) => MatchResult { winner: Some(player_of(SIDE_B, self.match_index)), reason: MISSED_REVEAL },
-            _ => MatchResult { winner: Some(player_of(SIDE_A, self.match_index)), reason: MISSED_REVEAL },
+            (false, true) => MatchResult { winner: Some(player_of(SIDE_A, self.match_index)), reason: MISSED_REVEAL },
+            (false, false) => return Err(SeriesError::Internal),
         };
-        self.end_match(result, at);
-        Ok(())
+        self.end_match(result, at)
     }
 
     pub fn retire(&mut self, player: u8) -> Result<(), SeriesError> {
+        check_player(player)?;
         if self.ending.is_some() {
             return Err(SeriesError::Over);
         }
