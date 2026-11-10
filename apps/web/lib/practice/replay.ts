@@ -82,7 +82,7 @@ export function replaySeries(h: SeriesHistory): Replay {
     // Never accepted: no move can have been made, and only a cancel (or a freeze) can have closed it.
     const moved = events.some((e) => e.kind !== "open" && e.kind !== "closed");
     if (moved || (out.closed && out.closed.how !== "cancelled" && out.closed.how !== "refunded" && out.closed.how !== "unread")) {
-      return { ...out, problem: "Moves or a payout without the second side's acceptance: the history read from devnet is incomplete." };
+      return { ...out, problem: "Moves or a payout without the second side's acceptance: the history read from the chain is incomplete." };
     }
     return { ...out, ok: true };
   }

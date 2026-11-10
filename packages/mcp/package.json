@@ -45,7 +45,8 @@
     "postpack": "rm -rf ideas",
     "rehearse": "tsx --conditions=highwire-source scripts/rehearse.ts",
     "wager-admin": "tsx --conditions=highwire-source scripts/wager-admin.ts",
-    "wager-pair": "tsx --conditions=highwire-source scripts/wager-pair.ts"
+    "wager-pair": "tsx --conditions=highwire-source scripts/wager-pair.ts",
+    "rehearse-wagers": "tsx --conditions=highwire-source scripts/rehearse-wagers.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

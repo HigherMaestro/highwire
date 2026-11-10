@@ -243,14 +243,47 @@ export function initConfigInstruction(program: PublicKey, c: WagerConfigInit): T
   });
 }
 
+/** What `UpdateConfig` may change (instruction.rs `ConfigUpdate`); anything left out stays as it is. Lamports for amounts. */
+export interface WagerConfigUpdate {
+  authority?: PublicKey;
+  ticketKey?: { key: PublicKey; id: number };
+  paused?: boolean;
+  /** Applies to series opened afterwards: each series keeps the fee it opened with. */
+  feeBps?: number;
+  feeAccount?: PublicKey;
+  /** Up to four tiers, lamports a side. */
+  tiers?: bigint[];
+  maxStake?: bigint;
+  openStakeCap?: bigint;
+}
+
 /**
- * `UpdateConfig` setting only `paused` (instruction.rs `ConfigUpdate`: eight Borsh options, the third is `paused`), for
- * the maintainer's tool only. A paused config refuses new series and accepts (an opened, unaccepted series can only be
- * cancelled then); live ones play on and settle. assertSafe refuses it everywhere.
+ * `UpdateConfig`, for the maintainer's tool only: eight Borsh options in instruction.rs's order, signed by the config's
+ * authority. The program checks the result against its hard caps. assertSafe refuses it everywhere.
+ */
+export function configUpdateInstruction(program: PublicKey, authority: PublicKey, u: WagerConfigUpdate): TransactionInstruction {
+  const opt = (b: Buffer | undefined) => (b ? Buffer.concat([Buffer.from([1]), b]) : Buffer.from([0]));
+  if (u.tiers && (u.tiers.length < 1 || u.tiers.length > 4)) throw new Error("one to four tiers");
+  const data = Buffer.concat([
+    Buffer.from([WAGER_TAGS.updateConfig]),
+    opt(u.authority?.toBuffer()),
+    opt(u.ticketKey ? Buffer.concat([u.ticketKey.key.toBuffer(), u16(u.ticketKey.id)]) : undefined),
+    opt(u.paused === undefined ? undefined : Buffer.from([u.paused ? 1 : 0])),
+    opt(u.feeBps === undefined ? undefined : u16(u.feeBps)),
+    opt(u.feeAccount?.toBuffer()),
+    opt(u.tiers ? Buffer.concat([...u.tiers, 0n, 0n, 0n, 0n].slice(0, 4).map(u64)) : undefined),
+    opt(u.maxStake === undefined ? undefined : u64(u.maxStake)),
+    opt(u.openStakeCap === undefined ? undefined : u64(u.openStakeCap)),
+  ]);
+  return new TransactionInstruction({ programId: program, keys: [r(authority, true), w(wagerConfigAddress(program))], data });
+}
+
+/**
+ * `UpdateConfig` setting only `paused`. A paused config refuses new series and accepts (an opened, unaccepted series can
+ * only be cancelled then); live ones play on and settle.
  */
 export function pauseInstruction(program: PublicKey, authority: PublicKey, paused: boolean): TransactionInstruction {
-  const data = Buffer.from([WAGER_TAGS.updateConfig, 0, 0, 1, paused ? 1 : 0, 0, 0, 0, 0, 0]);
-  return new TransactionInstruction({ programId: program, keys: [r(authority, true), w(wagerConfigAddress(program))], data });
+  return configUpdateInstruction(program, authority, { paused });
 }
 
 /**

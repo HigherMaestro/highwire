@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
-import { Chain, recentSeries, seriesHistory, WAGER_PROGRAM_IDS, type ClosedOutcome, type SeriesHistory, type SeriesSummary } from "highwire-core";
+import { recentSeries, seriesHistory, WAGER_PROGRAM_IDS, type ClosedOutcome, type SeriesHistory, type SeriesSummary } from "highwire-core";
 import { arenaPagesOn } from "../arena/data.ts";
-import { lineRelay } from "../line/server.ts";
+import { lineRelay, wagerChain, wagerCluster } from "../line/server.ts";
 
 // The practice pages' data (docs/wager-mode.md 7.5). Which series exist: the wager desk's index of the series it
 // ticketed (only a ticketed series can open), joined with the config account's recent history on devnet, so
@@ -13,9 +13,9 @@ import { lineRelay } from "../line/server.ts";
 // that fails isn't cached, and only one runs at a time per key in an instance. Devnet's public RPC throttles
 // transaction reads hard, so production sets LINE_WAGER_RPC_URL to a devnet RPC of its own.
 
-export const practiceOn = () => arenaPagesOn() && Boolean(WAGER_PROGRAM_IDS.devnet);
+export const practiceOn = () => arenaPagesOn() && Boolean(WAGER_PROGRAM_IDS[wagerCluster()]);
 
-/** Practice is devnet play with worthless SOL: its pages are never indexed, and they show no stakes (9.3). */
+/** The wager pages are never indexed, and show no stakes (docs/wager-mode.md 9.3). */
 export const PRACTICE_META: Metadata = { robots: { index: false, follow: false } };
 
 export type Names = Record<"A" | "B", { id: string; name: string; ticker: string }>;
@@ -24,7 +24,8 @@ export interface PracticeIndex {
   names: Record<string, Names>;
 }
 
-const chain = () => new Chain({ cluster: "devnet", rpcUrl: process.env.LINE_WAGER_RPC_URL || undefined });
+// The pages follow the desk: devnet's series before the switch, mainnet's after.
+const chain = wagerChain;
 
 /** One read per key at a time in this instance: concurrent visits to a cold page share it. */
 const inflight = new Map<string, Promise<unknown>>();
@@ -59,22 +60,22 @@ async function buildIndex(): Promise<PracticeIndex> {
   return { list: [...byId.values()].sort((x, y) => y.openedAt - x.openedAt), names };
 }
 
-const cachedIndex = unstable_cache(buildIndex, ["practice-index"], { revalidate: 60 });
+const cachedIndex = unstable_cache(buildIndex, [`practice-index-${wagerCluster()}`], { revalidate: 60 });
 export const practiceIndex = () => once("index", cachedIndex);
 
-const closedHistory = unstable_cache(async (id: string): Promise<SeriesHistory> => seriesHistory(chain(), id), ["practice-history-closed"], { revalidate: 86_400 });
-const liveHistory = unstable_cache(async (id: string): Promise<SeriesHistory> => seriesHistory(chain(), id), ["practice-history-live"], { revalidate: 10 });
+const closedHistory = unstable_cache(async (id: string): Promise<SeriesHistory> => seriesHistory(chain(), id), [`practice-history-closed-${wagerCluster()}`], { revalidate: 86_400 });
+const liveHistory = unstable_cache(async (id: string): Promise<SeriesHistory> => seriesHistory(chain(), id), [`practice-history-live-${wagerCluster()}`], { revalidate: 10 });
 
 /** Gives up waiting on a read that's taking too long (a throttled RPC), so a page says so instead of hanging. */
 export function inTime<T>(read: Promise<T>, ms = 45_000): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<never>((_, no) => {
-    timer = setTimeout(() => no(new Error(`devnet didn't answer within ${ms / 1000} s`)), ms);
+    timer = setTimeout(() => no(new Error(`the chain didn't answer within ${ms / 1000} s`)), ms);
   });
   return Promise.race([read, late]).finally(() => clearTimeout(timer));
 }
 
-/** One series' every move, or null when it isn't a practice series. Throws when devnet doesn't answer in time. */
+/** One series' every move, or null when it isn't a practice series. Throws when the chain doesn't answer in time. */
 export async function practiceHistory(id: string): Promise<{ summary: SeriesSummary; names: Names | undefined; history: SeriesHistory } | null> {
   if (!/^[0-9a-f]{64}$/.test(id)) return null;
   const index = await inTime(practiceIndex());
@@ -84,6 +85,9 @@ export async function practiceHistory(id: string): Promise<{ summary: SeriesSumm
   return { summary, names: index.names[id], history };
 }
 
+/** Where the wagers are, for the pages' copy: "Solana devnet" before the switch, "Solana" after. */
+export const network = () => (wagerCluster() === "mainnet" ? "Solana" : "Solana devnet");
+
 export const shortWallet = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
 
-export const explorer = (address: string) => `https://explorer.solana.com/address/${address}?cluster=devnet`;
+export const explorer = (address: string) => `https://explorer.solana.com/address/${address}${wagerCluster() === "devnet" ? "?cluster=devnet" : ""}`;

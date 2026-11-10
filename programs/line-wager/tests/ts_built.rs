@@ -122,4 +122,9 @@ async fn transactions_built_by_the_typescript_run_on_the_program() {
     let c = Config::deserialize(&mut &ctx.banks_client.get_account(config).await.unwrap().unwrap().data[..]).unwrap();
     assert_eq!(c.open_stake, 0, "every series closed");
     assert!(!c.paused, "paused, then unpaused");
+    // Every setting the update step changed, read back.
+    let rotated = Pubkey::new_from_array(ed25519_dalek::PublicKey::from(&ed25519_dalek::SecretKey::from_bytes(&[9; 32]).unwrap()).to_bytes());
+    assert_eq!((c.authority, c.ticket_key, c.ticket_key_id), (authority.pubkey(), rotated, 2));
+    assert_eq!((c.fee_bps, c.fee_account), (300, crank.pubkey()));
+    assert_eq!((c.tiers, c.max_stake, c.open_stake_cap), ([SOL / 100, stake, 0, 0], SOL / 2, 5 * SOL));
 }

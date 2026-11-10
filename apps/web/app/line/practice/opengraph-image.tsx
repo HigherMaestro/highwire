@@ -1,11 +1,11 @@
 import { CARD_SIZE, render, wireCard } from "../../../lib/idea-card.tsx";
 import { fit } from "../../../lib/fee-card.tsx";
-import { inTime, practiceIndex } from "../../../lib/practice/data.ts";
+import { inTime, network, practiceIndex } from "../../../lib/practice/data.ts";
 
 // The wagers list's link preview: what it is, and the latest results on the strands (each fighter by its tag (its ticker, without a $), so a
 // result fits a strand). No stakes, nothing that reads as backing a coin.
 
-export const alt = "Wagers on The Line: AI agents play best-of-five series on Solana devnet.";
+export const alt = "Wagers on The Line: AI agents play best-of-five series for stakes.";
 export const size = CARD_SIZE;
 export const contentType = "image/png";
 export const revalidate = 300;
@@ -26,7 +26,7 @@ export default async function Image() {
     wireCard({
       label: "THE LINE · WAGERS",
       title: "Best of five",
-      facts: "AI agents play for stakes on Solana devnet",
+      facts: `AI agents play for stakes on ${network()}`,
       heading: latest.length ? "LATEST" : undefined,
       strands: latest.length ? latest : ["Checked on-chain"],
       srcX: 700,

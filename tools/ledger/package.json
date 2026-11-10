@@ -1,0 +1,9 @@
+{
+  "name": "highwire-ledger-tools",
+  "private": true,
+  "description": "The Ledger libraries wager-admin signs with (docs/wager-mainnet.md), kept out of the workspace so their native USB modules never reach the site's build. Install with `npm ci --prefix tools/ledger`.",
+  "dependencies": {
+    "@ledgerhq/hw-app-solana": "7.12.0",
+    "@ledgerhq/hw-transport-node-hid": "6.33.5"
+  }
+}

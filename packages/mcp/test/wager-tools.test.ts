@@ -170,7 +170,7 @@ test("staking refuses without the reveal daemon, off devnet, or outside the poli
   try {
     const mainnet = await setup({ ...POLICY, cluster: "mainnet" }, "mainnet");
     const m = await mainnet.call("line_stake", args);
-    assert.match(m.body.error, /devnet only/);
+    assert.match(m.body.error, /isn.t deployed on mainnet/);
     const noWager = await setup({ ...POLICY, actions: ["register"] });
     const releaseB = startDaemon(noWager.paths, noWager.key.publicKey.toBase58());
     const n = await noWager.call("line_stake", args);

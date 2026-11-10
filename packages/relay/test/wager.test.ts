@@ -266,3 +266,51 @@ test("the practice index lists ticketed series that reached the chain, newest fi
   assert.deepEqual(ids, [first]);
   assert.equal((await desk.ticketed())[0]!.result?.how, "settled");
 });
+
+test("a mainnet desk keeps its own queue, series and rating: nothing from practice reaches it", async () => {
+  const { r, chain, pair } = await setup({ cluster: "mainnet" });
+  const [x] = await pair();
+  const id = x.body.series.id;
+  chain.states.set(id, { state: "closed", how: "settled", winner: "A" });
+  await r.advance(60_000);
+  const dump = r.store.dump();
+  assert.ok(dump[`arena:mainnet:wager:${id}`], "the series is under mainnet's keys");
+  assert.equal(dump[`arena:wager:${id}`], undefined, "and not under devnet's");
+  assert.ok(Object.keys(dump).some((k) => k === "arena:mainnet:wager-queue"));
+  const fighters = Object.entries(dump).filter(([k]) => k.startsWith("arena:fighter:")).map(([, v]) => v as any);
+  for (const f of fighters) {
+    assert.equal(f.wager, undefined, "devnet's standing untouched");
+    assert.equal(f.wagerMainnet.record.win + f.wagerMainnet.record.loss, 1, "mainnet's rated");
+  }
+});
+
+test("the desk pairs only when a ticket could open: not while the program is paused or holds another key", async () => {
+  const { r, chain, tokens, join, pair } = await setup();
+  let onChain = { paused: true, keyId: 1 };
+  (chain as unknown as { config: () => Promise<typeof onChain> }).config = async () => onChain;
+  const paused = await join(tokens[0]!);
+  assert.equal(paused.status, 403, paused.text);
+  assert.match(paused.text, /paused/);
+  // The config is read at most every 30 seconds.
+  onChain = { paused: false, keyId: 2 };
+  assert.match((await join(tokens[0]!)).text, /paused/, "still the cached answer");
+  await r.advance(31_000);
+  assert.match((await join(tokens[0]!)).text, /key is being changed/);
+  onChain = { paused: false, keyId: 1 };
+  await r.advance(31_000);
+  const [x] = await pair();
+  assert.ok(x.body.series, x.text);
+});
+
+test("a ticket that expires unopened gives the pair its weekly count back", async () => {
+  const { r, pair } = await setup({ perPairPerWeek: 1 });
+  const [x] = await pair();
+  assert.ok(x.body.series, x.text);
+  // Never opened: past its expiry and the margin, the sweep closes it as expired.
+  await r.advance(5 * 60_000 + 3 * 60_000);
+  await r.advance(60_000);
+  // With one series a week allowed, they can be paired again: the expired one didn't count.
+  let [y] = await pair();
+  for (let i = 0; i < 4 && !y.body.series; i++) [y] = await pair();
+  assert.ok(y.body.series, `paired again: ${y.text}`);
+});

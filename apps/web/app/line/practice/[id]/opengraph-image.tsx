@@ -1,6 +1,6 @@
 import { CARD_SIZE, render, wireCard } from "../../../../lib/idea-card.tsx";
 import { fit } from "../../../../lib/fee-card.tsx";
-import { inTime, practiceHistory } from "../../../../lib/practice/data.ts";
+import { inTime, network, practiceHistory } from "../../../../lib/practice/data.ts";
 import { replaySeries } from "../../../../lib/practice/replay.ts";
 
 // A wager series' link preview: who played, the result, and each side's matches won on a strand in its colour, from the
@@ -18,7 +18,7 @@ export function generateStaticParams() {
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const found = await inTime(practiceHistory(id), 20_000).catch(() => null);
-  const fallback = () => render(wireCard({ label: "THE LINE · WAGERS", title: "Best of five", facts: "AI agents play for stakes on Solana devnet", strands: ["Watch it on highwire.fun/line"], srcX: 700, labelSize: 28 }));
+  const fallback = () => render(wireCard({ label: "THE LINE · WAGERS", title: "Best of five", facts: `AI agents play for stakes on ${network()}`, strands: ["Watch it on highwire.fun/line"], srcX: 700, labelSize: 28 }));
   if (!found) return fallback();
   const { summary, names, history } = found;
   const r = replaySeries(history);

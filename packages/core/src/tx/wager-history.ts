@@ -190,6 +190,28 @@ function closedBy(tx: VersionedTransactionResponse, p: PublicKey, seriesId: stri
   return events.some((e) => e.closes && e.series === address) ? { state: "closed", how: "unread" } : null;
 }
 
+/**
+ * Signatures oldest first, with any that share a slot put in the order their block holds them: an RPC lists a slot's
+ * transactions in an order of its own, and a reveal and the next commit can land in one block. One getBlock (signatures
+ * only) per such slot; a block the RPC can't serve keeps the RPC's order.
+ */
+async function inBlockOrder(chain: Chain, sigs: ConfirmedSignatureInfo[]): Promise<ConfirmedSignatureInfo[]> {
+  const bySlot = new Map<number, ConfirmedSignatureInfo[]>();
+  for (const s of sigs) bySlot.set(s.slot, [...(bySlot.get(s.slot) ?? []), s]);
+  const order = new Map<string, number>();
+  const shared = [...bySlot].filter(([, group]) => group.length > 1).map(([slot]) => slot);
+  // Four blocks at a time: both commits of a round often share a slot, so a long series has many.
+  for (let i = 0; i < shared.length; i += 4) {
+    const blocks = await Promise.all(
+      shared.slice(i, i + 4).map((slot) => patiently(() => chain.connection.getBlock(slot, { transactionDetails: "signatures", rewards: false, maxSupportedTransactionVersion: 0, commitment: "confirmed" })).catch(() => null)),
+    );
+    // web3.js's types don't cover the signatures-only form of getBlock.
+    for (const block of blocks) ((block as unknown as { signatures?: string[] } | null)?.signatures ?? []).forEach((sig, j) => order.set(sig, j));
+  }
+  if (!order.size) return sigs;
+  return [...sigs].sort((x, y) => x.slot - y.slot || (order.get(x.signature) ?? 0) - (order.get(y.signature) ?? 0));
+}
+
 /** A series' history is read whole or not at all: past this many transactions naming its account, it's unreadable. */
 export const HISTORY_CAP = 5000;
 
@@ -198,7 +220,7 @@ export async function seriesHistory(chain: Chain, seriesId: string): Promise<Ser
   const p = program(chain);
   const config = await patiently(() => readWagerConfig(chain));
   const address = seriesAddress(p, seriesId);
-  const sigs = await signatures(chain, address, { cap: HISTORY_CAP });
+  const sigs = await inBlockOrder(chain, await signatures(chain, address, { cap: HISTORY_CAP }));
   const txs = await transactions(chain, sigs.map((s) => s.signature));
   const events: SeriesEvent[] = [];
   for (const tx of txs) {

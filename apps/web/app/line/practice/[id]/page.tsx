@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { seriesAddress, wagerProgram } from "highwire-core";
 import { pageMetadata } from "../../../../lib/site.ts";
+import { wagerCluster } from "../../../../lib/line/server.ts";
 import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";
 import { ArenaHero } from "../../../../components/arena/Parts.tsx";
 import { PracticeCheck } from "../../../../components/arena/PracticeCheck.tsx";
 import { when } from "../../../../lib/arena/data.ts";
-import { explorer, inTime, PRACTICE_META, practiceHistory, practiceIndex, practiceOn, shortWallet } from "../../../../lib/practice/data.ts";
+import { explorer, inTime, network, PRACTICE_META, practiceHistory, practiceIndex, practiceOn, shortWallet } from "../../../../lib/practice/data.ts";
 import { replaySeries } from "../../../../lib/practice/replay.ts";
 
 // One practice series, replayed from its on-chain moves (docs/wager-mode.md 7.5): every match round by round, and the
@@ -22,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const n = known?.names[id];
   const title = n ? `${n.A.name} v ${n.B.name} · The Line` : "A wager series · The Line";
   return {
-    ...pageMetadata({ title, description: "A best-of-five wager series between AI agents on Solana devnet, every move checked.", path: `/line/practice/${id}`, card: { url: `/line/practice/${id}/opengraph-image`, alt: "A wager series on The Line" } }),
+    ...pageMetadata({ title, description: `A best-of-five wager series between AI agents on ${network()}, every move checked.`, path: `/line/practice/${id}`, card: { url: `/line/practice/${id}/opengraph-image`, alt: "A wager series on The Line" } }),
     ...PRACTICE_META,
   };
 }
@@ -41,7 +42,7 @@ function Unavailable() {
     <>
       <SiteHeader />
       <main className="arena">
-        <ArenaHero id="series-title" eyebrow={<><a href="/line">The Line</a> · <a href="/line/practice">wagers</a></>} title="A wager series" lead="Devnet didn't answer in time, so this series can't be replayed just now. Try again in a minute." />
+        <ArenaHero id="series-title" eyebrow={<><a href="/line">The Line</a> · <a href="/line/practice">wagers</a></>} title="A wager series" lead="The chain didn't answer in time, so this series can't be replayed just now. Try again in a minute." />
       </main>
       <SiteFooter />
     </>
@@ -52,7 +53,7 @@ export default async function PracticeSeriesPage({ params }: { params: Promise<{
   if (!practiceOn()) notFound();
   const { id } = await params;
   const found = await practiceHistory(id).catch((err: unknown) => {
-    console.error(`practice: devnet history unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`practice: wager history unavailable: ${err instanceof Error ? err.message : String(err)}`);
     return "unavailable" as const;
   });
   if (found === "unavailable") return <Unavailable />;
@@ -73,7 +74,7 @@ export default async function PracticeSeriesPage({ params }: { params: Promise<{
         : o?.how === "unread"
           ? `Closed, ${wins("A")}–${wins("B")} as replayed (the program's announcement of how couldn't be read)`
           : `Under way: ${wins("A")}–${wins("B")}`;
-  const program = wagerProgram("devnet");
+  const program = wagerProgram(wagerCluster());
 
   return (
     <>
@@ -104,7 +105,7 @@ export default async function PracticeSeriesPage({ params }: { params: Promise<{
               <h2 id="check-title">Checked move by move</h2>
               <p className="muted">
                 Each round both sides commit to a hidden pull on-chain (a SHA-256 hash of the series, match, round, side, pull and a
-                random nonce), then reveal it. This page reads every one of those transactions from devnet and replays them under
+                random nonce), then reveal it. This page reads every one of those transactions from the chain and replays them under
                 the rules, in your browser.
               </p>
             </div>
@@ -164,7 +165,7 @@ export default async function PracticeSeriesPage({ params }: { params: Promise<{
             <div className="section-head">
               <h2 id="chain-title">On the chain</h2>
               <p className="muted">
-                The stakes, the moves and the payout are all public on devnet.{" "}
+                The stakes, the moves and the payout are all public on-chain.{" "}
                 {program ? (
                   <a href={explorer(seriesAddress(program, id).toBase58())} rel="noopener noreferrer" target="_blank">
                     The series account on the explorer

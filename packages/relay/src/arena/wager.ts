@@ -30,6 +30,11 @@ export interface WagerChain {
     | { state: "closed"; how: "settled"; winner: "A" | "B" | null }
     | { state: "closed"; how: "cancelled" | "refunded" }
   >;
+  /**
+   * The program's config as it stands: whether new series are paused, and the ticket key id it accepts. Without it the
+   * desk pairs regardless; with it, it pairs only when a ticket could open.
+   */
+  config?(): Promise<{ paused: boolean; keyId: number }>;
 }
 
 export interface WagerConfig {
@@ -113,16 +118,30 @@ interface WagerQueue {
   pairs: { week: number; counts: Record<string, number> };
 }
 
-const QUEUE = "arena:wager-queue";
-const OPEN = "arena:wagers-open";
-/** Every series the desk ticketed, newest last, capped: the practice pages' index (only a ticketed series can open). */
-const TICKETED = "arena:wagers-ticketed";
+/**
+ * The desk's store keys. Devnet keeps the names it always had; mainnet's are apart, so nothing from practice (the
+ * queue, a series, a pairing count) can reach a desk playing for real.
+ */
+function deskKeys(cluster: "devnet" | "mainnet") {
+  const ns = cluster === "mainnet" ? "arena:mainnet:" : "arena:";
+  return {
+    queue: `${ns}wager-queue`,
+    open: `${ns}wagers-open`,
+    ticketed: `${ns}wagers-ticketed`,
+    series: (id: string) => `${ns}wager:${id}`,
+    poll: (fighter: string) => `${ns}wager-poll:${fighter}`,
+  };
+}
+/** How many ticketed series the desk remembers for the wager pages (only a ticketed series can open). */
 const TICKETED_MAX = 1000;
-const series = (id: string) => `arena:wager:${id}`;
 const fighterKey = (id: string) => `arena:fighter:${id}`;
 const ALIVE_MS = 60_000;
-/** Past the ticket's time on the server's clock before "never opened" is believed: the chain's clock can lag. */
-const EXPIRY_MARGIN_MS = 10 * 60_000;
+/**
+ * Past the ticket's time on the server's clock before "never opened" is believed: the chain's clock can lag, by seconds.
+ * Until then both fighters are held by a ticket nobody can use, so it's short; an open that lags past it is still safe
+ * (A's stake comes back through the cancel after the deadline).
+ */
+const EXPIRY_MARGIN_MS = 2 * 60_000;
 /** A live series whose account vanished with no closing event found: unrated after this long. */
 const UNREAD_AFTER_MS = 60 * 60_000;
 const WEEK_MS = 7 * 86_400_000;
@@ -180,6 +199,9 @@ export interface WagerSeriesView {
 
 export class WagerDesk {
   private minQueue: number;
+  /** The store keys and the fighter's standing field for this desk's cluster: devnet's and mainnet's never mix. */
+  private k: ReturnType<typeof deskKeys>;
+  private field: "wager" | "wagerMainnet";
   private acceptMs: number;
   private perPair: number;
   private longPollMs: number;
@@ -192,6 +214,8 @@ export class WagerDesk {
     private cfg: WagerConfig,
     private spend: (f: Fighter, units: number) => Promise<void>,
   ) {
+    this.k = deskKeys(cfg.cluster);
+    this.field = cfg.cluster === "mainnet" ? "wagerMainnet" : "wager";
     // Checked here, not when a pairing is signed: a bad value would otherwise spend pairs' weekly counts on tickets
     // that can't be made.
     if (cfg.ticketSecret.length !== 32) throw new Error("the ticket key is a 32-byte Ed25519 secret");
@@ -213,7 +237,7 @@ export class WagerDesk {
   }
 
   private standing(f: Fighter): WagerStanding {
-    return f.wager ?? { rating: START, record: emptyTally(), series: null };
+    return f[this.field] ?? { rating: START, record: emptyTally(), series: null };
   }
 
   private view(s: WagerSeries, f: Fighter): WagerSeriesView {
@@ -244,7 +268,7 @@ export class WagerDesk {
    * program's accounts can't push a series off the list.
    */
   async ticketed(limit = 300): Promise<{ id: string; playerA: string; playerB: string; createdAt: number; result: WagerResult | null; fighters: Record<"A" | "B", { id: string; name: string; ticker: string }> }[]> {
-    const ids = ((await this.store.get<string[]>(TICKETED))?.value ?? []).slice(-Math.max(1, Math.min(limit, TICKETED_MAX))).reverse();
+    const ids = ((await this.store.get<string[]>(this.k.ticketed))?.value ?? []).slice(-Math.max(1, Math.min(limit, TICKETED_MAX))).reverse();
     const known = new Map<string, Fighter | null>();
     const show = async (fid: string) => {
       if (!known.has(fid)) known.set(fid, (await this.store.get<Fighter>(fighterKey(fid)))?.value ?? null);
@@ -253,7 +277,7 @@ export class WagerDesk {
     };
     const out = [];
     for (const id of ids) {
-      const s = (await this.store.get<WagerSeries>(series(id)))?.value;
+      const s = (await this.store.get<WagerSeries>(this.k.series(id)))?.value;
       if (!s) continue;
       // Reached the chain: the desk saw it open or live, or it closed in a way only an opened series can.
       const reached = s.seen !== undefined || (s.result !== undefined && s.result.how !== "expired" && s.result.how !== "unaccepted");
@@ -275,7 +299,7 @@ export class WagerDesk {
       return known.get(id)!;
     };
     for (const id of ids.filter((x) => /^[0-9a-f]{64}$/.test(x)).slice(0, 200)) {
-      const s = (await this.store.get<WagerSeries>(series(id)))?.value;
+      const s = (await this.store.get<WagerSeries>(this.k.series(id)))?.value;
       if (!s) continue;
       const [a, b] = [await fighter(s.fighters.A), await fighter(s.fighters.B)];
       const show = (f: Fighter | null, fid: string) => ({ id: fid, name: f?.name ?? "A fighter", ticker: f?.ticker ?? "" });
@@ -284,11 +308,21 @@ export class WagerDesk {
     return out;
   }
 
+  private configRead: { at: number; value: Promise<{ paused: boolean; keyId: number } | null> } | null = null;
+
+  /** The program's config, read at most every 30 seconds; null when the deployment can't say (pairing goes on). */
+  private programConfig(): Promise<{ paused: boolean; keyId: number } | null> {
+    const now = this.clock.now();
+    if (!this.cfg.chain.config) return Promise.resolve(null);
+    if (!this.configRead || now - this.configRead.at > 30_000) this.configRead = { at: now, value: this.cfg.chain.config().catch(() => null) };
+    return this.configRead.value;
+  }
+
   /** The series a fighter is in, if it's still being played: a pointer to a finished or missing series doesn't count. */
   private async activeSeries(fighter: string): Promise<WagerSeries | null> {
-    const id = (await this.store.get<Fighter>(fighterKey(fighter)))?.value.wager?.series;
+    const id = (await this.store.get<Fighter>(fighterKey(fighter)))?.value[this.field]?.series;
     if (!id) return null;
-    const s = (await this.store.get<WagerSeries>(series(id)))?.value;
+    const s = (await this.store.get<WagerSeries>(this.k.series(id)))?.value;
     return s && s.status !== "done" ? s : null;
   }
 
@@ -301,12 +335,17 @@ export class WagerDesk {
     if (f.operator) fail("refused", "Highwire's and the maintainer's own fighters never wager against the public.");
     const current = await this.activeSeries(f.id);
     if (current) return { series: this.view(current, f) };
+    // A ticket the program would refuse (paused, or signed with a key it no longer holds) would only hold both fighters
+    // and spend the pair's weekly count: don't pair until it could open.
+    const onChain = await this.programConfig();
+    if (onChain?.paused) fail("refused", "Wagering is paused: no new series for now. Try again later.");
+    if (onChain && onChain.keyId !== this.cfg.keyId) fail("refused", "The matchmaker's key is being changed: no new series for a few minutes. Try again later.");
     const tier = typeof input.stake === "string" ? input.stake : typeof input.stake === "number" ? String(input.stake) : "";
     if (!this.tiers.has(tier)) fail("bad_request", `stake is one of the tiers, in lamports a side: ${[...this.tiers].join(", ")}.`);
     const wait = input.wait !== false;
     await this.spend(f, wait ? 5 : 1);
     // One join at a time per fighter, waiting or not: two at once could queue it again after the other paired it.
-    const lock = `arena:wager-poll:${f.id}`;
+    const lock = this.k.poll(f.id);
     if ((await this.store.cas(lock, 0, 1, Math.ceil(this.longPollMs / 1000) + 5)) === null) fail("rate_limited", "One wager join at a time per fighter.");
     try {
       const until = this.clock.now() + (wait ? this.longPollMs : 0);
@@ -315,7 +354,7 @@ export class WagerDesk {
         const now = this.clock.now();
         const step = await this.step(f, tier, now);
         if (step.series) {
-          const s = (await this.store.get<WagerSeries>(series(step.series)))?.value;
+          const s = (await this.store.get<WagerSeries>(this.k.series(step.series)))?.value;
           if (s) return { series: this.view(s, f) };
         }
         if (now >= until) return { waiting: true, tier, waitingAtTier: step.atTier, needed: this.minQueue, waitedSeconds: Math.round(step.waited / 1000) };
@@ -330,7 +369,7 @@ export class WagerDesk {
   /** Leaves the queue. */
   async leave(f: Fighter): Promise<{ left: boolean }> {
     let left = false;
-    await update<WagerQueue>(this.store, QUEUE, (cur) => {
+    await update<WagerQueue>(this.store, this.k.queue, (cur) => {
       if (!cur?.entries.some((e) => e.fighter === f.id)) return undefined;
       left = true;
       return { ...cur, entries: cur.entries.filter((e) => e.fighter !== f.id) };
@@ -343,12 +382,12 @@ export class WagerDesk {
     const mine = await this.activeSeries(f.id);
     if (mine) return { series: mine.id, atTier: 0, waited: 0 };
     // A pairing note from someone else's poll, if its series is still on (a note can outlive a series that ended fast).
-    const note = (await this.store.get<WagerQueue>(QUEUE))?.value.paired[f.id];
-    const noted = note ? (await this.store.get<WagerSeries>(series(note.series)))?.value : null;
+    const note = (await this.store.get<WagerQueue>(this.k.queue))?.value.paired[f.id];
+    const noted = note ? (await this.store.get<WagerSeries>(this.k.series(note.series)))?.value : null;
     const id = randomHex(32);
     const week = Math.floor(now / WEEK_MS);
     let outcome: { series?: string; partner?: Entry; atTier: number; waited: number } = { atTier: 0, waited: 0 };
-    await update<WagerQueue>(this.store, QUEUE, (cur) => {
+    await update<WagerQueue>(this.store, this.k.queue, (cur) => {
       const q: WagerQueue = {
         entries: (cur?.entries ?? []).filter((e) => now - e.seen < ALIVE_MS),
         paired: Object.fromEntries(Object.entries(cur?.paired ?? {}).filter(([, v]) => now - v.at < 2 * ALIVE_MS)),
@@ -398,7 +437,7 @@ export class WagerDesk {
       if (!made) {
         // No series: give the pair its weekly count back, and drop the partner's note.
         const k = pairKey(outcome.partner.owner, f.wallet);
-        await update<WagerQueue>(this.store, QUEUE, (cur) => {
+        await update<WagerQueue>(this.store, this.k.queue, (cur) => {
           if (!cur) return undefined;
           const paired = { ...cur.paired };
           if (paired[outcome.partner!.fighter]?.series === id) delete paired[outcome.partner!.fighter];
@@ -424,10 +463,10 @@ export class WagerDesk {
     const until = Math.floor((now + this.acceptMs) / 1000);
     const ticket: WagerTicketRecord = { seriesId: id, playerA: a.wallet, playerB: b.wallet, stake: tier, acceptDeadline: until, expiry: until, keyId: this.cfg.keyId };
     const signature = toHex(ed25519.sign(wagerTicketMessage(this.cfg.programId, ticket), this.cfg.ticketSecret));
-    await update<string[]>(this.store, OPEN, (cur) => [...(cur ?? []), id]);
-    await update<string[]>(this.store, TICKETED, (cur) => [...(cur ?? []), id].slice(-TICKETED_MAX));
-    await this.store.cas(series(id), 0, { id, ticket, signature, fighters: { A: a.id, B: b.id }, createdAt: now, status: "ticketed" } satisfies WagerSeries);
-    for (const x of [a, b]) await update<Fighter>(this.store, fighterKey(x.id), (cur) => (cur ? { ...cur, wager: { ...this.standing(cur), series: id } } : undefined));
+    await update<string[]>(this.store, this.k.open, (cur) => [...(cur ?? []), id]);
+    await update<string[]>(this.store, this.k.ticketed, (cur) => [...(cur ?? []), id].slice(-TICKETED_MAX));
+    await this.store.cas(this.k.series(id), 0, { id, ticket, signature, fighters: { A: a.id, B: b.id }, createdAt: now, status: "ticketed" } satisfies WagerSeries);
+    for (const x of [a, b]) await update<Fighter>(this.store, fighterKey(x.id), (cur) => (cur ? { ...cur, [this.field]: { ...this.standing(cur), series: id } } : undefined));
     return true;
   }
 
@@ -438,7 +477,7 @@ export class WagerDesk {
    * closes unrated after an hour.
    */
   async sweep(): Promise<{ open: number; done: number }> {
-    const ids = (await this.store.get<string[]>(OPEN))?.value ?? [];
+    const ids = (await this.store.get<string[]>(this.k.open))?.value ?? [];
     let done = 0;
     for (const id of ids) {
       try {
@@ -451,9 +490,9 @@ export class WagerDesk {
   }
 
   private async sweepOne(id: string): Promise<boolean> {
-    const s = (await this.store.get<WagerSeries>(series(id)))?.value;
+    const s = (await this.store.get<WagerSeries>(this.k.series(id)))?.value;
     if (!s) {
-      await update<string[]>(this.store, OPEN, (cur) => (cur?.includes(id) ? cur.filter((x) => x !== id) : undefined));
+      await update<string[]>(this.store, this.k.open, (cur) => (cur?.includes(id) ? cur.filter((x) => x !== id) : undefined));
       return true;
     }
     if (s.status === "done") {
@@ -473,7 +512,7 @@ export class WagerDesk {
     if (st.state === "open" || st.state === "live") {
       const state = st.state;
       // Refreshed every pass: "unread" counts from the last time the series was seen on-chain.
-      await update<WagerSeries>(this.store, series(id), (cur) => (cur ? { ...cur, seen: { state, at: now } } : undefined));
+      await update<WagerSeries>(this.store, this.k.series(id), (cur) => (cur ? { ...cur, seen: { state, at: now } } : undefined));
       if (state === "open" && now > s.ticket.acceptDeadline * 1000 + EXPIRY_MARGIN_MS) {
         await this.close(s, { how: "unaccepted" });
         return true;
@@ -483,6 +522,13 @@ export class WagerDesk {
     // none: never opened, or closed out of reach.
     if (!s.seen && now > s.ticket.expiry * 1000 + EXPIRY_MARGIN_MS) {
       await this.close(s, { how: "expired" });
+      // Never played: the pair gets its weekly count back, as when a ticket can't be made.
+      const week = Math.floor(s.createdAt / WEEK_MS);
+      const k = pairKey(s.ticket.playerA, s.ticket.playerB);
+      await update<WagerQueue>(this.store, this.k.queue, (cur) => {
+        if (!cur || cur.pairs.week !== week || !(cur.pairs.counts[k]! > 0)) return undefined;
+        return { ...cur, pairs: { ...cur.pairs, counts: { ...cur.pairs.counts, [k]: cur.pairs.counts[k]! - 1 } } };
+      }).catch(() => undefined);
       return true;
     }
     if (s.seen && now - s.seen.at > UNREAD_AFTER_MS) {
@@ -504,7 +550,7 @@ export class WagerDesk {
     if (!closing) {
       const [fa, fb] = [await read(s.fighters.A), await read(s.fighters.B)];
       const before = { A: fa ? this.standing(fa).rating : START, B: fb ? this.standing(fb).rating : START };
-      const set = await update<WagerSeries>(this.store, series(id), (cur) => (cur && !cur.closing ? { ...cur, closing: { result, before } } : undefined));
+      const set = await update<WagerSeries>(this.store, this.k.series(id), (cur) => (cur && !cur.closing ? { ...cur, closing: { result, before } } : undefined));
       closing = set?.closing ?? { result, before };
     }
     const score = closing.result.how === "settled" ? (closing.result.winner === "A" ? 1 : closing.result.winner === "B" ? 0 : 0.5) : null;
@@ -512,17 +558,17 @@ export class WagerDesk {
       const other = role === "A" ? "B" : "A";
       const mine = score === null ? null : role === "A" ? score : 1 - score;
       await update<Fighter>(this.store, fighterKey(s.fighters[role]), (cur) => {
-        if (!cur || cur.wager?.series !== id) return undefined;
+        if (!cur || cur[this.field]?.series !== id) return undefined;
         const w = this.standing(cur);
         const next: WagerStanding = { ...w, series: null };
         if (mine !== null) {
           next.rating = rate(closing!.before[role], [{ opponent: closing!.before[other], score: mine as 0 | 0.5 | 1 }]);
           next.record = mine === 1 ? { ...w.record, win: w.record.win + 1 } : mine === 0 ? { ...w.record, loss: w.record.loss + 1 } : { ...w.record, draw: w.record.draw + 1 };
         }
-        return { ...cur, wager: next };
+        return { ...cur, [this.field]: next };
       });
     }
-    await update<WagerSeries>(this.store, series(id), (cur) => (cur && cur.status !== "done" ? { ...cur, status: "done", result: closing!.result } : undefined));
-    await update<string[]>(this.store, OPEN, (cur) => (cur?.includes(id) ? cur.filter((x) => x !== id) : undefined));
+    await update<WagerSeries>(this.store, this.k.series(id), (cur) => (cur && cur.status !== "done" ? { ...cur, status: "done", result: closing!.result } : undefined));
+    await update<string[]>(this.store, this.k.open, (cur) => (cur?.includes(id) ? cur.filter((x) => x !== id) : undefined));
   }
 }

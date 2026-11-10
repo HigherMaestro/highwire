@@ -172,6 +172,39 @@ test("two stakes at once can't both fit under max_open: each counts the other on
   assert.match(readFileSync(paths.audit, "utf8"), /"wager":"open".*"series":"/);
 });
 
+test("a recent stake counts as open until it has provably closed", async () => {
+  const series = Keypair.generate().publicKey.toBase58();
+  const line = (agoMs: number, outcome: string) => JSON.stringify({ time: new Date(Date.now() - agoMs).toISOString(), tool: "line_stake", action: "wager", cluster: "devnet", wallet: "w", outcome, sol: "0.1", lamports: "100000000", label: "stake", wager: "open", series, ...(outcome === "confirmed" ? { signature: "stakesig" } : {}) }) + "\n";
+  // The chain: the stake landed at slot 50; asked about the series at that slot or later, the account is `gone` or not.
+  const chain = (o: { gone: boolean; behind?: boolean }) => {
+    const c = fakeConnection({ spend: 104_000_000 }) as unknown as Record<string, unknown>;
+    const base = c.getAccountInfo as (k: PublicKey, x?: unknown) => Promise<unknown>;
+    c.getSignatureStatuses = async () => ({ value: [{ slot: 50, err: null, confirmationStatus: "confirmed" }] });
+    c.getAccountInfo = async (k: PublicKey, x?: { minContextSlot?: number }) => {
+      if (k.toBase58() !== series) return base(k, x);
+      if (o.behind) throw new Error("Minimum context slot has not been reached");
+      return o.gone ? null : { data: Buffer.alloc(0), owner: program, executable: false, lamports: 1 };
+    };
+    return c as unknown as Connection;
+  };
+  const next = (s: ReturnType<typeof live>, c: Connection) => s.signer.execute(c, { tool: "t", intent: ask("open"), envelope: wagerEnvelope(s.signer.publicKey, "open", "99".repeat(32)) });
+  const at = (log: string) => {
+    const s = live();
+    writeFileSync(s.paths.audit, log);
+    return s;
+  };
+  // Sent a minute ago, never seen confirmed: it may still land, so it counts.
+  await assert.rejects(next(at(line(60_000, "sent")), chain({ gone: true })), /1 series already open/);
+  // Confirmed a minute ago, and the account gone as of the stake's slot: closed, and the next stake goes.
+  assert.equal((await next(at(line(61_000, "sent") + line(60_000, "confirmed")), chain({ gone: true }))).status, "sent");
+  // ...but not when the RPC hasn't reached that slot, or the account is still there.
+  await assert.rejects(next(at(line(61_000, "sent") + line(60_000, "confirmed")), chain({ gone: true, behind: true })), /1 series already open/);
+  // Confirmed a moment ago: still counts, whatever the RPC says.
+  await assert.rejects(next(at(line(6_000, "sent") + line(5_000, "confirmed")), chain({ gone: true })), /1 series already open/);
+  // Cancelled and opened again on the same ticket: the newer send is in flight, so it counts.
+  await assert.rejects(next(at(line(61_000, "sent") + line(60_000, "confirmed") + line(10_000, "sent")), chain({ gone: true })), /1 series already open/);
+});
+
 test("moves are never refused by the daily limit, only by their own fee cap, and never wait for the lock", async () => {
   const { paths, signer } = live({ max_sol_per_day: 0.105 });
   // The stake uses the whole day (0.1 SOL and the rent).

@@ -43,6 +43,8 @@ export interface Fighter {
   standing: CoinStanding | null;
   /** Wagering (docs/wager-mode.md 7.4): its own rating and record, apart from free play's, and its series. */
   wager?: { rating: Rating; record: Tally; series: string | null };
+  /** The same on mainnet, apart: practice results never seed or touch it (docs/wager-mode.md 13). */
+  wagerMainnet?: { rating: Rating; record: Tally; series: string | null };
 }
 
 /** What one side sent for the open round. Hidden until both have moved. */

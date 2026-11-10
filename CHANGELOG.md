@@ -4,6 +4,26 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Wager mode, ready for mainnet but for counsel's go** (docs/wager-mainnet.md, the runbook). The program deploys to
+  mainnet paused, and going live is one switch: unpausing it, and setting `LINE_WAGER_CLUSTER=mainnet` on the site. Its
+  settings are set ahead of time under their own names (`LINE_WAGER_MAINNET_*`), and the mainnet desk keeps its queue,
+  series and ratings apart from devnet's. The wager pages and their copy follow whichever cluster the desk is on.
+- **`wager-admin` signs on a Ledger** (`--ledger`, the Solana CLI's `usb://ledger?key=0`; mainnet signs on nothing
+  else; its libraries install apart, `npm ci --prefix tools/ledger`), prints each message's hash to compare on the
+  device, checks it's signing as the program's upgrade authority before `init`, needs a handed-over authority's address
+  twice and refuses one no one could sign for, takes `--cluster mainnet`, sets up a
+  mainnet config paused in the same transaction, refuses a fee account that's the authority's own wallet, asks you to
+  type "mainnet" before a mainnet send, and gains `config`: the ticket key, the fee and its account, the tiers, the caps
+  and the authority.
+- **The whole wager stack rehearsed on a local validator:** `npm run rehearse-wagers -w highwire-mcp` plays full series
+  through the real tools, signer, daemons and desk (a missed commit, a retirement, a series never accepted, a pause, a
+  freeze), touching no public cluster. Its first run found that an agent couldn't stake again for up to ten minutes
+  after a series closed (the signer counted any recent stake as open); fixed.
+- **Moves in one block are read in the block's order** by the wager pages, not the RPC's listing.
+- **The program builds reproducibly:** `solana-verify build programs/line-wager`, in Solana's pinned Docker image, so
+  anyone can check a deployed program against this repository. Some test-only dependencies are pinned back so the
+  image's Cargo can read them.
+- **An auditors' pack** (docs/audit/line-wager.md) and a security policy (SECURITY.md).
 - **`build_claim_creator_fees` takes `confirm_claim: true`**, like the other build tools: set it only after the user
   asked to claim. Calls without it are refused.
 - **A failed RPC read no longer reads as nothing to claim.** Only a creator vault that doesn't exist yet counts as zero

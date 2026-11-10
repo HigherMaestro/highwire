@@ -1,4 +1,5 @@
-import { Chain, createHttpConfig, DEFAULT_API_URL, evaluateRisk, HigherApi, HIGHWIRE_WALLET, NotFoundError, seriesOutcome, SolanaRpc, solToLamports, WAGER_PROGRAM_IDS } from "highwire-core";
+import { Chain, createHttpConfig, DEFAULT_API_URL, evaluateRisk, HigherApi, HIGHWIRE_WALLET, NotFoundError, readWagerConfig, seriesOutcome, SolanaRpc, solToLamports, WAGER_PROGRAM_IDS } from "highwire-core";
+import { GENESIS_HASHES } from "highwire-agent";
 import { serverOptionsFromEnv } from "highwire-mcp";
 import { createRelay, JsonRpc, realClock, UpstashStore, type CoinDirectory, type Relay, type WagerConfig } from "highwire-relay";
 
@@ -37,27 +38,71 @@ function coinDirectory(rpcUrl: string): CoinDirectory {
 }
 
 /**
- * Wagering's matchmaker (docs/wager-mode.md 7.4), on devnet: on only with LINE_WAGER_TICKET_KEY (the ticket key's
- * 32-byte Ed25519 secret, hex, held only in the site's environment) and the key id the program's config holds for it.
- * LINE_WAGER_TIERS lists the tiers in SOL; LINE_WAGER_MIN_QUEUE how many owners must wait at a tier before it pairs;
- * LINE_WAGER_PER_PAIR_WEEK how many series two owners may play in a week (default 2).
+ * Which cluster the wager desk plays on: LINE_WAGER_CLUSTER, "devnet" (the default) or "mainnet". Flipping it to
+ * "mainnet" (with the program's config unpaused on-chain) is the switch (docs/wager-mainnet.md): mainnet's settings
+ * are set ahead of time under their own names, so the flip changes nothing else.
+ */
+export function wagerCluster(): "devnet" | "mainnet" {
+  return process.env.LINE_WAGER_CLUSTER?.trim().toLowerCase() === "mainnet" ? "mainnet" : "devnet";
+}
+
+/** A wager setting for the desk's cluster: devnet's are LINE_WAGER_<NAME>, mainnet's LINE_WAGER_MAINNET_<NAME>. */
+export function wagerSetting(name: string): string | undefined {
+  return process.env[wagerCluster() === "mainnet" ? `LINE_WAGER_MAINNET_${name}` : `LINE_WAGER_${name}`] || undefined;
+}
+
+/** The desk's chain: its cluster, through RPC_URL (devnet's public RPC throttles reads; mainnet's is required). */
+export function wagerChain(): Chain {
+  return new Chain({ cluster: wagerCluster(), rpcUrl: wagerSetting("RPC_URL") });
+}
+
+/**
+ * Wagering's matchmaker (docs/wager-mode.md 7.4): on only with the ticket key (TICKET_KEY: its 32-byte Ed25519 secret,
+ * hex, held only in the site's environment), the key id the program's config holds for it (KEY_ID), and a program on
+ * that cluster. TIERS lists the tiers in SOL; MIN_QUEUE how many owners must wait at a tier before it pairs;
+ * PER_PAIR_WEEK how many series two owners may play in a week. Mainnet's defaults are the spec's (W2: one 0.1 SOL tier,
+ * four owners, two a week); devnet's are looser for practice.
  */
 function wagerConfig(): WagerConfig | undefined {
-  const secret = process.env.LINE_WAGER_TICKET_KEY;
-  const programId = WAGER_PROGRAM_IDS.devnet;
+  const cluster = wagerCluster();
+  const mainnet = cluster === "mainnet";
+  const secret = wagerSetting("TICKET_KEY");
+  const programId = WAGER_PROGRAM_IDS[cluster];
   if (!secret || !/^[0-9a-f]{64}$/i.test(secret) || !programId) return undefined;
-  const chain = new Chain({ cluster: "devnet", rpcUrl: process.env.LINE_WAGER_RPC_URL || undefined });
+  if (mainnet && !wagerSetting("RPC_URL")) return undefined;
+  const chain = wagerChain();
+  // The RPC must be on the desk's cluster: one on another would answer "no such series" for every live one, and the
+  // desk would close them as never opened. Checked once; on a mismatch every read fails, so nothing closes.
+  let genesis: Promise<void> | null = null;
+  const onCluster = () =>
+    (genesis ??= chain.connection.getGenesisHash().then((g) => {
+      if (g !== GENESIS_HASHES[cluster]) {
+        console.error(`line: the wager RPC isn't on ${cluster} (genesis ${g}): wager outcomes won't be read until it is`);
+        throw new Error(`the wager RPC isn't on ${cluster}`);
+      }
+    })).catch((err: unknown) => {
+      genesis = null;
+      throw err;
+    });
   return {
     programId,
-    cluster: "devnet",
+    cluster,
     ticketSecret: Uint8Array.from(Buffer.from(secret, "hex")),
-    keyId: Number(process.env.LINE_WAGER_KEY_ID ?? 1),
-    tiers: (process.env.LINE_WAGER_TIERS ?? "0.01,0.1").split(",").map((t) => solToLamports(Number(t.trim()))),
-    minQueue: Number(process.env.LINE_WAGER_MIN_QUEUE ?? 4),
-    // Series a week between the same two owners: the spec's 2 for real stakes; a devnet practice desk with only a
-    // maintainer's own fighters can raise it.
-    perPairPerWeek: Math.max(1, Math.floor(Number(process.env.LINE_WAGER_PER_PAIR_WEEK ?? 2)) || 2),
-    chain: { status: (id) => seriesOutcome(chain, id) },
+    keyId: Number(wagerSetting("KEY_ID") ?? 1),
+    tiers: (wagerSetting("TIERS") ?? (mainnet ? "0.1" : "0.01,0.1")).split(",").map((t) => solToLamports(Number(t.trim()))),
+    minQueue: Number(wagerSetting("MIN_QUEUE") ?? 4),
+    perPairPerWeek: Math.max(1, Math.floor(Number(wagerSetting("PER_PAIR_WEEK") ?? 2)) || 2),
+    chain: {
+      status: async (id) => {
+        await onCluster();
+        return seriesOutcome(chain, id);
+      },
+      config: async () => {
+        await onCluster();
+        const c = await readWagerConfig(chain);
+        return { paused: c.paused, keyId: c.ticketKeyId };
+      },
+    },
   };
 }
 

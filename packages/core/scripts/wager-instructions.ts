@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { Keypair, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
 import { fallbackCommitment, moveCommitment, sideOf } from "../src/arena/index.ts";
-import { freezeAndRefundInstruction, pauseInstruction, ticketCheck, ticketMessage, wagerInstruction, WAGER_PROGRAM_IDS, type WagerParties, type WagerTicket } from "../src/tx/wager-codec.ts";
+import { configUpdateInstruction, freezeAndRefundInstruction, pauseInstruction, ticketCheck, ticketMessage, wagerInstruction, WAGER_PROGRAM_IDS, type WagerParties, type WagerTicket } from "../src/tx/wager-codec.ts";
 
 const out = join(dirname(fileURLToPath(import.meta.url)), "../../../programs/line-wager/tests/fixtures/ts-instructions.json");
 
@@ -86,6 +86,19 @@ step("commit A (4)", T0 + 1, ["A"], [wagerInstruction(program, keys.A.publicKey,
 step("pause", T0 + 2, ["authority"], [pauseInstruction(program, keys.authority.publicKey, true)]);
 step("freeze and refund", T0 + 3, ["authority"], [freezeAndRefundInstruction(program, keys.authority.publicKey, s4, parties)]);
 step("unpause", T0 + 4, ["authority"], [pauseInstruction(program, keys.authority.publicKey, false)]);
+// Then every other setting at once, as wager-admin sets them: the authority (handed to itself), a new ticket key, the fee
+// and its account, the tiers and both caps. ts_built.rs reads the config back.
+step("update the config", T0 + 5, ["authority"], [
+  configUpdateInstruction(program, keys.authority.publicKey, {
+    authority: keys.authority.publicKey,
+    ticketKey: { key: new PublicKey(ed25519.getPublicKey(seed(9))), id: 2 },
+    feeBps: 300,
+    feeAccount: keys.crank.publicKey,
+    tiers: [10_000_000n, STAKE],
+    maxStake: 500_000_000n,
+    openStakeCap: 5_000_000_000n,
+  }),
+]);
 
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify({ program: program.toBase58(), t0: T0, stake: STAKE.toString(), ticketKey: new PublicKey(ed25519.getPublicKey(ticketKey)).toBase58(), feeAccount: keys.fee.publicKey.toBase58(), steps }, null, 1));

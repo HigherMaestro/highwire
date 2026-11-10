@@ -129,6 +129,8 @@ export const WAGER_MOVE_FEE_CAP_LAMPORTS = 1_000_000n;
 
 /** How long a stake that was sent counts as an open series, whether or not the chain shows it yet. */
 const RECENT_STAKE_MS = 10 * 60 * 1000;
+/** A recent stake confirmed this long ago whose series account is gone has closed (the account is visible by then). */
+const CLOSED_AFTER_MS = 30_000;
 
 /** What a wager envelope does, read from its bytes: one transaction, one wager instruction. */
 export function wagerFacts(env: Envelope, cluster: Cluster): { kind: string; series: string; stake?: bigint } {
@@ -296,16 +298,39 @@ export class LocalSigner {
   private async openSeries(connection: Connection, cluster: Cluster): Promise<number> {
     const program = wagerProgram(cluster);
     if (!program) throw refused("wagers", `wagering isn't deployed on ${cluster}`);
-    const open = new Set<string>(this.audit.stakedSeriesSince(cluster, RECENT_STAKE_MS));
+    // Open: a series staked in whose account is still the program's, and any recent stake unless it has provably closed:
+    // its latest send confirmed a while ago, and its account gone at a slot no earlier than that confirmation's (an RPC
+    // that lags, or a load balancer's other node, can't make an open series look closed).
+    const recent = this.audit.recentStakes(cluster, RECENT_STAKE_MS);
     const staked = [...new Set(this.audit.stakedSeriesSince(cluster, 30 * 86_400_000))];
+    const open = new Set<string>();
+    const now = Date.now();
     for (let i = 0; i < staked.length; i += 100) {
       const chunk = staked.slice(i, i + 100);
       const infos = await connection.getMultipleAccountsInfo(chunk.map((a) => new PublicKey(a)), "confirmed");
       chunk.forEach((a, j) => {
-        if (infos[j]?.owner.equals(program)) open.add(a);
+        if (infos[j]?.owner.equals(program) || recent.has(a)) open.add(a);
       });
     }
+    for (const [a, r] of recent) {
+      if (!open.has(a)) continue;
+      const c = r.confirmed;
+      if (!c || c.at < r.sent || now - c.at <= CLOSED_AFTER_MS) continue;
+      if (await this.closedSince(connection, program, a, c.signature)) open.delete(a);
+    }
     return open.size;
+  }
+
+  /** Whether a series account is gone as of a slot no earlier than the stake that created or filled it: closed. */
+  private async closedSince(connection: Connection, program: PublicKey, series: string, stakeSignature: string): Promise<boolean> {
+    try {
+      const slot = (await connection.getSignatureStatuses([stakeSignature], { searchTransactionHistory: true })).value[0]?.slot;
+      if (!slot) return false;
+      const info = await connection.getAccountInfo(new PublicKey(series), { commitment: "confirmed", minContextSlot: slot });
+      return !info || !info.owner.equals(program);
+    } catch {
+      return false;
+    }
   }
 
   /**

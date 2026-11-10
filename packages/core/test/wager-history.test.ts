@@ -89,3 +89,19 @@ test("a close whose log was cut short still reads as a close", async () => {
   assert.ok(closed.kind === "closed");
   assert.deepEqual(closed.outcome, { state: "closed", how: "unread" });
 });
+
+test("transactions in one block are read in the block's order, not the RPC's listing", async () => {
+  const commit = ix(A, { kind: "commit", round: 1, hash: "cc".repeat(32) });
+  const chain = fakeChain([{ sig: "s1", top: [open] }, { sig: "s2", top: [accept] }, { sig: "s3", top: [commit] }]);
+  const c = (chain as unknown as { connection: Record<string, unknown> }).connection;
+  // The RPC lists the slot's three transactions in an order of its own (here: the open as the newest)...
+  c.getSignaturesForAddress = async (k: PublicKey, o: { before?: string }) =>
+    k.equals(SERIES) && !o.before ? ["s1", "s3", "s2"].map((signature) => ({ signature, slot: 7, err: null })) : [];
+  // ...and the block holds them in the order they ran.
+  c.getBlock = async (slot: number) => (slot === 7 ? { signatures: ["s1", "s2", "s3"] } : null);
+  const h = await seriesHistory(chain, ID);
+  assert.deepEqual(
+    h.events.map((e) => e.kind),
+    ["open", "accept", "commit"],
+  );
+});

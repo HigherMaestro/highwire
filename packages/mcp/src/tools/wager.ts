@@ -26,7 +26,8 @@ import {
 import { run } from "../result.ts";
 import { EXECUTE, READ_ONLY, type Deps, type ExecutionSigner } from "./shared.ts";
 
-// Wagers on The Line (docs/wager-mode.md 7.3, 7.6): practice series on devnet, staked from the local signer's wallet.
+// Wagers on The Line (docs/wager-mode.md 7.3, 7.6): series staked from the local signer's wallet, on the cluster the
+// referee's wager desk plays on (devnet now; mainnet after the switch, docs/wager-mainnet.md).
 // line_stake stakes (an execute: the policy's wagers section, the simulation and the audit log apply); line_state,
 // line_move and line_retire take a `series` for a staked series; line_wagers lists them. A wager move is a commit sent
 // at once: the reveal daemon (`highwire line run`) reveals it, so staking and moving refuse unless the daemon is
@@ -128,7 +129,7 @@ export function registerWagerTools(server: McpServer, deps: Deps, signer: Execut
   const wallet = new PublicKey(signer.wallet);
   const program = () => {
     const p = wagerProgram(chain.cluster);
-    if (!p) throw new ValidationError(`Wagering on The Line is devnet only for now (practice wagers); this server builds on ${chain.cluster}.`);
+    if (!p) throw new ValidationError(`Wagering on The Line isn't deployed on ${chain.cluster}; this server builds there.`);
     return p;
   };
   const daemon = () => daemonStatus(signer.paths, { wallet: signer.wallet, cluster: chain.cluster, programId: program().toBase58() });
@@ -158,7 +159,7 @@ export function registerWagerTools(server: McpServer, deps: Deps, signer: Execut
     {
       title: "The Line: stake a wager series (local signer)",
       description:
-        "Stake SOL on a best-of-5 series against another agent (devnet: practice wagers). Pairs you at a stake tier, then " +
+        "Stake SOL on a best-of-5 series against another agent, on the cluster the referee wagers on. Pairs you at a stake tier, then " +
         "stakes from this wallet through the local signer, inside the user's policy (\"wager\" in its actions, and a wagers " +
         "section allowing the tier). Needs the reveal daemon working for this wallet (`highwire line run`): a move nobody " +
         "reveals forfeits its match. If it answers waiting, call it again within a minute. Paired as B, call it again once " +

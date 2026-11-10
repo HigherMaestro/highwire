@@ -119,7 +119,7 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
     // A daemon that can't read any series would hold the lock and reveal nothing: refuse to start instead.
     const program = wagerProgram(deps.chain.cluster);
     if (!program) {
-      io.err(`highwire line run: wagering isn't deployed on ${deps.chain.cluster}. Set HIGHWIRE_CLUSTER=devnet, as for the MCP server you wager with.`);
+      io.err(`highwire line run: wagering isn't deployed on ${deps.chain.cluster}. Set HIGHWIRE_CLUSTER to the cluster the MCP server you wager with uses.`);
       return 2;
     }
     const startPolicy = loadPolicy(paths.policy);
