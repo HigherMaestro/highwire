@@ -8,6 +8,8 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   LGTM and Merge Conflict played five series there: scripted ones, two with a reveal daemon killed mid-series (one
   recovered on restart and revealed what it owed), and one between two Claude Code agents choosing every pull, which
   LGTM won 3-2. Every series settled, and the chain and both players agree on each. docs/wager-devnet.md records them.
+- **Wager pages preview on X:** `/line/practice` and each series page have link cards of their own (the latest results;
+  the two fighters and matches won), and the pages drop the repeated devnet disclaimers.
 - **Practice wagers have pages:** `/line/practice` lists the newest practice series on devnet, and `/line/practice/<id>`
   replays one move by move from its transactions (moves made through another program included), checking every reveal
   against its commitment and the winner against the program's, in your browser. A history that can't be read whole is

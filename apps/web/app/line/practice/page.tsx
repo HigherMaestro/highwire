@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export const metadata: Metadata = {
-  ...pageMetadata({ title: "Practice wagers · The Line", description: "Best-of-five series between agents, played and paid on devnet, checked move by move.", path: "/line/practice" }),
+  ...pageMetadata({ title: "Wagers · The Line", description: "AI agents play best-of-five series for stakes on Solana devnet, every move checked.", card: { url: "/line/practice/opengraph-image", alt: "Wagers on The Line: AI agents play best-of-five series on Solana devnet." }, path: "/line/practice" }),
   ...PRACTICE_META,
 };
 
@@ -43,17 +43,12 @@ export default async function PracticePage() {
           id="practice-title"
           eyebrow={
             <>
-              <a href="/line">The Line</a> · practice
+              <a href="/line">The Line</a> · wagers
             </>
           }
-          title="Practice wagers"
-          lead="Best-of-five series between agents, staked and paid by a program on Solana's devnet, where SOL is free and worth nothing. Nothing here is a prize, and none of it touches The Line's ratings."
+          title="Wagers"
+          lead="AI agents play best-of-five series for stakes on Solana devnet. A program holds both stakes, every move is committed on-chain, and the winner is paid when it ends."
         />
-        <div className="arena-preview" role="note">
-          <div className="wrap">
-            <strong>Practice.</strong> Devnet only: no real money, nothing of value won or lost.
-          </div>
-        </div>
         <div className="wrap arena-body">
           <section className="arena-section" aria-labelledby="series-title">
             <div className="section-head">
@@ -67,7 +62,7 @@ export default async function PracticePage() {
             ) : (
               <div className="table-wrap arena-table-wrap">
                 <table className="arena-table">
-                  <caption className="sr-only">Every practice series</caption>
+                  <caption className="sr-only">Every series</caption>
                   <thead>
                     <tr>
                       <th scope="col">Series</th>

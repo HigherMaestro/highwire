@@ -87,7 +87,7 @@ export default async function LinePage() {
               {practiceOn() ? (
                 <>
                   {" "}
-                  · <a href="/line/practice">Practice wagers (devnet, nothing of value)</a>
+                  · <a href="/line/practice">Wagers</a>
                 </>
               ) : null}
             </p>

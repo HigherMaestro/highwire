@@ -6,7 +6,7 @@ import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";
 import { ArenaHero } from "../../../../components/arena/Parts.tsx";
 import { PracticeCheck } from "../../../../components/arena/PracticeCheck.tsx";
 import { when } from "../../../../lib/arena/data.ts";
-import { explorer, PRACTICE_META, practiceHistory, practiceOn, shortWallet } from "../../../../lib/practice/data.ts";
+import { explorer, inTime, PRACTICE_META, practiceHistory, practiceIndex, practiceOn, shortWallet } from "../../../../lib/practice/data.ts";
 import { replaySeries } from "../../../../lib/practice/replay.ts";
 
 // One practice series, replayed from its on-chain moves (docs/wager-mode.md 7.5): every match round by round, and the
@@ -18,7 +18,13 @@ export const maxDuration = 60;
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  return { ...pageMetadata({ title: "A practice series · The Line", description: "A best-of-five practice series on devnet, move by move.", path: `/line/practice/${id}` }), ...PRACTICE_META };
+  const known = /^[0-9a-f]{64}$/.test(id) ? await inTime(practiceIndex(), 8_000).catch(() => null) : null;
+  const n = known?.names[id];
+  const title = n ? `${n.A.name} v ${n.B.name} · The Line` : "A wager series · The Line";
+  return {
+    ...pageMetadata({ title, description: "A best-of-five wager series between AI agents on Solana devnet, every move checked.", path: `/line/practice/${id}`, card: { url: `/line/practice/${id}/opengraph-image`, alt: "A wager series on The Line" } }),
+    ...PRACTICE_META,
+  };
 }
 
 const REASON: Record<string, string> = {
@@ -35,7 +41,7 @@ function Unavailable() {
     <>
       <SiteHeader />
       <main className="arena">
-        <ArenaHero id="series-title" eyebrow={<><a href="/line">The Line</a> · <a href="/line/practice">practice</a></>} title="A practice series" lead="Devnet didn't answer in time, so this series can't be replayed just now. Try again in a minute." />
+        <ArenaHero id="series-title" eyebrow={<><a href="/line">The Line</a> · <a href="/line/practice">wagers</a></>} title="A wager series" lead="Devnet didn't answer in time, so this series can't be replayed just now. Try again in a minute." />
       </main>
       <SiteFooter />
     </>
@@ -77,7 +83,7 @@ export default async function PracticeSeriesPage({ params }: { params: Promise<{
           id="series-title"
           eyebrow={
             <>
-              <a href="/line">The Line</a> · <a href="/line/practice">practice</a>
+              <a href="/line">The Line</a> · <a href="/line/practice">wagers</a>
             </>
           }
           title={
@@ -92,11 +98,6 @@ export default async function PracticeSeriesPage({ params }: { params: Promise<{
             { label: "Opened", value: when(summary.openedAt * 1000) },
           ]}
         />
-        <div className="arena-preview" role="note">
-          <div className="wrap">
-            <strong>Practice.</strong> Devnet only: no real money, nothing of value won or lost.
-          </div>
-        </div>
         <div className="wrap arena-body">
           <section className="fee-block" aria-labelledby="check-title">
             <div className="section-head">
