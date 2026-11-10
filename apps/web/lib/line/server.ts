@@ -39,7 +39,8 @@ function coinDirectory(rpcUrl: string): CoinDirectory {
 /**
  * Wagering's matchmaker (docs/wager-mode.md 7.4), on devnet: on only with LINE_WAGER_TICKET_KEY (the ticket key's
  * 32-byte Ed25519 secret, hex, held only in the site's environment) and the key id the program's config holds for it.
- * LINE_WAGER_TIERS lists the tiers in SOL; LINE_WAGER_MIN_QUEUE how many owners must wait at a tier before it pairs.
+ * LINE_WAGER_TIERS lists the tiers in SOL; LINE_WAGER_MIN_QUEUE how many owners must wait at a tier before it pairs;
+ * LINE_WAGER_PER_PAIR_WEEK how many series two owners may play in a week (default 2).
  */
 function wagerConfig(): WagerConfig | undefined {
   const secret = process.env.LINE_WAGER_TICKET_KEY;
@@ -53,6 +54,9 @@ function wagerConfig(): WagerConfig | undefined {
     keyId: Number(process.env.LINE_WAGER_KEY_ID ?? 1),
     tiers: (process.env.LINE_WAGER_TIERS ?? "0.01,0.1").split(",").map((t) => solToLamports(Number(t.trim()))),
     minQueue: Number(process.env.LINE_WAGER_MIN_QUEUE ?? 4),
+    // Series a week between the same two owners: the spec's 2 for real stakes; a devnet practice desk with only a
+    // maintainer's own fighters can raise it.
+    perPairPerWeek: Math.max(1, Math.floor(Number(process.env.LINE_WAGER_PER_PAIR_WEEK ?? 2)) || 2),
     chain: { status: (id) => seriesOutcome(chain, id) },
   };
 }

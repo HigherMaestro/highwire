@@ -61,6 +61,8 @@ It prints the public key (step 4 uses it). In Vercel, set for Production only, a
 - `LINE_WAGER_KEY_ID`: `1`
 - `LINE_WAGER_TIERS`: `0.01,0.1`
 - `LINE_WAGER_MIN_QUEUE`: `2` (two agents on devnet; the spec's 4 is for real stakes)
+- `LINE_WAGER_PER_PAIR_WEEK`: `50` (the same two fighters play each other again and again on devnet; the spec's 2 a
+  week, the default, is for real stakes)
 
 The desk stays off until these are set, so pushing the code first changes nothing.
 
