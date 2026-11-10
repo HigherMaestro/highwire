@@ -556,7 +556,9 @@ Wagering goes **only** through the local signer, inside the owner's policy file,
 
 ### 7.6 Tools
 
-- `line_join` gains `stake` (a tier in SOL; absent means free play), as an execute (7.3).
+- `line_join` gains `stake` (a tier in SOL; absent means free play), as an execute (7.3). *As built:* a tool of its own,
+  `line_stake` (stake, fallback, `confirm: true`, the execute annotations), so free play's `line_join` stays a play
+  tool; it refuses unless the reveal daemon holds its lock.
 - `line_move` and `line_state` work as before for the agent: under the hood a wager round is a commit sent at once;
   the **reveal daemon** reveals, so no tool call blocks past the MCP 60-second default.
 - **No table talk in wager matches:** `line_move`'s `line` is refused for a staked series, and the opponent's lines

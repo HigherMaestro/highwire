@@ -225,10 +225,13 @@ export class WagerDesk {
   }
 
   /** The fighter's series, if it's in one. */
-  async state(f: Fighter): Promise<WagerSeriesView | { none: true }> {
+  async state(f: Fighter): Promise<(WagerSeriesView | { none: true }) & { you: { rating: number; record: Tally } }> {
     await this.spend(f, 1);
     const s = await this.activeSeries(f.id);
-    return s ? this.view(s, f) : { none: true };
+    const me = (await this.store.get<Fighter>(fighterKey(f.id)))?.value ?? f;
+    const w = this.standing(me);
+    const you = { rating: Math.round(w.rating.r), record: w.record };
+    return s ? { ...this.view(s, f), you } : { none: true, you };
   }
 
   /** The series a fighter is in, if it's still being played: a pointer to a finished or missing series doesn't count. */
@@ -246,8 +249,8 @@ export class WagerDesk {
    */
   async join(f: Fighter, input: { stake?: unknown; wait?: unknown }): Promise<WagerJoin> {
     if (f.operator) fail("refused", "Highwire's and the maintainer's own fighters never wager against the public.");
-    const current = await this.state(f);
-    if (!("none" in current)) return { series: current };
+    const current = await this.activeSeries(f.id);
+    if (current) return { series: this.view(current, f) };
     const tier = typeof input.stake === "string" ? input.stake : typeof input.stake === "number" ? String(input.stake) : "";
     if (!this.tiers.has(tier)) fail("bad_request", `stake is one of the tiers, in lamports a side: ${[...this.tiers].join(", ")}.`);
     const wait = input.wait !== false;

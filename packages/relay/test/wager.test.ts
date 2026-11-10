@@ -118,7 +118,7 @@ test("outcomes come from the chain: a decided series rates both, an expired tick
   chain.states.set(s.id, { state: "closed", how: "settled", winner: "A" });
   await r.advance(60_000);
   const after = (await r.call("GET", "/api/arena/wager/state", undefined, tokens[0])).body;
-  assert.deepEqual(after, { none: true }, "freed");
+  assert.equal(after.none, true, "freed");
   const stored = (id: string) => (r.store.dump()[`arena:fighter:${id}`] as any).wager;
   const winner = stored(fighterOf("A"));
   const loser = stored(fighterOf("B"));
@@ -135,7 +135,7 @@ test("outcomes come from the chain: a decided series rates both, an expired tick
   await r.advance(5 * 60_000);
   assert.equal((await r.call("GET", "/api/arena/wager/state", undefined, tokens[0])).body.status, "ticketed", "not yet: the margin");
   await r.advance(11 * 60_000);
-  assert.deepEqual((await r.call("GET", "/api/arena/wager/state", undefined, tokens[0])).body, { none: true });
+  assert.equal((await r.call("GET", "/api/arena/wager/state", undefined, tokens[0])).body.none, true);
   assert.deepEqual(stored(fighterOf("A")).record, winner.record);
   assert.equal((r.store.dump()[`arena:wager:${y.body.series.id}`] as any).result.how, "expired");
 });
@@ -176,7 +176,7 @@ test("a series seen live whose closing can't be found closes unrated after an ho
   await live.r.advance(30 * 60_000);
   assert.equal((await live.r.call("GET", "/api/arena/wager/state", undefined, live.tokens[0])).body.status, "ticketed");
   await live.r.advance(31 * 60_000);
-  for (const t of live.tokens) assert.deepEqual((await live.r.call("GET", "/api/arena/wager/state", undefined, t)).body, { none: true });
+  for (const t of live.tokens) assert.equal((await live.r.call("GET", "/api/arena/wager/state", undefined, t)).body.none, true);
   assert.equal((live.r.store.dump()[`arena:wager:${x.body.series.id}`] as any).result.how, "unread");
   assert.deepEqual((live.r.store.dump()[`arena:fighter:${mint(0)}`] as any).wager.record, { win: 0, draw: 0, loss: 0 }, "unrated");
 
@@ -184,7 +184,7 @@ test("a series seen live whose closing can't be found closes unrated after an ho
   const [y] = await open.pair();
   open.chain.states.set(y.body.series.id, { state: "open" });
   await open.r.advance(16 * 60_000);
-  for (const t of open.tokens) assert.deepEqual((await open.r.call("GET", "/api/arena/wager/state", undefined, t)).body, { none: true });
+  for (const t of open.tokens) assert.equal((await open.r.call("GET", "/api/arena/wager/state", undefined, t)).body.none, true);
   assert.equal((open.r.store.dump()[`arena:wager:${y.body.series.id}`] as any).result.how, "unaccepted");
 });
 
@@ -195,7 +195,7 @@ test("a failure half way through closing or ticketing leaves nothing the next sw
   failOnce(r.store as never, /^arena:fighter:/);
   await r.advance(60_000); // this sweep dies half way
   await r.advance(5 * 60_000);
-  for (const t of tokens) assert.deepEqual((await r.call("GET", "/api/arena/wager/state", undefined, t)).body, { none: true });
+  for (const t of tokens) assert.equal((await r.call("GET", "/api/arena/wager/state", undefined, t)).body.none, true);
   const recs = [0, 1].map((i) => (r.store.dump()[`arena:fighter:${mint(i)}`] as any).wager.record);
   assert.deepEqual(recs.map((t) => t.win + t.loss).sort(), [1, 1], "rated exactly once each");
 
