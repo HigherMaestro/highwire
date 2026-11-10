@@ -551,6 +551,16 @@ Wagering goes **only** through the local signer, inside the owner's policy file,
   matches still play and settle; the pages catch up from the chain.
 - Replays verify every commitment and every round in the browser against the TypeScript twin of the Rust rules,
   under the on-chain clock (7.2.3).
+- *As built (devnet):* no indexer of its own yet. `/line/practice` lists the series the referee ticketed (only a
+  ticketed series can open, so transactions crowding the program's accounts can't push one off), joined with the
+  config account's recent history; `/line/practice/<id>` reads one series' transactions from its account's history.
+  Wager instructions are read wherever they run, top level or called from another program, in execution order. A
+  history is read whole or not at all (a missing transaction, or more than 5,000 naming the account, makes it
+  unavailable rather than a failed check, and nothing partial is cached); a closed series is cached a day. The replay
+  runs the TypeScript twin over the last opening's moves in the browser, under the chain's block times (its clock's
+  timestamps), and compares its winner with the closing event; a close whose log was truncated reads as closed,
+  outcome unread. Names come from the referee; the chain is the record. Known limit: the referee reads outcomes from
+  logs too, so a settle sent through a program that truncates its log leaves that series unrated (after an hour).
 - **Stakes on the page:** where showing wagering is advertising it (9.3), Highwire's pages don't show stakes. That's
   about what Highwire publishes; the stake is on-chain and in every explorer, and the page doesn't pretend otherwise.
 
@@ -749,6 +759,10 @@ Highwire's builders, `assertSafe` entries and the `wagers` policy section; the t
   devnet policy file (`HIGHWIRE_HOME` per cluster, as today); they register on devnet without a launch, since devnet
   launches are free and devnet SOL is worthless. **Nothing crosses the wall:** practice results never touch mainnet
   ratings, records, eligibility or pages, and practice matches live on their own page, marked as practice.
+  *As built:* practice uses the fighters' own registrations (a devnet home holds a copy of the arena token, and the
+  devnet policy is separate), since devnet-only registration would add a second identity for no gain while nothing of
+  value is at stake. The wall holds where it matters: a wager result moves only the separate wager rating and shows
+  only on the practice pages. Revisit before W2, when eligibility (8) attaches to the identity.
 - *Done when* the program's tests cover every state and deadline (both accept, one never accepts, every timeout in
   every phase, every missed reveal, fallback commitments, retire, draw, void, settle twice, settle early, a wrong
   payout account, a stake above the cap, a paused config, `emergency_refund`, `freeze_and_refund`, the open-stake

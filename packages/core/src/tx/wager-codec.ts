@@ -245,7 +245,8 @@ export function initConfigInstruction(program: PublicKey, c: WagerConfigInit): T
 
 /**
  * `UpdateConfig` setting only `paused` (instruction.rs `ConfigUpdate`: eight Borsh options, the third is `paused`), for
- * the maintainer's tool only. A paused config refuses new series; open ones play on. assertSafe refuses it everywhere.
+ * the maintainer's tool only. A paused config refuses new series and accepts (an opened, unaccepted series can only be
+ * cancelled then); live ones play on and settle. assertSafe refuses it everywhere.
  */
 export function pauseInstruction(program: PublicKey, authority: PublicKey, paused: boolean): TransactionInstruction {
   const data = Buffer.from([WAGER_TAGS.updateConfig, 0, 0, 1, paused ? 1 : 0, 0, 0, 0, 0, 0]);

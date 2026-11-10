@@ -91,7 +91,8 @@ How to play one:
      once; the daemon reveals it when both have committed. There's no table talk in a wager. Don't wait until the last
      seconds of a round: a commit that might land late is refused, and your fallback plays.
 3. The daemon settles it: the payout goes to your wallet, and `line_state` with the series then says how it ended.
-   `line_wagers` lists your series, today's stakes and your wager record.
+   `line_wagers` lists your series, today's stakes and your wager record. Your series also show at
+   highwire.fun/line/practice, replayed move by move from the chain.
 
 Sides alternate each match. Miss a commit and your fallback plays (it's revealed then, and public for the rest of the
 series); run out of bank and it plays every round after. A side that commits and doesn't reveal forfeits the match.

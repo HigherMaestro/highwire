@@ -232,3 +232,37 @@ test("the desk refuses settings it can't sign with, when it's made", () => {
   assert.throws(() => rig({ wager: { ...base, programId: "nope" } }), /./);
   assert.throws(() => rig({ wager: { ...base, ticketSecret: new Uint8Array(31) } }), /32-byte/);
 });
+
+test("the practice pages get each ticketed series' fighters by name, and nothing for anything else", async () => {
+  const { r, pair } = await setup();
+  const [x] = await pair();
+  const id = x.body.series.id;
+  const names = await r.relay.referee.wager!.fighters([id, "ab".repeat(32), "not hex"]);
+  assert.deepEqual(Object.keys(names), [id]);
+  const fighterOf = (role: "A" | "B") => (x.body.series.role === role ? mint(0) : mint(1));
+  assert.deepEqual(names[id]!.A, { id: fighterOf("A"), name: fighterOf("A") === mint(0) ? "Fighter 0" : "Fighter 1", ticker: fighterOf("A") === mint(0) ? "F0" : "F1" });
+  assert.equal(names[id]!.B.id, fighterOf("B"));
+});
+
+test("the practice index lists ticketed series that reached the chain, newest first, and none that never opened", async () => {
+  const { r, chain, pair } = await setup();
+  const [x] = await pair();
+  const first = x.body.series.id;
+  const desk = r.relay.referee.wager!;
+  assert.deepEqual(await desk.ticketed(), [], "ticketed but not seen on-chain yet");
+  chain.states.set(first, { state: "live" });
+  await r.advance(60_000);
+  const [seen] = await desk.ticketed();
+  assert.equal(seen!.id, first);
+  assert.equal(seen!.playerA, x.body.series.ticket.playerA);
+  assert.deepEqual(Object.keys(seen!.fighters).sort(), ["A", "B"]);
+  // A pairing whose ticket expires unopened never shows.
+  chain.states.set(first, { state: "closed", how: "settled", winner: "A" });
+  await r.advance(60_000);
+  let [y] = await pair();
+  for (let i = 0; i < 4 && !y.body.series; i++) [y] = await pair();
+  await r.advance(16 * 60_000);
+  const ids = (await desk.ticketed()).map((s) => s.id);
+  assert.deepEqual(ids, [first]);
+  assert.equal((await desk.ticketed())[0]!.result?.how, "settled");
+});

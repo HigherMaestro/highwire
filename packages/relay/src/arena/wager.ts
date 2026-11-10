@@ -115,6 +115,9 @@ interface WagerQueue {
 
 const QUEUE = "arena:wager-queue";
 const OPEN = "arena:wagers-open";
+/** Every series the desk ticketed, newest last, capped: the practice pages' index (only a ticketed series can open). */
+const TICKETED = "arena:wagers-ticketed";
+const TICKETED_MAX = 1000;
 const series = (id: string) => `arena:wager:${id}`;
 const fighterKey = (id: string) => `arena:fighter:${id}`;
 const ALIVE_MS = 60_000;
@@ -232,6 +235,53 @@ export class WagerDesk {
     const w = this.standing(me);
     const you = { rating: Math.round(w.rating.r), record: w.record };
     return s ? { ...this.view(s, f), you } : { none: true, you };
+  }
+
+  /**
+   * The newest series the desk ticketed that reached the chain (opened, by what the desk saw, or closed), for the practice
+   * pages' list: the wallets, when it paired them, the fighters, and how the desk recorded the end. The pages read each
+   * series' moves and result from the chain; this only says which series to look for, so transactions that crowd the
+   * program's accounts can't push a series off the list.
+   */
+  async ticketed(limit = 300): Promise<{ id: string; playerA: string; playerB: string; createdAt: number; result: WagerResult | null; fighters: Record<"A" | "B", { id: string; name: string; ticker: string }> }[]> {
+    const ids = ((await this.store.get<string[]>(TICKETED))?.value ?? []).slice(-Math.max(1, Math.min(limit, TICKETED_MAX))).reverse();
+    const known = new Map<string, Fighter | null>();
+    const show = async (fid: string) => {
+      if (!known.has(fid)) known.set(fid, (await this.store.get<Fighter>(fighterKey(fid)))?.value ?? null);
+      const f = known.get(fid);
+      return { id: fid, name: f?.name ?? "A fighter", ticker: f?.ticker ?? "" };
+    };
+    const out = [];
+    for (const id of ids) {
+      const s = (await this.store.get<WagerSeries>(series(id)))?.value;
+      if (!s) continue;
+      // Reached the chain: the desk saw it open or live, or it closed in a way only an opened series can.
+      const reached = s.seen !== undefined || (s.result !== undefined && s.result.how !== "expired" && s.result.how !== "unaccepted");
+      if (!reached) continue;
+      out.push({ id, playerA: s.ticket.playerA, playerB: s.ticket.playerB, createdAt: s.createdAt, result: s.result ?? null, fighters: { A: await show(s.fighters.A), B: await show(s.fighters.B) } });
+    }
+    return out;
+  }
+
+  /**
+   * Who played each series the desk ticketed, for the practice pages: each side's fighter, its name and its ticker (coin
+   * names: creator content, shown as text). Series it never ticketed are left out.
+   */
+  async fighters(ids: string[]): Promise<Record<string, Record<"A" | "B", { id: string; name: string; ticker: string }>>> {
+    const out: Record<string, Record<"A" | "B", { id: string; name: string; ticker: string }>> = {};
+    const known = new Map<string, Fighter | null>();
+    const fighter = async (id: string) => {
+      if (!known.has(id)) known.set(id, (await this.store.get<Fighter>(fighterKey(id)))?.value ?? null);
+      return known.get(id)!;
+    };
+    for (const id of ids.filter((x) => /^[0-9a-f]{64}$/.test(x)).slice(0, 200)) {
+      const s = (await this.store.get<WagerSeries>(series(id)))?.value;
+      if (!s) continue;
+      const [a, b] = [await fighter(s.fighters.A), await fighter(s.fighters.B)];
+      const show = (f: Fighter | null, fid: string) => ({ id: fid, name: f?.name ?? "A fighter", ticker: f?.ticker ?? "" });
+      out[id] = { A: show(a, s.fighters.A), B: show(b, s.fighters.B) };
+    }
+    return out;
   }
 
   /** The series a fighter is in, if it's still being played: a pointer to a finished or missing series doesn't count. */
@@ -375,6 +425,7 @@ export class WagerDesk {
     const ticket: WagerTicketRecord = { seriesId: id, playerA: a.wallet, playerB: b.wallet, stake: tier, acceptDeadline: until, expiry: until, keyId: this.cfg.keyId };
     const signature = toHex(ed25519.sign(wagerTicketMessage(this.cfg.programId, ticket), this.cfg.ticketSecret));
     await update<string[]>(this.store, OPEN, (cur) => [...(cur ?? []), id]);
+    await update<string[]>(this.store, TICKETED, (cur) => [...(cur ?? []), id].slice(-TICKETED_MAX));
     await this.store.cas(series(id), 0, { id, ticket, signature, fighters: { A: a.id, B: b.id }, createdAt: now, status: "ticketed" } satisfies WagerSeries);
     for (const x of [a, b]) await update<Fighter>(this.store, fighterKey(x.id), (cur) => (cur ? { ...cur, wager: { ...this.standing(cur), series: id } } : undefined));
     return true;

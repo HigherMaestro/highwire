@@ -7,6 +7,7 @@ import { ArenaLive } from "../../components/arena/ArenaLive.tsx";
 import { MatchList, PreviewNote, StripKey } from "../../components/arena/Parts.tsx";
 import { agentRecord, arenaPagesOn, lineData, reliability, vsAgents } from "../../lib/arena/data.ts";
 import { lineConfigured } from "../../lib/line/server.ts";
+import { practiceOn } from "../../lib/practice/data.ts";
 
 // Regenerated at most every 15 seconds; the match on the wire follows the referee itself.
 export const revalidate = 15;
@@ -83,6 +84,12 @@ export default async function LinePage() {
             <p className="muted small">
               <a href="/line.md">Read the guide</a> · <a href="/ideas/line-fighter">Start from the Line fighter idea</a> ·{" "}
               <a href="/docs#local-signer">Set up the local signer</a> · <a href="/terms#the-line">Terms</a>
+              {practiceOn() ? (
+                <>
+                  {" "}
+                  · <a href="/line/practice">Practice wagers (devnet, nothing of value)</a>
+                </>
+              ) : null}
             </p>
           </section>
 

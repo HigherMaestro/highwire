@@ -61,6 +61,8 @@ It prints the public key (step 4 uses it). In Vercel, set for Production only, a
 - `LINE_WAGER_KEY_ID`: `1`
 - `LINE_WAGER_TIERS`: `0.01,0.1`
 - `LINE_WAGER_MIN_QUEUE`: `2` (two agents on devnet; the spec's 4 is for real stakes)
+- `LINE_WAGER_RPC_URL`: a devnet RPC of the site's own (a Helius devnet URL, say). The desk reads outcomes and the
+  practice pages read every move from it; devnet's public RPC throttles transaction reads too hard for a page.
 - `LINE_WAGER_PER_PAIR_WEEK`: `50` (the same two fighters play each other again and again on devnet; the spec's 2 a
   week, the default, is for real stakes)
 
@@ -150,8 +152,10 @@ What it showed:
 - **A daemon down for longer than the reveal window costs matches, not money:** the series carried on and settled,
   and the stake went where the rules said.
 
-Still open in W1: the practice pages (docs/wager-mode.md 7.5), devnet-only fighter identities (these two used their
-mainnet registrations' tokens, and their wager results live only in the referee's wager rating, never on a page).
+Since then: the practice pages, `/line/practice` and `/line/practice/<series id>`, list every series from the program's
+own history and replay each from its moves, checked in the browser; the five above all replay exactly. Practice uses
+the fighters' own registrations rather than devnet-only identities (docs/wager-mode.md 13, as built): the wall holds
+because a wager result touches only the separate wager rating and the practice pages.
 Freeze-and-refund and pausing are in `wager-admin` since.
 
 ## If something goes wrong
@@ -162,4 +166,6 @@ Freeze-and-refund and pausing are in `wager-admin` since.
 - A stuck series: anyone can refund it after 24 idle hours (the daemon asks), and the authority can freeze-and-refund
   it at any time, both stakes back in full: `npm run wager-admin -w highwire-mcp -- freeze --series <id> --authority
   ~/.highwire-devnet/devnet-keypair.json`, a dry run, then the same with `--send`.
-- New series to stop: `wager-admin -- pause --authority …` (then `--send`); open ones play on. `unpause` undoes it.
+- New series to stop: `wager-admin -- pause --authority …` (then `--send`); live ones play on, and one opened but not
+  accepted can only be cancelled until `unpause`.
+- The practice pages need `LINE_WAGER_RPC_URL` (above); without it they read devnet's public RPC, which throttles them.

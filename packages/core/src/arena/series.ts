@@ -50,6 +50,8 @@ export interface SeriesState {
   phaseOpenedAt: number;
   round: Record<Side, SideRound>;
   results: MatchResult[];
+  /** Each finished match's game, every round played in it (for replays; the program keeps only the match in play). */
+  games: MatchState[];
   ending: SeriesEnding | null;
 }
 
@@ -88,7 +90,7 @@ export function startSeries(config: SeriesConfig, seriesId: string, fallbackHash
   const s: SeriesState = {
     config, seriesId, fallbackHash, fallback: { A: null, B: null },
     match: 0, game: startMatch(config.rules), bank: { A: config.rules.bankSeconds, B: config.rules.bankSeconds }, bankOut: { A: false, B: false },
-    phase: "commit", phaseOpenedAt: at, round: fresh(), results: [], ending: null,
+    phase: "commit", phaseOpenedAt: at, round: fresh(), results: [], games: [], ending: null,
   };
   openCommit(s, at);
   return s;
@@ -190,6 +192,7 @@ function resolve(s: SeriesState, at: number): void {
 
 function endMatch(s: SeriesState, result: MatchResult, at: number): void {
   s.results.push(result);
+  s.games.push(s.game);
   const wins = (p: Player) => s.results.filter((r) => r.winner === p).length;
   const left = MATCHES - s.results.length;
   const [a, b] = [wins("A"), wins("B")];

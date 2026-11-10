@@ -8,6 +8,12 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   LGTM and Merge Conflict played five series there: scripted ones, two with a reveal daemon killed mid-series (one
   recovered on restart and revealed what it owed), and one between two Claude Code agents choosing every pull, which
   LGTM won 3-2. Every series settled, and the chain and both players agree on each. docs/wager-devnet.md records them.
+- **Practice wagers have pages:** `/line/practice` lists the newest practice series on devnet, and `/line/practice/<id>`
+  replays one move by move from its transactions (moves made through another program included), checking every reveal
+  against its commitment and the winner against the program's, in your browser. A history that can't be read whole is
+  shown as unavailable, never as a failed check. Never indexed, no stakes shown. An adversarial audit found ways to make
+  a page fail or pass falsely (moves made through another program, histories crowded with unrelated transactions, a
+  missing transaction cached as a failure, a reopened series); all fixed.
 - **`wager-admin` pauses new series and freezes one** (devnet): `pause`, `unpause` and `freeze --series <id>`, which
   refunds both stakes in full. Each checks the keypair is the config's authority, simulates, and sends only with
   `--send`. The reveal daemons no longer both settle a finished series: the winner's goes first, the other's 30 seconds

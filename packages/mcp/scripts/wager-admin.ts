@@ -10,7 +10,8 @@
 //       [--reveal-seconds 120] [--send]
 //       the one-time config, signed by the program's upgrade authority. Without --send it builds and simulates only.
 //   npm run wager-admin -w highwire-mcp -- pause|unpause --authority <keypair file> [--send]
-//       stops (or restarts) new series. Open ones play on and settle as usual.
+//       stops (or restarts) new series. Live ones play on and settle as usual; one opened but not yet accepted can't be
+//       accepted while paused, so it's cancelled after its deadline (the daemons do it), refunding A.
 //   npm run wager-admin -w highwire-mcp -- freeze --series <id> --authority <keypair file> [--send]
 //       refunds both stakes of one series in full, whatever its state, a decided but unsettled one included (docs/
 //       wager-mode.md 7.7). For a series stuck in a way nothing else will end; the players are told by the chain only.
@@ -128,7 +129,7 @@ async function configAuthority(c: Connection, file: unknown): Promise<Keypair> {
 
 async function pause(c: Connection, v: Record<string, string | boolean | undefined>, paused: boolean) {
   const keypair = await configAuthority(c, v.authority);
-  console.log(paused ? "pausing: no new series until unpause; open ones play on" : "unpausing: new series may open again");
+  console.log(paused ? "pausing: no new series or accepts until unpause; live ones play on" : "unpausing: new series may open again");
   await simulateThenSend(c, keypair, pauseInstruction(program(), keypair.publicKey, paused), v.send === true, paused ? "paused" : "unpaused");
 }
 
@@ -143,7 +144,8 @@ async function freeze(c: Connection, v: Record<string, string | boolean | undefi
   const b = new PublicKey(header.playerB);
   // A payee the runtime won't credit (a wallet turned into a program) goes read-only; the program burns its share.
   const readOnly = await uncreditable(new Chain({ cluster: "devnet", rpcUrl: c.rpcEndpoint }), [a, b]);
-  console.log(`freezing series ${id} (${header.status}): both stakes back in full to A ${a.toBase58()} and B ${b.toBase58()}${readOnly.length ? `; burning the share of ${readOnly.map(String).join(", ")}, which can't be credited` : ""}`);
+  const back = header.status === "open" ? `A's stake back in full to ${a.toBase58()} (B never staked)` : `both stakes back in full to A ${a.toBase58()} and B ${b.toBase58()}`;
+  console.log(`freezing series ${id} (${header.status}): ${back}${readOnly.length ? `; burning the share of ${readOnly.map(String).join(", ")}, which can't be credited` : ""}`);
   await simulateThenSend(c, keypair, freezeAndRefundInstruction(program(), keypair.publicKey, id, { playerA: a, playerB: b }, readOnly), v.send === true, "frozen and refunded");
 }
 
