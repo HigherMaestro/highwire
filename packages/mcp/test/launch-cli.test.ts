@@ -164,17 +164,17 @@ test("line run refuses to start where it couldn't read a series: a cluster witho
   assert.match(mixed.err.join("\n"), /policy is for mainnet/);
 });
 
-test("the daemon reads known series every pass, and scans for new ones only once a minute", async () => {
+test("the daemon reads its known series every pass, asks the referee for new ones every 15 seconds, and never scans", async () => {
   const { seriesLister } = await import("../src/line-cli.ts");
   const series = (id: string) => ({ header: { seriesId: id } }) as never;
   let t = 0;
-  let scans = 0;
-  let reads: string[][] = [];
+  let asked = 0;
+  const reads: string[][] = [];
   const onChain = new Set(["aa", "bb"]);
   const list = seriesLister({
-    scan: async () => {
-      scans++;
-      return [...onChain].map(series);
+    discover: async () => {
+      asked++;
+      return ["bb"];
     },
     readMany: async (ids) => {
       reads.push(ids);
@@ -183,21 +183,20 @@ test("the daemon reads known series every pass, and scans for new ones only once
     savedIds: () => ["aa"],
     now: () => t,
   });
-  assert.equal((await list()).length, 2);
+  assert.deepEqual((await list()).map((s: any) => s.header.seriesId).sort(), ["aa", "bb"]);
   t += 3_000;
   await list();
   t += 3_000;
   await list();
-  assert.equal(scans, 1, "one scan in the first minute");
-  assert.deepEqual(reads.at(-1)!.sort(), ["aa", "bb"], "the scan's series are read by id after it");
+  assert.equal(asked, 1, "the referee once in 15 seconds");
+  assert.equal(reads.length, 3, "one read a pass");
   onChain.delete("bb"); // closed
   t += 3_000;
   assert.deepEqual((await list()).map((s: any) => s.header.seriesId), ["aa"]);
-  t += 60_000;
+  t += 15_000;
   await list();
-  assert.equal(scans, 2);
-  // A scan the RPC refuses leaves the known series watched.
-  const refused = seriesLister({ scan: async () => { throw new Error("429"); }, readMany: async (ids) => ids.map(series), savedIds: () => ["cc"], onScanError: () => undefined });
-  assert.deepEqual((await refused()).map((s: any) => s.header.seriesId), ["cc"]);
-  reads = [];
+  assert.equal(asked, 2);
+  // A referee that doesn't answer leaves the saved series watched.
+  const down = seriesLister({ discover: async () => { throw new Error("503"); }, readMany: async (ids) => ids.map(series), savedIds: () => ["cc"], onDiscoverError: () => undefined });
+  assert.deepEqual((await down()).map((s: any) => s.header.seriesId), ["cc"]);
 });

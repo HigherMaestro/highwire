@@ -12,6 +12,7 @@ import {
   lamportsNumber,
   listWalletSeries,
   readSeries,
+  readSeriesMany,
   revealDeadline,
   seriesAddress,
   seriesOutcome,
@@ -245,7 +246,9 @@ export function registerWagerTools(server: McpServer, deps: Deps, signer: Execut
       run(async () => {
         const p = program();
         const quiet = <T>(f: () => Promise<T>) => f().catch(() => null);
-        const [all, info, mine] = await Promise.all([listWalletSeries(chain, wallet), quiet(() => relay("GET", "/api/arena/wager")), quiet(() => relay("GET", "/api/arena/wager/state"))]);
+        // An RPC that refuses getProgramAccounts (public devnet's often does): the series this wallet staked in, by id.
+        const series = () => listWalletSeries(chain, wallet).catch(() => readSeriesMany(chain, secrets().seriesIds()));
+        const [all, info, mine] = await Promise.all([series(), quiet(() => relay("GET", "/api/arena/wager")), quiet(() => relay("GET", "/api/arena/wager/state"))]);
         const since = Date.now() - 86_400_000;
         const entries = new AuditLog(signer.paths.audit).entries();
         const unlanded = new Set(entries.filter((e) => e.outcome === "not_landed" && e.signature).map((e) => e.signature));

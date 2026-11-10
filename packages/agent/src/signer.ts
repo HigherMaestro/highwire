@@ -7,7 +7,6 @@ import {
   checkPostText,
   decodeSeriesAccount,
   describeTransaction,
-  SERIES_PLAYER_OFFSETS,
   wagerProgram,
   checkSignInMessage,
   HigherError,
@@ -288,16 +287,24 @@ export class LocalSigner {
     this.audit.append({ tool, action: order.kind === "fee_claim" ? "claim" : "trade", cluster: order.cluster, wallet: this.wallet, outcome: "order", sol: "0", lamports: "0", ...(order.mint ? { mint: order.mint } : {}), order: order.id, reason });
   }
 
-  /** The wallet's series on-chain (open or live), plus stakes it sent recently that the chain may not show yet. */
+  /**
+   * The series this wallet has money in: every stake its audit log shows it sent in the last 30 days whose series
+   * account is still on-chain (one getMultipleAccounts, never getProgramAccounts, which public RPCs throttle), plus any
+   * sent in the last ten minutes, which the chain may not show yet.
+   */
   private async openSeries(connection: Connection, cluster: Cluster): Promise<number> {
     const program = wagerProgram(cluster);
     if (!program) throw refused("wagers", `wagering isn't deployed on ${cluster}`);
-    const seen = new Set<string>(this.audit.stakedSeriesSince(cluster, RECENT_STAKE_MS));
-    for (const offset of [SERIES_PLAYER_OFFSETS.A, SERIES_PLAYER_OFFSETS.B]) {
-      const accounts = await connection.getProgramAccounts(program, { commitment: "confirmed", filters: [{ memcmp: { offset, bytes: this.wallet } }] });
-      for (const a of accounts) seen.add(a.pubkey.toBase58());
+    const open = new Set<string>(this.audit.stakedSeriesSince(cluster, RECENT_STAKE_MS));
+    const staked = [...new Set(this.audit.stakedSeriesSince(cluster, 30 * 86_400_000))];
+    for (let i = 0; i < staked.length; i += 100) {
+      const chunk = staked.slice(i, i + 100);
+      const infos = await connection.getMultipleAccountsInfo(chunk.map((a) => new PublicKey(a)), "confirmed");
+      chunk.forEach((a, j) => {
+        if (infos[j]?.owner.equals(program)) open.add(a);
+      });
     }
-    return seen.size;
+    return open.size;
   }
 
   /**

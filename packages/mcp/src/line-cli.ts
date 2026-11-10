@@ -1,4 +1,4 @@
-import { lstatSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import { agentPaths, holdProcessLock, loadPolicy, lockHolder, WagerRunner, WagerSecrets, writeBeat, type LocalSigner, type WagerAction } from "highwire-agent";
 import { buildWagerMove, lamportsNumber, listWalletSeries, readSeriesMany, wagerProgram, type Chain, type SeriesAccountData, type WagerMoveRequest } from "highwire-core";
 import { serverOptionsFromEnv } from "./env.ts";
@@ -42,41 +42,50 @@ export async function actOnSeries(chain: Chain, signer: LocalSigner, seriesId: s
   return `${r.status}${sig ? ` ${sig}` : ""}${r.transactions[0]?.error ? ` (${r.transactions[0].error})` : ""}`;
 }
 
-/** How often the daemon scans the program for this wallet's series: getProgramAccounts is the call RPCs throttle most. */
-export const SCAN_EVERY_MS = 60_000;
+/** How often the daemon asks the referee which series its fighter is in. */
+export const DISCOVER_EVERY_MS = 15_000;
 
 /**
- * The daemon's view of the wallet's series, cheap enough for a public RPC: every pass reads the series it already
- * knows (its own secrets file's, and the last scan's) in one getMultipleAccounts; a full scan for new ones runs once a
- * minute. A series this wallet stakes in is in its secrets file from the stake on, so it's watched from the first pass;
- * the scan only finds series it's in but hasn't staked (B's, before accepting), where nothing is urgent.
+ * The daemon's view of the wallet's series, without getProgramAccounts (which public RPCs throttle hard): the series
+ * its secrets file holds commitments for (every one it staked in), and the one the referee says its fighter is in (so
+ * B is watched before it accepts), all read in one getMultipleAccounts a pass. The referee is asked every 15 seconds.
  */
 export function seriesLister(o: {
-  scan: () => Promise<SeriesAccountData[]>;
+  discover: () => Promise<string[]>;
   readMany: (ids: string[]) => Promise<SeriesAccountData[]>;
   savedIds: () => string[];
-  onScanError?: (err: unknown) => void;
+  onDiscoverError?: (err: unknown) => void;
   now?: () => number;
-  scanEveryMs?: number;
+  discoverEveryMs?: number;
 }): () => Promise<SeriesAccountData[]> {
-  let lastScan = -Infinity;
+  let last = -Infinity;
   let found = new Set<string>();
   const now = o.now ?? Date.now;
   return async () => {
-    if (now() - lastScan >= (o.scanEveryMs ?? SCAN_EVERY_MS)) {
-      lastScan = now();
+    if (now() - last >= (o.discoverEveryMs ?? DISCOVER_EVERY_MS)) {
+      last = now();
       try {
-        found = new Set((await o.scan()).map((s) => s.header.seriesId));
+        for (const id of await o.discover()) found.add(id);
       } catch (err) {
-        o.onScanError?.(err);
+        o.onDiscoverError?.(err);
       }
     }
     const ids = [...new Set([...o.savedIds(), ...found])];
     const live = ids.length ? await o.readMany(ids) : [];
-    // A series that has closed drops out of the scan's list too.
+    // A series that has closed stops being read.
     found = new Set([...found].filter((id) => live.some((s) => s.header.seriesId === id)));
     return live;
   };
+}
+
+/** The fighter's arena token, from this home's agent.json, for the referee this server uses; null without one. Never shown. */
+function arenaToken(path: string, relayUrl: string): string | null {
+  try {
+    const a = JSON.parse(readFileSync(path, "utf8"))?.arena;
+    return a && a.relay === relayUrl && typeof a.token === "string" ? a.token : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function runLine(argv: string[], io: LineIo): Promise<number> {
@@ -126,15 +135,23 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
           `${policy.actions.includes("wager") && policy.wagers ? "" : 'The policy doesn\'t allow wagers ("wager" in actions and a wagers section), so every action will be refused. '}Ctrl-C to stop.`,
       );
       const secrets = new WagerSecrets(paths.wagerSecrets);
-      let listFailures = 0;
+      let discoverFailures = 0;
       const list = seriesLister({
-        scan: () => listWalletSeries(deps.chain, signer.publicKey),
+        discover: async () => {
+          const token = arenaToken(paths.agent, deps.relayUrl);
+          if (!token) return [];
+          const res = await deps.fetch(`${deps.relayUrl}/api/arena/wager/state`, { headers: { authorization: `Bearer ${token}` } });
+          if (!res.ok) throw new Error(`the referee answered ${res.status}`);
+          const body = (await res.json()) as { id?: unknown };
+          return typeof body.id === "string" && /^[0-9a-f]{64}$/.test(body.id) ? [body.id] : [];
+        },
         readMany: (ids) => readSeriesMany(deps.chain, ids),
         savedIds: () => secrets.seriesIds(),
-        onScanError: (err) => {
-          if (++listFailures % 20 === 1) io.err(`WARNING the RPC refused getProgramAccounts (${err instanceof Error ? err.message : String(err)}): only series already known are watched. Use an RPC that allows it.`);
+        onDiscoverError: (err) => {
+          if (++discoverFailures % 20 === 1) io.err(`WARNING couldn't ask the referee for this fighter's series (${err instanceof Error ? err.message : String(err)}): only series with a saved secret are watched.`);
         },
       });
+      if (!arenaToken(paths.agent, deps.relayUrl)) io.err(`No arena token in ${paths.agent}: only series with a saved secret are watched. Copy the fighter's agent.json here.`);
       const runner = new WagerRunner({
         wallet: signer.wallet,
         list,

@@ -108,7 +108,7 @@ function wagerEnvelope(wallet: PublicKey, kind: "open" | "accept" | "reveal" | "
 }
 
 /** A fake RPC: `spend` is what the simulation shows leaving the wallet; the series to accept is the codec file's (0.1 SOL a side). */
-const fakeConnection = (o: { spend?: number } = {}) =>
+const fakeConnection = (o: { spend?: number; onChain?: Set<string> } = {}) =>
   ({
     getGenesisHash: async () => GENESIS_HASHES.devnet,
     getBalance: async () => 2e9,
@@ -117,7 +117,10 @@ const fakeConnection = (o: { spend?: number } = {}) =>
     confirmTransaction: async () => ({ value: { err: null } }),
     getLatestBlockhash: async () => ({ blockhash: PublicKey.default.toBase58(), lastValidBlockHeight: 200 }),
     getTransaction: async () => null,
-    getProgramAccounts: async () => [],
+    getProgramAccounts: async () => {
+      throw new Error("the signer never scans the program");
+    },
+    getMultipleAccountsInfo: async (keys: PublicKey[]) => keys.map((k) => (o.onChain?.has(k.toBase58()) ? { owner: program, data: Buffer.alloc(0), executable: false, lamports: 1 } : null)),
     getAccountInfo: async () => ({ data: Buffer.from(codec.seriesAccount, "hex"), owner: program, executable: false, lamports: 1 }),
   }) as unknown as Connection;
 
@@ -413,4 +416,19 @@ test("the runner beats only after it has read the wallet's series, never while i
   fail = false;
   await runner.tick();
   assert.equal(beats, 1);
+});
+
+test("the open-series count is this wallet's stakes still on-chain, read by address, never by scanning the program", async () => {
+  const { paths, signer } = live({ wagers: { max_stake_sol: 0.1, max_open: 1, tiers: [0.1], allow_retire: false } });
+  const { seriesAddress } = await import("highwire-core");
+  const old = seriesAddress(program, "99".repeat(32)).toBase58();
+  // A stake sent two hours ago (outside the ten-minute window): it counts only while its series is still on-chain.
+  const { AuditLog } = await import("../src/index.ts");
+  const log = new AuditLog(paths.audit, () => new Date(Date.now() - 2 * 3_600_000));
+  log.append({ tool: "line_stake", action: "wager", cluster: "devnet", wallet: signer.wallet, outcome: "sent", sol: "0.1", lamports: "100000000", wager: "open", series: old });
+  const open = () => signer.execute(fakeConnection({ spend: 104_000_000, onChain: new Set([old]) }), { tool: "t", intent: ask("open"), envelope: wagerEnvelope(signer.publicKey, "open", "aa".repeat(32)) });
+  await assert.rejects(open(), /1 series already open/);
+  // Once that series has closed, the slot is free.
+  const ok = await signer.execute(fakeConnection({ spend: 104_000_000, onChain: new Set() }), { tool: "t", intent: ask("open"), envelope: wagerEnvelope(signer.publicKey, "open", "bb".repeat(32)) });
+  assert.equal(ok.status, "sent");
 });
