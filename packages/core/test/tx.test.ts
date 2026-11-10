@@ -8,16 +8,20 @@ import { MAINNET } from "../src/higher/constants.ts";
 import { Chain } from "../src/tx/chain.ts";
 import { assertSafe, describeTransaction, UnsafeTransactionError } from "../src/tx/decode.ts";
 import { ENVELOPE_FORMAT, type Envelope } from "../src/tx/envelope.ts";
+import { readCreatorFees } from "../src/tx/claim.ts";
 import { buildLaunch, LaunchKeys, launchFingerprint, validateLaunch, type LaunchInput } from "../src/tx/launch.ts";
 import { MAX_LISTING_BYTES, walletPositions } from "../src/tx/positions.ts";
 import { reviewEnvelope } from "../src/tx/review.ts";
 import { signUrl } from "../src/tx/sign-link.ts";
 import type { Finished } from "../src/tx/envelope.ts";
+import { assertTradeMatches } from "../src/tx/trade.ts";
+import type { Quote } from "../src/tx/quote.ts";
 import { formatLamports, formatTokens, solToLamports, tokensToBase } from "../src/tx/units.ts";
 import { replayFetch, type Recording } from "./replay.ts";
 import { runScenario } from "./run-scenario.ts";
 import { CLAIM_COIN, CREATOR, CURVE_COIN, GRADUATED_COIN, GRADUATED_HOLDER, LAUNCH_MINT, LAUNCH_URI, TRADER, type Scenario } from "./scenarios.ts";
 
+const WSOL_MINT = "So11111111111111111111111111111111111111112";
 const fixture = (name: Scenario): Recording => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), "utf8"));
 const replay = (name: Scenario) => runScenario(name, replayFetch(fixture(name)));
 
@@ -183,6 +187,29 @@ test("an idempotency key keeps its mint, and refuses a different coin", () => {
   assert.ok(!keys.get("launch-456", fp).publicKey.equals(a.publicKey));
 });
 
+test("a pool trade's minimum out may rise with the pool, but not fall more than 1% below the quote", () => {
+  const coin = GRADUATED_COIN.toBase58();
+  const quote = { stage: "graduated", side: "buy", amountInUsed: 1_000_000n, amountOut: 1_000n, minOut: 1_000n } as Quote;
+  const swap = (minOut: bigint) => [{ kind: "cpmm-swap" as const, amountIn: 1_000_000n, minOut, inputMint: WSOL_MINT, outputMint: coin }];
+  // At zero slippage, a trade in between that moves the pool the user's way raises the minimum above the quoted output.
+  assertTradeMatches(swap(1_005n), quote, GRADUATED_COIN);
+  assertTradeMatches(swap(990n), quote, GRADUATED_COIN);
+  assert.throws(() => assertTradeMatches(swap(989n), quote, GRADUATED_COIN), UnsafeTransactionError);
+});
+
+test("the creator vault reads as empty only when it doesn't exist; other RPC failures are errors", async () => {
+  const rpc = (error: { code: number; message: string }) =>
+    new Chain({
+      fetch: (async (_input: unknown, init?: RequestInit) => {
+        const { id } = JSON.parse(String(init?.body)) as { id: unknown };
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id, error }), { headers: { "content-type": "application/json" } });
+      }) as typeof fetch,
+    });
+  const missing = await readCreatorFees(rpc({ code: -32602, message: "Invalid param: could not find account" }), CREATOR, []);
+  assert.equal(missing.curve, null);
+  await assert.rejects(readCreatorFees(rpc({ code: -32000, message: "Node is unhealthy" }), CREATOR, []));
+});
+
 test("creator fee claims cover the curve vault and the graduated pool", async () => {
   const r = await replay("claim");
   assert.ok(r && "claimable" in r);
@@ -192,7 +219,10 @@ test("creator fee claims cover the curve vault and the graduated pool", async ()
   checkEnvelope(env, CREATOR);
   assert.ok(env.transactions.every((t) => t.simulation.ok));
   assert.ok(env.transactions.some((t) => t.summary.some((l) => l.includes("Claim curve creator fees"))));
-  assert.ok(env.transactions.some((t) => t.summary.some((l) => l.includes("Collect the pool creator fees"))));
+  const collect = env.transactions.flatMap((t) => t.summary).find((l) => l.includes("Collect the pool creator fees"));
+  assert.ok(collect);
+  const pool = r.claimable.pools.find((p) => p.mint === CLAIM_COIN.toBase58())!;
+  assert.ok(collect.includes(`pool ${pool.poolId} `), collect);
 });
 
 test("positions keep only higher.fun coins, recognised on-chain", async () => {

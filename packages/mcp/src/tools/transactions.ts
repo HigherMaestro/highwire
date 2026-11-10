@@ -408,8 +408,12 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
         "Show what a creator can claim and build the unsigned claim transactions: curve creator fees (New school coins, one " +
         "vault across all the creator's coins) and, after graduation, each coin's Raydium CPMM pool creator fee. A New " +
         "school creator's third of the locked-LP fees is paid by higher.fun off-chain; that is reported, not claimed. " +
-        "Returns a sign_url for the user's wallet when there is something to claim.",
-      inputSchema: { wallet: wallet.describe("The creator's wallet, which signs (public key only).") },
+        "Set confirm_claim to true only after the user asked to claim. Returns a sign_url for the user's wallet when there " +
+        "is something to claim.",
+      inputSchema: {
+        wallet: wallet.describe("The creator's wallet, which signs (public key only)."),
+        confirm_claim: z.literal(true).describe("Set to true only after the user asked to claim their creator fees."),
+      },
       annotations: { title: "Build creator fee claims (unsigned)", ...BUILD },
     },
     (args) =>

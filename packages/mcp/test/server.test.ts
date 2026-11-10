@@ -59,6 +59,8 @@ test("build tools demand their confirm flag and cap slippage", async () => {
     arguments: { wallet: base.wallet, name: "X", ticker: "X", fee_mode: "classic", idempotency_key: "launch-key-1" },
   });
   assert.equal(launch.isError, true, "confirm_launch is required");
+  const claim = await client.callTool({ name: "build_claim_creator_fees", arguments: { wallet: base.wallet } });
+  assert.equal(claim.isError, true, "confirm_claim is required");
 });
 
 test("no tool takes a private key", async () => {

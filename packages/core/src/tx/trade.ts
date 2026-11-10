@@ -32,7 +32,7 @@ const asVersioned = (tx: unknown, what: string): VersionedTransaction => {
   return tx;
 };
 
-/** Checks the one trade in the bytes against the quote: same kind, mint, amount in, and a min-out no looser than quoted. */
+/** Checks the one trade in the bytes against the quote: same kind, mint, amount in, and a min-out no looser than quoted (within 1% on a pool). */
 export function assertTradeMatches(trades: DecodedTrade[], quote: Quote, mint: PublicKey): void {
   const fail = (m: string): never => {
     throw new UnsafeTransactionError(m);
@@ -53,9 +53,10 @@ export function assertTradeMatches(trades: DecodedTrade[], quote: Quote, mint: P
   if (t.minOut <= 0n) fail("the transaction has no minimum-out guard");
   if (quote.stage === "curve") {
     if (t.minOut !== quote.minOut) fail("the transaction's minimum out isn't the quoted one");
-  } else if (t.minOut > quote.amountOut || t.minOut < (quote.minOut * 99n) / 100n) {
-    // The pool is re-read for the swap, so a trade landing in between can move it a little.
-    fail("the transaction's minimum out is more than 1% away from the quote; quote again");
+  } else if (t.minOut < (quote.minOut * 99n) / 100n) {
+    // The pool is re-read for the swap, so a trade landing in between can move it a little. A move in the user's
+    // favour only raises the guard; a move against them may lower it by at most 1%.
+    fail("the transaction's minimum out is more than 1% below the quote; quote again");
   }
 }
 

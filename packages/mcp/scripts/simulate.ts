@@ -215,7 +215,7 @@ for (const cluster of clusters) {
     }
     await pause();
     console.log("- claim creator fees");
-    await report(cluster, `claim creator fees (${plan.creator})`, await call(client, "build_claim_creator_fees", { wallet: plan.creator }));
+    await report(cluster, `claim creator fees (${plan.creator})`, await call(client, "build_claim_creator_fees", { wallet: plan.creator, confirm_claim: true }));
 
     // Protected sends (docs/protected-sends.md), built in-process since no build tool tips: a tipped buy (the tip with the
     // read-only "don't front" key on it), and a fee claim and its buyback in one transaction, on the curve and in a pool.
@@ -285,7 +285,7 @@ for (const cluster of clusters) {
         }),
       );
       await pause();
-      await report(cluster, `claim creator fees (${wallet})`, await call(client, "build_claim_creator_fees", { wallet }));
+      await report(cluster, `claim creator fees (${wallet})`, await call(client, "build_claim_creator_fees", { wallet, confirm_claim: true }));
     }
   }
   await client.close();
