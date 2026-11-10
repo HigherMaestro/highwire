@@ -42,6 +42,43 @@ export async function actOnSeries(chain: Chain, signer: LocalSigner, seriesId: s
   return `${r.status}${sig ? ` ${sig}` : ""}${r.transactions[0]?.error ? ` (${r.transactions[0].error})` : ""}`;
 }
 
+/** How often the daemon scans the program for this wallet's series: getProgramAccounts is the call RPCs throttle most. */
+export const SCAN_EVERY_MS = 60_000;
+
+/**
+ * The daemon's view of the wallet's series, cheap enough for a public RPC: every pass reads the series it already
+ * knows (its own secrets file's, and the last scan's) in one getMultipleAccounts; a full scan for new ones runs once a
+ * minute. A series this wallet stakes in is in its secrets file from the stake on, so it's watched from the first pass;
+ * the scan only finds series it's in but hasn't staked (B's, before accepting), where nothing is urgent.
+ */
+export function seriesLister(o: {
+  scan: () => Promise<SeriesAccountData[]>;
+  readMany: (ids: string[]) => Promise<SeriesAccountData[]>;
+  savedIds: () => string[];
+  onScanError?: (err: unknown) => void;
+  now?: () => number;
+  scanEveryMs?: number;
+}): () => Promise<SeriesAccountData[]> {
+  let lastScan = -Infinity;
+  let found = new Set<string>();
+  const now = o.now ?? Date.now;
+  return async () => {
+    if (now() - lastScan >= (o.scanEveryMs ?? SCAN_EVERY_MS)) {
+      lastScan = now();
+      try {
+        found = new Set((await o.scan()).map((s) => s.header.seriesId));
+      } catch (err) {
+        o.onScanError?.(err);
+      }
+    }
+    const ids = [...new Set([...o.savedIds(), ...found])];
+    const live = ids.length ? await o.readMany(ids) : [];
+    // A series that has closed drops out of the scan's list too.
+    found = new Set([...found].filter((id) => live.some((s) => s.header.seriesId === id)));
+    return live;
+  };
+}
+
 export async function runLine(argv: string[], io: LineIo): Promise<number> {
   const env = io.env ?? process.env;
   const [cmd] = argv;
@@ -89,22 +126,15 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
           `${policy.actions.includes("wager") && policy.wagers ? "" : 'The policy doesn\'t allow wagers ("wager" in actions and a wagers section), so every action will be refused. '}Ctrl-C to stop.`,
       );
       const secrets = new WagerSecrets(paths.wagerSecrets);
-      // Two sources, so a node that throttles getProgramAccounts doesn't leave the daemon blind: the wallet's series by
-      // owner, and every series the secrets file holds a commitment for, by id.
       let listFailures = 0;
-      const list = async (): Promise<SeriesAccountData[]> => {
-        const byId = await readSeriesMany(deps.chain, secrets.seriesIds());
-        let scanned: SeriesAccountData[] = [];
-        try {
-          scanned = await listWalletSeries(deps.chain, signer.publicKey);
-          listFailures = 0;
-        } catch (err) {
-          if (++listFailures % 20 === 1) io.err(`WARNING the RPC refused getProgramAccounts (${err instanceof Error ? err.message : String(err)}): only series with a saved secret are watched. Use an RPC that allows it.`);
-        }
-        const all = new Map(byId.map((s) => [s.header.seriesId, s]));
-        for (const s of scanned) all.set(s.header.seriesId, s);
-        return [...all.values()];
-      };
+      const list = seriesLister({
+        scan: () => listWalletSeries(deps.chain, signer.publicKey),
+        readMany: (ids) => readSeriesMany(deps.chain, ids),
+        savedIds: () => secrets.seriesIds(),
+        onScanError: (err) => {
+          if (++listFailures % 20 === 1) io.err(`WARNING the RPC refused getProgramAccounts (${err instanceof Error ? err.message : String(err)}): only series already known are watched. Use an RPC that allows it.`);
+        },
+      });
       const runner = new WagerRunner({
         wallet: signer.wallet,
         list,

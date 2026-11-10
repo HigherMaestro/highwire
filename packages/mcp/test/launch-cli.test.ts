@@ -163,3 +163,41 @@ test("line run refuses to start where it couldn't read a series: a cluster witho
   assert.equal(await runLine(["run"], { ...mixed.io, signal, env: { HIGHWIRE_HOME: dir, HIGHWIRE_KEYPAIR_PATH: keyPath, HIGHWIRE_CLUSTER: "devnet" } }), 2);
   assert.match(mixed.err.join("\n"), /policy is for mainnet/);
 });
+
+test("the daemon reads known series every pass, and scans for new ones only once a minute", async () => {
+  const { seriesLister } = await import("../src/line-cli.ts");
+  const series = (id: string) => ({ header: { seriesId: id } }) as never;
+  let t = 0;
+  let scans = 0;
+  let reads: string[][] = [];
+  const onChain = new Set(["aa", "bb"]);
+  const list = seriesLister({
+    scan: async () => {
+      scans++;
+      return [...onChain].map(series);
+    },
+    readMany: async (ids) => {
+      reads.push(ids);
+      return ids.filter((id) => onChain.has(id)).map(series);
+    },
+    savedIds: () => ["aa"],
+    now: () => t,
+  });
+  assert.equal((await list()).length, 2);
+  t += 3_000;
+  await list();
+  t += 3_000;
+  await list();
+  assert.equal(scans, 1, "one scan in the first minute");
+  assert.deepEqual(reads.at(-1)!.sort(), ["aa", "bb"], "the scan's series are read by id after it");
+  onChain.delete("bb"); // closed
+  t += 3_000;
+  assert.deepEqual((await list()).map((s: any) => s.header.seriesId), ["aa"]);
+  t += 60_000;
+  await list();
+  assert.equal(scans, 2);
+  // A scan the RPC refuses leaves the known series watched.
+  const refused = seriesLister({ scan: async () => { throw new Error("429"); }, readMany: async (ids) => ids.map(series), savedIds: () => ["cc"], onScanError: () => undefined });
+  assert.deepEqual((await refused()).map((s: any) => s.header.seriesId), ["cc"]);
+  reads = [];
+});
