@@ -2,7 +2,15 @@ import { createHmac } from "node:crypto";
 import { createVestingAccount, getPdaCreatorVault, getPdaVestId, LaunchpadConfig, LaunchpadPool, TxVersion } from "@raydium-io/raydium-sdk-v2";
 import { NATIVE_MINT } from "@solana/spl-token";
 import BN from "bn.js";
-import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type AddressLookupTableAccount } from "@solana/web3.js";
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  TransactionMessage,
+  VersionedTransaction,
+  type AddressLookupTableAccount,
+  type TransactionInstruction,
+} from "@solana/web3.js";
 import type { HigherApi } from "../higher/api.ts";
 import {
   CLASSIC_RESERVE,
@@ -17,7 +25,7 @@ import {
 } from "../higher/constants.ts";
 import { HigherError, ValidationError } from "../lib/errors.ts";
 import type { Chain } from "./chain.ts";
-import { UnsafeTransactionError } from "./decode.ts";
+import { describeTransaction, UnsafeTransactionError } from "./decode.ts";
 import { finish, priorityFee, type BuiltTx, type Envelope } from "./envelope.ts";
 import { checkSlippage } from "./quote.ts";
 import { lamportsNumber } from "./units.ts";
@@ -54,6 +62,13 @@ export interface LaunchInput {
   simulate?: boolean;
 }
 
+/** The creator-lock assignment as its own transaction. finish() sets the real blockhash. */
+function lockTransaction(wallet: PublicKey, ix: TransactionInstruction): VersionedTransaction {
+  return new VersionedTransaction(
+    new TransactionMessage({ payerKey: wallet, recentBlockhash: PublicKey.default.toBase58(), instructions: [ix] }).compileToV0Message(),
+  );
+}
+
 /**
  * For a coin this wallet created on New school with a creator lock that was never assigned to it: the lock assignment,
  * built and checked like any other. Null when there's nothing to assign.
@@ -74,8 +89,7 @@ async function pendingLockAssignment(
   const vestingRecord = getPdaVestId(chain.key("launchLabProgram"), poolId, wallet).publicKey;
   if (await chain.connection.getAccountInfo(vestingRecord)) return null;
   const ix = createVestingAccount(chain.key("launchLabProgram"), wallet, wallet, poolId, vestingRecord, new BN(remaining.toString()));
-  const { blockhash } = await chain.connection.getLatestBlockhash("confirmed");
-  const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: blockhash, instructions: [ix] }).compileToV0Message());
+  const tx = lockTransaction(wallet, ix);
   const done = await finish({
     chain,
     wallet,
@@ -329,8 +343,14 @@ export async function buildLaunch(chain: Chain, api: HigherApi | null, input: La
 
   const expectBase = { wallet, platformId, extraSigners: [mint.publicKey] };
   const feeExpect = fee ? { launchFee: { to: fee.treasury, maxLamports: fee.lamports } } : {};
-  const txs: BuiltTx[] = created.transactions.map((t, i) => {
+  const versioned = created.transactions.map((t) => {
     if (!(t instanceof VersionedTransaction)) throw new Error("expected v0 transactions from createLaunchpad");
+    return t;
+  });
+  const tables = await chain.lookupTables(versioned);
+  const paysFee = (t: VersionedTransaction) =>
+    fee !== null && describeTransaction(t, chain.cluster, tables).transfers.some((x) => x.to === fee.treasury.toBase58());
+  const txs: BuiltTx[] = versioned.map((t, i) => {
     const needsMint = t.message.staticAccountKeys
       .slice(0, t.message.header.numRequiredSignatures)
       .some((k) => k.equals(mint.publicKey));
@@ -340,7 +360,7 @@ export async function buildLaunch(chain: Chain, api: HigherApi | null, input: La
       presign: needsMint ? [mint] : [],
       dependsOn: i === 0 ? [] : [0],
       // The fee rides on the last instruction of the create; the checker needs it on whichever transaction carries it.
-      expect: { ...expectBase, ...(t.message.compiledInstructions.length && hasTransferTo(t, fee?.treasury) ? feeExpect : {}) },
+      expect: { ...expectBase, ...(paysFee(t) ? feeExpect : {}) },
     };
   });
 
@@ -353,15 +373,14 @@ export async function buildLaunch(chain: Chain, api: HigherApi | null, input: La
     const i = txs.findIndex((b) => hasLaunchCreate(b.tx, chain));
     if (i < 0) throw new UnsafeTransactionError("the SDK built no coin creation");
     const b = txs[i]!;
-    b.tx = withCreator(b.tx, await chain.lookupTables([b.tx]), wallet, input.creator, funding, chain);
+    b.tx = withCreator(b.tx, tables, wallet, input.creator, funding, chain);
     b.expect = { ...b.expect, launchCreator: input.creator, ...(funding ? { creatorFunding: funding } : {}) };
   }
 
   if (input.mode === "rewards" && lock) {
     const vestingRecord = getPdaVestId(chain.key("launchLabProgram"), poolId, wallet).publicKey;
     const ix = createVestingAccount(chain.key("launchLabProgram"), wallet, wallet, poolId, vestingRecord, new BN(lock.amount.toString()));
-    const { blockhash } = await chain.connection.getLatestBlockhash("confirmed");
-    const tx = new VersionedTransaction(new TransactionMessage({ payerKey: wallet, recentBlockhash: blockhash, instructions: [ix] }).compileToV0Message());
+    const tx = lockTransaction(wallet, ix);
     txs.push({ tx, label: "assign the creator lock to the creator", dependsOn: [0], expect: { wallet, vestingPool: poolId } });
   }
 
@@ -406,18 +425,6 @@ export async function buildLaunch(chain: Chain, api: HigherApi | null, input: La
     creatorLock: input.mode === "rewards" && lock && input.creatorLockPct ? { pct: input.creatorLockPct, tokens: lock.amount } : null,
     envelope: done.envelope,
   };
-}
-
-function hasTransferTo(tx: VersionedTransaction, to: PublicKey | undefined): boolean {
-  if (!to) return false;
-  const keys = tx.message.staticAccountKeys;
-  return tx.message.compiledInstructions.some(
-    (ix) =>
-      keys[ix.programIdIndex]?.toBase58() === "11111111111111111111111111111111" &&
-      ix.data.length === 12 &&
-      Buffer.from(ix.data).readUInt32LE(0) === 2 &&
-      keys[ix.accountKeyIndexes[1] ?? -1]?.equals(to),
-  );
 }
 
 export function describeFeeMode(mode: FeeMode) {

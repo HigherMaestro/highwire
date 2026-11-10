@@ -49,7 +49,11 @@ export async function readCreatorFees(chain: Chain, wallet: PublicKey, graduated
   const vault = getPdaCreatorVault(chain.key("launchLabProgram"), wallet, WSOL).publicKey;
   const vaultBalance = await chain.connection.getTokenAccountBalance(vault).then(
     (r) => BigInt(r.value.amount),
-    () => 0n, // no vault yet: nothing earned on the curve
+    (err: unknown) => {
+      // No vault yet: nothing earned on the curve. Any other failure (a rate limit, a timeout) mustn't read as zero.
+      if (err instanceof Error && /could not find account/i.test(err.message)) return 0n;
+      throw err;
+    },
   );
   const pools: CreatorFees["pools"] = [];
   const ids = graduatedMints.map((m) => chain.graduatedPoolId(m));
@@ -135,7 +139,6 @@ export async function buildClaimCreatorFees(
   }
 
   if (fees.pools.length > 0) {
-    const { blockhash } = await chain.connection.getLatestBlockhash("confirmed");
     const a = chain.addresses;
     const perPool = (p: CreatorFees["pools"][number]): TransactionInstruction[] => {
       const pool = p.pool;
@@ -165,7 +168,8 @@ export async function buildClaimCreatorFees(
       new VersionedTransaction(
         new TransactionMessage({
           payerKey: wallet,
-          recentBlockhash: blockhash,
+          // finish() sets the real blockhash; a placeholder is the same size.
+          recentBlockhash: PublicKey.default.toBase58(),
           instructions: [
             ComputeBudgetProgram.setComputeUnitLimit({ units: Math.min(1_400_000, COMPUTE_UNITS.claim * groups.length) }),
             ComputeBudgetProgram.setComputeUnitPrice({ microLamports }),
@@ -174,23 +178,32 @@ export async function buildClaimCreatorFees(
           ],
         }).compileToV0Message(),
       );
-    const fits = (groups: TransactionInstruction[][]) => {
+    /** The compiled batch, or null if it doesn't fit one transaction with room for the memo finish() adds. */
+    const fitting = (groups: TransactionInstruction[][]): VersionedTransaction | null => {
       try {
-        // Leave room for the memo finish() adds.
-        return compile(groups).serialize().length <= MAX_TX_BYTES - MEMO_RESERVE_BYTES;
+        const tx = compile(groups);
+        return tx.serialize().length <= MAX_TX_BYTES - MEMO_RESERVE_BYTES ? tx : null;
       } catch {
-        return false;
+        return null;
       }
     };
+    const collect = (tx: VersionedTransaction) => txs.push({ tx, label: "collect CPMM pool creator fees", expect: { wallet, allowLaunchLab: false } });
+    // Each pool's instructions are compiled into the batch once; the last batch that fit is the one sent.
     let batch: TransactionInstruction[][] = [];
+    let built: VersionedTransaction | null = null;
     for (const p of fees.pools) {
       const next = [...batch, perPool(p)];
-      if (batch.length > 0 && !fits(next)) {
-        txs.push({ tx: compile(batch), label: "collect CPMM pool creator fees", expect: { wallet, allowLaunchLab: false } });
+      const tx = fitting(next);
+      if (tx || batch.length === 0) {
+        batch = next;
+        built = tx ?? compile(next);
+      } else {
+        collect(built!);
         batch = [perPool(p)];
-      } else batch = next;
+        built = fitting(batch) ?? compile(batch);
+      }
     }
-    if (batch.length > 0) txs.push({ tx: compile(batch), label: "collect CPMM pool creator fees", expect: { wallet, allowLaunchLab: false } });
+    if (built) collect(built);
   }
 
   const done = await finish({ chain, wallet, kind: "claim", txs, simulate: opts.simulate, jito: opts.jito });
