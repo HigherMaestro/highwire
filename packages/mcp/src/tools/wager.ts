@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { PublicKey } from "@solana/web3.js";
-import { AuditLog, lockHolder, WagerSecrets, type ExecuteResult, type WagerFallback } from "highwire-agent";
+import { AuditLog, daemonStatus, WagerSecrets, type ExecuteResult, type WagerFallback } from "highwire-agent";
 import {
   arena,
   buildWagerAccept,
@@ -13,6 +13,8 @@ import {
   listWalletSeries,
   readSeries,
   revealDeadline,
+  seriesAddress,
+  seriesOutcome,
   sideIndexOf,
   solToLamports,
   ValidationError,
@@ -26,14 +28,27 @@ import { EXECUTE, READ_ONLY, type Deps, type ExecutionSigner } from "./shared.ts
 // Wagers on The Line (docs/wager-mode.md 7.3, 7.6): practice series on devnet, staked from the local signer's wallet.
 // line_stake stakes (an execute: the policy's wagers section, the simulation and the audit log apply); line_state,
 // line_move and line_retire take a `series` for a staked series; line_wagers lists them. A wager move is a commit sent
-// at once: the reveal daemon (`highwire line run`) reveals it, so staking refuses unless the daemon is running. Moves
-// carry no table talk, and no tool ever returns a nonce or a salt.
+// at once: the reveal daemon (`highwire line run`) reveals it, so staking and moving refuse unless the daemon is
+// really working for this wallet. Moves carry no table talk, and no tool ever returns a nonce or a salt.
 
-export const SERIES_ID = z.string().regex(/^[0-9a-f]{64}$/).describe("The wager series' id (64 hex characters), from line_stake.");
+export const SERIES_ID = z.string().regex(/^[0-9a-f]{64}$/).describe("The wager series' id (64 hex characters), from line_stake or line_wagers.");
 
 type Relay = (method: "GET" | "POST", path: string, body?: unknown) => Promise<any>;
 
-const ticketOf = (t: { seriesId: string; playerA: string; playerB: string; stake: string; acceptDeadline: number; expiry: number; keyId: number }): WagerTicket => ({ ...t, stake: BigInt(t.stake) });
+/** A commit must land strictly before its deadline: moves this close to it are refused, as they'd likely land late. */
+const COMMIT_MARGIN_SECONDS = 5;
+const MATCH_REASONS: Record<number, string> = { 1: "reached the end", 2: "rounds up", 3: "tie-break", 4: "draw", 5: "a missed reveal", 6: "void" };
+const SERIES_REASONS: Record<number, string> = { 1: "decided", 2: "draw", 3: "retired" };
+
+const ticketOf = (t: { seriesId?: unknown; playerA?: unknown; playerB?: unknown; stake?: unknown; acceptDeadline?: unknown; expiry?: unknown; keyId?: unknown }): WagerTicket => ({
+  seriesId: String(t.seriesId),
+  playerA: String(t.playerA),
+  playerB: String(t.playerB),
+  stake: /^\d{1,20}$/.test(String(t.stake)) ? BigInt(String(t.stake)) : -1n,
+  acceptDeadline: Number(t.acceptDeadline),
+  expiry: Number(t.expiry),
+  keyId: Number(t.keyId),
+});
 
 function fallbackOf(text: string): WagerFallback {
   const f = arena.parseFallback(text);
@@ -41,10 +56,19 @@ function fallbackOf(text: string): WagerFallback {
   return f.kind === "steady" ? { kind: "steady", pull: f.pull } : { kind: f.kind, pull: 0 };
 }
 
-const daemonRunning = (signer: ExecutionSigner) => lockHolder(signer.paths.wagerRunner) !== null;
+/** What the signer did, honestly: landed, a dry run, or not landed and why. */
+function outcome(r: ExecuteResult): { landed: boolean; dryRun: boolean; report: Record<string, unknown> } {
+  const t = r.transactions[0];
+  const landed = r.status === "sent" && Boolean(t?.confirmed);
+  return {
+    landed,
+    dryRun: r.status === "dry_run",
+    report: { status: r.status, ...(t ? { signature: t.signature, confirmed: t.confirmed, ...(t.error ? { error: t.error } : {}) } : {}) },
+  };
+}
 
 /** The series as this wallet's agent needs it: its own side, the node from its side, its clock; never a secret. */
-export function wagerView(s: SeriesAccountData, wallet: string, now = Math.floor(Date.now() / 1000)) {
+export function wagerView(s: SeriesAccountData, wallet: string, now = Math.floor(Date.now() / 1000), ownPull?: (hash: string) => number | undefined) {
   const h = s.header;
   const me = h.playerA === wallet ? "A" : "B";
   const them = me === "A" ? "B" : "A";
@@ -56,7 +80,12 @@ export function wagerView(s: SeriesAccountData, wallet: string, now = Math.floor
   const toMe = (node: number) => (mine === 1 ? node : -node);
   const score = (p: "A" | "B") => x.results.filter((r) => r?.winner === p).length;
   const committed = x.round[mine].hash !== null || x.round[mine].owesFallback;
-  const yourMove = !x.ending && x.phase === "commit" && !committed;
+  const deadline = commitDeadline(x, mine);
+  const open = !x.ending && x.phase === "commit" && !committed;
+  const yourMove = open && now < deadline - COMMIT_MARGIN_SECONDS;
+  const bankOut = x.bankOut[me];
+  const hash = x.round[mine].hash;
+  const yourCommit = hash && ownPull ? ownPull(hash) : undefined;
   return {
     ...base,
     score: { you: score(me), them: score(them) },
@@ -70,19 +99,25 @@ export function wagerView(s: SeriesAccountData, wallet: string, now = Math.floor
     energy: { you: x.game.energy[mine], them: x.game.energy[theirs] },
     last_pulls: x.game.rounds > 0 ? { you: x.game.lastPull[mine], them: x.game.lastPull[theirs] } : null,
     bank_seconds: { you: x.bank[me], them: x.bank[them] },
+    bank_out: bankOut,
     your_move: yourMove,
-    ...(yourMove ? { seconds_to_commit: Math.max(0, commitDeadline(x, mine) - now) } : {}),
+    ...(yourMove ? { seconds_to_commit: deadline - now - COMMIT_MARGIN_SECONDS } : {}),
+    ...(yourCommit !== undefined ? { your_committed_pull: yourCommit } : {}),
     ...(x.phase === "reveal" ? { reveal_window_ends_in: Math.max(0, revealDeadline(x) - now), you_revealed: x.round[mine].pull !== null } : {}),
     their_fallback: x.fallback[them],
-    matches: x.results.flatMap((r, i) => (r ? [{ match: i + 1, result: r.winner === null ? "void or draw" : r.winner === me ? "you" : "them", reason: r.reason }] : [])),
-    ending: x.ending ? { result: x.ending.winner === null ? "draw" : x.ending.winner === me ? "win" : "loss", reason: x.ending.reason } : null,
+    matches: x.results.flatMap((r, i) => (r ? [{ match: i + 1, winner: r.winner === null ? "nobody" : r.winner === me ? "you" : "them", how: MATCH_REASONS[r.reason] ?? String(r.reason) }] : [])),
+    ending: x.ending ? { result: x.ending.winner === null ? "draw" : x.ending.winner === me ? "win" : "loss", how: SERIES_REASONS[x.ending.reason] ?? String(x.ending.reason) } : null,
     next_step: x.ending
       ? "The series is over: the reveal daemon settles it and the payout goes to the wallet."
-      : yourMove
-        ? `Your move: line_move with this series and your pull (0 to ${x.game.energy[mine]}).`
-        : x.phase === "reveal"
-          ? "Both have committed: the reveal daemon reveals your move. Call line_state for the result."
-          : "Waiting for the opponent's commit. Call line_state.",
+      : bankOut
+        ? "Your bank is out: your fallback plays every round for the rest of the series. Call line_state to follow it."
+        : yourMove
+          ? `Your move: line_move with this series, series_match ${x.match + 1}, round ${x.game.rounds + 1} and your pull (0 to ${x.game.energy[mine]}).`
+          : open
+            ? "Too late to commit this round: your fallback plays it once the deadline is applied. Call line_state."
+            : x.phase === "reveal"
+              ? "Both have committed: the reveal daemon reveals your move. Call line_state for the result."
+              : "Waiting for the opponent's commit. Call line_state.",
   };
 }
 
@@ -90,16 +125,30 @@ export function registerWagerTools(server: McpServer, deps: Deps, signer: Execut
   const { chain } = deps;
   const secrets = () => new WagerSecrets(signer.paths.wagerSecrets);
   const wallet = new PublicKey(signer.wallet);
-  const onDevnet = () => {
-    if (!wagerProgram(chain.cluster)) throw new ValidationError(`Wagering on The Line is devnet only for now (practice wagers); this server builds on ${chain.cluster}.`);
+  const program = () => {
+    const p = wagerProgram(chain.cluster);
+    if (!p) throw new ValidationError(`Wagering on The Line is devnet only for now (practice wagers); this server builds on ${chain.cluster}.`);
+    return p;
+  };
+  const daemon = () => daemonStatus(signer.paths, { wallet: signer.wallet, cluster: chain.cluster, programId: program().toBase58() });
+  const needDaemon = (what: string) => {
+    const d = daemon();
+    if (!d.ok) throw new HigherError(`${d.reason}, so ${what}. Ask the user to start \`highwire line run\` (same HIGHWIRE_CLUSTER, keypair and policy as this server).`, { code: "line_daemon_off" });
   };
   const execute = (tool: string, kind: string, solOut: bigint, envelope: Parameters<ExecutionSigner["execute"]>[1]["envelope"]): Promise<ExecuteResult> =>
     signer.execute(chain.connection, { tool, intent: { action: "wager", cluster: chain.cluster, solOut, wager: { kind } }, envelope });
-  const sent = (r: ExecuteResult) => ({ status: r.status, ...(r.transactions[0] ? { signature: r.transactions[0].signature, confirmed: r.transactions[0].confirmed, ...(r.transactions[0].error ? { error: r.transactions[0].error } : {}) } : {}) });
+  const ownPull = (series: string) => (hash: string) => secrets().move(series, hash)?.pull;
+  const isMine = (s: SeriesAccountData) => s.header.playerA === signer.wallet || s.header.playerB === signer.wallet;
+  /** Whether this wallet's stake into this series confirmed before: a ticket is used once. */
+  const stakedBefore = (series: string) => {
+    const addr = seriesAddress(program(), series).toBase58();
+    return new AuditLog(signer.paths.audit).entries().some((e) => e.action === "wager" && e.series === addr && (e.wager === "open" || e.wager === "accept") && e.outcome === "confirmed");
+  };
   const mustRead = async (id: string) => {
+    program();
     const s = await readSeries(chain, id);
-    if (!s) throw new HigherError("That series isn't on-chain: it hasn't been opened, or it has closed.", { code: "line_not_found" });
-    if (s.header.playerA !== signer.wallet && s.header.playerB !== signer.wallet) throw new ValidationError("That series is between other wallets.");
+    if (!s) throw new HigherError("That series isn't on-chain: it hasn't been opened, or it has closed (line_state says how it ended).", { code: "wager_not_found" });
+    if (!isMine(s)) throw new ValidationError("That series is between other wallets.");
     return s;
   };
 
@@ -110,57 +159,74 @@ export function registerWagerTools(server: McpServer, deps: Deps, signer: Execut
       description:
         "Stake SOL on a best-of-5 series against another agent (devnet: practice wagers). Pairs you at a stake tier, then " +
         "stakes from this wallet through the local signer, inside the user's policy (\"wager\" in its actions, and a wagers " +
-        "section allowing the tier). Needs the reveal daemon running (`highwire line run`): a move nobody reveals forfeits " +
-        "its match. If it answers waiting, call it again within a minute. Call it again after pairing to accept, as B, " +
-        "once A has opened. Declare a fallback for rounds you miss: zero, mirror, or steady:<n>.",
+        "section allowing the tier). Needs the reveal daemon working for this wallet (`highwire line run`): a move nobody " +
+        "reveals forfeits its match. If it answers waiting, call it again within a minute. Paired as B, call it again once " +
+        "A has opened, to accept. Declare a fallback for rounds you miss: zero, mirror, or steady:<n>.",
       inputSchema: {
         stake: z.number().positive().max(10).describe("SOL a side: one of the tiers (line_wagers lists them)."),
-        fallback: z.string().regex(/^(zero|mirror|steady:\d{1,2})$/).describe('What plays when you miss a commit: "zero", "mirror" or "steady:<n>". Committed now, public once used.'),
+        fallback: z.string().regex(/^(zero|mirror|steady:\d{1,2})$/).describe('What plays when you miss a commit: "zero", "mirror" or "steady:<n>". Committed when you stake, public once used.'),
         confirm: z.literal(true).describe("Stake the SOL."),
       },
       annotations: { title: "The Line: stake a wager series (local signer)", ...EXECUTE },
     },
     (args) =>
       run(async () => {
-        onDevnet();
+        program();
         signer.precheck("wager", chain.cluster, "line_stake");
-        if (!daemonRunning(signer)) {
-          throw new HigherError("The reveal daemon isn't running, so nothing could reveal your moves. Ask the user to start `highwire line run`, then stake.", { code: "line_daemon_off" });
-        }
+        needDaemon("nothing could reveal your moves");
         const fallback = fallbackOf(args.fallback);
-        const out = await relay("POST", "/api/arena/wager/join", { stake: String(solToLamports(args.stake)) });
+        const lamports = solToLamports(args.stake);
+        const out = await relay("POST", "/api/arena/wager/join", { stake: String(lamports) });
         if (out.waiting) {
           return {
             waiting: true,
-            waiting_at_this_tier: out.waitingAtTier,
-            owners_needed: out.needed,
-            waited_seconds: out.waitedSeconds,
+            waiting_at_this_tier: Number(out.waitingAtTier) || 0,
+            owners_needed: Number(out.needed) || 0,
+            waited_seconds: Number(out.waitedSeconds) || 0,
             next_step: "No opponent yet. Call line_stake again within a minute to keep your place. Nothing is staked until you're paired.",
           };
         }
-        const v = out.series;
-        if (v.cluster !== chain.cluster) throw new ValidationError(`The referee's wagers are on ${v.cluster}, and this server builds on ${chain.cluster}.`);
-        const onchain = await readSeries(chain, v.id);
-        if (onchain?.header.status === "live" || (v.role === "A" && onchain)) return { paired: true, ...wagerView(onchain, signer.wallet) };
-        if (v.role === "B" && !onchain) {
-          return { paired: true, series: v.id, you: "B", waiting_for_opener: true, accept_by: new Date(v.ticket.acceptDeadline * 1000).toISOString(), next_step: "Your opponent opens first. Call line_stake again in a few seconds to accept." };
+        const v = out.series ?? {};
+        const ticket = ticketOf(v.ticket ?? {});
+        const role: "A" | "B" = v.role === "A" ? "A" : "B";
+        if (v.cluster !== chain.cluster) throw new ValidationError(`The referee's wagers are on ${String(v.cluster)}, and this server builds on ${chain.cluster}.`);
+        if (typeof v.id !== "string" || ticket.seriesId !== v.id || (role === "A" ? ticket.playerA : ticket.playerB) !== signer.wallet) {
+          throw new HigherError("The referee's ticket isn't for this wallet in that role; nothing was staked. Tell the user.", { code: "wager_mismatch" });
         }
-        const ticket = ticketOf(v.ticket);
-        const fb = secrets().newFallback(v.id, v.role, fallback);
-        const built = v.role === "A"
-          ? await buildWagerOpen(chain, { wallet, ticket, signature: v.signature, fallbackHash: fb.hash })
-          : await buildWagerAccept(chain, { wallet, ticket, signature: v.signature, fallbackHash: fb.hash });
-        const r = await execute("line_stake", v.role === "A" ? "open" : "accept", built.stake, built.envelope);
+        // The stake is the ticket's: the agent asked for this one, so it must be this one.
+        if (ticket.stake !== lamports) {
+          throw new HigherError(
+            `You're already paired at ${lamportsNumber(ticket.stake)} SOL a side (series ${v.id}). Stake that (line_stake with stake ${lamportsNumber(ticket.stake)}), or let the pairing expire in a few minutes. Nothing was staked.`,
+            { code: "wager_mismatch" },
+          );
+        }
+        const onchain = await readSeries(chain, v.id);
+        if (onchain) {
+          if (!isMine(onchain)) throw new HigherError("The referee named a series between other wallets; nothing was staked. Tell the user.", { code: "wager_mismatch" });
+          if (onchain.header.status === "live" || role === "A") return { paired: true, ...wagerView(onchain, signer.wallet, undefined, ownPull(v.id)), note: "Already staked: the fallback is the one committed then." };
+        } else if (role === "B") {
+          return { paired: true, series: v.id, you: "B", waiting_for_opener: true, accept_by: new Date(ticket.acceptDeadline * 1000).toISOString(), next_step: "Your opponent opens first. Call line_stake again in a few seconds to accept." };
+        }
+        if (stakedBefore(v.id)) {
+          throw new HigherError("This wallet already staked in that series, which has since closed: a ticket is used once. Call line_stake again in a minute or two for a new pairing.", { code: "wager_mismatch" });
+        }
+        needDaemon("nothing could reveal your moves");
+        const fb = secrets().newFallback(v.id, role, fallback);
+        const built = role === "A"
+          ? await buildWagerOpen(chain, { wallet, ticket, signature: String(v.signature), fallbackHash: fb.hash })
+          : await buildWagerAccept(chain, { wallet, ticket, signature: String(v.signature), fallbackHash: fb.hash });
+        const o = outcome(await execute("line_stake", role === "A" ? "open" : "accept", built.stake, built.envelope));
         return {
           paired: true,
           series: v.id,
-          you: v.role,
+          you: role,
           stake_sol: lamportsNumber(built.stake),
-          staked: sent(r),
-          next_step:
-            r.status === "dry_run"
-              ? "The policy is a dry run, so nothing was staked. The user sets it live to wager."
-              : v.role === "A"
+          staked: o.report,
+          next_step: o.dryRun
+            ? "The policy is a dry run, so nothing was staked. The user sets it live to wager."
+            : !o.landed
+              ? "The stake didn't land (see staked). Call line_stake again to retry while the ticket lasts, or tell the user."
+              : role === "A"
                 ? "Staked and opened. Your opponent accepts next; then play with line_state and line_move, passing this series."
                 : "Staked and accepted: match 1 has started. Play with line_state and line_move, passing this series.",
         };
@@ -171,78 +237,112 @@ export function registerWagerTools(server: McpServer, deps: Deps, signer: Execut
     "line_wagers",
     {
       title: "The Line: your wagers",
-      description: "This wallet's open and live wager series (from the chain), today's gross stakes (from the audit log), your wager rating and record, the tiers, and whether the reveal daemon is running.",
+      description: "This wallet's open and live wager series (from the chain), today's stakes (from the audit log), your wager rating and record and the tiers (from the referee, when it answers), and whether the reveal daemon is working.",
       inputSchema: {},
       annotations: { title: "The Line: your wagers", ...READ_ONLY },
     },
     () =>
       run(async () => {
-        onDevnet();
-        const [all, info, mine] = await Promise.all([listWalletSeries(chain, wallet), relay("GET", "/api/arena/wager"), relay("GET", "/api/arena/wager/state")]);
+        const p = program();
+        const quiet = <T>(f: () => Promise<T>) => f().catch(() => null);
+        const [all, info, mine] = await Promise.all([listWalletSeries(chain, wallet), quiet(() => relay("GET", "/api/arena/wager")), quiet(() => relay("GET", "/api/arena/wager/state"))]);
         const since = Date.now() - 86_400_000;
-        const staked = new AuditLog(signer.paths.audit)
-          .entries()
-          .filter((e) => e.action === "wager" && e.outcome === "sent" && (e.wager === "open" || e.wager === "accept") && e.cluster === chain.cluster && Date.parse(e.time) >= since)
+        const entries = new AuditLog(signer.paths.audit).entries();
+        const unlanded = new Set(entries.filter((e) => e.outcome === "not_landed" && e.signature).map((e) => e.signature));
+        const staked = entries
+          .filter((e) => e.action === "wager" && e.outcome === "sent" && e.wallet === signer.wallet && (e.wager === "open" || e.wager === "accept") && e.cluster === chain.cluster && Date.parse(e.time) >= since && !(e.signature && unlanded.has(e.signature)))
           .reduce((n, e) => n + BigInt(e.lamports), 0n);
+        const d = daemon();
         return {
-          series: all.map((s) => wagerView(s, signer.wallet)),
-          today: { staked_sol: lamportsNumber(staked), note: "Gross: what left the wallet to stake, rent included. Winnings never free up the day's limit." },
-          you: mine.you,
-          tiers_sol: (info.tiers as string[]).map((t) => lamportsNumber(BigInt(t))),
-          reveal_daemon: daemonRunning(signer) ? "running" : "NOT running: start `highwire line run` before staking",
+          series: all.map((s) => wagerView(s, signer.wallet, undefined, ownPull(s.header.seriesId))),
+          today: { staked_sol: lamportsNumber(staked), note: "Every stake sent in the last 24 hours, rent included, as the policy's daily limit counts it. Winnings never free up the day's limit." },
+          you: mine?.you ? { rating: Number(mine.you.rating) || null, record: { win: Number(mine.you.record?.win) || 0, draw: Number(mine.you.record?.draw) || 0, loss: Number(mine.you.record?.loss) || 0 } } : null,
+          tiers_sol: Array.isArray(info?.tiers) ? (info.tiers as unknown[]).filter((t) => /^\d{1,20}$/.test(String(t))).map((t) => lamportsNumber(BigInt(String(t)))) : null,
+          ...(info ? {} : { referee: "not answering: the series above come from the chain" }),
+          program: p.toBase58(),
+          reveal_daemon: d.ok ? "working" : `NOT working: ${d.reason}. Start \`highwire line run\` before staking.`,
         };
       }),
   );
 
+  /** A series that's gone from the chain: how it ended, from the program's closing event. */
+  const ended = async (series: string) => {
+    const o = await seriesOutcome(chain, series);
+    if (o.state !== "closed") throw new HigherError("That series isn't on-chain: it hasn't been opened, or its closing isn't readable yet.", { code: "wager_not_found" });
+    const me = secrets().player(series);
+    const result = o.how !== "settled" ? o.how : o.winner === null ? "draw" : me === null ? `won by ${o.winner}` : o.winner === me ? "win" : "loss";
+    return { series, status: "closed", how: o.how, result, ...(me ? { you: me } : {}), next_step: "The series is over and settled: the payout, if any, is in the wallet. line_stake starts another." };
+  };
+
   return {
     /** line_state for a series: the chain's state, waiting up to 40 seconds for a change when asked. */
     async state(series: string, wait: boolean) {
-      onDevnet();
-      let s = await mustRead(series);
+      program();
+      const first = await readSeries(chain, series);
+      if (!first) return ended(series);
+      if (!isMine(first)) throw new ValidationError("That series is between other wallets.");
+      let s = first;
       const key = (x: SeriesAccountData) => `${x.series?.match}:${x.series?.game.rounds}:${x.series?.phase}:${Boolean(x.series?.ending)}`;
       const start = key(s);
-      const until = Date.now() + 40_000;
       const yourMove = (x: SeriesAccountData) => {
         const v = wagerView(x, signer.wallet);
         return "your_move" in v && v.your_move;
       };
+      const until = Date.now() + 40_000;
       while (wait && !s.series?.ending && !yourMove(s) && Date.now() < until) {
         await new Promise((r) => setTimeout(r, 2_000));
         const next = await readSeries(chain, series);
-        if (!next) break;
+        if (!next) return ended(series);
         s = next;
         if (key(s) !== start) break;
       }
-      return { ...wagerView(s, signer.wallet), reveal_daemon: daemonRunning(signer) ? "running" : "NOT running: your commits won't be revealed" };
+      const d = daemon();
+      return { ...wagerView(s, signer.wallet, undefined, ownPull(series)), reveal_daemon: d.ok ? "working" : `NOT working: ${d.reason}` };
     },
 
     /** line_move for a series: commits the pull (the nonce saved first, never returned); the daemon reveals it. */
-    async move(series: string, pull: number, round: number | undefined, line: string | undefined) {
-      onDevnet();
+    async move(series: string, pull: number, seriesMatch: number | undefined, round: number | undefined, line: string | undefined) {
+      program();
       if (line) throw new ValidationError("Wager series carry no table talk: an opponent with money at stake has every reason to mislead.");
-      if (!daemonRunning(signer)) throw new HigherError("The reveal daemon isn't running, so this commit would never be revealed and the match would be forfeited. Ask the user to start `highwire line run`.", { code: "line_daemon_off" });
+      if (seriesMatch === undefined || round === undefined) throw new ValidationError("A wager move names its series_match (1 to 5) and round, from line_state, so it's committed to the state you saw.");
+      needDaemon("this commit would never be revealed and the match would be forfeited");
       const s = await mustRead(series);
       const x = s.series;
-      if (!x || x.ending) throw new ValidationError(x ? "The series is over." : "The series hasn't started: B hasn't accepted yet.");
+      if (!x || x.ending) throw new HigherError(x ? "The series is over." : "The series hasn't started: B hasn't accepted yet.", { code: "wager_late" });
       const me = s.header.playerA === signer.wallet ? "A" : "B";
       const mine = sideIndexOf(me, x.match);
-      if (x.phase !== "commit") throw new HigherError("Both sides have committed this round; it's being revealed. Call line_state.", { code: "line_late" });
-      if (x.round[mine].hash !== null || x.round[mine].owesFallback) throw new HigherError("You've already committed this round (or missed it, and your fallback plays).", { code: "line_conflict" });
       const r = x.game.rounds + 1;
-      if (round !== undefined && round !== r) throw new HigherError(`This is round ${r} of match ${x.match + 1}.`, { code: "line_late" });
+      if (seriesMatch !== x.match + 1 || round !== r) throw new HigherError(`It's now round ${r} of match ${x.match + 1}: call line_state and choose again.`, { code: "wager_late" });
+      if (x.phase !== "commit") throw new HigherError("Both sides have committed this round; it's being revealed.", { code: "wager_late" });
+      if (x.round[mine].hash !== null) throw new HigherError("You've already committed this round.", { code: "wager_conflict" });
+      if (x.round[mine].owesFallback) throw new HigherError(x.bankOut[me] ? "Your bank is out: your fallback plays every round." : "You missed this round's commit: your fallback plays it.", { code: "wager_late" });
+      if (Math.floor(Date.now() / 1000) >= commitDeadline(x, mine) - COMMIT_MARGIN_SECONDS) throw new HigherError("Too close to this round's commit deadline to land in time: your fallback plays it.", { code: "wager_late" });
       if (pull > x.game.energy[mine]) throw new ValidationError(`You have ${x.game.energy[mine]} energy: pull 0 to ${x.game.energy[mine]}.`);
       const secret = secrets().newMove(series, x.match, r, mine === 0 ? "a" : "b", pull);
       const built = await buildWagerMove(chain, { wallet, seriesId: series, args: { kind: "commit", round: r, hash: secret.hash } });
-      const out = await execute("line_move", "commit", 0n, built.envelope);
-      return { committed: sent(out), match: x.match + 1, round: r, pull, next_step: "Committed. The reveal daemon reveals it once both sides have committed; call line_state for the result." };
+      const o = outcome(await execute("line_move", "commit", 0n, built.envelope));
+      return {
+        committed: o.report,
+        match: x.match + 1,
+        round: r,
+        pull,
+        next_step: o.dryRun
+          ? "The policy is a dry run, so nothing was committed and your fallback will play this round."
+          : o.landed
+            ? "Committed. The reveal daemon reveals it once both sides have committed; call line_state for the result."
+            : "The commit didn't land (see committed). Call line_state: if it's still your move, try again; otherwise your fallback plays.",
+      };
     },
 
     /** line_retire for a series: concedes it, if the policy's wagers.allow_retire lets it. */
     async retire(series: string) {
-      onDevnet();
       await mustRead(series);
       const built = await buildWagerMove(chain, { wallet, seriesId: series, args: { kind: "retire" } });
-      return { retired: sent(await execute("line_retire", "retire", 0n, built.envelope)), next_step: "Conceded: the series goes to your opponent, and the daemon settles it." };
+      const o = outcome(await execute("line_retire", "retire", 0n, built.envelope));
+      return {
+        retired: o.report,
+        next_step: o.landed ? "Conceded: the series goes to your opponent, and the daemon settles it." : o.dryRun ? "The policy is a dry run: nothing was conceded." : "The retirement didn't land (see retired); the series goes on. Call line_state.",
+      };
     },
   };
 }

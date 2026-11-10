@@ -147,3 +147,19 @@ test("line: usage, and run or series need the signer's keypair; nothing starts w
     assert.match(w.err.join("\n"), /HIGHWIRE_KEYPAIR_PATH/);
   }
 });
+
+test("line run refuses to start where it couldn't read a series: a cluster without the program, or another cluster's policy", async () => {
+  const { runLine } = await import("../src/line-cli.ts");
+  const { Keypair } = await import("@solana/web3.js");
+  const dir = home();
+  const keyPath = join(dir, "k.json");
+  writeFileSync(keyPath, JSON.stringify(Array.from(Keypair.generate().secretKey)), { mode: 0o600 });
+  writeFileSync(join(dir, "policy.json"), JSON.stringify({ version: 1, cluster: "mainnet", live: true, actions: ["wager"], max_sol_per_tx: 0.5, max_sol_per_day: 1, max_slippage_bps: 100, transfer_allowlist: [], wagers: { max_stake_sol: 0.1, tiers: [0.1] } }));
+  const signal = new AbortController().signal;
+  const main = capture();
+  assert.equal(await runLine(["run"], { ...main.io, signal, env: { HIGHWIRE_HOME: dir, HIGHWIRE_KEYPAIR_PATH: keyPath, HIGHWIRE_CLUSTER: "mainnet" } }), 2);
+  assert.match(main.err.join("\n"), /isn't deployed on mainnet/);
+  const mixed = capture();
+  assert.equal(await runLine(["run"], { ...mixed.io, signal, env: { HIGHWIRE_HOME: dir, HIGHWIRE_KEYPAIR_PATH: keyPath, HIGHWIRE_CLUSTER: "devnet" } }), 2);
+  assert.match(mixed.err.join("\n"), /policy is for mainnet/);
+});

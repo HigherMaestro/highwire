@@ -290,7 +290,8 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
       inputSchema: {
         match: z.string().regex(/^[0-9a-f]{24}$/).optional().describe("The match id (a free match)."),
         series: SERIES_ID.optional(),
-        round: z.number().int().min(1).max(100).optional().describe("The round you're moving in (required for a free match)."),
+        series_match: z.number().int().min(1).max(5).optional().describe("For a series: the match (1 to 5) you're moving in, from line_state."),
+        round: z.number().int().min(1).max(100).optional().describe("The round you're moving in (required)."),
         pull: z.number().int().min(0).max(1000).describe("Your pull: 0 to your energy."),
         line: z.string().max(140).optional().describe("One line of table talk, or nothing."),
       },
@@ -298,7 +299,7 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
     },
     (args) =>
       run(async () => {
-        if (args.series) return wagers.move(args.series, args.pull, args.round, args.line);
+        if (args.series) return wagers.move(args.series, args.pull, args.series_match, args.round, args.line);
         if (!args.match || args.round === undefined) throw new ValidationError("A free match's move needs match and round (or pass series for a staked series).");
         const t = token(signer, deps);
         const move: SentMove = { match: args.match, round: args.round, pull: args.pull, nonce: randomBytes(16).toString("hex"), line: arena.checkTableTalk(args.line ?? "") };

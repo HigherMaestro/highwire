@@ -8,7 +8,9 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   your wallet inside your policy; `line_state`, `line_move` and `line_retire` take a `series` to play one (a move commits
   on-chain at once, and `highwire line run`, the reveal daemon, reveals it); `line_wagers` lists your series. Staking
   and moving refuse unless the daemon is running, wagers carry no table talk, and no tool returns a nonce or a salt.
-  line.md explains it.
+  line.md explains it. An adversarial audit found the daemon check could pass for a dead daemon or one on the wrong
+  cluster (it now needs the daemon's fresh heartbeat for this wallet), and ways a stake or move could differ from what
+  the agent asked or saw; all fixed.
 - **Wager mode's matchmaker** (devnet, off until its ticket key is set). The referee gains a wager desk: it pairs two
   fighters at the same stake tier, from different owners, once enough owners wait there, at most twice a week per
   pair, and signs the ticket the program needs to open and accept their series. It never holds money. It reads each

@@ -1,4 +1,6 @@
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { commitDeadline, revealDeadline, sideIndexOf, type SeriesAccountData } from "highwire-core";
+import { lockHolder } from "./lock.ts";
 import type { WagerFallback, WagerSecrets } from "./wager-secrets.ts";
 
 // The reveal daemon (docs/wager-mode.md 7.3): `highwire line run` watches the wallet's wager series and, through the
@@ -73,6 +75,45 @@ export function nextWagerAction(s: SeriesAccountData, wallet: string, now: numbe
   return { action: null };
 }
 
+/** What the daemon writes after every pass that read the wallet's series, so the tools can tell it's really working. */
+export interface DaemonBeat {
+  pid: number;
+  wallet: string;
+  cluster: string;
+  programId: string;
+  /** ms */
+  beat: number;
+}
+
+/** A heartbeat older than this means the daemon isn't working (it passes every 3 seconds). */
+export const BEAT_FRESH_MS = 20_000;
+
+export function writeBeat(path: string, beat: DaemonBeat): void {
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(beat), { mode: 0o600 });
+  renameSync(tmp, path);
+}
+
+/**
+ * Whether a reveal daemon is really working for this wallet, cluster and program: it holds the lock, and its heartbeat
+ * is fresh and names them. A lock alone proves only that some process with that pid is alive.
+ */
+export function daemonStatus(paths: { wagerRunner: string; wagerBeat: string }, want: { wallet: string; cluster: string; programId: string }, now = Date.now()): { ok: true } | { ok: false; reason: string } {
+  const pid = lockHolder(paths.wagerRunner);
+  if (pid === null) return { ok: false, reason: "the reveal daemon isn't running" };
+  let b: Partial<DaemonBeat>;
+  try {
+    b = JSON.parse(readFileSync(paths.wagerBeat, "utf8"));
+  } catch {
+    return { ok: false, reason: "the reveal daemon hasn't read the wallet's series yet" };
+  }
+  if (b.pid !== pid) return { ok: false, reason: "the reveal daemon's heartbeat is from another process" };
+  if (b.wallet !== want.wallet) return { ok: false, reason: `the reveal daemon is watching another wallet (${b.wallet})` };
+  if (b.cluster !== want.cluster || b.programId !== want.programId) return { ok: false, reason: `the reveal daemon is on ${b.cluster}, not ${want.cluster}` };
+  if (typeof b.beat !== "number" || now - b.beat > BEAT_FRESH_MS) return { ok: false, reason: "the reveal daemon hasn't read the wallet's series in the last 20 seconds (its RPC may be failing, or the policy keeps it idle)" };
+  return { ok: true };
+}
+
 export interface WagerRunnerOptions {
   wallet: string;
   /** The wallet's series on-chain. */
@@ -87,6 +128,8 @@ export interface WagerRunnerOptions {
   log: (line: string) => void;
   now?: () => number;
   intervalMs?: number;
+  /** Called after every pass that read the wallet's series while not idle: the heartbeat. */
+  beat?: () => void;
 }
 
 /** How long before trying the same action on the same series again after a failure: doubling from 5 s to 5 minutes. */
@@ -120,6 +163,11 @@ export class WagerRunner {
     } catch (err) {
       this.o.log(`couldn't read the wallet's series: ${err instanceof Error ? err.message : String(err)}`);
       return [];
+    }
+    try {
+      this.o.beat?.();
+    } catch {
+      /* a heartbeat that can't be written: the tools will say the daemon isn't working */
     }
     const now = this.now();
     const live = new Set(series.map((s) => s.header.seriesId));

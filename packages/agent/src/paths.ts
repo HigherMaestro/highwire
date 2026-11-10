@@ -30,6 +30,8 @@ export interface AgentPaths {
   wagerSecrets: string;
   /** Held by the one `highwire line run` process (the reveal daemon). */
   wagerRunner: string;
+  /** The daemon's heartbeat: its wallet, cluster and program, and when it last read the wallet's series. */
+  wagerBeat: string;
 }
 
 export function agentPaths(env: Record<string, string | undefined> = process.env): AgentPaths {
@@ -48,5 +50,6 @@ export function agentPaths(env: Record<string, string | undefined> = process.env
     stopWagers: join(home, "STOP-WAGERS"),
     wagerSecrets: join(home, "wager-secrets.jsonl"),
     wagerRunner: join(home, "wager-runner.lock"),
+    wagerBeat: join(home, "wager-daemon.json"),
   };
 }

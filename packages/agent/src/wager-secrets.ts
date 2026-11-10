@@ -122,6 +122,12 @@ export class WagerSecrets {
     return entry;
   }
 
+  /** Which player this wallet was in a series, from the fallback it committed there; null when the file doesn't say. */
+  player(series: string): Player | null {
+    const f = this.all().find((e): e is WagerFallbackSecret => e.type === "fallback" && e.series === series);
+    return f ? f.player : null;
+  }
+
   /** The move behind a commitment on-chain, checked against it. */
   move(series: string, hash: string): WagerMoveSecret | undefined {
     return this.all().find(

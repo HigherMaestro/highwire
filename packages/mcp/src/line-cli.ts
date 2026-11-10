@@ -1,6 +1,6 @@
 import { lstatSync } from "node:fs";
-import { agentPaths, holdProcessLock, loadPolicy, lockHolder, WagerRunner, WagerSecrets, type LocalSigner, type WagerAction } from "highwire-agent";
-import { buildWagerMove, lamportsNumber, listWalletSeries, readSeriesMany, type Chain, type SeriesAccountData, type WagerMoveRequest } from "highwire-core";
+import { agentPaths, holdProcessLock, loadPolicy, lockHolder, WagerRunner, WagerSecrets, writeBeat, type LocalSigner, type WagerAction } from "highwire-agent";
+import { buildWagerMove, lamportsNumber, listWalletSeries, readSeriesMany, wagerProgram, type Chain, type SeriesAccountData, type WagerMoveRequest } from "highwire-core";
 import { serverOptionsFromEnv } from "./env.ts";
 import { createDeps } from "./server.ts";
 import { signerFromEnv } from "./signer-env.ts";
@@ -70,6 +70,17 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
       }
       return 0;
     }
+    // A daemon that can't read any series would hold the lock and reveal nothing: refuse to start instead.
+    const program = wagerProgram(deps.chain.cluster);
+    if (!program) {
+      io.err(`highwire line run: wagering isn't deployed on ${deps.chain.cluster}. Set HIGHWIRE_CLUSTER=devnet, as for the MCP server you wager with.`);
+      return 2;
+    }
+    const startPolicy = loadPolicy(paths.policy);
+    if (startPolicy.cluster !== deps.chain.cluster) {
+      io.err(`highwire line run: the policy is for ${startPolicy.cluster}, and this daemon is on ${deps.chain.cluster}. Run it with the same HIGHWIRE_CLUSTER and policy as the MCP server you wager with.`);
+      return 2;
+    }
     const release = holdProcessLock(paths.wagerRunner, "highwire line run");
     try {
       const policy = loadPolicy(paths.policy);
@@ -97,11 +108,13 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
       const runner = new WagerRunner({
         wallet: signer.wallet,
         list,
+        beat: () => writeBeat(paths.wagerBeat, { pid: process.pid, wallet: signer.wallet, cluster: deps.chain.cluster, programId: program.toBase58(), beat: Date.now() }),
         idle: () => {
           try {
             const p = loadPolicy(paths.policy);
             if (!p.live) return 'the policy is a dry run ("live": false), so nothing is revealed';
             if (!p.actions.includes("wager") || !p.wagers) return 'the policy doesn\'t allow wagers ("wager" in actions and a wagers section)';
+            if (p.cluster !== deps.chain.cluster) return `the policy is now for ${p.cluster}, and this daemon is on ${deps.chain.cluster}`;
             return null;
           } catch (err) {
             return err instanceof Error ? err.message : String(err);

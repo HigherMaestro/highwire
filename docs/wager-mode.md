@@ -902,6 +902,18 @@ to lock fighters out for good: a series whose closing couldn't be read, a store 
 closing, an opener who never cancels, a stale pairing note, two joins at once. Each now ends or can't happen, and is
 tested in `packages/relay/test/wager.test.ts`. Settings the desk can't sign with are refused when it's made.
 
+### 17.4 The tools' audit (step 5)
+
+An adversarial audit of the wager tools found no way to stake outside the policy or leak a nonce or salt. It found:
+the daemon check proved only that some process held the lock file (a recycled pid, or a daemon started on mainnet,
+passed it), so the daemon now writes a heartbeat naming its wallet, cluster and program after every pass that read the
+wallet's series, the tools require a fresh, matching one, and `highwire line run` refuses to start where it couldn't
+read a series; `line_stake` staked the paired ticket's tier whatever the agent asked, and now refuses a mismatch; the
+tools reported a commit or stake as done whatever the signer returned; the view said "your move" after the commit
+deadline and nothing when the bank was out; a settled series read as "not found"; a closed series' ticket could be
+staked again; a referee could name another pair's series; and a move wasn't pinned to the match and round the agent
+saw. All fixed, each with a test in `packages/mcp/test/wager-tools.test.ts`.
+
 ## Sources
 
 - Gambling elements, skill and chance (US): https://www.ifrahlaw.com/ifrah-on-igaming/gambling-on-skill-enforcement-of-gambling-laws-against-skill-games-in-outlier-states/ ,

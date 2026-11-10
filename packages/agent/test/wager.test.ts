@@ -17,8 +17,11 @@ import {
   POLICY_TEMPLATE,
   PolicySchema,
   WagerRunner,
+  daemonStatus,
+  holdProcessLock,
   WagerSecrets,
   withFileLock,
+  writeBeat,
   type Intent,
   type Policy,
 } from "../src/index.ts";
@@ -374,4 +377,40 @@ test("the runner survives any failure, keeps other series going, backs off, and 
   const r2 = new WagerRunner({ wallet: A, list: async () => [owes], act: async () => "sent", secrets: { move: () => undefined, fallback: () => { throw new TypeError("a bad line"); } }, stopped: () => false, log: (l) => logs.push(l), now: () => 1_141 });
   assert.deepEqual(await r2.tick(), []);
   assert.match(logs.join("\n"), /a bad line/);
+});
+
+test("the daemon's heartbeat: fresh, from the lock's own process, for this wallet, cluster and program", () => {
+  const paths = agentPaths({ HIGHWIRE_HOME: home() });
+  const want = { wallet: A, cluster: "devnet", programId: "P" };
+  assert.match((daemonStatus(paths, want) as { reason: string }).reason, /isn't running/);
+  const release = holdProcessLock(paths.wagerRunner, "test");
+  try {
+    assert.match((daemonStatus(paths, want) as { reason: string }).reason, /hasn't read/);
+    const beat = { pid: process.pid, wallet: A, cluster: "devnet", programId: "P", beat: Date.now() };
+    writeBeat(paths.wagerBeat, beat);
+    assert.deepEqual(daemonStatus(paths, want), { ok: true });
+    writeBeat(paths.wagerBeat, { ...beat, beat: Date.now() - 21_000 });
+    assert.match((daemonStatus(paths, want) as { reason: string }).reason, /last 20 seconds/);
+    writeBeat(paths.wagerBeat, { ...beat, pid: process.pid + 1 });
+    assert.match((daemonStatus(paths, want) as { reason: string }).reason, /another process/);
+    writeBeat(paths.wagerBeat, { ...beat, cluster: "mainnet" });
+    assert.match((daemonStatus(paths, want) as { reason: string }).reason, /on mainnet/);
+  } finally {
+    release();
+  }
+});
+
+test("the runner beats only after it has read the wallet's series, never while idle or failing", async () => {
+  let beats = 0;
+  let fail = false;
+  let idle: string | null = null;
+  const runner = new WagerRunner({ wallet: A, list: async () => { if (fail) throw new Error("rpc"); return []; }, act: async () => "sent", secrets: none, stopped: () => false, idle: () => idle, log: () => undefined, beat: () => beats++ });
+  await runner.tick();
+  assert.equal(beats, 1);
+  fail = true;
+  await runner.tick();
+  idle = "dry run";
+  fail = false;
+  await runner.tick();
+  assert.equal(beats, 1);
 });
