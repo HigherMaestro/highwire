@@ -36,7 +36,7 @@ Connection.prototype.sendRawTransaction = async function (this: Connection, raw)
   if (sim.value.err) throw new Error(`the signed bytes don't simulate: ${simulated}`);
   return signature;
 };
-Connection.prototype.confirmTransaction = async () => ({ context: { slot: 0 }, value: { err: null } });
+Connection.prototype.getSignatureStatuses = (async (sigs: string[]) => ({ context: { slot: 0 }, value: sigs.map(() => ({ slot: 0, confirmations: 1, err: null, confirmationStatus: "confirmed" as const })) })) as Connection["getSignatureStatuses"];
 Connection.prototype.getTransaction = (async () => null) as Connection["getTransaction"];
 
 interface Row {

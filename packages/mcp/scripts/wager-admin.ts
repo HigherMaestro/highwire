@@ -19,7 +19,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import bs58 from "bs58";
 import { Connection, PublicKey, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 import { DEFAULT_RPC_URLS, decodeWagerConfig, initConfigInstruction, lamportsNumber, solToLamports, wagerConfigAddress, WAGER_PROGRAM_IDS } from "highwire-core";
-import { GENESIS_HASHES, loadKeypair } from "highwire-agent";
+import { confirmByPolling, GENESIS_HASHES, loadKeypair } from "highwire-agent";
 
 const LOADER = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
 
@@ -100,8 +100,7 @@ async function init(c: Connection, v: Record<string, string | boolean | undefine
   if (v.send !== true) return console.log("dry run: nothing sent. Add --send to set it up.");
   tx.sign([keypair]);
   const sig = await c.sendRawTransaction(tx.serialize());
-  const res = await c.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
-  if (res.value.err) fail(`${sig} failed: ${JSON.stringify(res.value.err)}`);
+  await confirmByPolling(c, sig, lastValidBlockHeight).catch((err) => fail(`${sig} didn't confirm: ${err instanceof Error ? err.message : String(err)}`));
   console.log(`set up: ${sig}`);
 }
 

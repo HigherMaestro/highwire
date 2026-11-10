@@ -24,6 +24,7 @@ import {
   type SignMessage,
 } from "highwire-core";
 import { AuditLog, type AuditAction } from "./audit.ts";
+import { confirmByPolling } from "./confirm.ts";
 import { jitoClient, JitoRejected, tipFor, type JitoClient } from "./jito.ts";
 import { withFileLock } from "./lock.ts";
 import type { AgentPaths } from "./paths.ts";
@@ -467,8 +468,7 @@ export class LocalSigner {
           }
         }
         try {
-          const res = await connection.confirmTransaction({ signature, blockhash: tx.message.recentBlockhash, lastValidBlockHeight }, "confirmed");
-          if (res.value.err) throw new Error(JSON.stringify(res.value.err));
+          await confirmByPolling(connection, signature, lastValidBlockHeight);
         } catch (err) {
           // A bundle-only send never enters the public queue, so once its blockhash has expired without it, it can't land.
           if (via === "jito" && (await this.neverLanded(connection, signature, lastValidBlockHeight))) {

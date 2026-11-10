@@ -114,7 +114,8 @@ const fakeConnection = (o: { spend?: number; onChain?: Set<string> } = {}) =>
     getBalance: async () => 2e9,
     simulateTransaction: async () => ({ value: { err: null, logs: [], accounts: [{ lamports: 2e9 - (o.spend ?? 5_000) }] } }),
     sendRawTransaction: async () => "sig",
-    confirmTransaction: async () => ({ value: { err: null } }),
+    getSignatureStatuses: async () => ({ value: [{ err: null, confirmationStatus: "confirmed" }] }),
+    getBlockHeight: async () => 1,
     getLatestBlockhash: async () => ({ blockhash: PublicKey.default.toBase58(), lastValidBlockHeight: 200 }),
     getTransaction: async () => null,
     getProgramAccounts: async () => {

@@ -126,7 +126,8 @@ function fakeConnection(opts: { simulateErr?: unknown; confirmErr?: unknown; sen
       if (opts.sendErr) throw opts.sendErr;
       return `sig-${sent.length}`;
     },
-    confirmTransaction: async () => ({ value: { err: opts.confirmErr ?? null } }),
+    getSignatureStatuses: async () => ({ value: [{ err: opts.confirmErr ?? null, confirmationStatus: "confirmed" }] }),
+    getBlockHeight: async () => 1,
     getLatestBlockhash: async () => ({ blockhash: PublicKey.default.toBase58(), lastValidBlockHeight: 200 }),
     getTransaction: async () => ({ meta: { preBalances: [2_000_000_000], postBalances: [1_899_995_000], preTokenBalances: [], postTokenBalances: [] } }),
   };
@@ -486,4 +487,26 @@ test("a claim and buyback needs both actions in the policy", () => {
   assert.equal(checkPolicy(p, { ...trade(), also: ["claim"] }, 0n)?.rule, "actions");
   assert.equal(checkPolicy(mainnetPolicy({ route: "rpc" }, { actions: ["trade"] }), { ...trade(), also: ["claim"] }, 0n)?.rule, "actions");
   assert.equal(checkPolicy(mainnetPolicy({ route: "rpc" }), { ...trade(), also: ["claim"] }, 0n), null);
+});
+
+test("confirmation polls the signature's status, never a websocket, and survives refused calls", async () => {
+  const { confirmByPolling } = await import("../src/index.ts");
+  let polls = 0;
+  const flaky = {
+    getSignatureStatuses: async () => {
+      polls++;
+      if (polls < 3) throw new Error("429 Too Many Requests");
+      return { value: [polls < 4 ? { err: null, confirmationStatus: "processed" } : { err: null, confirmationStatus: "confirmed" }] };
+    },
+    getBlockHeight: async () => 10,
+    onSignature: () => {
+      throw new Error("no websockets");
+    },
+  } as unknown as Connection;
+  await confirmByPolling(flaky, "sig", 100, { intervalMs: 1 });
+  assert.equal(polls, 4);
+  const failed = { getSignatureStatuses: async () => ({ value: [{ err: { InstructionError: [0, { Custom: 104 }] }, confirmationStatus: "confirmed" }] }), getBlockHeight: async () => 10 } as unknown as Connection;
+  await assert.rejects(confirmByPolling(failed, "sig", 100, { intervalMs: 1 }), /Custom/);
+  const expired = { getSignatureStatuses: async () => ({ value: [null] }), getBlockHeight: async () => 101 } as unknown as Connection;
+  await assert.rejects(confirmByPolling(expired, "sig", 100, { intervalMs: 1 }), /blockhash expired/);
 });
