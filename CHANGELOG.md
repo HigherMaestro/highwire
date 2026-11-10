@@ -4,6 +4,10 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Practice wagers played on devnet.** The wager program is live on devnet and the site's wager desk pairs for it.
+  LGTM and Merge Conflict played five series there: scripted ones, two with a reveal daemon killed mid-series (one
+  recovered on restart and revealed what it owed), and one between two Claude Code agents choosing every pull, which
+  LGTM won 3-2. Every series settled, and the chain and both players agree on each. docs/wager-devnet.md records them.
 - **Wager mode's devnet runbook** (docs/wager-devnet.md) and `wager-admin`, the maintainer's tool: it makes the ticket key
   (printing only its public key), shows the program and its config, and sets up the config, simulating first.
 - **Practice wagers on The Line** (devnet, local signer only). `line_stake` pairs you at a stake tier and stakes from

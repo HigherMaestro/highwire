@@ -102,6 +102,16 @@ its own devnet home, so nothing touches its mainnet policy:
   `npx tsx --conditions=highwire-source <repo>/packages/mcp/src/cli.ts`, with `HIGHWIRE_CLUSTER=devnet`, the devnet
   `HIGHWIRE_HOME` and the fighter's `HIGHWIRE_KEYPAIR_PATH`. The daemon, in its own terminal, with the same three:
   `npm run dev -w highwire-mcp -- line run`.
+- **An agent to play it**, for a series between agents rather than the script: a folder per fighter, outside the
+  repository and outside the devnet home (so the agent can't read the secrets file), holding
+  - `.mcp.json`: the server above as `highwire`, its `SOLANA_RPC_URL` set to `${SOLANA_RPC_URL:-https://api.devnet.solana.com}`
+    so the RPC key stays in the maintainer's shell;
+  - `.claude/settings.json`: `enabledMcpjsonServers: ["highwire"]`, the `line_*` tools allowed, and Bash, edits, the
+    web and `line_retire` denied;
+  - `CLAUDE.md`: who the fighter is, and the steps of section 7 for one series, then stop.
+
+  Start each with `source <the RPC env file> && claude "Play your wager series."` in its folder, within a minute of
+  each other.
 
 ## 7. The series
 
@@ -113,6 +123,35 @@ an explorer.
 W1 is done when (docs/wager-mode.md 13): two agents play full best-of-5 series with every round revealed and verified,
 through the local signer and the daemon; one series has a daemon killed mid-match that recovers on restart; the
 referee records each outcome and rates it; and the audit logs, the chain and the referee agree on every stake and payout.
+
+`npm run wager-pair -w highwire-mcp -- --a HOME:KEY --b HOME:KEY` plays one scripted series between two fighters through
+the same tools, and checks the result against the closing event, the referee and both balances.
+
+## 8. W1's devnet series (2026-11-09 and 10)
+
+The devnet play W1 asks for is done. LGTM (`7bK1…fu4B`) and Merge Conflict (`7JQB…f1uQ`) played five series at 0.01
+SOL a side, all settled, and in each the program's closing event, both players' views and the balances agree:
+
+| Series | How it was played | Result |
+|---|---|---|
+| `598b27ec0154ee9a8a8d9f9b082f88a176adb7f1d33b8dbb61db178175a455fc` | `wager-pair`, devnet's public RPC: 30 commits and 30 reveals in matches 1 to 3, match 4 on fallbacks and timeouts after the RPC throttled the client (fixed: no `getProgramAccounts`, confirmation by polling) | MC |
+| `1a4f39c85dad363759d89143f119b1548eb76a7d8fc6d61d204d72d9f5757ba8` | `wager-pair` | MC, 3-0 |
+| `333f3f185b1b46d78e3f9ab1bee744581d5137427fca5592ed4758809321d7af` | `wager-pair`; LGTM's daemon killed (`kill -9`) in match 1 and not restarted: LGTM's `line_move` refused every commit (`line_daemon_off`), its fallback played, and MC's daemon applied the deadlines and settled | MC, 3-0 |
+| `4986497b8764811c2a1c3d842b87efa53aa7f69b6bc1b896ba763201681df450` | `wager-pair`; LGTM's daemon killed in match 1 after round 2 and restarted 9 minutes later: within a second it revealed the fallback it owed, from the secrets file, then the agent's next move | MC, 3-0 |
+| `2908fc1292eec9e8e585d74ddc0ce5f1a4d7218e22ad1a9b56faa7fe74d67177` | two Claude Code agents (section 6), choosing every pull: 59 commits a side, every one revealed by its daemon, no fallback, no failed send, 16 minutes | LGTM, 3-2 |
+
+What it showed:
+- **The wager rating pairs slowly between two fighters far apart.** After MC's early wins the two were about 440 to 500
+  points apart, and the desk widens the allowed gap by 100 every 30 seconds, so pairing took 90 to 120 seconds. With
+  more than two fighters waiting that's fine; it's how the desk is meant to behave.
+- **Both daemons settle a finished series.** One lands, the other fails against the closed account and is logged as
+  `failed`. Harmless, but it reads as an error in the audit log.
+- **A daemon down for longer than the reveal window costs matches, not money:** the series carried on and settled,
+  and the stake went where the rules said.
+
+Still open in W1: the practice pages (docs/wager-mode.md 7.5), devnet-only fighter identities (these two used their
+mainnet registrations' tokens, and their wager results live only in the referee's wager rating, never on a page), and
+freeze-and-refund in `wager-admin`.
 
 ## If something goes wrong
 
