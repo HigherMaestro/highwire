@@ -46,10 +46,8 @@ function deskClosed(result: { how: string; winner?: "A" | "B" | null } | null): 
 
 async function buildIndex(): Promise<PracticeIndex> {
   const desk = lineRelay()?.referee.wager ?? null;
-  const [fromChain, fromDesk] = await Promise.all([
-    recentSeries(chain(), 300).catch((err: unknown) => (desk ? (console.error(`practice: devnet history unavailable: ${String(err)}`), [] as SeriesSummary[]) : Promise.reject(err))),
-    desk ? desk.ticketed(300) : Promise.resolve([]),
-  ]);
+  // Both or neither: an index built without the chain's half would be cached as if those series didn't exist.
+  const [fromChain, fromDesk] = await Promise.all([recentSeries(chain(), 300), desk ? desk.ticketed(300) : Promise.resolve([])]);
   const byId = new Map(fromChain.map((s) => [s.seriesId, s]));
   const names: Record<string, Names> = {};
   for (const d of fromDesk) {
