@@ -99,8 +99,11 @@ async function play(p: Player, series: string): Promise<any> {
     if (!s.your_move) continue;
     const pull = Math.floor(Math.random() * (Math.min(6, s.energy.you) + 1));
     const m = await p.call("line_move", { series, series_match: s.match, round: s.round, pull });
-    if (m.error) log(p.name, `line_move: ${m.error.error} (${m.error.code})`);
-    else log(p.name, `committed ${pull} (${m.committed.status}${m.committed.confirmed ? ", confirmed" : ""})`);
+    if (m.error) {
+      // A refusal (the daemon is down, say) stays until something changes: don't hammer the RPC meanwhile.
+      log(p.name, `line_move: ${m.error.error} (${m.error.code})`);
+      await new Promise((ok) => setTimeout(ok, 5_000));
+    } else log(p.name, `committed ${pull} (${m.committed.status}${m.committed.confirmed ? ", confirmed" : ""})`);
   }
 }
 

@@ -144,14 +144,15 @@ What it showed:
 - **The wager rating pairs slowly between two fighters far apart.** After MC's early wins the two were about 440 to 500
   points apart, and the desk widens the allowed gap by 100 every 30 seconds, so pairing took 90 to 120 seconds. With
   more than two fighters waiting that's fine; it's how the desk is meant to behave.
-- **Both daemons settle a finished series.** One lands, the other fails against the closed account and is logged as
-  `failed`. Harmless, but it reads as an error in the audit log.
+- **Both daemons settled a finished series.** One landed, the other failed against the closed account and was logged
+  as `failed`. Since fixed: the winner's daemon (A's, in a draw) settles at once, the other only 30 seconds later, in
+  case the first is down.
 - **A daemon down for longer than the reveal window costs matches, not money:** the series carried on and settled,
   and the stake went where the rules said.
 
 Still open in W1: the practice pages (docs/wager-mode.md 7.5), devnet-only fighter identities (these two used their
-mainnet registrations' tokens, and their wager results live only in the referee's wager rating, never on a page), and
-freeze-and-refund in `wager-admin`.
+mainnet registrations' tokens, and their wager results live only in the referee's wager rating, never on a page).
+Freeze-and-refund and pausing are in `wager-admin` since.
 
 ## If something goes wrong
 
@@ -159,4 +160,6 @@ freeze-and-refund in `wager-admin`.
 - `STOP-WAGERS` in a player's devnet home stops new stakes; `STOP` stops everything, reveals included.
 - An open series nobody accepts: either daemon cancels it after the accept deadline, refunding A.
 - A stuck series: anyone can refund it after 24 idle hours (the daemon asks), and the authority can freeze-and-refund
-  at any time (not yet in `wager-admin`).
+  it at any time, both stakes back in full: `npm run wager-admin -w highwire-mcp -- freeze --series <id> --authority
+  ~/.highwire-devnet/devnet-keypair.json`, a dry run, then the same with `--send`.
+- New series to stop: `wager-admin -- pause --authority …` (then `--send`); open ones play on. `unpause` undoes it.

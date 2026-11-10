@@ -243,6 +243,29 @@ export function initConfigInstruction(program: PublicKey, c: WagerConfigInit): T
   });
 }
 
+/**
+ * `UpdateConfig` setting only `paused` (instruction.rs `ConfigUpdate`: eight Borsh options, the third is `paused`), for
+ * the maintainer's tool only. A paused config refuses new series; open ones play on. assertSafe refuses it everywhere.
+ */
+export function pauseInstruction(program: PublicKey, authority: PublicKey, paused: boolean): TransactionInstruction {
+  const data = Buffer.from([WAGER_TAGS.updateConfig, 0, 0, 1, paused ? 1 : 0, 0, 0, 0, 0, 0]);
+  return new TransactionInstruction({ programId: program, keys: [r(authority, true), w(wagerConfigAddress(program))], data });
+}
+
+/**
+ * `FreezeAndRefund`, for the maintainer's tool only: the config authority refunds both stakes of a series in full,
+ * whatever its state. `parties` from the series account; a payee that can't be credited goes read-only, and the program
+ * burns its share. assertSafe refuses it everywhere.
+ */
+export function freezeAndRefundInstruction(program: PublicKey, authority: PublicKey, seriesId: string, parties: Pick<WagerParties, "playerA" | "playerB">, readOnly: PublicKey[] = []): TransactionInstruction {
+  const payee = (k: PublicKey) => (readOnly.some((x) => x.equals(k)) ? r(k) : w(k));
+  return new TransactionInstruction({
+    programId: program,
+    keys: [r(authority, true), w(wagerConfigAddress(program)), w(seriesAddress(program, seriesId)), payee(parties.playerA), payee(parties.playerB), w(new PublicKey(INCINERATOR))],
+    data: Buffer.from([WAGER_TAGS.freezeAndRefund]),
+  });
+}
+
 /** A wager instruction's data, decoded, or null when it isn't one the program knows (strict lengths). */
 export type DecodedWager =
   | { kind: "open"; seriesId: string; playerB: string; stake: bigint; acceptDeadline: number; expiry: number; keyId: number; fallbackHash: string }

@@ -184,7 +184,8 @@ const LOADERS = new Set([
   "NativeLoader1111111111111111111111111111111",
 ]);
 
-async function uncreditable(chain: Chain, keys: PublicKey[]): Promise<PublicKey[]> {
+/** The payees the runtime won't credit (programs, or accounts a loader owns): passed read-only, and the program burns their share. */
+export async function uncreditable(chain: Chain, keys: PublicKey[]): Promise<PublicKey[]> {
   const infos = await chain.connection.getMultipleAccountsInfo(keys, "confirmed");
   return keys.filter((_, i) => {
     const a = infos[i];

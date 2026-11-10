@@ -26,6 +26,12 @@ export const DEADLINE_MARGIN_SECONDS = 3;
  */
 export const CANCEL_MARGIN_SECONDS = 90;
 const EMERGENCY_AFTER_SECONDS = 24 * 60 * 60;
+/**
+ * Both daemons watch a finished series, and only one settle can land. The winner's (A's, in a draw) settles at once; the
+ * other waits this long past the series' last change, in case the first is down, so the second doesn't usually send a
+ * settle that can only fail.
+ */
+export const SETTLE_GRACE_SECONDS = 30;
 
 export interface Decision {
   action: WagerAction | null;
@@ -46,7 +52,10 @@ export function nextWagerAction(s: SeriesAccountData, wallet: string, now: numbe
   }
   const x = s.series;
   if (!x) return { action: null };
-  if (x.ending) return { action: { kind: "settle" } };
+  if (x.ending) {
+    const first = (x.ending.winner ?? "A") === me;
+    return { action: first || past(h.lastChange + SETTLE_GRACE_SECONDS) ? { kind: "settle" } : null };
+  }
   const mine = sideIndexOf(me, x.match);
   const round = x.round[mine];
   if (x.phase === "reveal") {

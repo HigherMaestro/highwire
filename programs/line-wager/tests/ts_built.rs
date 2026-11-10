@@ -36,7 +36,7 @@ async fn transactions_built_by_the_typescript_run_on_the_program() {
     assert_eq!(program, line_wager::id(), "the TypeScript's program id is the program's");
 
     let seed = |n: u8| keypair_from_seed(&[n; 32]).unwrap();
-    let (a, b, fee, crank, authority) = (seed(1), seed(2), seed(3), seed(4), Keypair::new());
+    let (a, b, fee, crank, authority) = (seed(1), seed(2), seed(3), seed(4), seed(5));
     let mut pt = ProgramTest::new("line_wager", program, processor!(line_wager::processor::process));
     for k in [&a, &b, &crank, &authority] {
         pt.add_account(k.pubkey(), Account { lamports: 10 * SOL, owner: system_program::ID, ..Account::default() });
@@ -105,6 +105,7 @@ async fn transactions_built_by_the_typescript_run_on_the_program() {
                 "A" => &a,
                 "B" => &b,
                 "crank" => &crank,
+                "authority" => &authority,
                 other => panic!("unknown signer {other}"),
             })
             .collect();
@@ -115,9 +116,10 @@ async fn transactions_built_by_the_typescript_run_on_the_program() {
     }
 
     // B staked in series 1 and 3. Series 1 went to B (A retired): the pot less the fee. Series 3 refunded B's stake.
-    // Series 2 never touched B.
+    // Series 2 never touched B. Series 4 was frozen: B's stake back in full.
     let fee_cut = 2 * stake * 250 / 10_000;
     assert_eq!(ctx.banks_client.get_balance(b.pubkey()).await.unwrap(), b0 + stake - fee_cut);
     let c = Config::deserialize(&mut &ctx.banks_client.get_account(config).await.unwrap().unwrap().data[..]).unwrap();
     assert_eq!(c.open_stake, 0, "every series closed");
+    assert!(!c.paused, "paused, then unpaused");
 }

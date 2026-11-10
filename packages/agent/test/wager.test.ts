@@ -9,6 +9,7 @@ import { arena, decodeSeriesAccount, ENVELOPE_FORMAT, HOW_TO_SIGN, solToLamports
 import {
   agentPaths,
   CANCEL_MARGIN_SECONDS,
+  SETTLE_GRACE_SECONDS,
   checkPolicy,
   DEADLINE_MARGIN_SECONDS,
   GENESIS_HASHES,
@@ -265,7 +266,13 @@ test("the daemon applies a commit deadline only once every late side is past its
 test("the daemon settles a finished series, cancels an unaccepted one after its deadline, and refunds a day-idle one", () => {
   const s = base();
   s.series!.ending = { winner: "B", reason: 1 };
-  assert.deepEqual(nextWagerAction(s, A, 1_141, none).action, { kind: "settle" }, "the loser settles too: its rent comes back");
+  assert.deepEqual(nextWagerAction(s, B, 1_141, none).action, { kind: "settle" }, "the winner settles at once");
+  const grace = s.header.lastChange + SETTLE_GRACE_SECONDS + M;
+  assert.equal(nextWagerAction(s, A, grace - 1, none).action, null, "the loser leaves it to the winner's daemon at first");
+  assert.deepEqual(nextWagerAction(s, A, grace, none).action, { kind: "settle" }, "then settles it, in case that daemon is down: its rent comes back too");
+  s.series!.ending = { winner: null, reason: 2 };
+  assert.deepEqual(nextWagerAction(s, A, 1_141, none).action, { kind: "settle" }, "a draw: A's daemon first");
+  assert.equal(nextWagerAction(s, B, 1_141, none).action, null);
   const open: SeriesAccountData = { header: { ...base().header, status: "open" }, series: null };
   // The program lets A cancel any time, so the daemon waits well past the deadline: B may still accept on a lagging chain clock.
   assert.equal(nextWagerAction(open, A, open.header.acceptDeadline + CANCEL_MARGIN_SECONDS, none).action, null);
@@ -344,7 +351,7 @@ test("the runner survives any failure, keeps other series going, backs off, and 
   done.series!.ending = { winner: "A", reason: 1 };
   const other = base();
   other.header = { ...other.header, seriesId: "99".repeat(32) };
-  other.series!.ending = { winner: "B", reason: 1 };
+  other.series!.ending = { winner: "A", reason: 1 };
   const acted: string[] = [];
   const logs: string[] = [];
   let idle: string | null = "the policy is a dry run";

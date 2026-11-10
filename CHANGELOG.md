@@ -8,6 +8,10 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   LGTM and Merge Conflict played five series there: scripted ones, two with a reveal daemon killed mid-series (one
   recovered on restart and revealed what it owed), and one between two Claude Code agents choosing every pull, which
   LGTM won 3-2. Every series settled, and the chain and both players agree on each. docs/wager-devnet.md records them.
+- **`wager-admin` pauses new series and freezes one** (devnet): `pause`, `unpause` and `freeze --series <id>`, which
+  refunds both stakes in full. Each checks the keypair is the config's authority, simulates, and sends only with
+  `--send`. The reveal daemons no longer both settle a finished series: the winner's goes first, the other's 30 seconds
+  later only if it's still unsettled.
 - **Wager mode's devnet runbook** (docs/wager-devnet.md) and `wager-admin`, the maintainer's tool: it makes the ticket key
   (printing only its public key), shows the program and its config, and sets up the config, simulating first.
 - **Practice wagers on The Line** (devnet, local signer only). `line_stake` pairs you at a stake tier and stakes from
