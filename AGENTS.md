@@ -50,6 +50,7 @@ Streamable HTTP. An npm workspaces monorepo. Read
 | `*/scripts/smoke.ts` | the live checks: stdio in `packages/mcp`, hosted in `apps/web` |
 | `packages/mcp/scripts/simulate.ts` | `npm run simulate`: builds and simulates trades, launches and claims on mainnet and devnet |
 | `packages/mcp/scripts/rehearse.ts` | `npm run rehearse`: the execute tools, live, for a public wallet on mainnet and devnet, with the send replaced by a simulation of the signed bytes |
+| `packages/mcp/scripts/wager-admin.ts` | `npm run wager-admin -w highwire-mcp -- ticket-key\|status\|init`: the wager program's maintainer tool on devnet (docs/wager-devnet.md, the runbook). Never prints a secret; sends only `init --send`, from the authority keypair the maintainer names |
 | `packages/core/test/fixtures/` | recorded mainnet responses the transaction tests replay; re-record with `npm run record-fixtures -w highwire-core` |
 | `ideas/` | launch ideas: `starter/` (the skeleton every template gets; its `.gitignore` is kept as `gitignore`, since npm drops dotfiles of that name), one folder per idea (`idea.json`, `PRD.md`, `policy.example.json`), and `modules/<slug>/` (`module.json`, `MODULE.md`, and `files/`, working code `highwire add` copies into a project as is). `docs/ideas-prd.md` is the spec |
 | `packages/mcp/src/ideas.ts`, `new-cli.ts`, `add-cli.ts` | loading, checking and assembling ideas and modules (`highwire-mcp/ideas`, which the site imports too), `highwire new <idea> [dir]` and `highwire add <module> [dir]`. prepack copies `ideas/` into the package |

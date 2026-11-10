@@ -197,6 +197,52 @@ export function wagerInstruction(program: PublicKey, wallet: PublicKey, seriesId
   return new TransactionInstruction({ programId: program, keys, data: encodeWager(args) });
 }
 
+/** The program's config, as `InitConfig` sets it (instruction.rs `ConfigInit`). Lamports for amounts. */
+export interface WagerConfigInit {
+  authority: PublicKey;
+  ticketKey: PublicKey;
+  ticketKeyId: number;
+  feeBps: number;
+  feeAccount: PublicKey;
+  /** Up to four tiers, lamports a side. */
+  tiers: bigint[];
+  maxStake: bigint;
+  openStakeCap: bigint;
+  revealSeconds: number;
+}
+
+/**
+ * The one-time `InitConfig`, for the maintainer's tool only (packages/mcp/scripts/wager-admin.ts): signed by the
+ * program's upgrade authority, never by an agent's signer, and assertSafe refuses it everywhere.
+ */
+export function initConfigInstruction(program: PublicKey, c: WagerConfigInit): TransactionInstruction {
+  if (c.tiers.length < 1 || c.tiers.length > 4) throw new Error("one to four tiers");
+  const u32 = (n: number) => {
+    const b = Buffer.alloc(4);
+    b.writeUInt32LE(n);
+    return b;
+  };
+  const tiers = [...c.tiers, 0n, 0n, 0n, 0n].slice(0, 4);
+  const data = Buffer.concat([
+    Buffer.from([WAGER_TAGS.initConfig]),
+    c.authority.toBuffer(),
+    c.ticketKey.toBuffer(),
+    u16(c.ticketKeyId),
+    u16(c.feeBps),
+    c.feeAccount.toBuffer(),
+    ...tiers.map(u64),
+    u64(c.maxStake),
+    u64(c.openStakeCap),
+    u32(c.revealSeconds),
+  ]);
+  const programData = PublicKey.findProgramAddressSync([program.toBuffer()], new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111"))[0];
+  return new TransactionInstruction({
+    programId: program,
+    keys: [w(c.authority, true), w(wagerConfigAddress(program)), r(programData), r(SystemProgram.programId)],
+    data,
+  });
+}
+
 /** A wager instruction's data, decoded, or null when it isn't one the program knows (strict lengths). */
 export type DecodedWager =
   | { kind: "open"; seriesId: string; playerB: string; stake: bigint; acceptDeadline: number; expiry: number; keyId: number; fallbackHash: string }

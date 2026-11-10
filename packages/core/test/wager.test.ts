@@ -11,7 +11,7 @@ const file = JSON.parse(readFileSync(new URL("./fixtures/wager-codec.json", impo
 const key = (n: number) => new PublicKey(new Uint8Array(32).fill(n)).toBase58();
 const h = (b: number) => b.toString(16).padStart(2, "0").repeat(32);
 
-test("every instruction Highwire builds encodes as the program does, and decodes back", () => {
+test("every instruction Highwire builds encodes as the program does, and decodes back", async () => {
   const args: Record<string, WagerArgs> = {
     open: { kind: "open", ticket: { seriesId: h(0x11), playerA: key(5), playerB: key(6), stake: 100_000_000n, acceptDeadline: 1_300, expiry: 1_600, keyId: 3 }, fallbackHash: h(0x44) },
     accept: { kind: "accept", fallbackHash: h(0x55) },
@@ -24,7 +24,15 @@ test("every instruction Highwire builds encodes as the program does, and decodes
     retire: { kind: "retire" },
     emergencyRefund: { kind: "emergencyRefund" },
   };
-  assert.deepEqual(Object.keys(args).sort(), Object.keys(file.instructions).sort());
+  assert.deepEqual(Object.keys(args).sort(), Object.keys(file.instructions).filter((k) => k !== "initConfig").sort());
+  // The maintainer's one-time setup, from the same file.
+  const { initConfigInstruction } = await import("../src/tx/wager-codec.ts");
+  const init = initConfigInstruction(new PublicKey(WAGER_PROGRAM_IDS.devnet!), {
+    authority: new PublicKey(key(1)), ticketKey: new PublicKey(key(2)), ticketKeyId: 3, feeBps: 250, feeAccount: new PublicKey(key(4)),
+    tiers: [10_000_000n, 100_000_000n], maxStake: 100_000_000n, openStakeCap: 5_000_000_000n, revealSeconds: 120,
+  });
+  assert.equal(Buffer.from(init.data).toString("hex"), file.instructions.initConfig);
+  assert.equal(decodeWager(Buffer.from(init.data))?.kind, "initConfig");
   for (const [kind, a] of Object.entries(args)) {
     const bytes = encodeWager(a);
     assert.equal(bytes.toString("hex"), file.instructions[kind], kind);

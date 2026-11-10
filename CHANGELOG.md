@@ -4,6 +4,8 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Wager mode's devnet runbook** (docs/wager-devnet.md) and `wager-admin`, the maintainer's tool: it makes the ticket key
+  (printing only its public key), shows the program and its config, and sets up the config, simulating first.
 - **Practice wagers on The Line** (devnet, local signer only). `line_stake` pairs you at a stake tier and stakes from
   your wallet inside your policy; `line_state`, `line_move` and `line_retire` take a `series` to play one (a move commits
   on-chain at once, and `highwire line run`, the reveal daemon, reveals it); `line_wagers` lists your series. Staking

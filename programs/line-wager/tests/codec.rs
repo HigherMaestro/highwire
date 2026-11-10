@@ -2,7 +2,7 @@
 //! account mid-game, and every instruction Highwire builds, as the program encodes them. highwire-core's tests decode and
 //! encode the same file. `LINE_WAGER_WRITE_CODEC=1 cargo test --test codec` rewrites it after a deliberate layout change.
 
-use line_wager::instruction::WagerInstruction;
+use line_wager::instruction::{ConfigInit, WagerInstruction};
 use line_wager::rules::{Fallback, DUELS_1, FALLBACK_STEADY};
 use line_wager::series::{fallback_commitment, move_commitment, Reveal, Series, PLAYER_A, PLAYER_B};
 use line_wager::state::{Config, SeriesAccount, SeriesHeader, STATUS_LIVE};
@@ -73,6 +73,17 @@ fn vectors() -> Value {
             "settle": ix(&WagerInstruction::Settle),
             "retire": ix(&WagerInstruction::Retire),
             "emergencyRefund": ix(&WagerInstruction::EmergencyRefund),
+            "initConfig": ix(&WagerInstruction::InitConfig(ConfigInit {
+                authority: key(1),
+                ticket_key: key(2),
+                ticket_key_id: 3,
+                fee_bps: 250,
+                fee_account: key(4),
+                tiers: [10_000_000, 100_000_000, 0, 0],
+                max_stake: 100_000_000,
+                open_stake_cap: 5_000_000_000,
+                reveal_seconds: 120,
+            })),
         }
     })
 }
