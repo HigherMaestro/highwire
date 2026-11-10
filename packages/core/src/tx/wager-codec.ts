@@ -9,7 +9,7 @@ import type { Cluster } from "../higher/constants.ts";
 
 /** Where the wager program is deployed. Wagering is refused on a cluster without one. */
 export const WAGER_PROGRAM_IDS: Record<Cluster, string | null> = {
-  devnet: "81N428oajH3utYZSw33SE3YebTXcG47d4wSy2rQF9rJF",
+  devnet: "RRMA7jERXRceX7i5QBK2fw8qbACkAo5zs949onndezC",
   mainnet: null,
 };
 

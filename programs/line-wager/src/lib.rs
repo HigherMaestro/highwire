@@ -12,7 +12,7 @@ pub mod series;
 pub mod state;
 pub mod ticket;
 
-solana_program::declare_id!("81N428oajH3utYZSw33SE3YebTXcG47d4wSy2rQF9rJF");
+solana_program::declare_id!("RRMA7jERXRceX7i5QBK2fw8qbACkAo5zs949onndezC");
 
 #[cfg(not(feature = "no-entrypoint"))]
 mod entrypoint {
