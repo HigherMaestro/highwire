@@ -94,8 +94,8 @@ test("build tools cost five units of the per-IP budget, heavy reads more than on
   assert.equal(requestCost(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" })), 1);
   assert.equal(requestCost("not json"), 1);
   const handler = createHttpHandler({ server: FAKE_OPTIONS, rateLimit: { limit: 11, windowMs: 60_000 } });
-  assert.equal((await handler(toolCall("build_claim_creator_fees", { wallet: "H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5" }))).status, 200);
-  assert.equal((await handler(toolCall("build_claim_creator_fees", { wallet: "H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5" }))).status, 200);
+  assert.equal((await handler(toolCall("build_claim_creator_fees", { wallet: "H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5", confirm_claim: true }))).status, 200);
+  assert.equal((await handler(toolCall("build_claim_creator_fees", { wallet: "H4dxJQN6DRqCPva9yaX2Nt3mAkvgo7pyQZr93fLke1U5", confirm_claim: true }))).status, 200);
   // 10 units spent: a third build would overspend, but a read still fits.
   assert.equal((await handler(toolCall("build_trade"))).status, 429);
   assert.equal((await handler(toolCall("get_platform_info"))).status, 200);

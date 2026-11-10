@@ -27,7 +27,7 @@ wallet to sign, in the format in [unsigned-transactions.md](unsigned-transaction
 | `get_wallet_positions` | Balances in higher.fun coins, recognised on-chain and valued from the API |
 | `build_trade` | The trade as an unsigned transaction. Needs `confirm_trade: true`, `max_slippage_bps` ≤ 1500 and `max_sol` |
 | `build_launch` | Create the coin on the chosen fee mode, pay the launch fee after the treasury and cap checks, optional first buy and creator lock. Needs `confirm_launch: true` and an idempotency key |
-| `build_claim_creator_fees` | Curve creator fees and graduated pools' creator fees; reports higher.fun's off-chain locked-LP payouts |
+| `build_claim_creator_fees` | Curve creator fees and graduated pools' creator fees; reports higher.fun's off-chain locked-LP payouts. Needs `confirm_claim: true` |
 
 What's in place:
 - `z.literal(true)` confirm flags, a per-transaction SOL cap (`HIGHWIRE_MAX_SOL_PER_TX`), a slippage cap, and

@@ -45,8 +45,8 @@ Prompts: `scan_launches`, `coin_due_diligence`, `creator_report`, `plan_launch`.
 3. **Read the holders list right.** The bonding curve, the Raydium pool vault and the LP lock are labelled. They are
    not whales.
 4. **Highwire builds, the user signs.** The build tools return unsigned transactions; never ask for a private key or
-   seed phrase. Quote first and show the quote. Set `confirm_trade` or `confirm_launch` only after the user approves
-   that exact transaction, show them each transaction's summary lines, and don't offer one whose simulation failed.
+   seed phrase. Quote first and show the quote. Set `confirm_trade`, `confirm_launch` or `confirm_claim` only after the
+   user approves that exact transaction, show them each transaction's summary lines, and don't offer one whose simulation failed.
    Then give the user the result's `sign_url` right away: highwire.fun/sign re-checks and simulates it in their
    browser and their wallet signs. Trade and claim links last up to 10 minutes; launch links about a minute. If one has
    expired, build again (a launch with the same `idempotency_key`, so the coin can't happen twice). Never ask the user to paste a signed transaction back.

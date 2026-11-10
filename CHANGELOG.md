@@ -2,6 +2,17 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
+## Unreleased
+
+- **`build_claim_creator_fees` takes `confirm_claim: true`**, like the other build tools: set it only after the user
+  asked to claim. Calls without it are refused.
+- **A failed RPC read no longer reads as nothing to claim.** Only a creator vault that doesn't exist yet counts as zero
+  curve fees; a rate limit or timeout is an error the agent can retry.
+- **Pool trades whose price moved in the user's favour** between the quote and the build are no longer refused as
+  unsafe. The minimum out may still be at most 1% below the quoted one.
+- The launch builder finds the launch fee through the decoder, so a fee paid through a lookup table is still checked,
+  and the launch and claim builders make two fewer RPC calls.
+
 ## 0.15.0 (2026-11-10)
 
 - **Practice wagers played on devnet.** The wager program is live on devnet and the site's wager desk pairs for it.

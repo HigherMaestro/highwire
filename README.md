@@ -60,7 +60,7 @@ execute tools sign and send only inside it. Dry run until the policy says `"live
 | `get_wallet_pnl` | Profit and loss on a wallet's coins from its own transactions on-chain: average cost, realized and unrealized, through any app. Needs an RPC that can search history |
 | `build_trade` | The trade as an unsigned transaction. Needs `confirm_trade: true`, `max_slippage_bps` (at most 1500) and `max_sol` |
 | `build_launch` | Create a coin (Old or New school), pay the launch fee after checking its treasury, optional first buy and creator lock. Needs `confirm_launch: true` and an `idempotency_key` |
-| `build_claim_creator_fees` | Claim curve creator fees and graduated pools' creator fees; reports the off-chain locked-LP payouts |
+| `build_claim_creator_fees` | Claim curve creator fees and graduated pools' creator fees; reports the off-chain locked-LP payouts. Needs `confirm_claim: true` |
 
 Every build tool decodes its own transactions into plain-language lines, checks them the way higher.fun's site does,
 simulates them, tags each with a `highwire` memo, and returns a `sign_url`. The output format, the sign links and the

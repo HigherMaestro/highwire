@@ -47,7 +47,7 @@ Safety rules:
   links last up to 10 minutes (the page refreshes the blockhash; the minimum out still holds). Launch links last about a
   minute. An expired link asks them to have you build it again.
 - Before build_trade, run quote_trade and show the user the quote (amount out, minimum out, fees, price impact). Set
-  confirm_trade or confirm_launch only after the user approves that exact transaction, and show them the summary lines.
+  confirm_trade, confirm_launch or confirm_claim only after the user approves that exact transaction, and show them the summary lines.
 - Don't present a transaction whose simulation failed as ready to sign.
 - Nothing here is financial advice; say so when you recommend coins.`;
 
