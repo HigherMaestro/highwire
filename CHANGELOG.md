@@ -2,7 +2,7 @@
 
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
 
-## Unreleased
+## 0.15.0 (2026-11-10)
 
 - **Practice wagers played on devnet.** The wager program is live on devnet and the site's wager desk pairs for it.
   LGTM and Merge Conflict played five series there: scripted ones, two with a reveal daemon killed mid-series (one

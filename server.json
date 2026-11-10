@@ -3,7 +3,7 @@
   "name": "fun.highwire/highwire",
   "title": "Highwire",
   "description": "Trade, launch and research higher.fun coins on Solana, from any AI agent. Unsigned or policy-signed.",
-  "version": "0.14.3",
+  "version": "0.15.0",
   "websiteUrl": "https://highwire.fun",
   "repository": {
     "url": "https://github.com/HigherMaestro/highwire",
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "highwire-mcp",
-      "version": "0.14.3",
+      "version": "0.15.0",
       "transport": {
         "type": "stdio"
       },
