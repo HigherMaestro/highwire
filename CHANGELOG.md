@@ -3,6 +3,12 @@
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp`, `highwire-wager` (from 0.16.0) and the site at
 highwire.fun.
 
+## Unreleased
+
+- **The template sync stops on a token GitHub turns down** (`npm run ideas -w highwire-web -- sync`): it checks
+  whose `GH_TOKEN` is first and refuses one that isn't HigherMaestro's, and only a 404 counts as a missing repository.
+  Before, a bad token made every template read as missing, "would create it as a public template".
+
 ## 0.16.0 (2026-11-11)
 
 - **Each package's build clears `dist` first**, so a file whose source was moved or deleted can't ride along in the
