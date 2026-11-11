@@ -23,7 +23,7 @@ pub struct Rules {
 }
 
 /// `duels-1`: seven places, 30 energy regaining 2 a round, 15 rounds, no tie-break, 2 minutes a round, 10 in all.
-pub const DUELS_1: Rules = Rules { places: 3, energy: 30, regen: 2, rounds: 15, tie_break_spent: false, round_seconds: 120, bank_seconds: 600 };
+pub const DUELS_1: Rules = Rules { places: 3, energy: 30, regen: 3, rounds: 15, tie_break_spent: false, round_seconds: 120, bank_seconds: 600 };
 
 /// Why a match ended. The numbers are stored on-chain; never renumber them.
 pub const REACHED_END: u8 = 1;
