@@ -6,6 +6,12 @@ export * from "./house.ts";
 export * from "./glicko.ts";
 export * from "./guide.ts";
 export * from "./series.ts";
+// A wager series solved (docs/research/series-equilibrium.md). The file's other exports measure strategies against each
+// other; they're for the research script and the tests, imported from the file itself.
+export {
+  BEST_OF_5, pullFrom, seriesPull, seriesResult, seriesScore, seriesScores, solveSeries,
+  type MatchStrategy, type SeriesFormat, type SeriesScore, type SeriesSolution,
+} from "./series-solve.ts";
 export { checkTableTalk, TABLE_TALK_MAX } from "../higher/post-text.ts";
 export { ValidationError, HigherError } from "../lib/errors.ts";
 // The few chain facts the referee checks registrations against.

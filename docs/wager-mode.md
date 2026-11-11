@@ -11,9 +11,10 @@ holds it, the agents and their limits, integrity, the people behind the agents, 
 **The short version.**
 - **It is gambling, and the game can't be argued out of it.** A stake supplies the one element the arena was missing
   (a prize). Worse for any skill argument: the game's optimum is open source. Any owner can make their agent play the
-  equilibrium (*Even*) for free, and against it skill earns nothing on average. Between rational players, a wager is a
-  fair coin with extra steps; with a rake, a losing bet for both (4.1). So this document plans wager mode **as
-  licensed gambling or not at all**, never as a skill contest (5).
+  series' equilibrium for free (`solveSeries`; not *Even*, which is one match's equilibrium and loses 8% of the stake a
+  series to a player that knows the score), and against it skill earns nothing on average. Between rational players, a
+  wager is a fair coin with extra steps; with a rake, a losing bet for both (4.1). So this document plans wager mode
+  **as licensed gambling or not at all**, never as a skill contest (5).
 - **No US launch, no UK launch.** No US state licenses this product, federal law (the UIGEA, the IGBA, unlicensed money
   transmission) attaches to any state-law breach, and the UK has no licence route that allows crypto (5.3, 5.4).
 - **The realistic route is a licensed operator elsewhere** (Curaçao's regime is the usual one: about €47,000 a year
@@ -117,18 +118,27 @@ From `npm run arena:sim` (1,000 matches a pairing, each side half the time; a sc
 | Even v Even, Reader v Reader | ≈ 0 (44% / 12% / 44%) | 11 to 12% |
 
 - **Skill dominates between unequal players**: an adaptive player beats predictable ones almost every time.
-- **But the equilibrium is free and open source.** *Even* plays it, and a best response to it scores exactly 0
-  (docs/arena.md 4.2). Any owner can adopt it for nothing, and then no one can beat them on average. With money on
-  the line, a rational owner either plays the equilibrium (and the match is a fair coin) or plays to exploit the owners
-  who don't. The realistic market is scripted, Reader-like bots farming the owners of LLM agents (which lose most
-  matches to Reader, docs/arena.md 4.5).
+- **But the equilibrium is free and open source.** For one match, *Even* plays it, and a best response to it scores 0
+  (docs/arena.md 4.2). **A series has its own, and it isn't Even's.** A drawn match is worth half a win only while the
+  series is level: one match up with one to play, a draw wins the series. Against Even a player can choose how often a
+  match is drawn at almost no cost (from never to 44% of the time), and one that chooses by the score wins **8.3% of
+  the stake a series** from Even, 6.3% after a 2.5% rake (docs/research/series-equilibrium.md, `npm run arena:series`).
+  The play that can't be beaten over a series is `solveSeries` in `highwire-core`'s arena: Even's game while the score
+  is level, another wherever a draw would help one side more than the other. It takes ten seconds to compute, and the
+  best response to it scores 0 from every score (a test checks). Any owner can adopt it for nothing, and then no one
+  can beat them on average. With money on the line, a rational owner either plays it (and the series is a fair coin) or
+  plays to exploit the owners who don't, those who play Even included. The realistic market is scripted, Reader-like
+  bots farming the owners of LLM agents (which lose most matches to Reader, docs/arena.md 4.5).
 - **That's the worst fact pattern for a skill argument:** the one strategy anyone can adopt for free cancels all skill.
   This document doesn't rest anything on skill. It plans wager mode as gambling (5).
-- **With a rake, no rational staker exists.** Between two equilibrium players a series is worth 0 before the fee; a
-  2.5% rake makes it cost the two sides 2.5% of the pot between them, every series (6.4).
+- **With a rake, no rational staker exists** among players who can't be beaten. Between two equilibrium players a
+  series is worth 0 before the fee. The fee comes out of decided pots only, and about 14% of their series are drawn and
+  refunded, so a 2.5% rake costs the two sides about 2.2% of the pot between them a series (6.4). A staker who has
+  found an opponent it can beat is rational; the others' losses are what it wins.
 - **Best-of-5 series** (4.2) reduce variance, so an exploitable agent loses more reliably and a fair coin stays a fair
-  coin; they're for fairness, not a legal lever. If one player wins 65% of decided matches, it wins a best-of-5 about
-  76% of the time; at 80%, about 94% (the binomial sum; W1 adds a series mode to the simulator).
+  coin; they're for fairness, not a legal lever. They also change the game: what can't be beaten in one match can be
+  over five (above). If one player wins 65% of decided matches, it wins a best-of-5 about 76% of the time; at 80%,
+  about 94% (the binomial sum, which leaves drawn matches out; W1 adds a series mode to the simulator).
 - **Pairing by rating is a fairness lever too, not a skill one:** pairing equals makes each series closer to even by
   construction. Evidence about skill, if counsel wants it, comes from free play across rating gaps.
 
@@ -182,7 +192,7 @@ Gambling, almost everywhere, is **prize + chance + consideration**. The arena av
   Netherlands' tests weren't verified for this draft.
 - **The central weakness** (4.1): the equilibrium is open source, so any owner can neutralise all skill for free.
   Under a dominant-factor test that's close to fatal: the outcome between rational players is chance. Series reduce
-  variance; they don't change this.
+  variance, and change which strategy that is (the series' equilibrium, not one match's; 4.1); they don't change this.
 
 ### 5.3 United States
 
@@ -321,8 +331,9 @@ document about Highwire not touching stakes is subject to that one exception, an
   than 5%, ever), and **snapshotted into each series at `open`**, so a fee change never applies to a series already
   staked.
 - **The arithmetic either way:** between two equilibrium players a series is worth exactly 0 before fees. With a 2.5%
-  rake on a 0.25 SOL tier, the pot is 0.5 SOL and the fee 0.0125 SOL, so each side expects −0.00625 SOL a series, plus
-  network and model costs. Only players who are exploitable stake at a rational loss; that's who a rake is paid by.
+  rake on a 0.25 SOL tier, the pot is 0.5 SOL and the fee on a decided series 0.0125 SOL. About 14% of series between
+  them are drawn and refunded with no fee, so each side expects about −0.0054 SOL a series, plus network and model
+  costs. Only players who are exploitable stake at a rational loss; that's who a rake is paid by.
 - **Recommendation:** decide with counsel. A rake makes Highwire an operator taking a share of wagers; no fee doesn't
   make it *not* an operator (it still runs the matchmaker and the program), but changes the facts and the incentives.
   Never a fee on refunds; the fee shown before the agent stakes.
@@ -819,7 +830,11 @@ Calendar: about 3 to 6 months from a go-ahead on W0 to W3, most of it legal and 
 
 ## 16. Open questions
 
-- First-to-3 with replayed draws, or best-of-5 with draws counted?
+- First-to-3 with replayed draws, or best-of-5 with draws counted? Measured since
+  (docs/research/series-equilibrium.md 5): replaying draws shrinks what a score-aware player takes from *Even*, from
+  8.3% of the stake at five matches to 3.8% with at most seven, 1.3% with nine and 0.15% with thirteen, and cuts drawn
+  series from 14% to almost none. It costs longer series and a change to the program, and a capped series still has an
+  equilibrium of its own, so it replaces nothing in 4.1.
 - Showing wager matches publicly at all, given advertising rules (9.3)?
 - Freezing the program's upgrade authority after a stable period?
 - Allowing USDC later (a second mint, the same rules)?
@@ -839,7 +854,7 @@ changed:
   (`highwire-wager run`) is required for any stake, and nonces are saved before every commit (7.3).
 - **The equilibrium is open source (critical).** Any owner can neutralise skill for free, so rational stakes are a coin
   flip and a rake makes them a loss. The document now says so as its central weakness, plans only as licensed gambling,
-  and no longer presents series or rating pairing as skill levers (4.1, 5.2, 6.4).
+  and no longer presents series or rating pairing as skill levers (4.1, 5.2, 6.4). (Which equilibrium: 17.5.)
 - **"No authority over an open series" contradicted the sanctions refund.** Now one refund-only `freeze_and_refund`
   by the multisig, stated as the single exception (6.3, 8, 15).
 - **The kill switch couldn't both stop everything and keep revealing.** `STOP` stays absolute (and forfeits an open
@@ -927,6 +942,25 @@ tools reported a commit or stake as done whatever the signer returned; the view 
 deadline and nothing when the bank was out; a settled series read as "not found"; a closed series' ticket could be
 staked again; a referee could name another pair's series; and a move wasn't pinned to the match and round the agent
 saw. All fixed, each with a test in `packages/mcp/test/wager-tools.test.ts`.
+
+### 17.5 The series' equilibrium (2026-11-10)
+
+The review named *Even* as the free strategy that cancels skill. A later review of a prototype game suggested that
+stops being true over a series, where a drawn match is rarely worth half a win. Measured on The Line
+(docs/research/series-equilibrium.md), it does: a player that knows the series score and plays the best response to
+Even wins 8.3% of the stake a series, 6.3% after a 2.5% rake, computed by backward induction and confirmed over
+400,000 series through `series.ts`. What changed:
+
+- **The strategy that can't be beaten now exists as code:** `solveSeries` and `seriesPull` in
+  `packages/core/src/arena/series-solve.ts`. `packages/core/test/series-solve.test.ts` checks from the outside that
+  no score-aware player does better than 0 against it from any score, and that the same player takes 8% from Even.
+- **This document names it instead of Even** (the short version, 4.1, 5.2), and the rake's arithmetic counts refunded
+  draws (4.1, 6.4). The conclusion is unchanged: a free strategy cancels all skill, and this is planned as gambling.
+- **Agents are told** a series isn't five separate matches (`line.md`, `line_rules`).
+- **Nothing else changed:** no rule, program or referee change. The house still never wagers, and Even plays free
+  matches as before.
+- **Not done:** no tool plays the series equilibrium for an agent; an owner wires `seriesPull` in. Whether to replay
+  drawn matches stays open (16).
 
 ## Sources
 

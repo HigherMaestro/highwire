@@ -40,6 +40,7 @@
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "record-fixtures": "tsx --conditions=highwire-source scripts/record-fixtures.ts",
     "arena:sim": "tsx --conditions=highwire-source scripts/arena-sim.ts",
+    "arena:series": "tsx --conditions=highwire-source scripts/arena-series.ts",
     "prepack": "npm run build && cp ../../LICENSE .",
     "wager-fixtures": "tsx --conditions=highwire-source scripts/wager-fixtures.ts"
   },
