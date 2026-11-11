@@ -2,6 +2,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer, localLaunchSecret, serverOptionsFromEnv, signerFromEnv, VERSION } from "highwire-mcp";
 import { LINE_USAGE, runLine } from "./line-cli.ts";
+import { wagerSigning } from "./signing.ts";
 import { registerWagerTools } from "./tools.ts";
 
 // highwire-wager: Highwire's MCP server with The Line's wager tools, and the reveal daemon. Running this instead of
@@ -31,7 +32,7 @@ Environment: as for highwire-mcp (npx -y highwire-mcp --help). Staking needs the
   process.exit(args.includes("--help") ? 0 : 2);
 }
 
-const signer = signerFromEnv();
+const signer = signerFromEnv(process.env, console.error, [wagerSigning]);
 const server = createServer({ ...serverOptionsFromEnv(), launchKeySecret: localLaunchSecret(), signer, wagers: registerWagerTools });
 await server.connect(new StdioServerTransport());
 // stdout carries the protocol, so logs go to stderr.

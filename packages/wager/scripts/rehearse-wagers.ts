@@ -30,13 +30,15 @@ import { ed25519 } from "@noble/curves/ed25519";
 import { Connection, Keypair, PublicKey, sendAndConfirmTransaction, Transaction } from "@solana/web3.js";
 import bs58 from "bs58";
 import { agentPaths, GENESIS_HASHES, LocalSigner } from "highwire-agent";
-import { Chain, freezeAndRefundInstruction, initConfigInstruction, pauseInstruction, WAGER_PROGRAM_IDS } from "highwire-core";
-import { readWagerConfig, seriesOutcome } from "../src/tx.ts";
+import { Chain } from "highwire-core";
+import { freezeAndRefundInstruction, initConfigInstruction, pauseInstruction, WAGER_PROGRAM_IDS } from "../src/codec.ts";
+import { readSeries, readWagerConfig, seriesOutcome } from "../src/tx.ts";
 import { createRelay, MemoryStore, realClock } from "highwire-relay";
 import { FakeCoins, FakeRpc, launchTx, memoTx } from "highwire-relay/testing";
 import { runLine } from "../src/line-cli.ts";
 import { createServer } from "highwire-mcp";
 import { registerWagerTools } from "../src/tools.ts";
+import { wagerSigner } from "../src/signing.ts";
 
 const QUICK = process.argv.includes("--quick");
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -221,7 +223,7 @@ async function agent(name: string, key: Keypair, n: number): Promise<Agent> {
   // Its reveal daemon, as `highwire-wager run` with the same environment as its server.
   const env = { HIGHWIRE_CLUSTER: "devnet", HIGHWIRE_HOME: home, HIGHWIRE_KEYPAIR_PATH: keyFile, SOLANA_RPC_URL: RPC, HIGHWIRE_RELAY_URL: "https://relay.test" };
   void runLine(["run"], { env, signal: daemons.signal, out: () => undefined, err: (l) => (/WARNING|refused|failed/i.test(l) ? log(`${name} run`, l.slice(9)) : undefined) });
-  const server = createServer({ cluster: "devnet", rpcUrl: RPC, relayUrl: "https://relay.test", arena: true, wagers: registerWagerTools, signer: new LocalSigner(key, paths) });
+  const server = createServer({ cluster: "devnet", rpcUrl: RPC, relayUrl: "https://relay.test", arena: true, wagers: registerWagerTools, signer: wagerSigner(key, paths) });
   const client = new Client({ name: `rehearse-${name}`, version: "0" });
   const [x, y] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(x), client.connect(y)]);
@@ -346,7 +348,10 @@ try {
   await admin(pauseInstruction(PROGRAM, keys.authority.publicKey, false));
   const [s4] = await Promise.all([stakeIn(a), stakeIn(b)]);
   const before4 = { a: await balance(a.wallet), b: await balance(b.wallet) };
-  await admin(freezeAndRefundInstruction(PROGRAM, keys.authority.publicKey, s4, { playerA: keys.a.publicKey, playerB: keys.b.publicKey }));
+  // The desk gives the two sides at random, so who is A comes from the series, not from which agent staked first.
+  const live4 = await readSeries(chain, s4);
+  if (!live4) throw new Error("the series to freeze isn't on-chain");
+  await admin(freezeAndRefundInstruction(PROGRAM, keys.authority.publicKey, s4, { playerA: new PublicKey(live4.header.playerA), playerB: new PublicKey(live4.header.playerB) }));
   const o4 = await seriesOutcome(chain, s4);
   check("the frozen series was refunded", o4.state === "closed" && "how" in o4 && o4.how === "refunded", JSON.stringify(o4));
   const back = { a: (await balance(a.wallet)) - before4.a, b: (await balance(b.wallet)) - before4.b };

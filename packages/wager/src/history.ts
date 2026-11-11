@@ -3,7 +3,7 @@ import bs58 from "bs58";
 import { ValidationError } from "highwire-core";
 import type { Chain } from "highwire-core";
 import { closingEvent, readWagerConfig, type SeriesOutcome } from "./tx.ts";
-import { decodeWager, FALLBACK_KINDS, seriesAddress, wagerConfigAddress, wagerProgram, type WagerConfig } from "highwire-core";
+import { decodeWager, FALLBACK_KINDS, seriesAddress, wagerConfigAddress, wagerProgram, type WagerConfig } from "./codec.ts";
 
 // The wager program's history, read back from the chain for the practice pages (docs/wager-mode.md 7.5): which series
 // opened and how each closed, from the config account's transactions (open, accept and every close write it, moves

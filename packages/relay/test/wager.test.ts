@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { ed25519 } from "@noble/curves/ed25519";
 import bs58 from "bs58";
 import { PublicKey } from "@solana/web3.js";
-import { ticketMessage, WAGER_PROGRAM_IDS } from "highwire-core";
 import { wagerTicketMessage, type WagerChain, type WagerConfig, type WagerTicketRecord } from "../src/arena/wager.ts";
 import { RelayError } from "../src/errors.ts";
 import { MINT, rig, WALLET } from "./fakes.ts";
@@ -11,7 +10,9 @@ import { MINT, rig, WALLET } from "./fakes.ts";
 // The wager desk (docs/wager-mode.md 7.4): pairing at a tier, the signed ticket, the thin-queue and weekly rules, and
 // outcomes read from the chain into a wager rating of its own. The chain is a fake: nothing here touches a cluster.
 
-const PROGRAM = WAGER_PROGRAM_IDS.devnet!;
+// The wager program on devnet. The desk takes its program id as a setting; that its ticket's bytes are the ones the
+// program checks is tested in highwire-wager (test/codec.test.ts), which has the program's codec.
+const PROGRAM = "RRMA7jERXRceX7i5QBK2fw8qbACkAo5zs949onndezC";
 const SECRET = new Uint8Array(32).fill(7);
 const TIER = "100000000";
 
@@ -61,11 +62,9 @@ test("two fighters at a tier are paired with one ticket, signed as the program c
   assert.equal(a.ticket.acceptDeadline, a.ticket.expiry);
   const left = a.ticket.expiry - Math.floor(r.clock.now() / 1000);
   assert.ok(left > 250 && left <= 300, `the ticket lives about 5 minutes (${left}s left)`);
-  // The bytes are the program's (highwire-core's codec), and the signature is the ticket key's.
+  // The signature is the ticket key's, over the desk's ticket message.
   const t = a.ticket as WagerTicketRecord;
-  const core = ticketMessage(new PublicKey(PROGRAM), { ...t, stake: BigInt(t.stake) });
-  assert.deepEqual(Buffer.from(wagerTicketMessage(PROGRAM, t)), core);
-  assert.ok(ed25519.verify(Buffer.from(a.signature, "hex"), core, ed25519.getPublicKey(SECRET)));
+  assert.ok(ed25519.verify(Buffer.from(a.signature, "hex"), wagerTicketMessage(PROGRAM, t), ed25519.getPublicKey(SECRET)));
   // Each fighter's wallet is its side: the one that registered it.
   const wallets = [a.role === "A" ? t.playerA : t.playerB, b.role === "A" ? t.playerA : t.playerB];
   assert.deepEqual(wallets.sort(), [wallet(1), wallet(2)].sort());

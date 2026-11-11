@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Keypair, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 import bs58 from "bs58";
-import { seriesAddress, wagerConfigAddress, wagerInstruction, WAGER_PROGRAM_IDS, type Chain } from "highwire-core";
+import { type Chain } from "highwire-core";
+import { seriesAddress, wagerConfigAddress, wagerInstruction, WAGER_PROGRAM_IDS } from "../src/codec.ts";
 import { seriesHistory } from "../src/history.ts";
 
 // The practice pages' reader (tx/wager-history.ts) against a fake RPC: wager instructions are read wherever they run,

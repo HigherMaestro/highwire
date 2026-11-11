@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { seriesAddress, wagerProgram } from "highwire-core";
+import { seriesAddress, wagerProgram } from "highwire-wager/chain";
 import { pageMetadata } from "../../../../lib/site.ts";
 import { wagerCluster } from "../../../../lib/line/server.ts";
 import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";

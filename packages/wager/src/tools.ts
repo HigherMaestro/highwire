@@ -4,7 +4,8 @@ import { PublicKey } from "@solana/web3.js";
 import { AuditLog, type ExecuteResult } from "highwire-agent";
 import { daemonStatus } from "./runner.ts";
 import { WagerSecrets, type WagerFallback } from "./secrets.ts";
-import { arena, commitDeadline, HigherError, lamportsNumber, revealDeadline, seriesAddress, sideIndexOf, solToLamports, ValidationError, wagerProgram, type SeriesAccountData, type WagerTicket } from "highwire-core";
+import { arena, HigherError, lamportsNumber, solToLamports, ValidationError } from "highwire-core";
+import { commitDeadline, revealDeadline, seriesAddress, sideIndexOf, wagerProgram, type SeriesAccountData, type WagerTicket } from "./codec.ts";
 import { buildWagerAccept, buildWagerMove, buildWagerOpen, listWalletSeries, readSeries, readSeriesMany, seriesOutcome } from "./tx.ts";
 import { EXECUTE, READ_ONLY, run, type Deps, type ExecutionSigner, type RelayCall, type StakedSeries } from "highwire-mcp";
 

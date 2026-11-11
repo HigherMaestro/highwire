@@ -1,5 +1,5 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { commitDeadline, revealDeadline, sideIndexOf, type SeriesAccountData } from "highwire-core";
+import { commitDeadline, revealDeadline, sideIndexOf, type SeriesAccountData } from "./codec.ts";
 import { lockHolder } from "highwire-agent";
 import type { WagerFallback, WagerSecrets } from "./secrets.ts";
 

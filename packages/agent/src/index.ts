@@ -2,6 +2,7 @@ export * from "./audit.ts";
 export * from "./keypair.ts";
 export * from "./paths.ts";
 export * from "./policy.ts";
+export * from "./extension.ts";
 export * from "./signer.ts";
 export * from "./lock.ts";
 export * from "./orders.ts";

@@ -1,10 +1,10 @@
 import { Buffer } from "buffer";
 import { Ed25519Program, PublicKey, SYSVAR_INSTRUCTIONS_PUBKEY, SystemProgram, TransactionInstruction, type AccountMeta } from "@solana/web3.js";
-import type { Cluster } from "../higher/constants.ts";
+import type { Cluster } from "highwire-core";
 
 // The wager program's wire format (programs/line-wager, docs/wager-mode.md 7.2): its address on each cluster, the
-// accounts it derives, the matchmaker's ticket, its Borsh-encoded instructions, and its accounts' layouts. The sign
-// page's checks (decode.ts) import this, so it imports only web3.js and plain modules. The encodings are pinned by
+// accounts it derives, the matchmaker's ticket, its Borsh-encoded instructions, and its accounts' layouts. The
+// site's wager pages import this (through chain.ts), so it imports only web3.js and plain modules. The encodings are pinned by
 // test/fixtures/wager-codec.json, which the program's own tests check byte for byte.
 
 /** Where the wager program is deployed. Wagering is refused on a cluster without one. */

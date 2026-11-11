@@ -10,12 +10,15 @@ import { ed25519 } from "@noble/curves/ed25519";
 import bs58 from "bs58";
 import { agentPaths, holdProcessLock, LocalSigner, type ExecuteRequest, type ExecuteResult } from "highwire-agent";
 import { writeBeat } from "../src/runner.ts";
-import { arena, decodeSeriesAccount, decodeWager, describeTransaction, seriesAddress, wagerConfigAddress, WAGER_PROGRAM_IDS } from "highwire-core";
+import { arena, describeTransaction } from "highwire-core";
+import { decodeSeriesAccount, decodeWager, seriesAddress, wagerConfigAddress, WAGER_PROGRAM_IDS } from "../src/codec.ts";
 import { createRelay, FakeClock, MemoryStore, type Relay, type WagerChain } from "highwire-relay";
 import { FakeCoins, FakeRpc, launchTx, memoTx } from "highwire-relay/testing";
 import { createServer } from "highwire-mcp";
 import { FAKE_OPTIONS } from "../../mcp/test/fake.ts";
 import { registerWagerTools } from "../src/tools.ts";
+import { wagerFacts, wagerGuard } from "../src/guard.ts";
+import { wagerSigning } from "../src/signing.ts";
 
 // The wager tools end to end (docs/wager-mode.md 7.6), on devnet: an agent on the local server is paired by the
 // referee's wager desk (in process, with a fake chain), stakes through its policy, commits a move whose nonce never
@@ -146,7 +149,7 @@ async function setup(policy: object = POLICY, cluster: "devnet" | "mainnet" = "d
   const paths = agentPaths({ HIGHWIRE_HOME: mkdtempSync(join(tmpdir(), "highwire-wager-tools-")) });
   writeFileSync(paths.policy, JSON.stringify(policy));
   const key = Keypair.generate();
-  const signer = new CapturingSigner(key, paths);
+  const signer = new CapturingSigner(key, paths, undefined, undefined, undefined, [wagerSigning]);
   const mint = bs58.encode(new Uint8Array(32).fill(201));
   const coins = (w.relay.referee as any).coins as FakeCoins;
   coins.coins.set(mint, { name: "Staker", ticker: "STK", createdAt: 0, holders: 1, volumeSol: 0, rugFlag: false, creatorHolds: true, creator: key.publicKey.toBase58() });
@@ -204,8 +207,11 @@ test("an agent is paired, then stakes and opens as A through the signer; its fal
     const req = s.signer.sent[0]!;
     assert.deepEqual([req.tool, req.intent.action, req.intent.wager?.kind, req.intent.solOut], ["line_stake", "wager", "open", 100_000_000n]);
     const tx = VersionedTransaction.deserialize(Buffer.from(req.envelope.transactions[0]!.base64, "base64"));
-    const d = describeTransaction(tx, "devnet");
-    assert.deepEqual(d.wagers.map((x) => [x.kind, x.stake]), [["open", 100_000_000n]]);
+    const d = describeTransaction(tx, "devnet", [], [wagerGuard()]);
+    const facts = wagerFacts(req.envelope, "devnet");
+    assert.deepEqual([facts.kind, facts.stake], ["open", 100_000_000n]);
+    // Without the guard, core reads the same transaction as two instructions it doesn't know.
+    assert.equal(describeTransaction(tx, "devnet").instructions.filter((i) => !i.known).length, 2);
     assert.ok(d.instructions.some((i) => /matchmaker's signature/.test(i.text)));
     // The fallback committed in the open is the one saved, and its salt appears in no answer.
     const open = tx.message.compiledInstructions.find((ix) => tx.message.staticAccountKeys[ix.programIdIndex]!.equals(PROGRAM))!;

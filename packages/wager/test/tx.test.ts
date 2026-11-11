@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PublicKey } from "@solana/web3.js";
-import { WAGER_PROGRAM_IDS } from "highwire-core";
+import { WAGER_PROGRAM_IDS } from "../src/codec.ts";
 import { closingEvent, seriesOutcome } from "../src/tx.ts";
 
 // Reading a closed series from the chain (the builders and the signer's side are in agent.test.ts and tools.test.ts).
