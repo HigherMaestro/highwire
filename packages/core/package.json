@@ -1,6 +1,6 @@
 {
   "name": "highwire-core",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Highwire's higher.fun client: the typed API, constants, unit formatting, the rug check, unsigned transaction builders and sign links",
   "type": "module",
   "license": "MIT",
@@ -35,7 +35,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "record-fixtures": "tsx --conditions=highwire-source scripts/record-fixtures.ts",

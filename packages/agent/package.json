@@ -1,6 +1,6 @@
 {
   "name": "highwire-agent",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Highwire's opt-in local signer for higher.fun: a policy file, dry runs by default, and an audit log. Runs only on your machine.",
   "type": "module",
   "license": "MIT",
@@ -25,7 +25,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "prepack": "npm run build && cp ../../LICENSE ."
@@ -34,7 +34,7 @@
     "@noble/curves": "1.9.7",
     "@solana/web3.js": "1.99.0",
     "bs58": "6.0.0",
-    "highwire-core": "0.15.0",
+    "highwire-core": "0.16.0",
     "zod": "4.6.7"
   }
 }
