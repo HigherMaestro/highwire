@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Keypair, VersionedTransaction, type Connection } from "@solana/web3.js";
 import bs58 from "bs58";
-import { agentPaths, LocalSigner, type ExecuteRequest, type ExecuteResult } from "highwire-agent";
+import { AuditLog, agentPaths, LocalSigner, type ExecuteRequest, type ExecuteResult } from "highwire-agent";
 import { createRelay, FakeClock, MemoryStore, type Relay } from "highwire-relay";
 import { FakeCoins, FakeRpc, launchTx, memoTx, MINT } from "highwire-relay/testing";
 import { createServer, type ServerOptions } from "../src/server.ts";
@@ -252,18 +252,35 @@ test("registration goes through the user's policy first: a refusal or a dry run 
   assert.match(live.body.next_step, /line_join/);
 });
 
-test("a second registration while a code waits gets its own code and tells the agent to wait, not that it moved", async () => {
+test("a code someone else left waiting doesn't block the wallet's own registration", async () => {
   const w = world();
   const key = Keypair.generate();
   const launch = w.rpc.add(launchTx({ payer: key.publicKey.toBase58() }));
-  // An attempt that asked The Line and then never sent its memo leaves the code waiting.
+  // Anyone can ask for a code for this wallet and coin: it needs only public facts.
   await w.relay.fetch(new Request("https://relay.test/api/agents/challenge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet: key.publicKey.toBase58(), mint: MINT, launchSignature: launch, secretHash: "0".repeat(64) }) }));
   const client = await connect(w, { signer: new LandingSigner(key, home(POLICY), w) });
-  const again = await call(client, "line_register", { mint: MINT, launch_signature: launch, confirm: true });
-  assert.equal(again.isError, true);
-  assert.equal(again.body.code, "line_pending");
-  assert.match(again.body.next_step, /10 minutes/);
-  assert.doesNotMatch(again.body.next_step, /moved/);
+  const reg = await call(client, "line_register", { mint: MINT, launch_signature: launch, confirm: true });
+  assert.equal(reg.body.registered, true, reg.text);
+});
+
+test("without launch_signature, registration reads the wallet's confirmed launch of that coin from its audit log", async () => {
+  const w = world();
+  const key = Keypair.generate();
+  const wallet = key.publicKey.toBase58();
+  const launch = w.rpc.add(launchTx({ payer: wallet }));
+  const paths = home(POLICY);
+  const signer = new LandingSigner(key, paths, w);
+  const client = await connect(w, { signer });
+  const missing = await call(client, "line_register", { mint: MINT, confirm: true });
+  assert.equal(missing.isError, true);
+  assert.match(missing.body.error, /no confirmed launch .*Pass launch_signature/);
+  const log = new AuditLog(paths.audit);
+  const entry = { action: "launch" as const, cluster: "mainnet" as const, sol: "0.02", lamports: "20000000", mint: MINT };
+  log.append({ ...entry, tool: "execute_launch", wallet, outcome: "sent", signature: "1".repeat(88) });
+  log.append({ ...entry, tool: "execute_launch", wallet: "someoneElse", outcome: "confirmed", signature: "2".repeat(88) });
+  log.append({ ...entry, tool: "execute_launch", wallet, outcome: "confirmed", signature: launch });
+  const reg = await call(client, "line_register", { mint: MINT, confirm: true });
+  assert.equal(reg.body.registered, true, reg.text);
 });
 
 test("an agent registers through the signer, plays the house to the end, and every reveal checks out", async () => {

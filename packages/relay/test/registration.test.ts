@@ -4,7 +4,7 @@ import { MAINNET } from "highwire-core/arena";
 import { randomHex, sha256Hex } from "../src/registration.ts";
 import { launchTx, memoTx, MINT, MINT2, OTHER, rig, WALLET } from "./fakes.ts";
 
-// The shared registration (docs/x-posting.md 5), every case: what a launch must show, one challenge at a time, the
+// The shared registration (docs/x-posting.md 5), every case: what a launch must show, challenges that can't block each other, the
 // secret that stops a stranger registering with a memo they saw on-chain, and tokens that a new registration replaces.
 
 async function challenge(r: ReturnType<typeof rig>, over: Record<string, unknown> = {}, tx = launchTx()) {
@@ -66,13 +66,23 @@ test("launches that don't qualify are refused, each with its reason", async () =
   assert.equal(bad.status, 400);
 });
 
-test("one challenge per wallet and coin at a time, so nobody can overwrite another's", async () => {
+test("challenges never block each other: anyone can ask for a code, and only the wallet's own memo and secret register", async () => {
   const r = rig();
+  // Someone who isn't the wallet asks for codes for its coin, over and over (a challenge needs nothing private).
+  const squatter = await challenge(r);
+  assert.equal(squatter.res.status, 200);
   assert.equal((await challenge(r)).res.status, 200);
-  const second = await challenge(r);
-  assert.equal(second.res.status, 409);
-  r.clock.advance(601_000);
-  assert.equal((await challenge(r)).res.status, 200, "after the first expires");
+  // The wallet's own attempt still gets a code of its own, at once, and registers.
+  const own = await challenge(r);
+  assert.equal(own.res.status, 200);
+  assert.notEqual(own.res.body.code, squatter.res.body.code);
+  const memo = r.rpc.add(memoTx(WALLET, own.res.body.memo, r.clock.now() + 20_000));
+  const reg = await r.call("POST", "/api/agents/register", { code: own.res.body.code, signature: memo, secret: own.secret });
+  assert.equal(reg.status, 200, reg.text);
+  // The squatter's code can't be completed with the wallet's memo (wrong code), nor without the wallet (no memo).
+  const stolen = await r.call("POST", "/api/agents/register", { code: squatter.res.body.code, signature: memo, secret: squatter.secret });
+  assert.equal(stolen.status, 403);
+  assert.match(stolen.body.error, /doesn't carry this code's memo/);
 });
 
 test("a stranger who sees the memo on-chain can't register with it: the secret stays with the signer", async () => {

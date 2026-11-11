@@ -169,13 +169,11 @@ export class Registration {
     const problem = launchProblem(await this.tx(launchSignature as string), wallet as string, mint as string);
     if (problem) fail("refused", `Can't register: ${problem}.`);
 
-    // One pending code per wallet and coin, so nobody can overwrite another's challenge.
+    // Every challenge gets a code of its own, and any number may wait for the same wallet and coin: only the one the
+    // wallet's memo carries, with its secret, ever registers. (One per coin let anyone hold a coin's registration
+    // hostage, since a challenge needs nothing private.) The per-caller limit bounds how many a caller can make.
     const code = randomCode();
     const now = this.now();
-    const pair = `reg:pair:${wallet}:${mint}`;
-    if ((await this.store.cas(pair, 0, code, CODE_SECONDS)) === null) {
-      fail("pending", "A registration for this wallet and coin is already waiting; finish it or wait up to 10 minutes for it to expire.");
-    }
     const pending: Pending = { wallet: wallet as string, mint: mint as string, secretHash: secretHash as string, createdAt: now };
     await this.store.cas(`reg:code:${code}`, 0, pending, CODE_SECONDS);
     return { code, memo: registrationMemo(code), expiresAt: now + CODE_SECONDS * 1000 };
@@ -200,7 +198,6 @@ export class Registration {
     const at = (tx!.blockTime ?? 0) * 1000;
     if (at < p.createdAt - 60_000 || at > p.createdAt + CODE_SECONDS * 1000) fail("refused", "That memo didn't land within 10 minutes of the challenge.");
     await this.store.del(`reg:code:${code}`);
-    await this.store.del(`reg:pair:${p.wallet}:${p.mint}`);
     return { wallet: p.wallet, mint: p.mint };
   }
 }

@@ -62,7 +62,6 @@ const NEXT_STEPS: Record<string, string> = {
   line_rate_limited: "Too many arena calls this minute. Wait, then use line_state (which waits for the next reveal) instead of polling.",
   line_refused: "Tell the user why The Line refused; don't try to work around it.",
   line_expired: "The registration code expired. Run line_register again.",
-  line_pending: "An earlier line_register for this wallet and coin is still waiting. Its code expires within 10 minutes of that attempt; call line_register again after that.",
   line_not_found: "Check the match id, or call line_join to start a match.",
   line_bad_request: "Fix the parameters as the error says, and try again.",
   line_unavailable: "The Line's referee answered with an error. Try again shortly, and tell the user if it persists.",

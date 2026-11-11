@@ -4,7 +4,7 @@ import { randomBytes, createHash } from "node:crypto";
 import { appendFileSync, chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { PublicKey } from "@solana/web3.js";
 import { arena, buildAgentRegistration, HigherError, ValidationError } from "highwire-core";
-import type { ExecuteResult } from "highwire-agent";
+import { AuditLog, type ExecuteResult } from "highwire-agent";
 import { run } from "../result.ts";
 import { EXECUTE, READ_ONLY, address, type Deps, type ExecutionSigner } from "./shared.ts";
 
@@ -212,6 +212,14 @@ export function registerArenaTools(server: McpServer, deps: Deps, opts: { wagers
   if (deps.signer) registerPlayTools(server, deps, deps.signer, opts.wagers);
 }
 
+/** The signature of this wallet's latest confirmed launch of `mint`, from the signer's audit log, or null. */
+function launchFromAudit(signer: ExecutionSigner, mint: string): string | null {
+  const found = new AuditLog(signer.paths.audit)
+    .entries()
+    .filter((e) => e.tool === "execute_launch" && e.mint === mint && e.wallet === signer.wallet && e.outcome === "confirmed" && e.signature);
+  return found.at(-1)?.signature ?? null;
+}
+
 /** `p1.<bot>.<side>.<seed>`: everything a practice match needs, so the tool keeps no state. */
 const PRACTICE_ID = /^p1\.(reader|even)\.(a|b)\.([0-9a-f]{32})$/;
 
@@ -279,7 +287,11 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
         "this server reads. Mainnet only.",
       inputSchema: {
         mint: address("The coin this wallet launched."),
-        launch_signature: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{64,90}$/).describe("The launch transaction's signature (highwire launch prints it)."),
+        launch_signature: z
+          .string()
+          .regex(/^[1-9A-HJ-NP-Za-km-z]{64,90}$/)
+          .optional()
+          .describe("The launch transaction's signature. Leave it out when this wallet launched the coin through Highwire: it's read from the audit log."),
         confirm: z.literal(true).describe("Send the registration memo."),
       },
       annotations: { title: "The Line: register (local signer)", ...EXECUTE },
@@ -287,8 +299,7 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
     (args) =>
       run(async () => {
         if (chain.cluster !== "mainnet") throw new ValidationError("The Line is mainnet only: devnet launches are free, which would make fighters free.");
-        // The policy first: The Line holds a code for a wallet and coin for 10 minutes once asked, so a refusal after
-        // asking would lock the next try out.
+        // The policy first, so a registration the policy refuses never asks The Line for a code.
         const policy = signer.precheck("register", chain.cluster, "line_register");
         if (!policy.live) {
           return {
@@ -297,11 +308,15 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
             next_step: 'The policy is a dry run, so nothing was sent and The Line wasn\'t asked. The user sets "live": true in the policy to register; then call line_register again.',
           };
         }
+        const launchSignature = args.launch_signature ?? launchFromAudit(signer, args.mint);
+        if (!launchSignature) {
+          throw new ValidationError(`This wallet's audit log (${signer.paths.audit}) has no confirmed launch of ${args.mint}. Pass launch_signature: the launch transaction's signature.`);
+        }
         const secret = randomBytes(32).toString("hex");
         const challenge = await relayCall(deps, "POST", "/api/agents/challenge", {
           wallet: signer.wallet,
           mint: args.mint,
-          launchSignature: args.launch_signature,
+          launchSignature,
           secretHash: sha256(secret),
         });
         const built = await buildAgentRegistration(chain, { wallet: new PublicKey(signer.wallet), code: challenge.code });
@@ -311,7 +326,7 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
           return {
             registered: false,
             signer: sent,
-            next_step: `The memo ${sent.status === "sent" ? "didn't confirm" : "wasn't sent"}, so nothing was registered. The Line keeps this attempt's code for up to 10 minutes: fix what the signer reported, then call line_register again after ${new Date(challenge.expiresAt).toISOString()}.`,
+            next_step: `The memo ${sent.status === "sent" ? "didn't confirm" : "wasn't sent"}, so nothing was registered. Fix what the signer reported, then call line_register again: each attempt gets a code of its own.`,
           };
         }
         // The relay reads the memo from the chain: give the RPC a few seconds to have it.

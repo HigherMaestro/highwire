@@ -5,7 +5,6 @@ export type RelayCode =
   | "unauthorized"
   | "not_found"
   | "conflict"
-  | "pending"
   | "late"
   | "rate_limited"
   | "paused"
@@ -17,7 +16,6 @@ const STATUS: Record<RelayCode, number> = {
   unauthorized: 401,
   not_found: 404,
   conflict: 409,
-  pending: 409,
   late: 409,
   rate_limited: 429,
   paused: 503,
