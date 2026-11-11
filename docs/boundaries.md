@@ -1,7 +1,7 @@
 # PRD: Boundaries inside the repository
 
-Status: **approved 2026-11-10, with the recommended answer to each decision in 9. Phase 1 (the switch) is built; the
-rest isn't.** Not legal advice: who may distribute or operate wagering software is
+Status: **approved 2026-11-10, with the recommended answer to each decision in 9. Phase 1 (the switch) and the first half
+of phase 2 (the package, without the signer's hooks) are built; the rest isn't.** Not legal advice: who may distribute or operate wagering software is
 counsel's question (docs/wager-mode.md 5), and nothing here answers it.
 
 Highwire started as an MCP server for higher.fun. It now also holds a game (The Line), a referee, a wager program and
@@ -119,7 +119,8 @@ wager's stake against the owner's limits.
   with the wager tools added, and `highwire-wager run` is the daemon. Their MCP client's config names the package, so
   wagering is a choice visible in one line. *(Alternative: a flag on `highwire-mcp` that loads the package if it's
   installed. Rejected: with `npx` there's no "installed", and a flag that changes what code loads is easy to miss.)*
-- **Four extension points**, each an argument the host passes in code. Nothing is discovered from disk or from the
+- **Four extension points** (the tools and the CLI in 2a, the decoder and the policy check in 2b), each an argument
+  the host passes in code. Nothing is discovered from disk or from the
   environment, so a look-alike package can't register itself:
   1. **Tools:** `createServer` takes extra tool groups, and the play tools take an optional handler for a `series`.
      Tool names don't change (`line_stake`, `line_wagers`, and `series` on the three shared tools).
@@ -189,9 +190,16 @@ Each phase is its own pull request, and each needs the one before it merged.
 1. **The switch.** *Done when* the tool list and the three shared tools behave as in "Success" with and without
    `HIGHWIRE_WAGERS`, the runbooks and `line.md` say how to turn it on, and a devnet series still settles with it on.
    *Built:* everything but the devnet series, which is the maintainer's to run (`wager-pair`: it sends transactions).
-2. **The package.** *Done when* the pack test and the import-direction test pass, `npx highwire-wager` serves every tool
-   the old server did with the switch on, `wager-pair` settles a devnet series through it, and every existing test
-   passes with the fixtures unchanged.
+2. **The package**, in two pull requests, the dangerous part alone in the second:
+   - **2a. Everything but the safety checks.** The tools, the builders, the history, the reveal daemon, the CLI and the
+     maintainer's scripts move to `highwire-wager`; `highwire-mcp` takes the tools as a `WagerExtension` passed in code.
+     The switch from phase 1 goes: running `highwire-wager` is the opt-in. *Done when* the import-direction test
+     passes, `highwire-wager`'s server lists every tool the old one did, the local rehearsal passes, and every test
+     that moved passes unchanged but for its imports. *Built.*
+   - **2b. The codec and the signer's hooks.** `wager-codec.ts`, the wager branches of `decode.ts` (`assertSafe` and
+     the plain-language decoding) and of the signer and policy move behind the decoder and policy hooks in 5.2, each
+     refusing by default. *Done when* `highwire-core` and `highwire-agent` have no wager code, `attacks.test.ts`
+     passes unchanged, and new tests cover a host with no hook, a wrong hook and a hook for another program.
 3. **The deploy rule.** *Done when* a preview branch has shown a skip for a program-only push and a build for a
    changelog-only push, a code push and a mixed push.
 4. **The tag, the freeze and CI.** *Done when* the pack names the tag and its build hash, CI is green on `main` and red

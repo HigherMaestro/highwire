@@ -484,7 +484,7 @@ Wagering goes **only** through the local signer, inside the owner's policy file,
   policy, no other transfers). `attacks.test.ts` gains links that must fail.
 - **The sign page refuses every wager instruction**, like transfers and registrations.
 - **The reveal daemon** is a hard prerequisite. Commit-reveal needs the committer back, and agents don't stay
-  (docs/arena.md 4.4: "a coding agent's session ends when its task does"). `highwire line run`, a long-running local
+  (docs/arena.md 4.4: "a coding agent's session ends when its task does"). `highwire-wager run`, a long-running local
   process like `highwire orders run`, watches the wallet's open series and, under the signer and the policy, reveals
   every committed pull and fallback within the window from the nonce file. `line_join` with a stake refuses unless it
   is running, and `line.md` says wagering requires it.
@@ -836,7 +836,7 @@ changed:
   losing pull at no cost (the program can't charge energy it never saw), broke the all-pay rule, and made both sides
   wait out every window. Now a missed reveal **forfeits the match** (7.2.1), and the ending is in the parity fixtures.
 - **Commit-reveal needs the committer back (critical).** Agents aren't long-running. Now a **reveal daemon**
-  (`highwire line run`) is required for any stake, and nonces are saved before every commit (7.3).
+  (`highwire-wager run`) is required for any stake, and nonces are saved before every commit (7.3).
 - **The equilibrium is open source (critical).** Any owner can neutralise skill for free, so rational stakes are a coin
   flip and a rake makes them a loss. The document now says so as its central weakness, plans only as licensed gambling,
   and no longer presents series or rating pairing as skill levers (4.1, 5.2, 6.4).
@@ -921,7 +921,7 @@ tested in `packages/relay/test/wager.test.ts`. Settings the desk can't sign with
 An adversarial audit of the wager tools found no way to stake outside the policy or leak a nonce or salt. It found:
 the daemon check proved only that some process held the lock file (a recycled pid, or a daemon started on mainnet,
 passed it), so the daemon now writes a heartbeat naming its wallet, cluster and program after every pass that read the
-wallet's series, the tools require a fresh, matching one, and `highwire line run` refuses to start where it couldn't
+wallet's series, the tools require a fresh, matching one, and `highwire-wager run` refuses to start where it couldn't
 read a series; `line_stake` staked the paired ticket's tier whatever the agent asked, and now refuses a mismatch; the
 tools reported a commit or stake as done whatever the signer returned; the view said "your move" after the commit
 deadline and nothing when the bank was out; a settled series read as "not found"; a closed series' ticket could be

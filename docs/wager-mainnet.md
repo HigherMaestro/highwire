@@ -89,7 +89,7 @@ extend` locks more for the extra bytes.
 ## 4. Rehearse (assistant)
 
 ```bash
-npm run rehearse-wagers -w highwire-mcp
+npm run rehearse-wagers -w highwire-wager
 ```
 
 The whole stack on a local validator: a full series with a missed commit, a retirement, a series never accepted and
@@ -119,11 +119,11 @@ Then check it, and set up the config **paused** in the same transaction (wager-a
 first, then the same with `--send`; the send asks you to type "mainnet":
 
 ```bash
-npm run wager-admin -w highwire-mcp -- status --cluster mainnet
+npm run wager-admin -w highwire-wager -- status --cluster mainnet
 ```
 
 ```bash
-npm run wager-admin -w highwire-mcp -- init --cluster mainnet --ledger --ticket-key <mainnet ticket key's public key> --fee-account <the fee account> --tiers 0.1 --max-stake 0.1 --open-cap 1
+npm run wager-admin -w highwire-wager -- init --cluster mainnet --ledger --ticket-key <mainnet ticket key's public key> --fee-account <the fee account> --tiers 0.1 --max-stake 0.1 --open-cap 1
 ```
 
 The spec's closed beta (W2): one 0.1 SOL tier, 0.1 SOL a side at most, 1 SOL open in all. `status` must then say
@@ -140,7 +140,7 @@ It must equal the hash recorded in section 10.
 ## 6. The mainnet ticket key and the site's settings (maintainer)
 
 ```bash
-npm run wager-admin -w highwire-mcp -- ticket-key --cluster mainnet --out ~/.highwire-mainnet/ticket-key.hex
+npm run wager-admin -w highwire-wager -- ticket-key --cluster mainnet --out ~/.highwire-mainnet/ticket-key.hex
 ```
 
 (Make this one before step 5: `init` takes its public key.) In Vercel, Production only, each Sensitive:
@@ -165,15 +165,15 @@ Two actions, in this order:
 1. **Open the program:**
 
    ```bash
-   npm run wager-admin -w highwire-mcp -- unpause --cluster mainnet --ledger --send
+   npm run wager-admin -w highwire-wager -- unpause --cluster mainnet --ledger --send
    ```
 
 2. **Point the desk at mainnet:** set `LINE_WAGER_CLUSTER` to `mainnet` in Vercel (Production) and redeploy.
 
 Then check `https://highwire.fun/api/arena/wager` answers with `"cluster": "mainnet"` and the mainnet program, and
-`status` says open. Agents wager on mainnet with `HIGHWIRE_WAGERS=1` in their server's environment (the wager tools are
-off without it, docs/boundaries.md 5.1), a mainnet policy that has `"wager"` in its actions and a `wagers` section, and
-their reveal daemon on mainnet (`HIGHWIRE_CLUSTER=mainnet highwire line run`).
+`status` says open. Agents wager on mainnet with `npx -y highwire-wager` as their MCP server (the wager tools aren't in
+`highwire-mcp`, docs/boundaries.md 5.2), a mainnet policy that has `"wager"` in its actions and a `wagers` section, and
+their reveal daemon on mainnet (`HIGHWIRE_CLUSTER=mainnet highwire-wager run`).
 
 To go back: pause (section 8), wait until `status` shows the open stake at 0 (every mainnet series settled: the desk
 only reads the cluster it's on, so one left open would never be rated), then set `LINE_WAGER_CLUSTER` back to

@@ -29,8 +29,8 @@ where five full series have been played and settled (docs/wager-devnet.md 8).
 | `src/lib.rs` | 26 | the entrypoint |
 
 About 1,500 lines. Out of scope, but useful context: the TypeScript twin of the rules (`packages/core/src/arena/`), the
-client's builders and safety checks (`packages/core/src/tx/wager*.ts`, `decode.ts`'s `assertSafe`), the reveal daemon
-(`packages/agent/src/wager-runner.ts`) and the desk (`packages/relay/src/arena/wager.ts`).
+client's builders and safety checks (`packages/core/src/tx/wager-codec.ts`, `packages/wager/src/tx.ts`, `decode.ts`'s `assertSafe`), the reveal daemon
+(`packages/wager/src/runner.ts`) and the desk (`packages/relay/src/arena/wager.ts`).
 
 ## The instructions
 
@@ -105,7 +105,7 @@ program).
 The whole stack, on a local validator:
 
 ```bash
-npm run rehearse-wagers -w highwire-mcp
+npm run rehearse-wagers -w highwire-wager
 ```
 
 The reproducible build, whose hash the deployed program must match (docs/wager-mainnet.md 2 and 10):
