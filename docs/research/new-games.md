@@ -185,9 +185,10 @@ claimed couldn't happen: "walking away forfeits" is only a penalty when the matc
   prizes; the draft's size wasn't run). The solver treats a drawn match as half a win. In a best-of-5 it rarely is: a
   side one match up with one to play wins the series on a draw, so it steers for burned prizes. A player that solves
   each match for the series' score beats one on the published mix, breaking no rule. So **Even is not a series'
-  equilibrium**, here and very likely on the wire, which draws more often (11%) and wasn't tested. Two ways out:
-  settle a level match by a draw from the entropy, which makes a draw worth half a win again and adds luck; or solve
-  and publish the mix per series score.
+  equilibrium**, here or on the wire. That was then measured on The Line (docs/research/series-equilibrium.md): a
+  score-aware best response beats Even by 8.3% of a stake a series, and the series' own equilibrium is in
+  `highwire-core` now (`series-solve.ts`). The Lot would need the same, per series score; the other way out, settling
+  a level match by a draw from the entropy, makes a draw worth half a win again and adds luck.
 - **Stalling is free.** With no clock across rounds, a side that uses every window in full stretches a two-minute
   series to over two hours. The wire's bank would have to charge reveals as well as commits, and running out would
   have to forfeit the match, since there's no fallback to play.
@@ -195,10 +196,11 @@ claimed couldn't happen: "walking away forfeits" is only a penalty when the matc
   reachable states where the side to move has less energy: 2 at 7 prizes, 30 at 8. A daemon that asked it for a bid
   and didn't catch that would miss its commit. The wire's own solve doesn't hit it.
 
-**One finding reaches the wire.** The Line's series (`src/arena/series.ts`, the wager program's twin) also checks a
-commitment's round and not its match, and its instruction carries no match. Checked: a copy of a match-1 round-1
-commitment is accepted as match 2's round 1, and forfeits it. It needs a signed commit that hadn't landed (a retry),
-arriving at the same round of the next match, so it's narrow. It's a change to the program, not to this prototype.
+**Two findings reached the wire.** The series one, above. And The Line's series (`src/arena/series.ts`, the wager
+program's twin) also checked a commitment's round and not its match, with no match in its instruction. Checked at the
+time: a copy of a match-1 round-1 commitment was accepted as match 2's round 1, and forfeited it. It needs a signed
+commit that hadn't landed (a retry), arriving at the same round of the next match, so it's narrow. It's a change to the
+program, not to this prototype, and has a pull request of its own.
 
 ## 2. Three wires
 
