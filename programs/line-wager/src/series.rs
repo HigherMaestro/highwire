@@ -68,6 +68,8 @@ pub struct Series {
 pub enum SeriesError {
     Over,
     WrongPhase,
+    /// The commit names a match other than the one in play.
+    WrongMatch,
     WrongRound,
     AlreadyCommitted,
     TooLate,
@@ -201,7 +203,10 @@ impl Series {
         Ok(())
     }
 
-    pub fn commit(&mut self, player: u8, round: u8, hash: [u8; 32], at: i64) -> Result<(), SeriesError> {
+    /// A side commits to its pull for the open round. The commit names its match and its round, as its commitment
+    /// does, and both must be the ones in play: round numbers repeat from match to match, so a second copy of an
+    /// earlier match's commit (a retry that landed late) would otherwise stand as this match's move, unopenable.
+    pub fn commit(&mut self, player: u8, match_index: u8, round: u8, hash: [u8; 32], at: i64) -> Result<(), SeriesError> {
         let pi = check_player(player)?;
         if self.ending.is_some() {
             return Err(SeriesError::Over);
@@ -211,6 +216,9 @@ impl Series {
         }
         if at < self.phase_opened_at {
             return Err(SeriesError::ClockBackward);
+        }
+        if match_index != self.match_index {
+            return Err(SeriesError::WrongMatch);
         }
         if round != self.game.rounds + 1 {
             return Err(SeriesError::WrongRound);

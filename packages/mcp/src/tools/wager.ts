@@ -323,7 +323,7 @@ export function registerWagerTools(server: McpServer, deps: Deps, signer: Execut
       if (Math.floor(Date.now() / 1000) >= commitDeadline(x, mine) - COMMIT_MARGIN_SECONDS) throw new HigherError("Too close to this round's commit deadline to land in time: your fallback plays it.", { code: "wager_late" });
       if (pull > x.game.energy[mine]) throw new ValidationError(`You have ${x.game.energy[mine]} energy: pull 0 to ${x.game.energy[mine]}.`);
       const secret = secrets().newMove(series, x.match, r, mine === 0 ? "a" : "b", pull);
-      const built = await buildWagerMove(chain, { wallet, seriesId: series, args: { kind: "commit", round: r, hash: secret.hash } });
+      const built = await buildWagerMove(chain, { wallet, seriesId: series, args: { kind: "commit", match: x.match, round: r, hash: secret.hash } });
       const o = outcome(await execute("line_move", "commit", 0n, built.envelope));
       return {
         committed: o.report,

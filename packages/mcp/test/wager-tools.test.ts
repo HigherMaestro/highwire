@@ -248,9 +248,9 @@ test("a wager move commits on-chain at once; the nonce is saved first and never 
     assert.deepEqual([req.tool, req.intent.wager?.kind, req.intent.solOut], ["line_move", "commit", 0n]);
     const tx = VersionedTransaction.deserialize(Buffer.from(req.envelope.transactions[0]!.base64, "base64"));
     const ix = tx.message.compiledInstructions.find((x) => tx.message.staticAccountKeys[x.programIdIndex]!.equals(PROGRAM))!;
-    const commit = decodeWager(Buffer.from(ix.data)) as { round: number; hash: string };
+    const commit = decodeWager(Buffer.from(ix.data)) as { match: number; round: number; hash: string };
     const saved = JSON.parse(readFileSync(s.paths.wagerSecrets, "utf8").trim().split("\n").at(-1)!);
-    assert.equal(commit.round, 2);
+    assert.deepEqual([commit.match, commit.round], [0, 2], "the commit names the match and round line_state showed");
     assert.equal(commit.hash, arena.moveCommitment(id, 0, 2, "a", 3, saved.nonce), "the commitment opens with the saved nonce");
     assert.ok(!out.text.includes(saved.nonce), "the nonce never leaves the machine");
   } finally {

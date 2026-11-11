@@ -4,10 +4,11 @@ import { chargeClock, fallbackPull, other, playRound, startMatch, type ArenaRule
 // A wager series (docs/wager-mode.md 4.2, 7.2): five matches of the arena's rules between two players, played as the
 // on-chain program plays them. Each round is two phases: both sides commit to a hidden pull, then both reveal. A side
 // that misses its commit plays its declared fallback, which it committed to when the series started and reveals in the
-// reveal phase; a side that commits (or owes a fallback) and doesn't reveal in time forfeits the match. A side whose
-// bank runs out stays on its fallback for the rest of the series. This file is the program's twin: the Rust in
-// programs/line-wager replays fixtures generated from it, and replays in the browser use it. Times are whole seconds
-// (the chain's clock), never earlier than the phase they act in. Pure: no I/O, no clock of its own.
+// reveal phase; a side that commits (or owes a fallback) and doesn't reveal in time forfeits the match. A commit names
+// the match and the round it's for, and is refused in any other. A side whose bank runs out stays on its fallback for
+// the rest of the series. This file is the program's twin: the Rust in programs/line-wager replays fixtures generated
+// from it, and replays in the browser use it. Times are whole seconds (the chain's clock), never earlier than the phase
+// they act in. Pure: no I/O, no clock of its own.
 
 export type Player = "A" | "B";
 export const MATCHES = 5;
@@ -138,12 +139,17 @@ function maybeReveal(s: SeriesState, at: number): void {
   if (s.round.a.pull !== null && s.round.b.pull !== null) resolve(s, at);
 }
 
-/** A side commits to its pull for the open round. */
-export function commit(s: SeriesState, player: Player, round: number, hash: string, at: number): void {
+/**
+ * A side commits to its pull for the open round. The commit names its match (from 0) and its round (from 1), as its
+ * commitment does, and both must be the ones in play: round numbers repeat from match to match, so a second copy of an
+ * earlier match's commit (a retry that landed late) would otherwise stand as this match's move, where nothing opens it.
+ */
+export function commit(s: SeriesState, player: Player, match: number, round: number, hash: string, at: number): void {
   checkPlayer(player);
   if (s.ending) fail("the series is over");
   if (s.phase !== "commit") fail("not a commit phase");
   checkTime(s, at);
+  if (match !== s.match) fail(`this is match ${s.match + 1}`);
   if (round !== s.game.rounds.length + 1) fail(`this is round ${s.game.rounds.length + 1}`);
   if (!/^[0-9a-f]{64}$/.test(hash)) fail("a commitment is 32 bytes of hex");
   const side = sideOf(player, s.match), r = s.round[side];

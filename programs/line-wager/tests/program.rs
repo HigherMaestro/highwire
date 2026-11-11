@@ -138,6 +138,18 @@ impl Env {
         failure(self.ctx.banks_client.process_transaction(tx).await)
     }
 
+    /// Sends `ixs` and returns the compute units a successful transaction used.
+    async fn units(&mut self, mut ixs: Vec<Instruction>, signers: &[&Keypair]) -> u64 {
+        self.nonce += 1;
+        ixs.push(ComputeBudgetInstruction::set_compute_unit_limit(1_400_000 - self.nonce));
+        let mut all: Vec<&Keypair> = vec![&self.ctx.payer];
+        all.extend_from_slice(signers);
+        let tx = Transaction::new_signed_with_payer(&ixs, Some(&self.ctx.payer.pubkey()), &all, self.ctx.last_blockhash);
+        let r = self.ctx.banks_client.process_transaction_with_metadata(tx).await.unwrap();
+        assert!(r.result.is_ok(), "{:?}", r.result);
+        r.metadata.unwrap().compute_units_consumed
+    }
+
     /// Sends `ixs` and returns the log of a successful transaction.
     async fn logs(&mut self, mut ixs: Vec<Instruction>, signers: &[&Keypair]) -> Vec<String> {
         self.nonce += 1;
@@ -304,7 +316,7 @@ impl Env {
         let nonce = |p: u8| [m * 64 + r * 2 + p; 32];
         for (k, p, pull) in &moves {
             let hash = move_commitment(id, m, r, side_of(*p, m), *pull, &nonce(*p));
-            assert_eq!(self.play(k, id, WagerInstruction::Commit { round: r, hash }).await, None);
+            assert_eq!(self.play(k, id, WagerInstruction::Commit { match_index: m, round: r, hash }).await, None);
         }
         assert_eq!(self.series(id).await.unwrap().series.unwrap().phase, PHASE_REVEAL);
         for (k, p, pull) in &moves {
@@ -549,7 +561,7 @@ async fn a_series_played_out_pays_the_winner_less_the_fee() {
     let rent = env.rent().await;
     // A stranger can't move; nor can anyone settle before the end.
     let stranger = clone(&env.stranger);
-    assert_eq!(env.play(&stranger, &id, WagerInstruction::Commit { round: 1, hash: [0; 32] }).await, Some((0, code(WagerError::NotAPlayer))));
+    assert_eq!(env.play(&stranger, &id, WagerInstruction::Commit { match_index: 0, round: 1, hash: [0; 32] }).await, Some((0, code(WagerError::NotAPlayer))));
     assert_eq!(env.settle(&id).await, Some((0, code(WagerError::NotOver))));
     let mut rounds = 0;
     while env.series(&id).await.unwrap().series.unwrap().ending.is_none() {
@@ -610,9 +622,9 @@ async fn a_drawn_series_refunds_both_in_full() {
         if s.ending.is_some() {
             break;
         }
-        let r = s.game.rounds + 1;
-        assert_eq!(env.play(&a, &id, WagerInstruction::Commit { round: r, hash: [1; 32] }).await, None);
-        assert_eq!(env.play(&b, &id, WagerInstruction::Commit { round: r, hash: [2; 32] }).await, None);
+        let (m, r) = (s.match_index, s.game.rounds + 1);
+        assert_eq!(env.play(&a, &id, WagerInstruction::Commit { match_index: m, round: r, hash: [1; 32] }).await, None);
+        assert_eq!(env.play(&b, &id, WagerInstruction::Commit { match_index: m, round: r, hash: [2; 32] }).await, None);
         assert_eq!(env.timeout(&id).await, Some((0, code(WagerError::Series) + 6)), "StillOpen");
         now += 121;
         env.set_time(now).await;
@@ -633,10 +645,62 @@ async fn series_rule_errors_come_back_with_their_own_codes() {
     let t = env.live(23).await;
     let a = clone(&env.a);
     let series = |n: u32| Some((0, code(WagerError::Series) + n));
-    assert_eq!(env.play(&a, &t.series_id, WagerInstruction::Commit { round: 2, hash: [0; 32] }).await, series(2), "WrongRound");
+    assert_eq!(env.play(&a, &t.series_id, WagerInstruction::Commit { match_index: 0, round: 2, hash: [0; 32] }).await, series(2), "WrongRound");
+    assert_eq!(env.play(&a, &t.series_id, WagerInstruction::Commit { match_index: 1, round: 1, hash: [0; 32] }).await, series(16), "WrongMatch");
+    // Both wrong: the match is checked first.
+    assert_eq!(env.play(&a, &t.series_id, WagerInstruction::Commit { match_index: 1, round: 2, hash: [0; 32] }).await, series(16), "WrongMatch");
     assert_eq!(env.play(&a, &t.series_id, WagerInstruction::Reveal { pull: 0, nonce: [0; 32] }).await, series(1), "WrongPhase");
     env.set_time(T0 - 1).await;
-    assert_eq!(env.play(&a, &t.series_id, WagerInstruction::Commit { round: 1, hash: [0; 32] }).await, series(14), "ClockBackward");
+    assert_eq!(env.play(&a, &t.series_id, WagerInstruction::Commit { match_index: 0, round: 1, hash: [0; 32] }).await, series(14), "ClockBackward");
+}
+
+// ---------------------------------------------------------------- a commit names its match
+
+/// Round numbers repeat from match to match, so a commit that named only its round could land twice (a retry signed
+/// with a new blockhash) and its second copy stand as the next match's move, where its hash opens nothing: the player's
+/// own commit refused as already made, and the match forfeited by a missed reveal. A commit names its match too.
+#[tokio::test]
+async fn a_second_copy_of_a_commit_is_refused_in_the_next_match() {
+    let mut env = Env::ready().await;
+    let t = env.live(24).await;
+    let id = t.series_id;
+    let (a, b) = (clone(&env.a), clone(&env.b));
+    let series = |n: u32| Some((0, code(WagerError::Series) + n));
+    // Match 1 ends in its first round: both commit, A reveals, B withholds and forfeits it.
+    let na = [7; 32];
+    let copy = WagerInstruction::Commit { match_index: 0, round: 1, hash: move_commitment(&id, 0, 1, side_of(PLAYER_A, 0), 3, &na) };
+    assert_eq!(env.play(&a, &id, copy.clone()).await, None);
+    assert_eq!(env.play(&b, &id, WagerInstruction::Commit { match_index: 0, round: 1, hash: [9; 32] }).await, None);
+    assert_eq!(env.play(&a, &id, WagerInstruction::Reveal { pull: 3, nonce: na }).await, None);
+    env.set_time(T0 + 121).await;
+    assert_eq!(env.timeout(&id).await, None);
+    let s = env.series(&id).await.unwrap().series.unwrap();
+    assert_eq!((s.match_index, s.game.rounds, s.phase), (1, 0, PHASE_COMMIT), "round 1 again, of match 2");
+    // The same instruction again: refused, with its own code, and nothing recorded for A.
+    assert_eq!(env.play(&a, &id, copy).await, series(16), "WrongMatch");
+    let s = env.series(&id).await.unwrap().series.unwrap();
+    assert_eq!(s.round[side_of(PLAYER_A, 1) as usize].hash, None);
+    // As the program took it before commits named their match (the tag, the round, the hash: 34 bytes): no longer an
+    // instruction at all, so it can't be read as a commit for any match.
+    let mut old = vec![5u8, 1];
+    old.extend_from_slice(&move_commitment(&id, 0, 1, side_of(PLAYER_A, 0), 3, &na));
+    assert_eq!(old.len() + 1, borsh::to_vec(&WagerInstruction::Commit { match_index: 0, round: 1, hash: [0; 32] }).unwrap().len());
+    let accounts = vec![AccountMeta::new_readonly(a.pubkey(), true), AccountMeta::new(series_address(&program_id(), &id).0, false)];
+    let raw = Instruction { program_id: program_id(), accounts: accounts.clone(), data: old };
+    assert_eq!(env.send(vec![raw], &[&a]).await, Some((0, code(WagerError::BadInstruction))));
+    assert_eq!(env.series(&id).await.unwrap().series.unwrap().round[side_of(PLAYER_A, 1) as usize].hash, None);
+    // A's own commit for match 2 goes in, opens, and the match plays on. A commit is cheap: a few thousand units.
+    let nb = [8; 32];
+    let own = WagerInstruction::Commit { match_index: 1, round: 1, hash: move_commitment(&id, 1, 1, side_of(PLAYER_A, 1), 4, &nb) };
+    assert_eq!(borsh::to_vec(&own).unwrap().len(), 35);
+    let units = env.units(vec![ix(own, accounts)], &[&a]).await;
+    println!("a commit used {units} compute units");
+    assert!(units < 20_000, "a commit used {units} compute units");
+    assert_eq!(env.play(&b, &id, WagerInstruction::Commit { match_index: 1, round: 1, hash: move_commitment(&id, 1, 1, side_of(PLAYER_B, 1), 2, &[6; 32]) }).await, None);
+    assert_eq!(env.play(&a, &id, WagerInstruction::Reveal { pull: 4, nonce: nb }).await, None);
+    assert_eq!(env.play(&b, &id, WagerInstruction::Reveal { pull: 2, nonce: [6; 32] }).await, None);
+    let s = env.series(&id).await.unwrap().series.unwrap();
+    assert_eq!((s.match_index, s.game.rounds, s.results[1]), (1, 1, None), "match 2 is in play, nobody forfeited it");
 }
 
 // ---------------------------------------------------------------- refunds
@@ -812,8 +876,8 @@ async fn a_withholds(env: &mut Env, id: &[u8; 32]) {
     let (a, b) = (clone(&env.a), clone(&env.b));
     let nb = [m + 2; 32];
     let hb = move_commitment(id, m, r, side_of(PLAYER_B, m), 3, &nb);
-    assert_eq!(env.play(&a, id, WagerInstruction::Commit { round: r, hash: [m + 9; 32] }).await, None);
-    assert_eq!(env.play(&b, id, WagerInstruction::Commit { round: r, hash: hb }).await, None);
+    assert_eq!(env.play(&a, id, WagerInstruction::Commit { match_index: m, round: r, hash: [m + 9; 32] }).await, None);
+    assert_eq!(env.play(&b, id, WagerInstruction::Commit { match_index: m, round: r, hash: hb }).await, None);
     assert_eq!(env.play(&b, id, WagerInstruction::Reveal { pull: 3, nonce: nb }).await, None);
 }
 

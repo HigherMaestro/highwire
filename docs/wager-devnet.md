@@ -158,6 +158,46 @@ the fighters' own registrations rather than devnet-only identities (docs/wager-m
 because a wager result touches only the separate wager rating and the practice pages.
 Freeze-and-refund and pausing are in `wager-admin` since.
 
+## 9. Redeploying after the program changes (maintainer)
+
+The program's address and its accounts stay; `solana program deploy` to the same address upgrades it. An instruction
+that changes shape (as `Commit` did when it gained its match, docs/wager-mode.md 7.2.6) changes for the program and the
+clients together: the players' servers and daemons run the repository at the same commit (section 6), so pull it
+there too, and restart them. Devnet's program was last deployed before that change, so this is still to do.
+
+1. Stop new series, and let the live ones finish. A dry run, then the same with `--send`:
+
+   ```bash
+   npm run wager-admin -w highwire-mcp -- pause --authority ~/.highwire-devnet/devnet-keypair.json
+   ```
+
+   ```bash
+   npm run wager-admin -w highwire-mcp -- status
+   ```
+
+   Wait until `status` shows the open stake at 0 (a series takes about 20 minutes; `freeze --series <id>` refunds one
+   that's stuck). A series still live across the upgrade keeps its account and its stakes, and reveals, deadlines and
+   settling work as before, but a commit in the earlier shape is refused, so a player whose server hasn't been updated
+   plays its fallback every round from then on.
+
+2. Build and deploy, from the commit being deployed:
+
+   ```bash
+   npm run test:program
+   ```
+
+   ```bash
+   solana program deploy programs/line-wager/target/deploy/line_wager.so --program-id ~/.highwire-devnet/line-wager-program.json --keypair ~/.highwire-devnet/devnet-keypair.json --upgrade-authority ~/.highwire-devnet/devnet-keypair.json --url https://api.devnet.solana.com
+   ```
+
+   If it says the program account is too small for the new build: `solana program extend
+   RRMA7jERXRceX7i5QBK2fw8qbACkAo5zs949onndezC <bytes> --keypair ~/.highwire-devnet/devnet-keypair.json --url
+   https://api.devnet.solana.com`, then deploy again.
+
+3. Check and reopen: `status` shows the program deployed and the config unchanged; then `unpause` (a dry run, then
+   `--send`), and play one series with `wager-pair` (section 7). The practice pages replay series from before the
+   upgrade as well as after.
+
 ## If something goes wrong
 
 - A daemon that won't start says why (another cluster's policy, a cluster without the program).

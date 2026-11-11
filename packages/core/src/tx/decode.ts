@@ -307,7 +307,7 @@ export function describeTransaction(
           open: wg.kind === "open" ? `Stake ${formatLamports(wg.stake)} SOL and open a best-of-5 wager series on The Line against ${wg.playerB} (series account ${series})` : "",
           accept: `Stake the series' amount and accept wager series ${series} on The Line`,
           cancel: `Cancel wager series ${series}, which was never accepted, refunding its opener`,
-          commit: wg.kind === "commit" ? `Commit a hidden move for round ${wg.round} of wager series ${series}` : "",
+          commit: wg.kind === "commit" ? `Commit a hidden move for match ${wg.match + 1}, round ${wg.round} of wager series ${series}` : "",
           reveal: wg.kind === "reveal" ? `Reveal a pull of ${wg.pull} in wager series ${series}` : "",
           revealFallback: `Reveal this player's fallback in wager series ${series}`,
           timeout: `Apply a passed deadline in wager series ${series}`,
@@ -391,10 +391,11 @@ export interface Expectations {
   /**
    * A wager on The Line: exactly one wager-program instruction of this kind, for this series, signed by the wallet; for
    * `open` and `accept`, immediately after the Ed25519 check of exactly this ticket by this key, and for `open` this
-   * stake. Only the local signer's wagers set it; without it no wager or Ed25519 instruction is allowed (so the sign
-   * page, which never sets it, refuses them).
+   * stake; for `commit`, exactly this match (from 0) and round (from 1), the ones its commitment hashes. Only the local
+   * signer's wagers set it; without it no wager or Ed25519 instruction is allowed (so the sign page, which never sets
+   * it, refuses them).
    */
-  wager?: { kind: WagerKind; seriesId: string; ticket?: WagerTicket; ticketKey?: PublicKey };
+  wager?: { kind: WagerKind; seriesId: string; ticket?: WagerTicket; ticketKey?: PublicKey; commit?: { match: number; round: number } };
 }
 
 /**
@@ -658,6 +659,13 @@ export function assertSafe(tx: VersionedTransaction, cluster: Cluster, exp: Expe
           signedByWallet(0);
           at(1, series, "series account");
           if (ix.keys.length !== 2) fail(`instruction ${i + 1}: a wager move with unexpected accounts`);
+          if (wg.kind === "commit") {
+            // The program takes a commit only in the match and round it names, so a commit naming any other than the
+            // ones its hidden move was hashed for would be refused, or stand where nothing can open it.
+            const c = wx.commit;
+            if (!c) return fail(`instruction ${i + 1}: a commit without the match and round it's for`);
+            if (wg.match !== c.match || wg.round !== c.round) fail(`instruction ${i + 1}: the commit names match ${wg.match + 1}, round ${wg.round}, not the match ${c.match + 1}, round ${c.round} it was made for`);
+          }
           break;
         case "timeout":
           at(0, series, "series account");

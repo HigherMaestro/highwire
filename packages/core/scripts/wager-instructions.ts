@@ -59,7 +59,7 @@ const pulls = { A: 4, B: 1 };
 const nonce = { A: "aa".repeat(32), B: "bb".repeat(32) };
 for (const p of ["A", "B"] as const) {
   const hash = moveCommitment(s1, 0, 1, sideOf(p, 0), pulls[p], nonce[p]);
-  step(`commit ${p}`, T0 + 5, [p], [wagerInstruction(program, keys[p].publicKey, s1, { kind: "commit", round: 1, hash })]);
+  step(`commit ${p}`, T0 + 5, [p], [wagerInstruction(program, keys[p].publicKey, s1, { kind: "commit", match: 0, round: 1, hash })]);
 }
 for (const p of ["A", "B"] as const) step(`reveal ${p}`, T0 + 6, [p], [wagerInstruction(program, keys[p].publicKey, s1, { kind: "reveal", pull: pulls[p], nonce: nonce[p] })]);
 step("retire A", T0 + 7, ["A"], [wagerInstruction(program, keys.A.publicKey, s1, { kind: "retire" })]);
@@ -73,7 +73,7 @@ step("cancel", T0 + 9, ["A"], [wagerInstruction(program, keys.A.publicKey, s2, {
 // Series 3: both stake, B misses round 1's commit, A's fallback-free commit times B out; then a day idle and refunded.
 const s3 = "77".repeat(32);
 accept(openAndAccept(s3, T0), T0);
-step("commit A", T0 + 1, ["A"], [wagerInstruction(program, keys.A.publicKey, s3, { kind: "commit", round: 1, hash: moveCommitment(s3, 0, 1, "a", 2, nonce.A) })]);
+step("commit A", T0 + 1, ["A"], [wagerInstruction(program, keys.A.publicKey, s3, { kind: "commit", match: 0, round: 1, hash: moveCommitment(s3, 0, 1, "a", 2, nonce.A) })]);
 step("timeout", T0 + 121, [], [wagerInstruction(program, keys.crank.publicKey, s3, { kind: "timeout" })]);
 step("reveal fallback B", T0 + 122, ["B"], [wagerInstruction(program, keys.B.publicKey, s3, { kind: "revealFallback", fallback: { kind: "steady", pull: 2 }, salt })]);
 step("emergency refund", T0 + 122 + 86_400, [], [wagerInstruction(program, keys.crank.publicKey, s3, { kind: "emergencyRefund" }, parties)]);
@@ -82,7 +82,7 @@ step("emergency refund", T0 + 122 + 86_400, [], [wagerInstruction(program, keys.
 // full), and unpauses.
 const s4 = "88".repeat(32);
 accept(openAndAccept(s4, T0), T0);
-step("commit A (4)", T0 + 1, ["A"], [wagerInstruction(program, keys.A.publicKey, s4, { kind: "commit", round: 1, hash: moveCommitment(s4, 0, 1, "a", 3, nonce.A) })]);
+step("commit A (4)", T0 + 1, ["A"], [wagerInstruction(program, keys.A.publicKey, s4, { kind: "commit", match: 0, round: 1, hash: moveCommitment(s4, 0, 1, "a", 3, nonce.A) })]);
 step("pause", T0 + 2, ["authority"], [pauseInstruction(program, keys.authority.publicKey, true)]);
 step("freeze and refund", T0 + 3, ["authority"], [freezeAndRefundInstruction(program, keys.authority.publicKey, s4, parties)]);
 step("unpause", T0 + 4, ["authority"], [pauseInstruction(program, keys.authority.publicKey, false)]);
