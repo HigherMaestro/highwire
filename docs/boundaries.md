@@ -135,9 +135,12 @@ wager's stake against the owner's limits.
 
 ### 5.3 Deploys (phase 3)
 
-- **The rule:** an `ignoreCommand` in `apps/web/vercel.json` that skips the build only when **every** changed file is
-  under a short skip list: `programs/`, `docs/research/`, `packages/*/test/`, `packages/*/scripts/`, `*.rs`.
-  Anything else builds.
+- **The rule:** an `ignoreCommand` in `apps/web/vercel.json` (`apps/web/scripts/ignore-build.mjs`) that skips the build
+  only when **every** changed file is under a short skip list: `programs/`, `docs/research/`, `packages/*/test/`,
+  `packages/*/scripts/`. Anything else builds. Whole folders only: the draft's `*.rs` went, since a `.rs` file under
+  `apps/web/public` would be something the site serves, and the program's Rust is all under `programs/` anyway.
+- **When it can't tell, it builds:** no earlier deployment of the branch, a commit it can't find, git failing, or
+  nothing changed at all (a redeploy asked for on purpose, as when a setting changes).
 - **Why a skip list and not a build list:** the site reads `CHANGELOG.md`, `ideas/` and
   `packages/mcp/package.json` at build time, besides every package it imports. A list of what to build would miss the
   next such file and leave the site stale; a list of what to skip can only err toward building.

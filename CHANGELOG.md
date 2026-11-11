@@ -4,6 +4,9 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **A push the site can't see no longer deploys it.** Vercel skips the build when every file changed since the last
+  deployed commit is under `programs/`, `docs/research/`, or a package's `test/` or `scripts/` folder. Anything else
+  builds, as does a redeploy with no change and any case the check can't work out.
 - **Wagering is its own package, `highwire-wager`.** The staking tools (`line_stake`, `line_wagers`, and `series` on
   `line_state`, `line_move` and `line_retire`), the builders, the reveal daemon and the maintainer's scripts moved out
   of `highwire-mcp`, `highwire-core` and `highwire-agent`, which no longer depend on any of it. In 0.15.0 any server
