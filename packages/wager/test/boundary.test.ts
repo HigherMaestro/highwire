@@ -54,10 +54,27 @@ test("highwire-mcp carries no wager tool, daemon or builder: nothing in it can s
   for (const file of files) assert.doesNotMatch(readFileSync(file, "utf8"), /import\(\s*(process\.env|[a-zA-Z_]+\s*\))|require\(\s*process\.env/, `${file} loads code by a computed name`);
 });
 
+test("highwire-core and highwire-agent have no wager code: no codec, no checks, nothing that knows the program", () => {
+  // What stays is the policy's shape and the audit log's fields (one policy file, one log), and the hooks themselves.
+  for (const pkg of ["core", "agent"]) {
+    const src = join(root, "packages", pkg, "src");
+    for (const file of sources(src)) {
+      assert.ok(!/wager/.test(file.slice(src.length)), `${file}: a wager file in highwire-${pkg}`);
+      assert.doesNotMatch(
+        readFileSync(file, "utf8"),
+        /wagerProgram|WAGER_PROGRAM_IDS|decodeWager|decodeSeriesAccount|seriesAddress|wagerConfigAddress|ticketMessage|decodeEd25519|ED25519_PROGRAM_ID|Ed25519SigVerify|openSeries\(|STAKE_KINDS|checkWagerPolicy|wagerFacts/,
+        `${file} knows the wager program`,
+      );
+    }
+  }
+});
+
 test("highwire-core and highwire-agent no longer export the builders, the history, the daemon or its secrets", async () => {
   const core = await import("highwire-core"), agent = await import("highwire-agent");
-  for (const name of ["buildWagerOpen", "buildWagerAccept", "buildWagerMove", "readSeries", "listWalletSeries", "seriesOutcome", "seriesHistory", "recentSeries"]) assert.ok(!(name in core), `highwire-core exports ${name}`);
-  for (const name of ["WagerRunner", "WagerSecrets", "daemonStatus", "writeBeat", "nextWagerAction"]) assert.ok(!(name in agent), `highwire-agent exports ${name}`);
+  for (const name of ["buildWagerOpen", "buildWagerAccept", "buildWagerMove", "readSeries", "listWalletSeries", "seriesOutcome", "seriesHistory", "recentSeries", "wagerProgram", "WAGER_PROGRAM_IDS", "decodeWager", "wagerInstruction", "seriesAddress"]) {
+    assert.ok(!(name in core), `highwire-core exports ${name}`);
+  }
+  for (const name of ["WagerRunner", "WagerSecrets", "daemonStatus", "writeBeat", "nextWagerAction", "wagerFacts", "STAKE_KINDS", "isWagerMove"]) assert.ok(!(name in agent), `highwire-agent exports ${name}`);
 });
 
 test("this package's server is highwire-mcp's with line_stake and line_wagers added, and nothing else", async () => {

@@ -9,7 +9,7 @@
 // side is always still to commit, so it's unreachable by construction, in both languages.)
 //
 // usage: npm run wager-fixtures -w highwire-core [-- --n 2000 --seed 20261109]
-import { createWriteStream } from "node:fs";
+import { createWriteStream, mkdirSync } from "node:fs";
 import { DUELS_1, fallbackCommitment, moveCommitment, sideOf, startSeries, commit, reveal, timeout, retire, commitDeadline, revealDeadline, type Fallback, type Player, type SeriesState } from "../src/arena/index.ts";
 
 const arg = (k: string, d: number) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? Number(process.argv[i + 1]) : d; };
@@ -67,6 +67,8 @@ type Persona = "present" | "slow" | "absent";
 const persona = (): Persona => (chance(10) ? "absent" : chance(4) ? "slow" : "present");
 
 const file = new URL("../../../programs/line-wager/tests/fixtures/series.ndjson", import.meta.url);
+// The folder is git-ignored, so a fresh checkout doesn't have it.
+mkdirSync(new URL(".", file), { recursive: true });
 const out = createWriteStream(file);
 out.write(JSON.stringify({ rules: "duels-1", revealSeconds: 120, seed: SEED, n: N }) + "\n");
 let events = 0;

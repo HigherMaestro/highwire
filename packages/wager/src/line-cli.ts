@@ -2,7 +2,9 @@ import { lstatSync, readFileSync } from "node:fs";
 import { agentPaths, holdProcessLock, loadPolicy, lockHolder, type LocalSigner } from "highwire-agent";
 import { WagerRunner, writeBeat, type WagerAction } from "./runner.ts";
 import { WagerSecrets } from "./secrets.ts";
-import { lamportsNumber, wagerProgram, type Chain, type SeriesAccountData } from "highwire-core";
+import { wagerSigning } from "./signing.ts";
+import { lamportsNumber, type Chain } from "highwire-core";
+import { wagerProgram, type SeriesAccountData } from "./codec.ts";
 import { buildWagerMove, listWalletSeries, readSeriesMany, type WagerMoveRequest } from "./tx.ts";
 import { createDeps, serverOptionsFromEnv, signerFromEnv } from "highwire-mcp";
 
@@ -96,7 +98,7 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
     io.out(LINE_USAGE);
     return cmd === undefined || cmd === "--help" ? 0 : 2;
   }
-  const signer = signerFromEnv(env, io.err);
+  const signer = signerFromEnv(env, io.err, [wagerSigning]);
   if (!signer) {
     io.err(`highwire-wager ${cmd}: set HIGHWIRE_KEYPAIR_PATH to the signer's keypair file, as for the MCP server.`);
     return 2;

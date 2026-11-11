@@ -2,12 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PublicKey } from "@solana/web3.js";
-import { commitDeadline, decodeSeriesAccount, decodeWager, decodeWagerConfig, encodeWager, revealDeadline, ticketMessage, WAGER_PROGRAM_IDS, type WagerArgs } from "../src/tx/wager-codec.ts";
+import { commitDeadline, decodeSeriesAccount, decodeWager, decodeWagerConfig, encodeWager, revealDeadline, ticketMessage, WAGER_PROGRAM_IDS, type WagerArgs } from "../src/codec.ts";
 
 // The wager program's byte formats, against test/fixtures/wager-codec.json, which the program's own tests
 // (programs/line-wager/tests/codec.rs) check is exactly what it encodes.
 
-const file = JSON.parse(readFileSync(new URL("./fixtures/wager-codec.json", import.meta.url), "utf8"));
+const file = JSON.parse(readFileSync(new URL("../../core/test/fixtures/wager-codec.json", import.meta.url), "utf8"));
 const key = (n: number) => new PublicKey(new Uint8Array(32).fill(n)).toBase58();
 const h = (b: number) => b.toString(16).padStart(2, "0").repeat(32);
 
@@ -26,7 +26,7 @@ test("every instruction Highwire builds encodes as the program does, and decodes
   };
   assert.deepEqual(Object.keys(args).sort(), Object.keys(file.instructions).filter((k) => k !== "initConfig").sort());
   // The maintainer's one-time setup, from the same file.
-  const { initConfigInstruction } = await import("../src/tx/wager-codec.ts");
+  const { initConfigInstruction } = await import("../src/codec.ts");
   const init = initConfigInstruction(new PublicKey(WAGER_PROGRAM_IDS.devnet!), {
     authority: new PublicKey(key(1)), ticketKey: new PublicKey(key(2)), ticketKeyId: 3, feeBps: 250, feeAccount: new PublicKey(key(4)),
     tiers: [10_000_000n, 100_000_000n], maxStake: 100_000_000n, openStakeCap: 5_000_000_000n, revealSeconds: 120,
@@ -83,4 +83,14 @@ test("the ticket message is the program's: domain, program, series, players, sta
   assert.equal(m.subarray(0, 22).toString(), "highwire-line-ticket-1");
   assert.ok(m.subarray(22, 54).equals(program.toBuffer()));
   assert.equal(m.readUInt16LE(174), 4);
+});
+
+test("the desk's ticket is byte for byte the one the program checks", async () => {
+  // The relay signs tickets with its own encoder (it doesn't depend on this package); the program verifies the codec's.
+  const { wagerTicketMessage } = await import("highwire-relay");
+  const program = WAGER_PROGRAM_IDS.devnet!;
+  for (const [stake, acceptDeadline, expiry, keyId] of [[100_000_000n, 1_300, 1_600, 1], [10_000_000n, 1_762_800_000, 1_762_800_000, 65_535], [18_446_744_073_709_551_615n, 0, 4_294_967_295, 0]] as const) {
+    const t = { seriesId: h(0x5a), playerA: key(1), playerB: key(2), stake, acceptDeadline, expiry, keyId };
+    assert.deepEqual(Buffer.from(wagerTicketMessage(program, { ...t, stake: stake.toString() })), ticketMessage(new PublicKey(program), t));
+  }
 });

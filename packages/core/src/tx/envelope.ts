@@ -157,7 +157,7 @@ export async function finish(opts: FinishOptions): Promise<Finished> {
     const tx = new VersionedTransaction(rebuilt.message);
     assertSafe(tx, chain.cluster, opts.jito ? { ...b.expect, jitoTip: { maxLamports: opts.jito.tipLamports } } : b.expect, tables);
     if (b.presign?.length) tx.sign(b.presign);
-    const d = describeTransaction(tx, chain.cluster, tables);
+    const d = describeTransaction(tx, chain.cluster, tables, b.expect.guards);
     decoded.push(d);
     const dependsOn = b.dependsOn ?? [];
     const sim: Simulation =

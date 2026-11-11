@@ -5,10 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type Connection, type TransactionInstruction } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
-import { arena, decodeSeriesAccount, ENVELOPE_FORMAT, HOW_TO_SIGN, solToLamports, ticketCheck, ticketMessage, WAGER_PROGRAM_IDS, wagerInstruction, type Envelope, type SeriesAccountData } from "highwire-core";
+import { arena, ENVELOPE_FORMAT, HOW_TO_SIGN, solToLamports, type Envelope } from "highwire-core";
+import { decodeSeriesAccount, ticketCheck, ticketMessage, WAGER_PROGRAM_IDS, wagerInstruction, type SeriesAccountData } from "../src/codec.ts";
 import { agentPaths, checkPolicy, GENESIS_HASHES, LocalSigner, POLICY_TEMPLATE, PolicySchema, holdProcessLock, withFileLock, type Intent, type Policy } from "highwire-agent";
 import { CANCEL_MARGIN_SECONDS, SETTLE_GRACE_SECONDS, DEADLINE_MARGIN_SECONDS, nextWagerAction, WagerRunner, daemonStatus, writeBeat } from "../src/runner.ts";
 import { WagerSecrets } from "../src/secrets.ts";
+import { wagerSigner, wagerSigning } from "../src/signing.ts";
 
 // The wager side of the local signer (docs/wager-mode.md 7.3): the policy's wagers section, STOP-WAGERS, the secrets
 // file and the reveal daemon's decisions. A fake RPC and series states only: nothing here touches a cluster.
@@ -23,23 +25,28 @@ const stake = (sol: number, openSeries = 0, kind = "open"): Intent => ({
   wager: { kind, stake: solToLamports(sol), openSeries },
 });
 
-test("the policy allows a wager only inside its wagers section", () => {
+test("the policy allows a wager only inside its wagers section, and only through the wager extension", () => {
   const p = policy();
-  assert.equal(checkPolicy(p, stake(0.1), 0n), null);
-  assert.equal(checkPolicy(p, stake(0.1, 0, "accept"), 0n), null);
-  assert.equal(checkPolicy(policy({ wagers: undefined }), stake(0.1), 0n)?.rule, "wagers");
-  assert.equal(checkPolicy(policy({ actions: ["trade"] }), stake(0.1), 0n)?.rule, "actions");
-  assert.equal(checkPolicy(p, stake(0.05), 0n)?.rule, "wagers.tiers", "not a tier");
-  assert.equal(checkPolicy(p, stake(0.1, 1), 0n)?.rule, "wagers.max_open");
+  const check = (pol: Policy, intent: Intent, spent: bigint) => checkPolicy(pol, intent, spent, wagerSigning);
+  // The signer's own policy check, with no extension, refuses every wager: the rules for one aren't in highwire-agent.
+  assert.equal(checkPolicy(p, stake(0.1), 0n)?.rule, "actions");
+  assert.match(checkPolicy(p, stake(0.1), 0n)!.reason, /can't check wagers/);
+  assert.equal(checkPolicy(p, { action: "wager", cluster: "devnet", solOut: 0n, wager: { kind: "reveal" } }, 0n)?.rule, "actions");
+  assert.equal(check(p, stake(0.1), 0n), null);
+  assert.equal(check(p, stake(0.1, 0, "accept"), 0n), null);
+  assert.equal(check(policy({ wagers: undefined }), stake(0.1), 0n)?.rule, "wagers");
+  assert.equal(check(policy({ actions: ["trade"] }), stake(0.1), 0n)?.rule, "actions");
+  assert.equal(check(p, stake(0.05), 0n)?.rule, "wagers.tiers", "not a tier");
+  assert.equal(check(p, stake(0.1, 1), 0n)?.rule, "wagers.max_open");
   const uncounted: Intent = { ...stake(0.1), wager: { kind: "open", stake: solToLamports(0.1) } };
-  assert.equal(checkPolicy(p, uncounted, 0n)?.rule, "wagers.max_open", "uncounted open series are refused");
+  assert.equal(check(p, uncounted, 0n)?.rule, "wagers.max_open", "uncounted open series are refused");
   // Gross, against the daily limit like any spend.
-  assert.equal(checkPolicy(policy({ max_sol_per_day: 0.15 }), stake(0.1), solToLamports(0.1))?.rule, "max_sol_per_day");
+  assert.equal(check(policy({ max_sol_per_day: 0.15 }), stake(0.1), solToLamports(0.1))?.rule, "max_sol_per_day");
   // Moves spend nothing and need no tier; retiring needs allow_retire.
   const move = (kind: string): Intent => ({ action: "wager", cluster: "devnet", solOut: 0n, wager: { kind } });
-  assert.equal(checkPolicy(p, move("reveal"), 0n), null);
-  assert.equal(checkPolicy(p, move("retire"), 0n)?.rule, "wagers.allow_retire");
-  assert.equal(checkPolicy(policy({ wagers: { max_stake_sol: 0.1, max_open: 1, tiers: [0.1], allow_retire: true } }), move("retire"), 0n), null);
+  assert.equal(check(p, move("reveal"), 0n), null);
+  assert.equal(check(p, move("retire"), 0n)?.rule, "wagers.allow_retire");
+  assert.equal(check(policy({ wagers: { max_stake_sol: 0.1, max_open: 1, tiers: [0.1], allow_retire: true } }), move("retire"), 0n), null);
   // A tier over the section's own cap doesn't parse.
   assert.throws(() => policy({ wagers: { max_stake_sol: 0.1, max_open: 1, tiers: [0.5], allow_retire: false } }), /at most max_stake_sol/);
   // A template never wagers.
@@ -112,7 +119,7 @@ const fakeConnection = (o: { spend?: number; onChain?: Set<string> } = {}) =>
 const live = (over: Partial<Policy> = {}) => {
   const paths = agentPaths({ HIGHWIRE_HOME: home() });
   writeFileSync(paths.policy, JSON.stringify(policy({ live: true, ...over })));
-  return { paths, signer: new LocalSigner(Keypair.generate(), paths) };
+  return { paths, signer: wagerSigner(Keypair.generate(), paths) };
 };
 const ask = (kind?: string, sol = 0): Intent => ({ action: "wager", cluster: "devnet", solOut: solToLamports(sol), ...(kind ? { wager: { kind } } : {}) });
 
@@ -444,7 +451,7 @@ test("the runner beats only after it has read the wallet's series, never while i
 
 test("the open-series count is this wallet's stakes still on-chain, read by address, never by scanning the program", async () => {
   const { paths, signer } = live({ wagers: { max_stake_sol: 0.1, max_open: 1, tiers: [0.1], allow_retire: false } });
-  const { seriesAddress } = await import("highwire-core");
+  const { seriesAddress } = await import("../src/codec.ts");
   const old = seriesAddress(program, "99".repeat(32)).toBase58();
   // A stake sent two hours ago (outside the ten-minute window): it counts only while its series is still on-chain.
   const { AuditLog } = await import("highwire-agent");
@@ -455,4 +462,49 @@ test("the open-series count is this wallet's stakes still on-chain, read by addr
   // Once that series has closed, the slot is free.
   const ok = await signer.execute(fakeConnection({ spend: 104_000_000, onChain: new Set() }), { tool: "t", intent: ask("open"), envelope: wagerEnvelope(signer.publicKey, "open", "bb".repeat(32)) });
   assert.equal(ok.status, "sent");
+});
+
+test("the signer refuses every wager without the wager extension, and a hostile extension can't loosen the signer", async () => {
+  const paths = agentPaths({ HIGHWIRE_HOME: home() });
+  writeFileSync(paths.policy, JSON.stringify(policy({ live: true })));
+  const key = Keypair.generate();
+  const open = () => ({ tool: "t", intent: ask("open"), envelope: wagerEnvelope(key.publicKey, "open") });
+  const reveal = () => ({ tool: "t", intent: ask("reveal"), envelope: wagerEnvelope(key.publicKey, "reveal") });
+  let sent = 0;
+  const connection = (spend?: number) => {
+    const c = fakeConnection({ spend });
+    const real = c.sendRawTransaction.bind(c);
+    c.sendRawTransaction = (async (...a: Parameters<typeof real>) => (sent++, real(...a))) as typeof c.sendRawTransaction;
+    return c;
+  };
+
+  // highwire-agent's own signer: the policy allows wagers and the transaction is a real one, and it's still refused.
+  const plain = new LocalSigner(key, paths);
+  await assert.rejects(plain.execute(connection(), open()), /can't check wagers/);
+  await assert.rejects(plain.execute(connection(), reveal()), /can't check wagers/);
+  assert.equal(sent, 0);
+
+  // An extension is only for an action the signer can't check itself, and one per action.
+  assert.throws(() => new LocalSigner(key, paths, undefined, undefined, undefined, [{ ...wagerSigning, action: "trade" }]), /takes no extension/);
+  assert.throws(() => new LocalSigner(key, paths, undefined, undefined, undefined, [wagerSigning, wagerSigning]), /two extensions/);
+
+  const withExtension = (over: Partial<typeof wagerSigning>) => new LocalSigner(key, paths, undefined, undefined, undefined, [{ ...wagerSigning, ...over }]);
+  // It can't turn a wager into another action, or one on another cluster.
+  await assert.rejects(withExtension({ intent: async ({ req }) => ({ ...req.intent, action: "trade", wager: { kind: "open" } }) }).execute(connection(), open()), /may not change the action or the cluster/);
+  await assert.rejects(withExtension({ intent: async ({ req }) => ({ ...req.intent, cluster: "mainnet", wager: { kind: "open" } }) }).execute(connection(), open()), /may not change the action or the cluster/);
+  // Nor report less than the caller declared, nor name another instruction than the one in the bytes.
+  const declared = { ...open(), intent: ask("open", 0.1) };
+  await assert.rejects(withExtension({ intent: async ({ req }) => ({ ...req.intent, solOut: 1n, wager: { kind: "open" } }) }).execute(connection(), declared), /may not lower what the transaction spends/);
+  await assert.rejects(withExtension({ intent: async ({ req }) => ({ ...req.intent, wager: { kind: "reveal" } }) }).execute(connection(), open()), /must name the instruction in the bytes/);
+  // Calling a stake a move doesn't free it from the limits: a move may say it spends nothing and nothing else...
+  await assert.rejects(withExtension({ stakes: () => false }).execute(connection(), open()), /stakes nothing/);
+  // ...and when it says nothing, the simulation shows the stake leaving, far over what a move may spend.
+  const lying = withExtension({ stakes: () => false, intent: async ({ req, facts }) => ({ ...req.intent, solOut: 0n, wager: { kind: facts.kind } }), check: () => null });
+  await assert.rejects(lying.execute(connection(100_000_000), open()), /a wager move would spend 0\.1 SOL, over its 0\.001 SOL fee cap/);
+  // A check that allows everything still leaves the signer's own limits in place.
+  writeFileSync(paths.policy, JSON.stringify(policy({ live: true, max_sol_per_tx: 0.05 })));
+  await assert.rejects(withExtension({ check: () => null }).execute(connection(), open()), /per transaction/);
+  writeFileSync(paths.policy, JSON.stringify(policy({ live: true, actions: ["trade"] })));
+  await assert.rejects(withExtension({ check: () => null }).execute(connection(), open()), /doesn't allow wagers/);
+  assert.equal(sent, 0, "none of these was sent");
 });

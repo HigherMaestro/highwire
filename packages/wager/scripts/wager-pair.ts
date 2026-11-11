@@ -21,6 +21,7 @@ import { Chain, DEFAULT_RPC_URLS, lamportsNumber } from "highwire-core";
 import { seriesOutcome } from "../src/tx.ts";
 import { createServer } from "highwire-mcp";
 import { registerWagerTools } from "../src/tools.ts";
+import { wagerSigner } from "../src/signing.ts";
 
 const { values } = parseArgs({ options: { a: { type: "string" }, b: { type: "string" }, stake: { type: "string" } } });
 const expand = (p: string) => p.replace(/^~(?=\/)/, homedir());
@@ -40,7 +41,7 @@ async function player(spec: string | undefined, label: string): Promise<Player> 
   const [home, key] = spec.split(":").map(expand) as [string, string];
   const { keypair, warning } = loadKeypair(key);
   if (warning) console.error(`warning (${label}): ${warning}`);
-  const signer = new LocalSigner(keypair, agentPaths({ HIGHWIRE_HOME: home }));
+  const signer = wagerSigner(keypair, agentPaths({ HIGHWIRE_HOME: home }));
   const server = createServer({ cluster: "devnet", rpcUrl, signer, arena: true, wagers: registerWagerTools });
   const client = new Client({ name: `wager-pair-${label}`, version: "0" });
   const [x, y] = InMemoryTransport.createLinkedPair();
