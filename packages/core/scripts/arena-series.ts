@@ -253,8 +253,8 @@ if (SERIES > 0) {
         const side = sideOf(seat, s.match), round = s.game.rounds.length + 1, match = s.match;
         const mine = first ? first(s, seat, rand) : houseMove("even", s.game, side, `first-${salt}-${i}-${match}`);
         const theirs = houseMove("even", s.game, other(side), `second-${salt}-${i}-${match}`);
-        commit(s, seat, round, moveCommitment(id, match, round, side, mine, NONCE), now);
-        commit(s, them, round, moveCommitment(id, match, round, other(side), theirs, NONCE), now);
+        commit(s, seat, match, round, moveCommitment(id, match, round, side, mine, NONCE), now);
+        commit(s, them, match, round, moveCommitment(id, match, round, other(side), theirs, NONCE), now);
         reveal(s, seat, { pull: mine, nonce: NONCE }, now + 1);
         reveal(s, them, { pull: theirs, nonce: NONCE }, now + 1);
         now += 2;

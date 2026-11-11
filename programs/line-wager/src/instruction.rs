@@ -46,8 +46,9 @@ pub enum WagerInstruction {
     Accept { fallback_hash: [u8; 32] },
     /// B never accepted: A at any time, or anyone after the deadline. Refunds A. [caller (s), config (w), series (w), player A (w), incinerator (w)]
     Cancel,
-    /// [player (s), series (w)]
-    Commit { round: u8, hash: [u8; 32] },
+    /// A hidden move for the open round. `match_index` (0 to 4) and `round` (from 1) are the ones the commitment hashes,
+    /// and must be the ones in play. [player (s), series (w)]
+    Commit { match_index: u8, round: u8, hash: [u8; 32] },
     /// [player (s), series (w)]
     Reveal { pull: u8, nonce: [u8; 32] },
     /// [player (s), series (w)]

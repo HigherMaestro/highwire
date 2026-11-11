@@ -1,4 +1,4 @@
-//! Runs wager transactions built by highwire-core's TypeScript codec (`packages/core/scripts/wager-instructions.ts`)
+//! Runs wager transactions built by the TypeScript codec in highwire-wager (`packages/wager/scripts/wager-instructions.ts`)
 //! against the program: the builders' encodings and account orders, checked by the program itself rather than by a
 //! second description of them. Keys come from the same fixed seeds on both sides. `npm run test:program` writes the
 //! fixture first.

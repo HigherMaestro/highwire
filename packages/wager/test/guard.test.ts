@@ -56,10 +56,20 @@ test("wagers: only the local signer's, exactly as expected; refused by anyone wi
   no(tx(check(), open(ticket, attacker)), /player isn't the expected one|unexpected signer/);
   // Another kind than the flow builds, two wager instructions, or another series' account.
   const retire = (id = ticket.seriesId) => wagerInstruction(program, wallet, id, { kind: "retire" });
-  const expectCommit: WagerExpectation = { kind: "commit", seriesId: ticket.seriesId };
+  const expectCommit: WagerExpectation = { kind: "commit", seriesId: ticket.seriesId, commit: { match: 0, round: 1 } };
   no(tx(retire()), /not the wager instruction this flow builds/, expectCommit);
-  const commit = (id = ticket.seriesId) => wagerInstruction(program, wallet, id, { kind: "commit", round: 1, hash: "66".repeat(32) });
+  const commit = (id = ticket.seriesId, match = 0, round = 1) => wagerInstruction(program, wallet, id, { kind: "commit", match, round, hash: "66".repeat(32) });
   ok(tx(commit()), expectCommit);
+  assert.ok(describeTransaction(tx(commit(ticket.seriesId, 1, 3)), "devnet", [], [wagerGuard()]).instructions.some((i) => i.known && /Commit a hidden move for match 2, round 3 of wager series/.test(i.text)));
+  // A commit names its match and round, and they must be the ones it was made for: the program takes it in no other,
+  // and one naming another would stand (or be refused) where its hidden move can't be opened.
+  no(tx(commit(ticket.seriesId, 1, 1)), /the commit names match 2, round 1, not the match 1, round 1 it was made for/, expectCommit);
+  no(tx(commit(ticket.seriesId, 0, 2)), /the commit names match 1, round 2, not the match 1, round 1 it was made for/, expectCommit);
+  no(tx(commit()), /a commit without the match and round it's for/, { kind: "commit", seriesId: ticket.seriesId });
+  // A commit as it was before it named its match (the tag, the round, the hash: 34 bytes) isn't a wager instruction now.
+  const oldCommit = new TransactionInstruction({ programId: program, keys: commit().keys, data: Buffer.concat([Buffer.from([WAGER_TAGS.commit, 1]), Buffer.alloc(32, 0x66)]) });
+  no(tx(oldCommit), /not the wager instruction this flow builds/, expectCommit);
+  assert.ok(describeTransaction(tx(oldCommit), "devnet", [], [wagerGuard()]).instructions.some((i) => !i.known && /UNKNOWN/.test(i.text)));
   no(tx(commit(), commit()), /more than one wager instruction/, expectCommit);
   no(tx(commit("77".repeat(32))), /series account isn't the expected one/, expectCommit);
   // A payout must name the incinerator as its burn account, not someone's wallet.

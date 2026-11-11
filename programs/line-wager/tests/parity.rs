@@ -29,6 +29,7 @@ fn kind(e: &SeriesError) -> &'static str {
     match e {
         SeriesError::Over => "Over",
         SeriesError::WrongPhase => "WrongPhase",
+        SeriesError::WrongMatch => "WrongMatch",
         SeriesError::WrongRound => "WrongRound",
         SeriesError::AlreadyCommitted => "AlreadyCommitted",
         SeriesError::TooLate => "TooLate",
@@ -93,7 +94,7 @@ fn every_fixture_event_matches_the_typescript() {
             let at = ev["at"].as_i64().unwrap_or(0);
             let player = ev["player"].as_u64().map(|p| p as u8).unwrap_or(0);
             let result = match ev["kind"].as_str().unwrap() {
-                "commit" => s.commit(player, ev["round"].as_u64().unwrap() as u8, hex32(&ev["hash"]), at),
+                "commit" => s.commit(player, ev["match"].as_u64().unwrap() as u8, ev["round"].as_u64().unwrap() as u8, hex32(&ev["hash"]), at),
                 "reveal" => s.reveal(player, Reveal::Pull { pull: ev["pull"].as_u64().unwrap() as u8, nonce: hex32(&ev["nonce"]) }, at),
                 "revealFallback" => {
                     let f = Fallback { kind: ev["fallback"]["kind"].as_u64().unwrap() as u8, pull: ev["fallback"]["pull"].as_u64().unwrap() as u8 };
@@ -120,7 +121,7 @@ fn every_fixture_event_matches_the_typescript() {
 #[test]
 fn a_bad_player_is_an_error_never_a_panic() {
     let mut s = Series::start(DUELS_1, 120, [1; 32], [[2; 32], [3; 32]], 100);
-    assert_eq!(s.commit(2, 1, [0; 32], 101), Err(SeriesError::BadPlayer));
+    assert_eq!(s.commit(2, 0, 1, [0; 32], 101), Err(SeriesError::BadPlayer));
     assert_eq!(s.reveal(7, Reveal::Pull { pull: 1, nonce: [0; 32] }, 101), Err(SeriesError::BadPlayer));
     assert_eq!(s.retire(9), Err(SeriesError::BadPlayer));
     assert!(s.ending.is_none());
@@ -129,7 +130,7 @@ fn a_bad_player_is_an_error_never_a_panic() {
 #[test]
 fn the_clock_never_goes_backward() {
     let mut s = Series::start(DUELS_1, 120, [1; 32], [[2; 32], [3; 32]], 100);
-    assert_eq!(s.commit(0, 1, [0; 32], 99), Err(SeriesError::ClockBackward));
+    assert_eq!(s.commit(0, 0, 1, [0; 32], 99), Err(SeriesError::ClockBackward));
     assert_eq!(s.timeout(50), Err(SeriesError::ClockBackward));
 }
 
@@ -142,4 +143,32 @@ fn known_answer_hashes() {
     assert_eq!(to_hex(&move_commitment(&id, 2, 7, 1, 13, &n)), "3ae827910d2eb6b35de306cbb9ecf454e510377ce33bbbe5eb06f087925d9d82");
     assert_eq!(to_hex(&fallback_commitment(&id, PLAYER_B, &Fallback { kind: FALLBACK_STEADY, pull: 9 }, &salt)), "cade30188add781fbf53fd6b29380ca9b0d865cb7aedd2365c67278ec46b8da0");
     assert_eq!(to_hex(&fallback_commitment(&id, PLAYER_A, &Fallback { kind: FALLBACK_MIRROR, pull: 0 }, &salt)), "3d1d8e85f8cf343b2b1e6fb25d0d9d463b78f824c91aee691e797668fac4be8a");
+}
+
+/// A commit names its match: round numbers repeat from match to match, so a second copy of match 1's round-1 commit
+/// (a retry that landed late) is refused in match 2's round 1, and the player's own commit there stands. The same
+/// series as packages/core/test/series.test.ts plays.
+#[test]
+fn a_commit_names_its_match() {
+    use line_wager::series::{move_commitment, PLAYER_A, PLAYER_B};
+    let id = [1; 32];
+    let mut s = Series::start(DUELS_1, 120, id, [[2; 32], [3; 32]], 100);
+    let copy = move_commitment(&id, 0, 1, 0, 3, &[7; 32]);
+    s.commit(PLAYER_A, 0, 1, copy, 101).unwrap();
+    s.commit(PLAYER_B, 0, 1, [9; 32], 102).unwrap();
+    s.reveal(PLAYER_A, Reveal::Pull { pull: 3, nonce: [7; 32] }, 103).unwrap();
+    // B withholds its reveal and forfeits match 1 in its first round: round 1 is open again, in match 2.
+    s.timeout(102 + 121).unwrap();
+    assert_eq!((s.match_index, s.game.rounds, s.phase), (1, 0, PHASE_COMMIT));
+    let t = s.phase_opened_at;
+    let before = s;
+    assert_eq!(s.commit(PLAYER_A, 0, 1, copy, t + 1), Err(SeriesError::WrongMatch));
+    assert_eq!(s.commit(PLAYER_A, 2, 1, copy, t + 1), Err(SeriesError::WrongMatch));
+    assert_eq!(s.commit(PLAYER_A, 0, 2, copy, t + 1), Err(SeriesError::WrongMatch), "the match is checked before the round");
+    assert_eq!(s, before, "a refused commit changes nothing");
+    s.commit(PLAYER_A, 1, 1, move_commitment(&id, 1, 1, 1, 4, &[8; 32]), t + 2).unwrap();
+    s.commit(PLAYER_B, 1, 1, move_commitment(&id, 1, 1, 0, 2, &[6; 32]), t + 3).unwrap();
+    s.reveal(PLAYER_A, Reveal::Pull { pull: 4, nonce: [8; 32] }, t + 4).unwrap();
+    s.reveal(PLAYER_B, Reveal::Pull { pull: 2, nonce: [6; 32] }, t + 5).unwrap();
+    assert_eq!((s.match_index, s.game.rounds, s.results[1]), (1, 1, None), "match 2 plays on");
 }

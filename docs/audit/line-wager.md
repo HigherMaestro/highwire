@@ -13,19 +13,20 @@ refunds both. A matchmaker (the site's wager desk) signs a ticket that `open` an
 Solana's Ed25519 instruction and instruction introspection.
 
 Deployed on devnet at `RRMA7jERXRceX7i5QBK2fw8qbACkAo5zs949onndezC` (binary SHA-256 `013472db00c49d74ae006d30391e93712befc7257b5972821e62a72fc6f74067`),
-where five full series have been played and settled (docs/wager-devnet.md 8).
+where five full series have been played and settled (docs/wager-devnet.md 8). That binary is from before a commit named
+its match (below, "Already found"): devnet runs this source once it's redeployed (docs/wager-devnet.md 9).
 
 ## Scope
 
 | File | Lines | What |
 |---|---|---|
 | `src/processor.rs` | 602 | every instruction: accounts, checks, lamport movements, the closing event |
-| `src/series.rs` | 385 | the series state machine: commit and reveal phases, the clock and banks, fallbacks, timeouts, match and series ends |
+| `src/series.rs` | 393 | the series state machine: commit and reveal phases, the clock and banks, fallbacks, timeouts, match and series ends |
 | `src/rules.rs` | 152 | the game's rules (the wire, energy, rounds), ported from the TypeScript twin |
 | `src/ticket.rs` | 100 | the matchmaker's ticket: its message, and the Ed25519 instruction check by introspection |
 | `src/state.rs` | 93 | the config and series accounts, the hard caps |
-| `src/instruction.rs` | 65 | the instructions and their accounts |
-| `src/error.rs` | 62 | the errors |
+| `src/instruction.rs` | 66 | the instructions and their accounts |
+| `src/error.rs` | 64 | the errors |
 | `src/lib.rs` | 26 | the entrypoint |
 
 About 1,500 lines. Out of scope, but useful context: the TypeScript twin of the rules (`packages/core/src/arena/`), the
@@ -41,7 +42,7 @@ client's codec, builders and safety checks (`packages/wager/src/codec.ts`, `tx.t
 | `Open` | player A, with a ticket | stakes A, creates the series account |
 | `Accept` | player B, with the same ticket | stakes B, starts match 1 |
 | `Cancel` | A any time, anyone after the accept deadline | refunds A, closes the series |
-| `Commit` | a player | a hidden pull for the open round |
+| `Commit` | a player | a hidden pull for the open round, naming its match and round: refused unless both are the ones in play |
 | `Reveal` / `RevealFallback` | a player | the pull and nonce, or the committed fallback and salt |
 | `Timeout` | anyone | applies a passed deadline: fallbacks owed, a missed reveal forfeits the match, both missing voids it |
 | `Settle` | anyone, once the series is decided | pays the winner (less the fee) or refunds a draw, closes the series |
@@ -62,7 +63,9 @@ client's codec, builders and safety checks (`packages/wager/src/codec.ts`, `tx.t
    series**, and the opener can't choose its deadlines. The Ed25519 check reads the instruction it verifies by index and
    checks every offset (the Wormhole class of bug).
 5. **Neither player can see the other's pull before committing**, and a reveal must match its commitment; a missed
-   reveal forfeits the match, so withholding never pays.
+   reveal forfeits the match, so withholding never pays. **A move counts only where it was made for:** a commit in the
+   match and round it names, a reveal against the hash of the match, round and side in play. A second copy of any move
+   changes nothing.
 6. **Every series ends**: by settlement, a cancel, a timeout path, a retirement, the 24-hour refund, or the freeze. No
    state can hold stakes forever.
 7. **The on-chain rules equal the TypeScript twin's** for every event: checked on 2,000 random series (300,000 moves,
@@ -84,6 +87,18 @@ Four adversarial reviews, each fixed and covered by tests (docs/wager-mode.md 17
 - a small fee into an empty fee account blocked `settle`: that fee now goes to the winner, and tiers are at least 0.01 SOL;
 - a day-long reveal window could be waited out by the emergency refund: the window is capped at an hour;
 - the emergency refund could skip a timeout already due: it now applies due timeouts first and refuses if they decide.
+
+Found since, by an adversarial review of a prototype of the same game, and fixed here before this audit
+(docs/wager-mode.md 7.2.6, 17.6):
+- a commit named its round but not its match, and round numbers repeat from match to match. A commit transaction that
+  landed twice (a retry signed with a new blockhash) could have its second copy accepted as the next match's move for the
+  same round number, when the earlier match had ended by then (in round 1, on a withheld reveal). It couldn't be opened
+  there, the player's own commit was refused as already made, and the match was forfeited by a missed reveal: a match
+  lost with no attacker. `Commit` now carries the match too, and the program refuses any other with its own error
+  (`WrongMatch`, 116). The instruction grew from 34 bytes to 35, so the earlier shape is refused outright
+  (`BadInstruction`). Tests: `a_commit_names_its_match` in `tests/parity.rs`,
+  `a_second_copy_of_a_commit_is_refused_in_the_next_match` in `tests/program.rs`, and the parity fixtures, which send
+  both wrong-match commits and second copies of earlier matches' commits.
 
 Known and accepted:
 - a settle sent through a program that logs enough to truncate the transaction's log hides the closing event from
@@ -145,5 +160,7 @@ CI also runs `npm run test:program` on every pull request that touches the progr
 - The lamport movements in `processor.rs` (`settle`, `cancel`, the refunds, `pay_player`, the incinerator burn) and the
   open-stake counter on every close path.
 - `series.rs`'s clock: banks charged by landing time, deadlines on the boundary, the reveal window, both banks out.
+- Replays inside a series: a second copy of any signed move (a commit, a reveal, a fallback's reveal, a retirement, a
+  timeout) landing later, in another round or match. The commit was the one that mattered (above).
 - Account validation: the series and config PDAs, owners, signers, and the payee accounts passed to payouts.
 - Anything that lets a third party (not a player, not the authority) change a series' outcome or its payees.

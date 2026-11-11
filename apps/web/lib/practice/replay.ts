@@ -100,7 +100,8 @@ export function replaySeries(h: SeriesHistory): Replay {
       if (!p) throw new Error(`a move by ${e.player}, who isn't in this series`);
       if (e.kind === "commit") {
         committed.add(`${s.match}:${e.round}:${p}`);
-        commit(s, p, e.round, e.hash, e.at);
+        // A commit from before commits named their match was taken in whichever match was in play.
+        commit(s, p, e.match ?? s.match, e.round, e.hash, e.at);
         out.commits++;
       } else if (e.kind === "reveal") {
         reveal(s, p, { pull: e.pull, nonce: e.nonce }, e.at);

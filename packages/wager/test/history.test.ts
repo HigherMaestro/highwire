@@ -69,14 +69,26 @@ const accept = ix(B, { kind: "accept", fallbackHash: "bb".repeat(32) });
 const viaProxy = (inner: TransactionInstruction): TransactionInstruction => ({ programId: PROXY, keys: inner.keys, data: Buffer.alloc(0) }) as TransactionInstruction;
 
 test("a move made through another program is read, in execution order", async () => {
-  const commit = ix(A, { kind: "commit", round: 1, hash: "cc".repeat(32) });
+  const commit = ix(A, { kind: "commit", match: 0, round: 1, hash: "cc".repeat(32) });
   const h = await seriesHistory(fakeChain([{ sig: "s1", top: [open] }, { sig: "s2", top: [accept] }, { sig: "s3", top: [viaProxy(commit)], inner: [commit] }]), ID);
   assert.deepEqual(
     h.events.map((e) => e.kind),
     ["open", "accept", "commit"],
   );
   const c = h.events[2]!;
-  assert.ok(c.kind === "commit" && c.player === A.toBase58() && c.round === 1);
+  assert.ok(c.kind === "commit" && c.player === A.toBase58() && c.match === 0 && c.round === 1);
+});
+
+test("a commit from before commits named their match still reads, with no match", async () => {
+  // Devnet's history before the program was redeployed: the tag, the round, the hash (34 bytes), taken in whichever
+  // match was in play. A replay plays it there, as the program did.
+  const now = ix(B, { kind: "commit", match: 0, round: 1, hash: "dd".repeat(32) });
+  const before = { programId: PROGRAM, keys: now.keys.map((k, i) => (i === 0 ? { ...k, pubkey: A } : k)), data: Buffer.concat([Buffer.from([5, 1]), Buffer.alloc(32, 0xcc)]) } as TransactionInstruction;
+  const h = await seriesHistory(fakeChain([{ sig: "s1", top: [open] }, { sig: "s2", top: [accept] }, { sig: "s3", top: [before] }, { sig: "s4", top: [now] }]), ID);
+  assert.deepEqual(
+    h.events.slice(2).map((e) => e.kind === "commit" && [e.player, e.match, e.round, e.hash]),
+    [[A.toBase58(), null, 1, "cc".repeat(32)], [B.toBase58(), 0, 1, "dd".repeat(32)]],
+  );
 });
 
 test("a history that can't be read whole throws instead of returning part of it", async () => {
@@ -93,7 +105,7 @@ test("a close whose log was cut short still reads as a close", async () => {
 });
 
 test("transactions in one block are read in the block's order, not the RPC's listing", async () => {
-  const commit = ix(A, { kind: "commit", round: 1, hash: "cc".repeat(32) });
+  const commit = ix(A, { kind: "commit", match: 0, round: 1, hash: "cc".repeat(32) });
   const chain = fakeChain([{ sig: "s1", top: [open] }, { sig: "s2", top: [accept] }, { sig: "s3", top: [commit] }]);
   const c = (chain as unknown as { connection: Record<string, unknown> }).connection;
   // The RPC lists the slot's three transactions in an order of its own (here: the open as the newest)...

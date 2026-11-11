@@ -36,7 +36,7 @@ fn vectors() -> Value {
     let salt = [0x33; 32];
     let mut s = Series::start(DUELS_1, 120, id, [[0x44; 32], fallback_commitment(&id, PLAYER_B, &fb_b, &salt)], 1_000);
     let nonce = [0x22; 32];
-    s.commit(PLAYER_A, 1, move_commitment(&id, 0, 1, 0, 4, &nonce), 1_010).unwrap();
+    s.commit(PLAYER_A, 0, 1, move_commitment(&id, 0, 1, 0, 4, &nonce), 1_010).unwrap();
     s.timeout(1_120).unwrap();
     s.reveal(PLAYER_B, Reveal::Fallback { fallback: fb_b, salt }, 1_130).unwrap();
     s.reveal(PLAYER_A, Reveal::Pull { pull: 4, nonce }, 1_140).unwrap();
@@ -66,7 +66,7 @@ fn vectors() -> Value {
             "open": ix(&WagerInstruction::Open { series_id: id, player_b: key(6), stake: 100_000_000, accept_deadline: 1_300, expiry: 1_600, key_id: 3, fallback_hash: [0x44; 32] }),
             "accept": ix(&WagerInstruction::Accept { fallback_hash: [0x55; 32] }),
             "cancel": ix(&WagerInstruction::Cancel),
-            "commit": ix(&WagerInstruction::Commit { round: 7, hash: [0x66; 32] }),
+            "commit": ix(&WagerInstruction::Commit { match_index: 2, round: 7, hash: [0x66; 32] }),
             "reveal": ix(&WagerInstruction::Reveal { pull: 13, nonce: [0x22; 32] }),
             "revealFallback": ix(&WagerInstruction::RevealFallback { kind: FALLBACK_STEADY, pull: 9, salt: [0x33; 32] }),
             "timeout": ix(&WagerInstruction::Timeout),

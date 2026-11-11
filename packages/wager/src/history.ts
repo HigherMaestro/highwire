@@ -3,7 +3,7 @@ import bs58 from "bs58";
 import { ValidationError } from "highwire-core";
 import type { Chain } from "highwire-core";
 import { closingEvent, readWagerConfig, type SeriesOutcome } from "./tx.ts";
-import { decodeWager, FALLBACK_KINDS, seriesAddress, wagerConfigAddress, wagerProgram, type WagerConfig } from "./codec.ts";
+import { decodeLegacyCommit, decodeWager, FALLBACK_KINDS, seriesAddress, wagerConfigAddress, wagerProgram, type WagerConfig } from "./codec.ts";
 
 // The wager program's history, read back from the chain for the practice pages (docs/wager-mode.md 7.5): which series
 // opened and how each closed, from the config account's transactions (open, accept and every close write it, moves
@@ -19,7 +19,8 @@ import { decodeWager, FALLBACK_KINDS, seriesAddress, wagerConfigAddress, wagerPr
 export type SeriesEvent = { at: number; sig: string } & (
   | { kind: "open"; playerA: string; playerB: string; fallbackHash: string }
   | { kind: "accept"; playerB: string; fallbackHash: string }
-  | { kind: "commit"; player: string; round: number; hash: string }
+  /** `match` from 0, as the commit names it; null for a commit from before commits named their match, which the program took in whichever match was in play. */
+  | { kind: "commit"; player: string; match: number | null; round: number; hash: string }
   | { kind: "reveal"; player: string; pull: number; nonce: string }
   | { kind: "revealFallback"; player: string; fallback: { kind: (typeof FALLBACK_KINDS)[number]; pull: number }; salt: string }
   | { kind: "timeout" }
@@ -140,9 +141,15 @@ function wagerEvents(tx: VersionedTransactionResponse, p: PublicKey): { series: 
   const out: { series: string | null; event: SeriesEvent | null; seriesId?: string; closes?: boolean }[] = [];
   for (const ix of executed(tx)) {
     if (!keys.get(ix.programIdIndex)?.equals(p)) continue;
-    const wg = decodeWager(ix.data);
-    if (!wg) continue;
     const acc = (n: number) => key(ix.accounts[n]);
+    const wg = decodeWager(ix.data);
+    if (!wg) {
+      // Only the program before the match was added can have run one of these (this one refuses it), so in a
+      // transaction that succeeded it's that program's commit.
+      const old = decodeLegacyCommit(ix.data);
+      if (old) out.push({ series: acc(1), event: { at, sig, kind: "commit", player: acc(0)!, match: null, round: old.round, hash: old.hash } });
+      continue;
+    }
     switch (wg.kind) {
       case "open":
         out.push({ series: acc(2), seriesId: wg.seriesId, event: { at, sig, kind: "open", playerA: acc(0)!, playerB: wg.playerB, fallbackHash: wg.fallbackHash } });
@@ -151,7 +158,7 @@ function wagerEvents(tx: VersionedTransactionResponse, p: PublicKey): { series: 
         out.push({ series: acc(2), event: { at, sig, kind: "accept", playerB: acc(0)!, fallbackHash: wg.fallbackHash } });
         break;
       case "commit":
-        out.push({ series: acc(1), event: { at, sig, kind: "commit", player: acc(0)!, round: wg.round, hash: wg.hash } });
+        out.push({ series: acc(1), event: { at, sig, kind: "commit", player: acc(0)!, match: wg.match, round: wg.round, hash: wg.hash } });
         break;
       case "reveal":
         out.push({ series: acc(1), event: { at, sig, kind: "reveal", player: acc(0)!, pull: wg.pull, nonce: wg.nonce } });

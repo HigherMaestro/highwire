@@ -39,6 +39,7 @@ impl From<WagerError> for ProgramError {
     }
 }
 
+/// 100 plus the number below. Never renumber: a new error takes the next number (WrongMatch came after Internal).
 pub fn series(e: SeriesError) -> ProgramError {
     let n = match e {
         SeriesError::Over => 0,
@@ -57,6 +58,7 @@ pub fn series(e: SeriesError) -> ProgramError {
         SeriesError::BadPlayer => 13,
         SeriesError::ClockBackward => 14,
         SeriesError::Internal => 15,
+        SeriesError::WrongMatch => 16,
     };
     ProgramError::Custom(WagerError::Series as u32 + n)
 }

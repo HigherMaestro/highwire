@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PublicKey } from "@solana/web3.js";
-import { commitDeadline, decodeSeriesAccount, decodeWager, decodeWagerConfig, encodeWager, revealDeadline, ticketMessage, WAGER_PROGRAM_IDS, type WagerArgs } from "../src/codec.ts";
+import { commitDeadline, decodeLegacyCommit, decodeSeriesAccount, decodeWager, decodeWagerConfig, encodeWager, revealDeadline, ticketMessage, WAGER_PROGRAM_IDS, type WagerArgs } from "../src/codec.ts";
 
 // The wager program's byte formats, against test/fixtures/wager-codec.json, which the program's own tests
 // (programs/line-wager/tests/codec.rs) check is exactly what it encodes.
@@ -16,7 +16,7 @@ test("every instruction Highwire builds encodes as the program does, and decodes
     open: { kind: "open", ticket: { seriesId: h(0x11), playerA: key(5), playerB: key(6), stake: 100_000_000n, acceptDeadline: 1_300, expiry: 1_600, keyId: 3 }, fallbackHash: h(0x44) },
     accept: { kind: "accept", fallbackHash: h(0x55) },
     cancel: { kind: "cancel" },
-    commit: { kind: "commit", round: 7, hash: h(0x66) },
+    commit: { kind: "commit", match: 2, round: 7, hash: h(0x66) },
     reveal: { kind: "reveal", pull: 13, nonce: h(0x22) },
     revealFallback: { kind: "revealFallback", fallback: { kind: "steady", pull: 9 }, salt: h(0x33) },
     timeout: { kind: "timeout" },
@@ -40,8 +40,19 @@ test("every instruction Highwire builds encodes as the program does, and decodes
   }
   const open = decodeWager(Buffer.from(file.instructions.open, "hex"));
   assert.deepEqual(open, { kind: "open", seriesId: h(0x11), playerB: key(6), stake: 100_000_000n, acceptDeadline: 1_300, expiry: 1_600, keyId: 3, fallbackHash: h(0x44) });
+  assert.deepEqual(decodeWager(Buffer.from(file.instructions.commit, "hex")), { kind: "commit", match: 2, round: 7, hash: h(0x66) });
+  // A commit is 35 bytes: the tag, the match, the round, the hash. Before it named its match it was 34 (the tag, the
+  // round, the hash), which is no instruction now; only the history reader knows that shape, as a commit with no match.
+  assert.equal(file.instructions.commit.length, 70);
+  const before = Buffer.concat([Buffer.from([5, 7]), Buffer.from(h(0x66), "hex")]);
+  assert.equal(decodeWager(before), null);
+  assert.deepEqual(decodeLegacyCommit(before), { round: 7, hash: h(0x66) });
+  assert.equal(decodeLegacyCommit(Buffer.from(file.instructions.commit, "hex")), null);
+  assert.equal(decodeLegacyCommit(Buffer.from(file.instructions.reveal, "hex")), null, "a reveal is 34 bytes too, under another tag");
+  assert.throws(() => encodeWager({ kind: "commit", match: 256, round: 1, hash: h(1) }), /the match is a whole number from 0 to 255/);
   // Truncated, padded or unknown: not a wager instruction.
   assert.equal(decodeWager(Buffer.from(file.instructions.commit.slice(0, -2), "hex")), null);
+  assert.equal(decodeWager(Buffer.from(file.instructions.commit + "00", "hex")), null);
   assert.equal(decodeWager(Buffer.from(file.instructions.retire + "00", "hex")), null);
   assert.equal(decodeWager(Buffer.from([99])), null);
   assert.throws(() => encodeWager({ kind: "reveal", pull: 256, nonce: h(1) }), /0 to 255/);

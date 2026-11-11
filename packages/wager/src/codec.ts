@@ -114,7 +114,8 @@ export type WagerArgs =
   | { kind: "open"; ticket: WagerTicket; fallbackHash: string }
   | { kind: "accept"; fallbackHash: string }
   | { kind: "cancel" }
-  | { kind: "commit"; round: number; hash: string }
+  /** `match` from 0 and `round` from 1, the ones the commitment hashes: the program refuses any but the ones in play. */
+  | { kind: "commit"; match: number; round: number; hash: string }
   | { kind: "reveal"; pull: number; nonce: string }
   | { kind: "revealFallback"; fallback: { kind: (typeof FALLBACK_KINDS)[number]; pull: number }; salt: string }
   | { kind: "timeout" }
@@ -137,7 +138,7 @@ export function encodeWager(args: WagerArgs): Buffer {
     case "accept":
       return Buffer.concat([tag, hex32(args.fallbackHash, "the fallback hash")]);
     case "commit":
-      return Buffer.concat([tag, byte(args.round, "the round"), hex32(args.hash, "the commitment")]);
+      return Buffer.concat([tag, byte(args.match, "the match"), byte(args.round, "the round"), hex32(args.hash, "the commitment")]);
     case "reveal":
       return Buffer.concat([tag, byte(args.pull, "the pull"), hex32(args.nonce, "the nonce")]);
     case "revealFallback":
@@ -304,7 +305,7 @@ export function freezeAndRefundInstruction(program: PublicKey, authority: Public
 export type DecodedWager =
   | { kind: "open"; seriesId: string; playerB: string; stake: bigint; acceptDeadline: number; expiry: number; keyId: number; fallbackHash: string }
   | { kind: "accept"; fallbackHash: string }
-  | { kind: "commit"; round: number; hash: string }
+  | { kind: "commit"; match: number; round: number; hash: string }
   | { kind: "reveal"; pull: number; nonce: string }
   | { kind: "revealFallback"; fallbackKind: number; pull: number; salt: string }
   | { kind: "cancel" | "timeout" | "settle" | "retire" | "emergencyRefund" | "freezeAndRefund" }
@@ -330,7 +331,9 @@ export function decodeWager(data: Buffer): DecodedWager | null {
     case WAGER_TAGS.accept:
       return len(33) ? { kind: "accept", fallbackHash: at(1) } : null;
     case WAGER_TAGS.commit:
-      return len(34) ? { kind: "commit", round: data[1]!, hash: at(2) } : null;
+      // 35 bytes exactly. A commit from before it named its match was 34 (the tag, the round, the hash): not this
+      // instruction, and the program refuses it too.
+      return len(35) ? { kind: "commit", match: data[1]!, round: data[2]!, hash: at(3) } : null;
     case WAGER_TAGS.reveal:
       return len(34) ? { kind: "reveal", pull: data[1]!, nonce: at(2) } : null;
     case WAGER_TAGS.revealFallback:
@@ -354,6 +357,16 @@ export function decodeWager(data: Buffer): DecodedWager | null {
     default:
       return null;
   }
+}
+
+/**
+ * A commit as the program took it before commits named their match (devnet, until the program was redeployed with the
+ * match): the tag, the round and the hash, 34 bytes. For reading that history only (wager-history.ts): the program
+ * accepted one in whichever match was in play. Nothing builds, checks or signs one, and `decodeWager` doesn't know it.
+ */
+export function decodeLegacyCommit(data: Buffer): { round: number; hash: string } | null {
+  if (data.length !== 34 || data[0] !== WAGER_TAGS.commit) return null;
+  return { round: data[1]!, hash: data.subarray(2, 34).toString("hex") };
 }
 
 /** An Ed25519 program instruction with exactly one signature, every part inside itself, decoded; else null. */

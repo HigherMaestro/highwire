@@ -202,6 +202,10 @@ const LABELS: Record<WagerMoveRequest["args"]["kind"], string> = {
 export async function buildWagerMove(chain: Chain, req: WagerMoveRequest): Promise<Finished> {
   const p = program(chain);
   const kind = req.args.kind;
+  // A best-of-5: the program refuses any other match, and a round of 0 can never be open.
+  if (req.args.kind === "commit" && !(Number.isInteger(req.args.match) && req.args.match >= 0 && req.args.match < 5 && Number.isInteger(req.args.round) && req.args.round >= 1 && req.args.round <= 255)) {
+    throw new ValidationError("A commit names its match (0 to 4) and its round (from 1).");
+  }
   let parties;
   let readOnly: PublicKey[] = [];
   if (kind === "cancel" || kind === "settle" || kind === "emergencyRefund") {
@@ -217,7 +221,7 @@ export async function buildWagerMove(chain: Chain, req: WagerMoveRequest): Promi
     wallet: req.wallet,
     kind: "wager",
     simulate: req.simulate,
-    txs: [{ tx, label: `${LABELS[kind]} (wager series ${req.seriesId.slice(0, 8)})`, expect: { wallet: req.wallet, allowLaunchLab: false, allowCpmm: false, guards: [wagerGuard({ kind, seriesId: req.seriesId })] } }],
+    txs: [{ tx, label: `${LABELS[kind]}${req.args.kind === "commit" ? ` for match ${req.args.match + 1}, round ${req.args.round}` : ""} (wager series ${req.seriesId.slice(0, 8)})`, expect: { wallet: req.wallet, allowLaunchLab: false, allowCpmm: false, guards: [wagerGuard({ kind, seriesId: req.seriesId, ...(req.args.kind === "commit" ? { commit: { match: req.args.match, round: req.args.round } } : {}) })] } }],
   });
 }
 

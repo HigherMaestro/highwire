@@ -31,6 +31,20 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   local signer takes an extension for an action it can't check; each is passed in code by the package that builds for
   it, and refused without. So a server or a signer that isn't `highwire-wager`'s refuses every wager transaction, the
   sign page included, and a guard or extension can't loosen any of core's or the signer's own checks.
+- **A wager commit names its match.** The wager program took a commit for a round number, in whichever match was in
+  play, and every match starts again at round 1. A commit transaction that landed twice (a retry signed with a new
+  blockhash) could have its second copy accepted as the next match's move for the same round number, once the earlier
+  match had ended (in round 1, on a withheld reveal). Nothing could open it there, the player's own commit was refused
+  as already made, and the match was forfeited by a missed reveal: a match lost with no attacker at all. Found by an
+  adversarial review of a prototype, reproduced here in the program and in its TypeScript twin, and closed before the
+  external audit: `Commit` carries the match as well as the round (35 bytes, where it was 34), both refuse a commit for
+  any other match with an error of its own (`WrongMatch`, the program's 116), `assertSafe` holds a built commit to the
+  match and round it was built for, and the parity fixtures send wrong-match commits and second copies of earlier
+  matches' commits. The earlier 34-byte commit is no instruction to the program now, and this one was none to the
+  earlier program, so **devnet's program must be redeployed with this change** (docs/wager-devnet.md 9), and players'
+  servers updated with it: until then devnet refuses these tools' commits, and afterwards it refuses earlier ones (the
+  fallback plays). The practice pages replay series from before and after. Nothing is on mainnet.
+- `npm run test:program` works on a fresh clone: the fixture writer makes its folder.
 - **Wager mode, ready for mainnet but for counsel's go** (docs/wager-mainnet.md, the runbook). The program deploys to
   mainnet paused, and going live is one switch: unpausing it, and setting `LINE_WAGER_CLUSTER=mainnet` on the site. Its
   settings are set ahead of time under their own names (`LINE_WAGER_MAINNET_*`), and the mainnet desk keeps its queue,

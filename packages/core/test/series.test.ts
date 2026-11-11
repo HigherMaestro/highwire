@@ -22,8 +22,8 @@ const hashFor = (s: SeriesState, p: Player, pull: number, n: number) => moveComm
 /** Both players commit and reveal one round, a second apart. */
 function play(s: SeriesState, pA: number, pB: number, at: number): number {
   const round = s.game.rounds.length + 1;
-  commit(s, "A", round, hashFor(s, "A", pA, at), at);
-  commit(s, "B", round, hashFor(s, "B", pB, at + 1), at + 1);
+  commit(s, "A", s.match, round, hashFor(s, "A", pA, at), at);
+  commit(s, "B", s.match, round, hashFor(s, "B", pB, at + 1), at + 1);
   reveal(s, "A", { pull: pA, nonce: nonce(at) }, at + 2);
   reveal(s, "B", { pull: pB, nonce: nonce(at + 1) }, at + 3);
   return at + 5;
@@ -84,8 +84,8 @@ test("a 3-1 series ends after four matches", () => {
 
 test("withholding never pays: a side that committed and doesn't reveal forfeits the match; both missing is void", () => {
   const s = series();
-  commit(s, "A", 1, hashFor(s, "A", 20, 1), 5);
-  commit(s, "B", 1, hashFor(s, "B", 25, 2), 6);
+  commit(s, "A", s.match, 1, hashFor(s, "A", 20, 1), 5);
+  commit(s, "B", s.match, 1, hashFor(s, "B", 25, 2), 6);
   reveal(s, "B", { pull: 25, nonce: nonce(2) }, 7);
   assert.equal(revealDeadline(s), 126);
   reveal; // A sees B's 25 and withholds its 20.
@@ -93,8 +93,8 @@ test("withholding never pays: a side that committed and doesn't reveal forfeits 
   timeout(s, 127);
   assert.deepEqual(s.results[0], { winner: "B", reason: "missed_reveal" });
   assert.equal(s.match, 1);
-  commit(s, "A", 1, hashFor(s, "A", 1, 3), 130);
-  commit(s, "B", 1, hashFor(s, "B", 1, 4), 131);
+  commit(s, "A", s.match, 1, hashFor(s, "A", 1, 3), 130);
+  commit(s, "B", s.match, 1, hashFor(s, "B", 1, 4), 131);
   timeout(s, 131 + 121);
   assert.deepEqual(s.results[1], { winner: null, reason: "void" });
 });
@@ -105,8 +105,8 @@ test("a commit-phase timeout waits until every side still to commit is past its 
   let t = 0;
   for (let r = 0; r < 5; r++) {
     const round = s.game.rounds.length + 1;
-    commit(s, "A", round, hashFor(s, "A", 0, t), t);
-    commit(s, "B", round, hashFor(s, "B", 0, t + 1), t + 119);
+    commit(s, "A", s.match, round, hashFor(s, "A", 0, t), t);
+    commit(s, "B", s.match, round, hashFor(s, "B", 0, t + 1), t + 119);
     reveal(s, "A", { pull: 0, nonce: nonce(t) }, t + 120);
     reveal(s, "B", { pull: 0, nonce: nonce(t + 1) }, t + 121);
     t += 121;
@@ -118,7 +118,7 @@ test("a commit-phase timeout waits until every side still to commit is past its 
   assert.throws(() => timeout(s, late), /still has time/);
   assert.equal(s.round.b.owesFallback, false);
   // A commits; now the timeout applies, charging B its whole remaining bank.
-  commit(s, "A", 6, hashFor(s, "A", 0, 99), late);
+  commit(s, "A", s.match, 6, hashFor(s, "A", 0, 99), late);
   timeout(s, late);
   assert.equal(s.round.b.owesFallback, true);
   assert.equal(s.bank.B, 0);
@@ -128,15 +128,15 @@ test("a commit-phase timeout waits until every side still to commit is past its 
 test("a move must land before its deadline, never on it; a timeout applies on it", () => {
   const s = series();
   const d = commitDeadline(s, "a");
-  assert.throws(() => commit(s, "A", 1, hashFor(s, "A", 1, 1), d), /too late/);
-  commit(s, "B", 1, hashFor(s, "B", 1, 2), d - 1);
+  assert.throws(() => commit(s, "A", s.match, 1, hashFor(s, "A", 1, 1), d), /too late/);
+  commit(s, "B", s.match, 1, hashFor(s, "B", 1, 2), d - 1);
   timeout(s, d);
   assert.equal(s.round.a.owesFallback, true);
 });
 
 test("a missed commit owes the committed fallback; a wrong one or the wrong kind is refused; once known it plays itself", () => {
   const s = series({ A: { kind: "steady", pull: 4 }, B: { kind: "zero" } });
-  commit(s, "B", 1, hashFor(s, "B", 2, 2), 5);
+  commit(s, "B", s.match, 1, hashFor(s, "B", 2, 2), 5);
   timeout(s, 120);
   assert.equal(s.bank.A, DUELS_1.bankSeconds - DUELS_1.roundSeconds, "charged the round's time");
   assert.throws(() => reveal(s, "A", { pull: 4, nonce: nonce(1) }, 121), /owes its fallback/);
@@ -146,7 +146,7 @@ test("a missed commit owes the committed fallback; a wrong one or the wrong kind
   reveal(s, "B", { pull: 2, nonce: nonce(2) }, 123);
   assert.deepEqual(s.game.rounds[0]!.pull, { a: 4, b: 2 });
   // Round 2: A misses again; its fallback is public now, so it plays as soon as the timeout lands, with no reveal.
-  commit(s, "B", 2, hashFor(s, "B", 6, 3), 130);
+  commit(s, "B", s.match, 2, hashFor(s, "B", 6, 3), 130);
   timeout(s, 123 + 120);
   assert.equal(s.round.a.pull, fallbackPull({ kind: "steady", pull: 4 }, s.game, "a"));
   reveal(s, "B", { pull: 6, nonce: nonce(3) }, 250);
@@ -157,7 +157,7 @@ test("mirror plays the opponent's last pull, capped by energy, and 0 in a match'
   const s = series({ A: { kind: "zero" }, B: { kind: "mirror" } });
   let t = play(s, 9, 1, 0);
   // B misses round 2: mirror plays A's last pull, 9.
-  commit(s, "A", 2, hashFor(s, "A", 3, t), t);
+  commit(s, "A", s.match, 2, hashFor(s, "A", 3, t), t);
   timeout(s, t + 120);
   reveal(s, "B", { fallback: { kind: "mirror" }, salt: SALT.B }, t + 121);
   reveal(s, "A", { pull: 3, nonce: nonce(t) }, t + 122);
@@ -187,7 +187,7 @@ test("one side out for the rest of the series: its known fallback plays every ro
   while (s.match === 0) {
     const round = s.game.rounds.length + 1, n = 1000 + round;
     t = s.phaseOpenedAt;
-    commit(s, "A", round, hashFor(s, "A", 1, n), t);
+    commit(s, "A", s.match, round, hashFor(s, "A", 1, n), t);
     // Once B's bank is out, its known fallback plays the moment A commits; A then reveals as usual.
     if (s.phase === "reveal" && s.round[sideOf("B", 0)].pull !== null) { reveal(s, "A", { pull: 1, nonce: nonce(n) }, t); continue; }
     t = s.phaseOpenedAt + Math.min(120, s.bank.B);
@@ -199,21 +199,21 @@ test("one side out for the rest of the series: its known fallback plays every ro
   assert.equal(s.bank.B, 0, "out for the rest of the series");
   // Match 2: B owes its fallback from the start; it plays itself as soon as A commits.
   assert.equal(s.round[sideOf("B", 1)].owesFallback, true);
-  commit(s, "A", 1, hashFor(s, "A", 2, 500), s.phaseOpenedAt + 1);
+  commit(s, "A", s.match, 1, hashFor(s, "A", 2, 500), s.phaseOpenedAt + 1);
   assert.equal(s.phase, "reveal");
   assert.equal(s.round[sideOf("B", 1)].pull, 1);
 });
 
 test("moves the program refuses", () => {
   const s = series();
-  assert.throws(() => commit(s, "A", 2, "00".repeat(32), 1), /this is round 1/);
-  assert.throws(() => commit(s, "A", 1, "nothex", 1), /32 bytes/);
-  assert.throws(() => commit(s, "C" as Player, 1, "00".repeat(32), 1), /player is/);
+  assert.throws(() => commit(s, "A", s.match, 2, "00".repeat(32), 1), /this is round 1/);
+  assert.throws(() => commit(s, "A", s.match, 1, "nothex", 1), /32 bytes/);
+  assert.throws(() => commit(s, "C" as Player, s.match, 1, "00".repeat(32), 1), /player is/);
   assert.throws(() => reveal(s, "A", { pull: 1, nonce: nonce(1) }, 1), /not a reveal phase/);
-  commit(s, "A", 1, hashFor(s, "A", 31, 1), 1);
-  assert.throws(() => commit(s, "A", 1, "00".repeat(32), 2), /already committed/);
-  commit(s, "B", 1, hashFor(s, "B", 3, 2), 2);
-  assert.throws(() => commit(s, "A", 2, "00".repeat(32), 3), /not a commit phase/);
+  commit(s, "A", s.match, 1, hashFor(s, "A", 31, 1), 1);
+  assert.throws(() => commit(s, "A", s.match, 1, "00".repeat(32), 2), /already committed/);
+  commit(s, "B", s.match, 1, hashFor(s, "B", 3, 2), 2);
+  assert.throws(() => commit(s, "A", s.match, 2, "00".repeat(32), 3), /not a commit phase/);
   assert.throws(() => reveal(s, "A", { pull: 30, nonce: nonce(1) }, 3), /doesn't match/);
   assert.throws(() => reveal(s, "A", { pull: 31, nonce: nonce(1) }, 3), /illegal pull/);
   assert.throws(() => reveal(s, "A", { pull: 31, nonce: nonce(1) }, 1), /clock went backward/);
@@ -223,13 +223,41 @@ test("moves the program refuses", () => {
   assert.throws(() => reveal(s, "B", { pull: 3, nonce: nonce(2) }, 5), /already revealed/);
 });
 
+test("a commit names its match: a second copy of match 1's round-1 commit can't stand in match 2's round 1", () => {
+  // A commit transaction signed twice (a retry with a new blockhash) can land twice. Match 1 ends in its first round
+  // (B withholds its reveal), so the next open round is round 1 again, of match 2, when the second copy arrives.
+  const s = series();
+  const copy = hashFor(s, "A", 3, 1);
+  commit(s, "A", 0, 1, copy, 1);
+  commit(s, "B", s.match, 1, hashFor(s, "B", 2, 2), 2);
+  reveal(s, "A", { pull: 3, nonce: nonce(1) }, 3);
+  timeout(s, revealDeadline(s) + 1);
+  assert.deepEqual(s.results, [{ winner: "A", reason: "missed_reveal" }]);
+  assert.deepEqual([s.match, s.game.rounds.length, s.phase], [1, 0, "commit"]);
+
+  const attempt = (f: () => void) => { try { f(); return "accepted"; } catch (e) { return `refused: ${(e as Error).message}`; } };
+  const t = s.phaseOpenedAt;
+  const own = hashFor(s, "A", 4, 7);
+  const got: Record<string, unknown> = {
+    copy: attempt(() => commit(s, "A", 0, 1, copy, t + 1)),
+    own: attempt(() => commit(s, "A", s.match, 1, own, t + 2)),
+  };
+  commit(s, "B", s.match, 1, hashFor(s, "B", 2, 8), t + 3);
+  got.reveal = attempt(() => reveal(s, "A", { pull: 4, nonce: nonce(7) }, t + 4));
+  reveal(s, "B", { pull: 2, nonce: nonce(8) }, t + 5);
+  // Whoever is still to reveal when the window closes forfeits the match.
+  if (s.phase === "reveal") timeout(s, revealDeadline(s) + 1);
+  got.match2 = s.results[1] ?? "still in play";
+  assert.deepEqual(got, { copy: "refused: this is match 2", own: "accepted", reveal: "accepted", match2: "still in play" });
+});
+
 test("retiring forfeits the series, in either phase", () => {
   const s = series();
   retire(s, "B");
   assert.deepEqual(s.ending, { winner: "A", reason: "retired" });
   const r = series();
-  commit(r, "A", 1, hashFor(r, "A", 1, 1), 1);
-  commit(r, "B", 1, hashFor(r, "B", 1, 2), 2);
+  commit(r, "A", r.match, 1, hashFor(r, "A", 1, 1), 1);
+  commit(r, "B", r.match, 1, hashFor(r, "B", 1, 2), 2);
   retire(r, "A");
   assert.deepEqual(r.ending, { winner: "B", reason: "retired" });
 });
@@ -254,7 +282,7 @@ test("2,000 random series all end, with the invariants holding throughout", () =
         if (s.phase === "commit") {
           const p: Player = rand(2) ? "A" : "B", side = sideOf(p, s.match), round = s.game.rounds.length + 1;
           const pull = rand(s.game.energy[side] + 1);
-          if (rand(6)) { commit(s, p, round, hashFor(s, p, pull, round * 10 + (p === "A" ? 0 : 1)), t); kept[`${s.match}:${round}:${p}`] = pull; }
+          if (rand(6)) { commit(s, p, s.match, round, hashFor(s, p, pull, round * 10 + (p === "A" ? 0 : 1)), t); kept[`${s.match}:${round}:${p}`] = pull; }
           else timeout(s, t);
         } else {
           const p: Player = rand(2) ? "A" : "B", side = sideOf(p, s.match), round = s.game.rounds.length + 1;

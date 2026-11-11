@@ -41,7 +41,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> Pr
         }
         WagerInstruction::Accept { fallback_hash } => accept(program_id, accounts, fallback_hash),
         WagerInstruction::Cancel => cancel(program_id, accounts),
-        WagerInstruction::Commit { round, hash } => play(program_id, accounts, |s, p, now| s.commit(p, round, hash, now)),
+        WagerInstruction::Commit { match_index, round, hash } => play(program_id, accounts, |s, p, now| s.commit(p, match_index, round, hash, now)),
         WagerInstruction::Reveal { pull, nonce } => play(program_id, accounts, |s, p, now| s.reveal(p, Reveal::Pull { pull, nonce }, now)),
         WagerInstruction::RevealFallback { kind, pull, salt } => {
             play(program_id, accounts, |s, p, now| s.reveal(p, Reveal::Fallback { fallback: Fallback { kind, pull }, salt }, now))

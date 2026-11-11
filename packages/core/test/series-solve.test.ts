@@ -18,7 +18,7 @@ const start = (): SeriesState =>
 /** Ends the match in play for `winner` (the other side never reveals), or with no winner (neither does). */
 function endMatch(s: SeriesState, winner: Player | null, at: number): number {
   const round = s.game.rounds.length + 1, match = s.match;
-  for (const p of ["A", "B"] as const) commit(s, p, round, moveCommitment(ID, match, round, sideOf(p, match), 3, NONCE), at);
+  for (const p of ["A", "B"] as const) commit(s, p, match, round, moveCommitment(ID, match, round, sideOf(p, match), 3, NONCE), at);
   if (winner) reveal(s, winner, { pull: 3, nonce: NONCE }, at + 1);
   const after = revealDeadline(s) + 1;
   timeout(s, after);

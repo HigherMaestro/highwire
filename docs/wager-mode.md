@@ -388,8 +388,8 @@ hosted side never holds a key that moves users' money (AGENTS.md, "The hosted en
 | `open(ticket)` | player A | verifies the matchmaker's ticket (8): series ID, both wallets, tier, acceptance deadline, expiry; creates the series, deposits A's stake, snapshots the fee, records A's fallback commitment |
 | `accept(ticket)` | player B, before the ticket's deadline | deposits B's stake and records B's fallback commitment; round 1 opens |
 | `cancel()` | player A, or anyone after the deadline | if B never accepted: refunds A, closes the account |
-| `commit(round, hash)` | a side, strictly before its deadline | `SHA-256(series_id ‖ match ‖ round ‖ side ‖ pull ‖ nonce)`: 32 bytes, then four single bytes, then a 32-byte nonce (pulls run only 0 to 30, so a short nonce could be brute-forced); charges the side's bank |
-| `reveal(round, pull, nonce)` | each side, after both commits, within the reveal window | checks the hash; when both are revealed, plays the round with the rules and opens the next |
+| `commit(match, round, hash)` | a side, strictly before its deadline | names the match (0 to 4) and the round (from 1) it's for, the same two its hash covers, and is refused in any other, each with its own error (7.2.6); the hash is `SHA-256(series_id ‖ match ‖ round ‖ side ‖ pull ‖ nonce)`: 32 bytes, then four single bytes, then a 32-byte nonce (pulls run only 0 to 30, so a short nonce could be brute-forced); charges the side's bank |
+| `reveal(pull, nonce)` | each side, after both commits, within the reveal window | checks the hash against the match, round and side in play; when both are revealed, plays the round with the rules and opens the next |
 | `timeout()` | anyone, after a deadline | in a commit phase, only once **every** side still to commit is past its own deadline (so nothing about one side is published while the other can still move); each late side then owes its fallback (7.2.5). In a reveal phase after the window: a missed reveal forfeits the match (7.2.1); both missed: a void |
 | `settle()` | anyone, once the series is decided | pays the winner and the snapshotted fee, or refunds; closes the account, rent to the opener; decrements the open-stake counter |
 | `retire()` | a player | forfeits the series |
@@ -446,6 +446,10 @@ The on-chain clock is a different clock from the free referee's, and it is the r
   the unused tail. Step 2 adds the wallets, tier, stake, fee and ticket key id around it. Rent about 0.003 SOL
   *(estimate)*, returned to the opener at close.
 
+- A `commit` is 35 bytes of instruction data (the tag, the match, the round, the hash) and two accounts. On the built
+  program it uses about 7,300 compute units (the builders ask for 60,000), and the transaction that carries one is 335
+  bytes of Solana's 1,232.
+
 #### 7.2.5 Fallbacks without leaking them
 
 In free play a fallback is private to its side, and the referee holds a fallback move hidden until both are in. On-chain
@@ -459,6 +463,39 @@ that has to be kept deliberately:
   after the other side's commit is in. Not revealing it is a missed reveal (7.2.1).
 - Once revealed, a fallback is public for the rest of the **series**, and later missed commits play it at once with no
   reveal; the spec and `line.md` say so.
+
+#### 7.2.6 A commit names its match
+
+Round numbers repeat: every match starts again at round 1. A commit that named only its round was good for that round
+number in **any** match of the series, and a commit transaction can land twice with no one's help: a client that
+doesn't see its first send confirm signs the same commit again with a new blockhash, and both land. If the match ends
+before the second copy arrives (in the first round, when the opponent withholds its reveal and forfeits, or by any
+ending at the same round number later), the copy arrives at an open round with its number, in the next match. The
+program took it as that match's move. Its hash names the earlier match (and, since sides alternate, the other side), so
+nothing can open it; the player's own commit is refused as already made; and the reveal window closes on a move that
+can't be revealed, which forfeits the match (7.2.1). A match lost with no attacker at all, and a stake with it if the
+series was close.
+
+**Rule: `commit` carries the match and the round, and the program refuses it unless both are the ones in play**, the
+match first (`WrongMatch`, the program's error 116), then the round (`WrongRound`, 102). A refused commit changes
+nothing, so the player's own commit still goes in. The pair (match, round) never repeats within a series, and the series
+account is the series, so a commit is good for exactly one round of one match of one series.
+
+- The reveals need nothing added. A `reveal` is checked against the hash on the account, which covers the series, the
+  match, the round and the side, so a second copy of one opens nothing in any other round; a fallback's reveal sets the
+  fallback once, after which it plays by itself and a second copy is refused as already revealed.
+- The instruction changed shape: 35 bytes, where the earlier one was 34 (the tag, the round, the hash). The program
+  reads instructions strictly, so the earlier shape is no instruction at all to it (`BadInstruction`), and this one was
+  none to the earlier program: neither can be read as the other. A program upgrade and the clients that build commits
+  therefore change together (docs/wager-devnet.md 9).
+- `assertSafe` holds a built commit to the match and round its builder was asked for, and `line_move` takes both from
+  the series account it has just read and from the agent (`series_match`, `round`), refusing when they differ.
+- The practice pages still read the earlier shape from devnet's history, as a commit with no match, and replay it in
+  the match that was in play, which is what the program did then. Nothing builds, checks or signs one.
+- Tested in both languages with the same series (`packages/core/test/series.test.ts`, `tests/parity.rs`), on the built
+  program (`tests/program.rs`: the copy, the earlier shape's bytes, the player's own commit after them), and in the
+  parity fixtures, which now send commits for the wrong match and second copies of earlier matches' commits at the same
+  round number, and refuse to be written without them.
 
 ### 7.3 The agent side: the policy, the signer and the reveal daemon
 
@@ -961,6 +998,15 @@ Even wins 8.3% of the stake a series, 6.3% after a 2.5% rake, computed by backwa
   matches as before.
 - **Not done:** no tool plays the series equilibrium for an agent; an owner wires `seriesPull` in. Whether to replay
   drawn matches stays open (16).
+
+### 17.6 A commit that named only its round (before the external audit)
+
+An adversarial review of a prototype of the same game found that a commitment carried its round but not its match, and
+the same held here, in the program and in its twin: after a match ended in its first round, a second copy of a
+player's round-1 commit was accepted as the next match's round-1 move, couldn't be opened, shut out the player's own
+commit and forfeited the match. It needed a commit transaction that landed twice, which a retry with a new blockhash
+produces without any attacker. Reproduced first, in both languages, then closed: a commit names its match as well as its
+round and is refused in any other (7.2.6).
 
 ## Sources
 
