@@ -24,7 +24,7 @@ const config: NextConfig = {
   // Build the workspace packages from source, so the site needs no prior build
   // step (on Vercel either). Turbopack has no custom export conditions, so
   // these aliases stand in for the "highwire-source" condition.
-  transpilePackages: ["highwire-core", "highwire-agent", "highwire-mcp", "highwire-relay"],
+  transpilePackages: ["highwire-core", "highwire-agent", "highwire-mcp", "highwire-relay", "highwire-wager"],
   turbopack: {
     root,
     resolveAlias: {
@@ -35,6 +35,8 @@ const config: NextConfig = {
       "highwire-core": "../../packages/core/src/index.ts",
       // The local signer's order tools are listed in the catalog; the hosted endpoint never registers them.
       "highwire-agent": "../../packages/agent/src/index.ts",
+      // The wager pages read series from the chain. Only this entry: the package's tools and daemon never reach the site.
+      "highwire-wager/chain": "../../packages/wager/src/chain.ts",
       "highwire-mcp/ideas": "../../packages/mcp/src/ideas.ts",
       "highwire-mcp": "../../packages/mcp/src/index.ts",
     },

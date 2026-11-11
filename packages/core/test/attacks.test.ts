@@ -7,7 +7,7 @@ import { Keypair, PublicKey, SystemProgram, TransactionInstruction, TransactionM
 import { buildLaunch } from "../src/tx/launch.ts";
 import { ADDRESSES, HIGHWIRE_WALLET, highwireFeeLamports } from "../src/higher/constants.ts";
 import { Chain } from "../src/tx/chain.ts";
-import { assertSafe, associatedTokenAddress, describeTransaction, NATIVE_MINT_ADDRESS, PROGRAMS } from "../src/tx/decode.ts";
+import { assertSafe, associatedTokenAddress, describeTransaction, NATIVE_MINT_ADDRESS, PROGRAMS, type ProgramGuard } from "../src/tx/decode.ts";
 import { replayFetch, type Recording } from "./replay.ts";
 import { runScenario } from "./run-scenario.ts";
 import { LAUNCH_FOR, LAUNCH_MINT, TRADER } from "./scenarios.ts";
@@ -238,57 +238,69 @@ test("registration memos: only with the exact code the local signer expects, onc
   await assert.rejects(async () => decodeSignPayload(await encodeSignPayload(env)), /never signs registrations/);
 });
 
-test("wagers: only the local signer's, exactly as expected; never on the sign page or a sign link", async () => {
-  const { ed25519 } = await import("@noble/curves/ed25519");
-  const { ComputeBudgetProgram } = await import("@solana/web3.js");
-  const w = await import("../src/tx/wager-codec.ts");
-  const program = new PublicKey(w.WAGER_PROGRAM_IDS.devnet!);
-  const secret = new Uint8Array(32).fill(7);
-  const ticketKey = new PublicKey(ed25519.getPublicKey(secret));
-  const ticket = { seriesId: "55".repeat(32), playerA: wallet.toBase58(), playerB: attacker.toBase58(), stake: 100_000_000n, acceptDeadline: 1_300, expiry: 1_600, keyId: 1 };
-  const check = (t = ticket, key = secret) => w.ticketCheck(program, t, new PublicKey(ed25519.getPublicKey(key)), ed25519.sign(w.ticketMessage(program, t), key));
-  const open = (t = ticket, signer = wallet) => w.wagerInstruction(program, signer, t.seriesId, { kind: "open", ticket: t, fallbackHash: "44".repeat(32) });
-  const expectOpen = { wallet, allowLaunchLab: false, allowCpmm: false, wager: { kind: "open" as const, seriesId: ticket.seriesId, ticket, ticketKey } };
-  const ok = (t: VersionedTransaction, exp: object = expectOpen) => assertSafe(t, "devnet", { wallet, ...exp } as never);
-  const no = (t: VersionedTransaction, why: RegExp, exp: object = expectOpen) => assert.throws(() => ok(t, exp), why);
+test("a program outside the allow-list is refused without its guard: so the sign page refuses every one", () => {
+  const ed25519 = new TransactionInstruction({ programId: new PublicKey("Ed25519SigVerify111111111111111111111111111"), keys: [], data: Buffer.alloc(16) });
+  const other = new TransactionInstruction({ programId: Keypair.generate().publicKey, keys: [meta(wallet)], data: Buffer.from([1]) });
+  for (const ix of [ed25519, other]) {
+    refused(tx(ix), /calls a program outside the allow-list/);
+    assert.ok(describeTransaction(tx(ix), "mainnet").instructions.some((x) => !x.known && /^UNKNOWN/.test(x.text)));
+  }
+});
 
-  ok(tx(check(), open()));
-  assert.ok(describeTransaction(tx(check(), open()), "devnet").instructions.some((i) => i.known && /Stake 0.1 SOL and open a best-of-5 wager series/.test(i.text)));
-  // The sign page never expects a wager, so it refuses the ticket check and the wager alike.
-  no(tx(check(), open()), /an Ed25519 check, which only a wager's open or accept carries/, {});
-  no(tx(open()), /a wager on The Line, which only the local signer's wagers make/, {});
-  // A ticket signed by another key, for another stake or series, or not immediately before the open.
-  no(tx(check(ticket, new Uint8Array(32).fill(9)), open()), /isn't signed by the matchmaker's key/);
-  no(tx(check({ ...ticket, stake: 1_000_000_000n }), open()), /isn't this series' ticket/);
-  no(tx(check(), ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }), open()), /isn't immediately before the wager/);
-  no(tx(open()), /without its ticket check/);
-  // An open whose data disagrees with its ticket (a bigger stake than the ticket's), or for another wallet.
-  no(tx(check(), open({ ...ticket, stake: 1_000_000_000n })), /doesn't match its ticket/);
-  no(tx(check(), open(ticket, attacker)), /player isn't the expected one|unexpected signer/);
-  // Another kind than the flow builds, two wager instructions, or another series' account.
-  const retire = (id = ticket.seriesId) => w.wagerInstruction(program, wallet, id, { kind: "retire" });
-  const expectCommit = { wager: { kind: "commit", seriesId: ticket.seriesId } };
-  no(tx(retire()), /not the wager instruction this flow builds/, expectCommit);
-  const commit = (id = ticket.seriesId) => w.wagerInstruction(program, wallet, id, { kind: "commit", round: 1, hash: "66".repeat(32) });
-  ok(tx(commit()), expectCommit);
-  no(tx(commit(), commit()), /more than one wager instruction/, expectCommit);
-  no(tx(commit("77".repeat(32))), /series account isn't the expected one/, expectCommit);
-  // A payout must name the incinerator as its burn account, not someone's wallet.
-  const parties = { playerA: wallet, playerB: attacker, feeAccount: attacker };
-  const settle = w.wagerInstruction(program, wallet, ticket.seriesId, { kind: "settle" }, parties);
-  const expectSettle = { wager: { kind: "settle", seriesId: ticket.seriesId } };
-  ok(tx(settle), expectSettle);
-  const swapped = new TransactionInstruction({ programId: program, keys: settle.keys.map((k, i) => (i === settle.keys.length - 1 ? meta(attacker) : k)), data: settle.data });
-  no(tx(swapped), /burn account isn't the expected one/, expectSettle);
-  // A payout with an extra account, or an accept of a ticket naming another wallet as B.
-  const padded = new TransactionInstruction({ programId: program, keys: [...settle.keys, meta(attacker)], data: settle.data });
-  no(tx(padded), /settle with unexpected accounts/, expectSettle);
-  const accept = w.wagerInstruction(program, wallet, ticket.seriesId, { kind: "accept", fallbackHash: "44".repeat(32) });
-  no(tx(check(), accept), /isn't for this wallet to accept/, { wager: { kind: "accept", seriesId: ticket.seriesId, ticket, ticketKey } });
-  // The admin instructions are never built, whatever the expectation says.
-  const freeze = new TransactionInstruction({ programId: program, keys: [], data: Buffer.from([w.WAGER_TAGS.freezeAndRefund]) });
-  no(tx(freeze), /Highwire never builds/, { wager: { kind: "freezeAndRefund", seriesId: ticket.seriesId } });
-  // A sign link can't carry a wager at all.
+test("guards: asked only about their own programs, never about ones checked here, and they can't loosen a check", () => {
+  const X = Keypair.generate().publicKey, Y = Keypair.generate().publicKey;
+  const ix = (program: PublicKey) => new TransactionInstruction({ programId: program, keys: [meta(wallet)], data: Buffer.from([1]) });
+  const asked: string[] = [];
+  /** A guard for X that allows anything, and insists on exactly `want` of its instructions. */
+  const permissive = (programs: PublicKey[] = [X], want = 1): ProgramGuard => ({
+    programs: () => programs.map((k) => k.toBase58()),
+    describe: () => "an X instruction",
+    check: ({ fail }) => {
+      let seen = 0;
+      return {
+        instruction: (_i, one) => {
+          asked.push(one.programId.toBase58());
+          seen++;
+        },
+        finish: () => {
+          if (seen !== want) fail(`a guard wanted ${want} of its instructions and saw ${seen}`);
+        },
+      };
+    },
+  });
+  const ok = (t: VersionedTransaction, guards: ProgramGuard[]) => assertSafe(t, "mainnet", { wallet, guards });
+  const no = (t: VersionedTransaction, why: RegExp, guards: ProgramGuard[]) => assert.throws(() => ok(t, guards), why);
+
+  // With its guard, an X instruction passes and reads in plain language; the same expectations check again from scratch.
+  const exp = [permissive()];
+  ok(tx(ix(X)), exp);
+  ok(tx(ix(X)), exp);
+  assert.ok(describeTransaction(tx(ix(X)), "mainnet", [], exp).instructions.some((x) => x.known && x.text === "an X instruction"));
+  // The guard's own closing rule runs: none of its instructions, or two, is refused.
+  no(tx(), /wanted 1 of its instructions and saw 0/, exp);
+  no(tx(ix(X), ix(X)), /wanted 1 of its instructions and saw 2/, exp);
+  // It's never asked about another program: Y is still outside the allow-list, with or without X beside it.
+  asked.length = 0;
+  no(tx(ix(X), ix(Y)), /calls a program outside the allow-list/, exp);
+  assert.ok(!asked.includes(Y.toBase58()));
+  // It can't answer for a program checked here, whatever it says: the transaction is refused before anything runs.
+  for (const own of [PROGRAMS.system, PROGRAMS.token, PROGRAMS.token2022, PROGRAMS.associatedToken, PROGRAMS.computeBudget, PROGRAMS.memo, ADDRESSES.mainnet.launchLabProgram, ADDRESSES.mainnet.cpmmProgram]) {
+    no(tx(ix(X)), /a guard may not answer for/, [permissive([X, new PublicKey(own)])]);
+  }
+  no(tx(ix(X)), /two guards answer for the same program/, [permissive(), permissive()]);
+  // And it loosens nothing: beside a permitted X instruction, the wallet's SOL still can't go to a stranger, the payer
+  // still has to be the wallet, and no extra signer is allowed.
+  asked.length = 0;
+  no(tx(SystemProgram.transfer({ fromPubkey: wallet, toPubkey: attacker, lamports: 1_000_000 }), ix(X)), /./, exp);
+  const paidByOther = new VersionedTransaction(new TransactionMessage({ payerKey: attacker, recentBlockhash: PublicKey.default.toBase58(), instructions: [ix(X), memo] }).compileToV0Message());
+  no(paidByOther, /paid by a different wallet/, exp);
+  const extraSigner = new TransactionInstruction({ programId: X, keys: [{ pubkey: attacker, isSigner: true, isWritable: false }], data: Buffer.from([1]) });
+  no(tx(extraSigner), /unexpected signer/, exp);
+  // A second memo is still refused beside it.
+  no(tx(ix(X), memo), /more than one Highwire memo/, exp);
+});
+
+test("a sign link can't carry a wager at all", async () => {
   const { decodeSignPayload, encodeSignPayload, signUrl } = await import("../src/tx/sign-link.ts");
   const env = { format: "highwire.unsigned-tx/v2", cluster: "devnet", wallet: wallet.toBase58(), kind: "wager", transactions: [], expiresAfterBlockHeight: 1, builtAt: 1, howToSign: "" } as never;
   await assert.rejects(signUrl(env), /wagers get no sign link/);

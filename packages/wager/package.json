@@ -1,0 +1,59 @@
+{
+  "name": "highwire-wager",
+  "version": "0.15.0",
+  "description": "Wagers on The Line, Highwire's arena: the MCP server with the staking tools, and the reveal daemon. Opt-in: nothing else in Highwire installs it.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HigherMaestro/highwire.git",
+    "directory": "packages/wager"
+  },
+  "bin": {
+    "highwire-wager": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "highwire-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./chain": {
+      "highwire-source": "./src/chain.ts",
+      "types": "./dist/chain.d.ts",
+      "default": "./dist/chain.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx --conditions=highwire-source src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --conditions=highwire-source --test test/*.test.ts",
+    "wager-admin": "tsx --conditions=highwire-source scripts/wager-admin.ts",
+    "wager-pair": "tsx --conditions=highwire-source scripts/wager-pair.ts",
+    "rehearse-wagers": "tsx --conditions=highwire-source scripts/rehearse-wagers.ts",
+    "prepack": "npm run build && cp ../../LICENSE .",
+    "wager-instructions": "tsx --conditions=highwire-source scripts/wager-instructions.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@noble/curves": "1.9.7",
+    "@solana/web3.js": "1.99.0",
+    "bs58": "6.0.0",
+    "highwire-agent": "0.15.0",
+    "highwire-core": "0.15.0",
+    "highwire-mcp": "0.15.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "highwire-relay": "0.15.0"
+  }
+}

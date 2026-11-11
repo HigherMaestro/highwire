@@ -1,5 +1,5 @@
 // The wager stack rehearsed end to end on a local validator (docs/wager-mainnet.md 4): the compiled program, two
-// agents' MCP servers with real LocalSigners and policies, their reveal daemons (`highwire line run`, in process), and
+// agents' MCP servers with real LocalSigners and policies, their reveal daemons (`highwire-wager run`, in process), and
 // the referee's wager desk (in process, its own ticket key) — everything a mainnet series goes through, with nothing
 // replaced but the cluster. It plays:
 //
@@ -15,7 +15,7 @@
 // emergency refund isn't rehearsed here (programs/line-wager/tests covers it with a moved clock).
 //
 //   (cd programs/line-wager && cargo build-sbf)    # once, for target/deploy/line_wager.so
-//   npm run rehearse-wagers -w highwire-mcp [-- --quick]    # --quick skips the missed commit (2 minutes of waiting)
+//   npm run rehearse-wagers -w highwire-wager [-- --quick]    # --quick skips the missed commit (2 minutes of waiting)
 //
 // About 8 minutes in all (3 with --quick).
 import { spawn } from "node:child_process";
@@ -30,11 +30,15 @@ import { ed25519 } from "@noble/curves/ed25519";
 import { Connection, Keypair, PublicKey, sendAndConfirmTransaction, Transaction } from "@solana/web3.js";
 import bs58 from "bs58";
 import { agentPaths, GENESIS_HASHES, LocalSigner } from "highwire-agent";
-import { Chain, freezeAndRefundInstruction, initConfigInstruction, pauseInstruction, readWagerConfig, seriesOutcome, WAGER_PROGRAM_IDS } from "highwire-core";
+import { Chain } from "highwire-core";
+import { freezeAndRefundInstruction, initConfigInstruction, pauseInstruction, WAGER_PROGRAM_IDS } from "../src/codec.ts";
+import { readSeries, readWagerConfig, seriesOutcome } from "../src/tx.ts";
 import { createRelay, MemoryStore, realClock } from "highwire-relay";
 import { FakeCoins, FakeRpc, launchTx, memoTx } from "highwire-relay/testing";
 import { runLine } from "../src/line-cli.ts";
-import { createServer } from "../src/server.ts";
+import { createServer } from "highwire-mcp";
+import { registerWagerTools } from "../src/tools.ts";
+import { wagerSigner } from "../src/signing.ts";
 
 const QUICK = process.argv.includes("--quick");
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -216,10 +220,10 @@ async function agent(name: string, key: Keypair, n: number): Promise<Agent> {
   mkdirSync(home, { recursive: true, mode: 0o700 });
   writeFileSync(paths.policy, JSON.stringify(POLICY));
   writeFileSync(paths.agent, JSON.stringify({ arena: { token: reg.arenaToken, fighter: mint, relay: "https://relay.test", registeredAt: "" } }), { mode: 0o600 });
-  // Its reveal daemon, as `highwire line run` with the same environment as its server.
+  // Its reveal daemon, as `highwire-wager run` with the same environment as its server.
   const env = { HIGHWIRE_CLUSTER: "devnet", HIGHWIRE_HOME: home, HIGHWIRE_KEYPAIR_PATH: keyFile, SOLANA_RPC_URL: RPC, HIGHWIRE_RELAY_URL: "https://relay.test" };
   void runLine(["run"], { env, signal: daemons.signal, out: () => undefined, err: (l) => (/WARNING|refused|failed/i.test(l) ? log(`${name} run`, l.slice(9)) : undefined) });
-  const server = createServer({ cluster: "devnet", rpcUrl: RPC, relayUrl: "https://relay.test", arena: true, wagers: true, signer: new LocalSigner(key, paths) });
+  const server = createServer({ cluster: "devnet", rpcUrl: RPC, relayUrl: "https://relay.test", arena: true, wagers: registerWagerTools, signer: wagerSigner(key, paths) });
   const client = new Client({ name: `rehearse-${name}`, version: "0" });
   const [x, y] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(x), client.connect(y)]);
@@ -344,7 +348,10 @@ try {
   await admin(pauseInstruction(PROGRAM, keys.authority.publicKey, false));
   const [s4] = await Promise.all([stakeIn(a), stakeIn(b)]);
   const before4 = { a: await balance(a.wallet), b: await balance(b.wallet) };
-  await admin(freezeAndRefundInstruction(PROGRAM, keys.authority.publicKey, s4, { playerA: keys.a.publicKey, playerB: keys.b.publicKey }));
+  // The desk gives the two sides at random, so who is A comes from the series, not from which agent staked first.
+  const live4 = await readSeries(chain, s4);
+  if (!live4) throw new Error("the series to freeze isn't on-chain");
+  await admin(freezeAndRefundInstruction(PROGRAM, keys.authority.publicKey, s4, { playerA: new PublicKey(live4.header.playerA), playerB: new PublicKey(live4.header.playerB) }));
   const o4 = await seriesOutcome(chain, s4);
   check("the frozen series was refunded", o4.state === "closed" && "how" in o4 && o4.how === "refunded", JSON.stringify(o4));
   const back = { a: (await balance(a.wallet)) - before4.a, b: (await balance(b.wallet)) - before4.b };

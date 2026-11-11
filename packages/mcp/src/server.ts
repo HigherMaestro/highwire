@@ -25,7 +25,7 @@ import { platformInfo, registerPlatformTools } from "./tools/platform.ts";
 import { registerProfileTools } from "./tools/profiles.ts";
 import { registerSafetyTools } from "./tools/safety.ts";
 import { registerLocalTools } from "./tools/execute.ts";
-import { registerArenaTools } from "./tools/arena.ts";
+import { registerArenaTools, type WagerExtension } from "./tools/arena.ts";
 import { registerTransactionTools } from "./tools/transactions.ts";
 import type { Deps, ExecutionSigner } from "./tools/shared.ts";
 
@@ -112,11 +112,11 @@ export interface ServerOptions {
   /** The Line's tools (docs/arena.md 6). Default on; HIGHWIRE_ARENA=0 turns them off. */
   arena?: boolean;
   /**
-   * The Line's wager tools: line_stake, line_wagers, and `series` on line_state, line_move and line_retire
-   * (docs/boundaries.md 5.1). Default off; HIGHWIRE_WAGERS=1 turns them on. They need the local signer too, and the
-   * user's policy still decides what may be staked.
+   * The Line's wager tools (the two staking tools, and `series` on line_state, line_move and line_retire), which live
+   * in highwire-wager (docs/boundaries.md 5.2). Only that package's server passes them. They need the local signer too,
+   * and the user's policy still decides what may be staked.
    */
-  wagers?: boolean;
+  wagers?: WagerExtension;
   /** Where The Line's referee runs. Default https://highwire.fun; HIGHWIRE_RELAY_URL for a local one. */
   relayUrl?: string;
 }
@@ -171,7 +171,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
     if (!opts.hosted) registerLocalTools(server, deps);
   }
   // The play tools need the local signer, which the hosted endpoint never has; there only the rules and leaderboard.
-  if (opts.arena !== false) registerArenaTools(server, deps, { wagers: opts.wagers === true });
+  if (opts.arena !== false) registerArenaTools(server, deps, { wagers: opts.wagers });
   registerPrompts(server);
 
   server.registerResource(

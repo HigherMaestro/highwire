@@ -4,12 +4,22 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
-- **The wager tools are off by default.** `line_stake` and `line_wagers` exist, and `line_state`, `line_move` and
-  `line_retire` take a `series`, only with `HIGHWIRE_WAGERS=1` in the server's environment (and the local signer). In
-  0.15.0 any server with a signer had them. Without the switch a `series` is refused (`wagers_off`) rather than
-  dropped, so a call meant for a staked series never acts on a free match. The policy's `wager` action and `wagers`
-  section still decide what may be staked, and the reveal daemon (`highwire line run`) starts as before, so a series
-  already open is never left unrevealed. docs/boundaries.md is the plan this is the first step of.
+- **A push the site can't see no longer deploys it.** Vercel skips the build when every file changed since the last
+  deployed commit is under `programs/`, `docs/research/`, or a package's `test/` or `scripts/` folder. Anything else
+  builds, as does a redeploy with no change and any case the check can't work out.
+- **Wagering is its own package, `highwire-wager`.** The staking tools (`line_stake`, `line_wagers`, and `series` on
+  `line_state`, `line_move` and `line_retire`), the builders, the reveal daemon and the maintainer's scripts moved out
+  of `highwire-mcp`, `highwire-core` and `highwire-agent`, which no longer depend on any of it. In 0.15.0 any server
+  with a local signer had the staking tools. To wager now, run `npx -y highwire-wager` as the MCP server in place of
+  `highwire-mcp` (the same server and environment, plus the wager tools), and `npx -y highwire-wager run` for the reveal
+  daemon (was `highwire line run`; `highwire-wager series` was `highwire line series`). On `highwire-mcp` a `series`
+  is refused (`wagers_off`) rather than dropped, so a call meant for a staked series never acts on a free match. The
+  policy's `wager` action and `wagers` section still decide what may be staked. docs/boundaries.md is the plan.
+- **`highwire-core` and `highwire-agent` have no wager code.** The program's codec and its safety checks moved to
+  `highwire-wager` too. `assertSafe` and `describeTransaction` take guards for programs core doesn't know, and the
+  local signer takes an extension for an action it can't check; each is passed in code by the package that builds for
+  it, and refused without. So a server or a signer that isn't `highwire-wager`'s refuses every wager transaction, the
+  sign page included, and a guard or extension can't loosen any of core's or the signer's own checks.
 - **Wager mode, ready for mainnet but for counsel's go** (docs/wager-mainnet.md, the runbook). The program deploys to
   mainnet paused, and going live is one switch: unpausing it, and setting `LINE_WAGER_CLUSTER=mainnet` on the site. Its
   settings are set ahead of time under their own names (`LINE_WAGER_MAINNET_*`), and the mainnet desk keeps its queue,

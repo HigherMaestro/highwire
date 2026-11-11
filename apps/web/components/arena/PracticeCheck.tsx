@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { SeriesHistory } from "highwire-core";
+import type { SeriesHistory } from "highwire-wager/chain";
 import { replaySeries, type Replay } from "../../lib/practice/replay.ts";
 
 // Replays the series again in the browser, from the same on-chain moves the page was drawn from: every reveal against

@@ -119,34 +119,9 @@ export class AuditLog {
     return total;
   }
 
-  /**
-   * Series this wallet staked in (open or accept sent) in the last `ms`: on-chain counts can lag a send that hasn't
-   * confirmed yet, so the open-series count adds these.
-   */
-  stakedSeriesSince(cluster: Cluster, ms: number): string[] {
-    const since = this.now().getTime() - ms;
-    return this.entries()
-      .filter((e) => e.action === "wager" && e.outcome === "sent" && e.cluster === cluster && (e.wager === "open" || e.wager === "accept") && e.series && Date.parse(e.time) >= since)
-      .map((e) => e.series!);
-  }
-
-  /**
-   * For each series staked in (open or accept) in the last `ms`: when its latest stake was sent, and its latest confirmed
-   * stake (time and signature), if any. A send after the last confirmation is a stake still in flight.
-   */
-  recentStakes(cluster: Cluster, ms: number): Map<string, { sent: number; confirmed?: { at: number; signature: string } }> {
-    const since = this.now().getTime() - ms;
-    const out = new Map<string, { sent: number; confirmed?: { at: number; signature: string } }>();
-    for (const e of this.entries()) {
-      if (e.action !== "wager" || e.cluster !== cluster || (e.wager !== "open" && e.wager !== "accept") || !e.series) continue;
-      const at = Date.parse(e.time);
-      if (at < since) continue;
-      const cur = out.get(e.series) ?? { sent: 0 };
-      if (e.outcome === "sent") cur.sent = Math.max(cur.sent, at);
-      if (e.outcome === "confirmed" && e.signature && at >= (cur.confirmed?.at ?? 0)) cur.confirmed = { at, signature: e.signature };
-      out.set(e.series, cur);
-    }
-    return out;
+  /** The log's clock, in milliseconds: what "the last 24 hours" is measured from. */
+  nowMs(): number {
+    return this.now().getTime();
   }
 
   /** Posts sent in the last 24 hours, for the policy's daily cap: each counts once (its "sent" line), up or not. */

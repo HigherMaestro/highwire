@@ -53,7 +53,7 @@ export function rpcUrlEnv(env: Env, name = "SOLANA_RPC_URL", warn: (msg: string)
 
 /**
  * Server options from HIGHER_API_URL, SOLANA_RPC_URL, HIGHWIRE_CLUSTER, HIGHWIRE_MAX_SOL_PER_TX, HIGHER_TIMEOUT_MS,
- * HIGHER_RETRIES, HIGHWIRE_SITE_URL, HIGHWIRE_LAUNCH_SECRET, HIGHWIRE_ARENA, HIGHWIRE_WAGERS and HIGHWIRE_RELAY_URL.
+ * HIGHER_RETRIES, HIGHWIRE_SITE_URL, HIGHWIRE_LAUNCH_SECRET, HIGHWIRE_ARENA and HIGHWIRE_RELAY_URL.
  */
 export function serverOptionsFromEnv(env: Env = process.env): ServerOptions {
   const maxSol = numberEnv(env, "HIGHWIRE_MAX_SOL_PER_TX");
@@ -69,8 +69,6 @@ export function serverOptionsFromEnv(env: Env = process.env): ServerOptions {
     launchKeySecret: env.HIGHWIRE_LAUNCH_SECRET || undefined,
     // The Line's tools are on; HIGHWIRE_ARENA=0 turns them off.
     arena: env.HIGHWIRE_ARENA !== "0",
-    // The wager tools are off; only HIGHWIRE_WAGERS=1 turns them on.
-    wagers: env.HIGHWIRE_WAGERS === "1",
     relayUrl: urlEnv(env, "HIGHWIRE_RELAY_URL"),
   };
 }
