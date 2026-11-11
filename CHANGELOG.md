@@ -5,6 +5,8 @@ highwire.fun.
 
 ## 0.16.0 (2026-11-11)
 
+- **Each package's build clears `dist` first**, so a file whose source was moved or deleted can't ride along in the
+  published package. Packing 0.16.0 found seven such files from before the wager code moved to `highwire-wager`.
 - **Devnet runs the program with a commit that names its match** (2026-11-11, docs/wager-devnet.md 9): redeployed to
   the same address, the config unchanged, and the first series after it played five matches with every commit revealed
   and no fallback. Players' servers and daemons need this repository from `a8f4b63` on (#5).
