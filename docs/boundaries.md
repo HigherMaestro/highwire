@@ -1,7 +1,8 @@
 # PRD: Boundaries inside the repository
 
-Status: **approved 2026-11-10, with the recommended answer to each decision in 9. Phases 1 and 2 are built (the switch,
-then the package and its hooks); the deploy rule and CI aren't.** Not legal advice: who may distribute or operate wagering software is
+Status: **approved 2026-11-10, with the recommended answer to each decision in 9. All four phases are built (the switch,
+the package and its hooks, the deploy rule, CI and the freeze). The audit tag itself is the maintainer's to make, when
+a commit is sent.** Not legal advice: who may distribute or operate wagering software is
 counsel's question (docs/wager-mode.md 5), and nothing here answers it.
 
 Highwire started as an MCP server for higher.fun. It now also holds a game (The Line), a referee, a wager program and
@@ -135,15 +136,37 @@ wager's stake against the owner's limits.
 
 ### 5.3 Deploys (phase 3)
 
-- **The rule:** an `ignoreCommand` in `apps/web/vercel.json` that skips the build only when **every** changed file is
-  under a short skip list: `programs/`, `docs/research/`, `packages/*/test/`, `packages/*/scripts/`, `*.rs`.
-  Anything else builds.
+- **The rule:** an `ignoreCommand` in `apps/web/vercel.json` (`apps/web/scripts/ignore-build.mjs`) that skips the build
+  only when **every** changed file is under a short skip list: `programs/`, `docs/research/`, `packages/*/test/`,
+  `packages/*/scripts/`, and (since CI arrived) `.github/`. Anything else builds. Whole folders only: the draft's `*.rs` went, since a `.rs` file under
+  `apps/web/public` would be something the site serves, and the program's Rust is all under `programs/` anyway.
+- **When it can't tell, it builds:** no earlier deployment of the branch, a commit it can't find, git failing, or
+  nothing changed at all (a redeploy asked for on purpose, as when a setting changes).
 - **Why a skip list and not a build list:** the site reads `CHANGELOG.md`, `ideas/` and
   `packages/mcp/package.json` at build time, besides every package it imports. A list of what to build would miss the
   next such file and leave the site stale; a list of what to skip can only err toward building.
 - **It compares against the last deployed commit** (`VERCEL_GIT_PREVIOUS_SHA`), not the previous one, so a push of
   several commits is judged whole. If that commit isn't in Vercel's shallow clone, it builds.
-- **Tried on a preview branch first**, with one push of each kind, before `main` relies on it.
+- **Tried on a preview branch**, one push of each kind, before `main` relies on it (2026-11-10, a throwaway branch,
+  since deleted). What Vercel reported for each commit:
+
+  | Push | Changed since the last deployed commit | Vercel |
+  |---|---|---|
+  | the branch's first | (no earlier deployment) | built |
+  | program only, pushed before the first deployment finished | (still no earlier deployment) | built |
+  | the changelog, with that program change | program, changelog | built |
+  | changelog only | changelog | built |
+  | site code only | a file under `apps/web/public` | built |
+  | program only | program | **skipped** |
+  | a research note | program, research | **skipped** |
+  | a package's test and scripts | program, research, test, scripts | **skipped** |
+  | program and site code together | all of those, and site code | built |
+
+  A skipped build shows on GitHub as a passing `Vercel` status, "Canceled by Ignored Build Step", so a pull request's
+  checks stay green. The second row was the trial's own doing: the branch's first commit already had a status from
+  another branch, so the trial didn't wait for this branch's first deployment. With none to compare with, the rule
+  built, as it should. The skips are judged over everything since the last *deployed* commit, not the last push: the
+  three skipped rows each include the ones before.
 - *(Alternative: Vercel's own "skip unaffected projects" setting. It's a project setting, outside the repository and
   outside review; the maintainer can turn it on as well.)*
 
@@ -204,9 +227,12 @@ Each phase is its own pull request, and each needs the one before it merged.
      for word; the rest of `attacks.test.ts` is unchanged. What stays in `highwire-agent` is the policy's `wagers` shape,
      the audit log's `wager` and `series` fields and the paths of the wager files: data, not checks.
 3. **The deploy rule.** *Done when* a preview branch has shown a skip for a program-only push and a build for a
-   changelog-only push, a code push and a mixed push.
+   changelog-only push, a code push and a mixed push. *Built, and shown* (5.3).
 4. **The tag, the freeze and CI.** *Done when* the pack names the tag and its build hash, CI is green on `main` and red
    on a branch that deliberately breaks parity, and a pull request touching the program after the tag is flagged.
+   *Built:* the workflow and the freeze check, with the pack saying how to tag. *Not done here:* the tag and its hash
+   (nothing has been sent to an auditor, and which commit is sent is the maintainer's call), and "green on `main`",
+   which waits for the merge; it ran green on its own pull request, and red on a deliberate parity break.
 
 ## 8. The later split
 

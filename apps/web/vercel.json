@@ -1,4 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [{ "path": "/api/arena/sweep", "schedule": "* * * * *" }]
+  "crons": [{ "path": "/api/arena/sweep", "schedule": "* * * * *" }],
+  "ignoreCommand": "node scripts/ignore-build.mjs"
 }
