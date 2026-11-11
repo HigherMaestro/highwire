@@ -147,7 +147,8 @@ In the Highwire repository:
 ideas/
   starter/              the skeleton every template gets
   buyback-coin/
-    idea.json           title, one-liner, tools used, difficulty, SOL to start, slug
+    idea.json           title, one-liner, tools used, difficulty, SOL to start, slug; `modules` it ships with
+                        already wired in, and `scripts` it adds to package.json
     PRD.md
     policy.example.json
     src/                anything beyond the starter
@@ -156,7 +157,7 @@ ideas/
 ```
 
 - **The site** reads `ideas/*/idea.json` and `PRD.md` at build time for `/ideas` and `/ideas/<slug>`.
-- **The templates:** `npm run ideas -w highwire-web -- sync` assembles each idea (the starter plus the idea's files), and pushes it to
+- **The templates:** `npm run ideas -w highwire-web -- sync` assembles each idea (the starter, then the modules it ships with, then the idea's own files), and pushes it to
   `HigherMaestro/highwire-idea-<slug>`, marked as a template repository. It's run by the maintainer with each release
   and each idea change; it never runs on Vercel.
 - **The release checklist** gains a step: run the sync, which pins the templates to the new `highwire-mcp`.
