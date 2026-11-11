@@ -1,9 +1,9 @@
 import { PublicKey, type ConfirmedSignatureInfo, type VersionedTransactionResponse } from "@solana/web3.js";
 import bs58 from "bs58";
-import { ValidationError } from "../lib/errors.ts";
-import type { Chain } from "./chain.ts";
-import { closingEvent, readWagerConfig, type SeriesOutcome } from "./wager.ts";
-import { decodeLegacyCommit, decodeWager, FALLBACK_KINDS, seriesAddress, wagerConfigAddress, wagerProgram, type WagerConfig } from "./wager-codec.ts";
+import { ValidationError } from "highwire-core";
+import type { Chain } from "highwire-core";
+import { closingEvent, readWagerConfig, type SeriesOutcome } from "./tx.ts";
+import { decodeLegacyCommit, decodeWager, FALLBACK_KINDS, seriesAddress, wagerConfigAddress, wagerProgram, type WagerConfig } from "./codec.ts";
 
 // The wager program's history, read back from the chain for the practice pages (docs/wager-mode.md 7.5): which series
 // opened and how each closed, from the config account's transactions (open, accept and every close write it, moves

@@ -152,6 +152,8 @@ test("the environment sets the sign site and the launch secret", () => {
   assert.equal(o.launchKeySecret, "s");
   assert.throws(() => serverOptionsFromEnv({ HIGHWIRE_SITE_URL: "ftp://x" }), /http/);
   assert.equal(serverOptionsFromEnv({}).siteUrl, undefined);
+  // Nothing in the environment turns the wager tools on: they come only from highwire-wager, in code.
+  assert.equal(serverOptionsFromEnv({ HIGHWIRE_WAGERS: "1" }).wagers, undefined);
 });
 
 test("a malformed SOLANA_RPC_URL falls back to the public RPC instead of failing, and is never logged", () => {

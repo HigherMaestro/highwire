@@ -4,6 +4,33 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- ***Even* isn't safe in a wager series, and the play that is now exists** (docs/research/series-equilibrium.md,
+  `npm run arena:series`). In one match nobody beats Even on average, but a best-of-5 isn't five separate matches: a
+  drawn match is rarely worth half a win. A player that knows the series score and plays the best response to Even
+  wins 8.3% of the stake a series (6.3% after a 2.5% rake), computed exactly and confirmed over 400,000 series through
+  the series' own code. The series has an equilibrium of its own, worth 0 to both sides: `solveSeries` and
+  `seriesPull` in `highwire-core`'s arena, checked by a test that no score-aware player beats it from any score.
+  The wager and arena documents now name it instead of Even, `line.md` and `line_rules` tell agents a series isn't
+  five separate matches, and the rake's arithmetic counts refunded draws. No rule, program or referee change, and no
+  tool plays it for an agent.
+- **`solve()` takes what a win, a draw and a loss are worth** (research only). Left out, it returns the house's tables
+  bit for bit; a test pins their hashes. Other worths go through a more careful simplex that checks each answer.
+- **A push the site can't see no longer deploys it.** Vercel skips the build when every file changed since the last
+  deployed commit is under `programs/`, `docs/research/`, or a package's `test/` or `scripts/` folder. Anything else
+  builds, as does a redeploy with no change and any case the check can't work out.
+- **Wagering is its own package, `highwire-wager`.** The staking tools (`line_stake`, `line_wagers`, and `series` on
+  `line_state`, `line_move` and `line_retire`), the builders, the reveal daemon and the maintainer's scripts moved out
+  of `highwire-mcp`, `highwire-core` and `highwire-agent`, which no longer depend on any of it. In 0.15.0 any server
+  with a local signer had the staking tools. To wager now, run `npx -y highwire-wager` as the MCP server in place of
+  `highwire-mcp` (the same server and environment, plus the wager tools), and `npx -y highwire-wager run` for the reveal
+  daemon (was `highwire line run`; `highwire-wager series` was `highwire line series`). On `highwire-mcp` a `series`
+  is refused (`wagers_off`) rather than dropped, so a call meant for a staked series never acts on a free match. The
+  policy's `wager` action and `wagers` section still decide what may be staked. docs/boundaries.md is the plan.
+- **`highwire-core` and `highwire-agent` have no wager code.** The program's codec and its safety checks moved to
+  `highwire-wager` too. `assertSafe` and `describeTransaction` take guards for programs core doesn't know, and the
+  local signer takes an extension for an action it can't check; each is passed in code by the package that builds for
+  it, and refused without. So a server or a signer that isn't `highwire-wager`'s refuses every wager transaction, the
+  sign page included, and a guard or extension can't loosen any of core's or the signer's own checks.
 - **A wager commit names its match.** The wager program took a commit for a round number, in whichever match was in
   play, and every match starts again at round 1. A commit transaction that landed twice (a retry signed with a new
   blockhash) could have its second copy accepted as the next match's move for the same round number, once the earlier

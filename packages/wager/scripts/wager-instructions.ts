@@ -10,8 +10,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Keypair, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
-import { fallbackCommitment, moveCommitment, sideOf } from "../src/arena/index.ts";
-import { configUpdateInstruction, freezeAndRefundInstruction, pauseInstruction, ticketCheck, ticketMessage, wagerInstruction, WAGER_PROGRAM_IDS, type WagerParties, type WagerTicket } from "../src/tx/wager-codec.ts";
+import { fallbackCommitment, moveCommitment, sideOf } from "highwire-core/arena";
+import { configUpdateInstruction, freezeAndRefundInstruction, pauseInstruction, ticketCheck, ticketMessage, wagerInstruction, WAGER_PROGRAM_IDS, type WagerParties, type WagerTicket } from "../src/codec.ts";
 
 const out = join(dirname(fileURLToPath(import.meta.url)), "../../../programs/line-wager/tests/fixtures/ts-instructions.json");
 

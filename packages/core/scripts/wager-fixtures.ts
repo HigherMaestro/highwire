@@ -68,7 +68,7 @@ type Persona = "present" | "slow" | "absent";
 const persona = (): Persona => (chance(10) ? "absent" : chance(4) ? "slow" : "present");
 
 const file = new URL("../../../programs/line-wager/tests/fixtures/series.ndjson", import.meta.url);
-// The fixtures aren't in the repository: a fresh clone has no folder for them yet.
+// The folder is git-ignored, so a fresh checkout doesn't have it.
 mkdirSync(new URL(".", file), { recursive: true });
 const out = createWriteStream(file);
 out.write(JSON.stringify({ rules: "duels-1", revealSeconds: 120, seed: SEED, n: N }) + "\n");

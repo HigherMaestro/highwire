@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dirname } from "node:path";
-import { agentPaths, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, policyWarnings, type AgentPaths, type Policy } from "highwire-agent";
+import { agentPaths, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, policyWarnings, type AgentPaths, type Policy , type ActionExtension } from "highwire-agent";
 
 // The local signer, for the stdio server only: turned on by HIGHWIRE_KEYPAIR_PATH, which names a keypair file on the
 // user's machine. The hosted route never imports this file.
@@ -10,7 +10,7 @@ import { agentPaths, loadKeypair, loadPolicy, LocalSigner, POLICY_TEMPLATE, poli
 type Env = Record<string, string | undefined>;
 
 /** The signer HIGHWIRE_KEYPAIR_PATH asks for, or undefined. Warnings go to stderr, never the key. */
-export function signerFromEnv(env: Env = process.env, warn: (msg: string) => void = console.error): LocalSigner | undefined {
+export function signerFromEnv(env: Env = process.env, warn: (msg: string) => void = console.error, extensions: readonly ActionExtension[] = []): LocalSigner | undefined {
   const path = env.HIGHWIRE_KEYPAIR_PATH?.trim();
   if (!path) return undefined;
   const { keypair, warning } = loadKeypair(path);
@@ -32,7 +32,8 @@ export function signerFromEnv(env: Env = process.env, warn: (msg: string) => voi
       /* missing: said above */
     }
   }
-  return new LocalSigner(keypair, paths, warning);
+  // Extensions come only from the caller's code (highwire-wager passes its own): nothing here reads one from `env`.
+  return new LocalSigner(keypair, paths, warning, undefined, undefined, extensions);
 }
 
 /**

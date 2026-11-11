@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
-import { recentSeries, seriesHistory, WAGER_PROGRAM_IDS, type ClosedOutcome, type SeriesHistory, type SeriesSummary } from "highwire-core";
+import { recentSeries, seriesHistory, WAGER_PROGRAM_IDS, type ClosedOutcome, type SeriesHistory, type SeriesSummary } from "highwire-wager/chain";
 import { arenaPagesOn } from "../arena/data.ts";
 import { lineRelay, wagerChain, wagerCluster } from "../line/server.ts";
 

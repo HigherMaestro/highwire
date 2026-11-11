@@ -11,6 +11,7 @@ import { agentPaths, LocalSigner, type ExecuteRequest, type ExecuteResult } from
 import { createRelay, FakeClock, MemoryStore, type Relay } from "highwire-relay";
 import { FakeCoins, FakeRpc, launchTx, memoTx, MINT } from "highwire-relay/testing";
 import { createServer, type ServerOptions } from "../src/server.ts";
+import type { WagerExtension } from "../src/tools/arena.ts";
 import { agentView } from "../src/tools/arena.ts";
 import { ALL_TOOLS, EXECUTE_TOOLS, FAKE_OPTIONS, HOSTED_TOOLS } from "./fake.ts";
 
@@ -121,6 +122,70 @@ test("The Line's tools: on by default, off with arena: false, and only the rules
   assert.ok(PLAY_TOOLS.every((t) => EXECUTE_TOOLS.includes(t)));
   const rules = await call(hosted, "line_rules");
   assert.equal(rules.body.rules.id, "duels-1");
+});
+
+test("without the wager extension: no staking tool, no word of staking, and a series is refused, never dropped", async () => {
+  const SERIES = "ab".repeat(32);
+  const w = world();
+  const off = await connect(w, { signer: new LocalSigner(Keypair.generate(), home()) });
+  const tools = (await off.listTools()).tools;
+  assert.deepEqual(tools.map((t) => t.name).sort(), [...ALL_TOOLS, ...EXECUTE_TOOLS].sort(), "no line_stake, no line_wagers");
+  for (const name of ["line_state", "line_move", "line_retire"]) {
+    const t = tools.find((x) => x.name === name)!;
+    assert.doesNotMatch(JSON.stringify(t), /stake|wager|on-chain|daemon/i, `${name} says nothing of staking`);
+    assert.ok("series" in (t.inputSchema.properties as object), `${name} still takes a series, to refuse it`);
+  }
+  // A dropped `series` would send these to the free match: line_retire would forfeit it.
+  const before = w.calls.length;
+  for (const [name, args] of [
+    ["line_state", { series: SERIES }],
+    ["line_move", { series: SERIES, series_match: 1, round: 1, pull: 3 }],
+    ["line_move", { series_match: 1, round: 1, pull: 3 }],
+    ["line_retire", { confirm: true, series: SERIES }],
+    ["line_retire", { confirm: true, series: "" }],
+  ] as const) {
+    const res = await call(off, name, args);
+    assert.equal(res.isError, true, name);
+    assert.equal(res.body.code, "wagers_off", name);
+    assert.match(res.body.error, /highwire-wager/);
+    assert.match(res.body.next_step, /Nothing was staked, committed or retired/);
+  }
+  assert.equal(w.calls.length, before, "nothing reached the relay or the RPC");
+});
+
+test("the wager extension: passed in code, it registers its tools and gets every staked series; never without the signer", async () => {
+  const SERIES = "ab".repeat(32);
+  const w = world();
+  const seen: unknown[][] = [];
+  let registered = 0;
+  const extension: WagerExtension = (server) => {
+    registered++;
+    server.registerTool("line_stake", { title: "a stand-in", description: "a stand-in", inputSchema: {} }, async () => ({ content: [{ type: "text", text: "{}" }] }));
+    return {
+      state: async (...a) => (seen.push(["state", ...a]), { from: "state" }),
+      move: async (...a) => (seen.push(["move", ...a]), { from: "move" }),
+      retire: async (...a) => (seen.push(["retire", ...a]), { from: "retire" }),
+    };
+  };
+  const on = await connect(w, { signer: new LocalSigner(Keypair.generate(), home()), wagers: extension });
+  const tools = (await on.listTools()).tools;
+  assert.deepEqual(tools.map((t) => t.name).sort(), [...ALL_TOOLS, ...EXECUTE_TOOLS, "line_stake"].sort());
+  assert.match(tools.find((t) => t.name === "line_move")!.description!, /staked series/);
+  const before = w.calls.length;
+  assert.equal((await call(on, "line_state", { series: SERIES, wait: false })).body.from, "state");
+  assert.equal((await call(on, "line_move", { series: SERIES, series_match: 2, round: 3, pull: 4 })).body.from, "move");
+  assert.equal((await call(on, "line_retire", { confirm: true, series: SERIES })).body.from, "retire");
+  assert.deepEqual(seen, [["state", SERIES, false], ["move", SERIES, 4, 2, 3, undefined], ["retire", SERIES]]);
+  assert.equal(w.calls.length, before, "a staked series never goes to the free match's routes");
+  // A series id that isn't one is refused by the schema, not handed on.
+  assert.equal((await on.callTool({ name: "line_retire", arguments: { confirm: true, series: "nope" } })).isError, true);
+  assert.equal(seen.length, 3);
+  // Without the local signer there is nothing to extend, and never on the hosted endpoint.
+  const noSigner = await connect(w, { wagers: extension });
+  assert.deepEqual((await noSigner.listTools()).tools.map((t) => t.name).sort(), ALL_TOOLS);
+  const hosted = await connect(w, { hosted: true, wagers: extension });
+  assert.deepEqual((await hosted.listTools()).tools.map((t) => t.name).sort(), HOSTED_TOOLS);
+  assert.equal(registered, 1, "the extension ran once, for the server with the signer");
 });
 
 test("registration goes through the user's policy: refused without \"register\", a dry run unless live", async () => {

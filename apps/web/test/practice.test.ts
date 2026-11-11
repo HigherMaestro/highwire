@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import type { SeriesHistory } from "highwire-core";
+import type { SeriesHistory } from "highwire-wager/chain";
 import { replaySeries } from "../lib/practice/replay.ts";
 
 // The practice pages' replay (docs/wager-mode.md 7.5), on two series recorded from devnet (W1, docs/wager-devnet.md 8):

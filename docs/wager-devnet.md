@@ -29,7 +29,7 @@ solana-keygen pubkey ~/.highwire-devnet/line-wager-program.json
 ```
 
 Give the address to the assistant. It sets `declare_id!` in `programs/line-wager/src/lib.rs` and
-`WAGER_PROGRAM_IDS.devnet` in `packages/core/src/tx/wager-codec.ts` to it, rebuilds, runs `npm run test:program` and
+`WAGER_PROGRAM_IDS.devnet` in `packages/wager/src/codec.ts` to it, rebuilds, runs `npm run test:program` and
 the full checks, and commits. (A later `cargo build-sbf` makes a new keypair in `target/deploy/` if it's missing; it
 doesn't matter, the deploy uses the moved one.)
 
@@ -45,7 +45,7 @@ From the repository, after step 1's commit:
 solana program deploy programs/line-wager/target/deploy/line_wager.so --program-id ~/.highwire-devnet/line-wager-program.json --keypair ~/.highwire-devnet/devnet-keypair.json --upgrade-authority ~/.highwire-devnet/devnet-keypair.json --url https://api.devnet.solana.com
 ```
 
-Check: `npm run wager-admin -w highwire-mcp -- status` says the program is deployed, with upgrade authority
+Check: `npm run wager-admin -w highwire-wager -- status` says the program is deployed, with upgrade authority
 `7bK1LThaA8xMKpmJt3wosCRcYvVA2R8V2PzoiAdqfu4B`.
 
 ## 3. The ticket key (maintainer)
@@ -53,7 +53,7 @@ Check: `npm run wager-admin -w highwire-mcp -- status` says the program is deplo
 The matchmaker's signing key. Its secret goes to the site's environment and nowhere else:
 
 ```bash
-npm run wager-admin -w highwire-mcp -- ticket-key --out ~/.highwire-devnet/ticket-key.hex
+npm run wager-admin -w highwire-wager -- ticket-key --out ~/.highwire-devnet/ticket-key.hex
 ```
 
 It prints the public key (step 4 uses it). In Vercel, set for Production only, as the `LINE_*` database variables are:
@@ -73,7 +73,7 @@ The desk stays off until these are set, so pushing the code first changes nothin
 A dry run first (it builds and simulates, and sends nothing), then the same with `--send`:
 
 ```bash
-npm run wager-admin -w highwire-mcp -- init --authority ~/.highwire-devnet/devnet-keypair.json --ticket-key <the public key from step 3>
+npm run wager-admin -w highwire-wager -- init --authority ~/.highwire-devnet/devnet-keypair.json --ticket-key <the public key from step 3>
 ```
 
 Defaults: key id 1, a 2.5% fee to the authority's wallet, tiers 0.01 and 0.1 SOL, at most 0.1 SOL a side, 5 SOL open in
@@ -101,9 +101,10 @@ its own devnet home, so nothing touches its mainnet policy:
   ```
 
 - **The repository's server and daemon**, since the wager tools aren't released yet. As the agent's MCP server:
-  `npx tsx --conditions=highwire-source <repo>/packages/mcp/src/cli.ts`, with `HIGHWIRE_CLUSTER=devnet`, the devnet
-  `HIGHWIRE_HOME` and the fighter's `HIGHWIRE_KEYPAIR_PATH`. The daemon, in its own terminal, with the same three:
-  `npm run dev -w highwire-mcp -- line run`.
+  `npx tsx --conditions=highwire-source <repo>/packages/wager/src/cli.ts` (highwire-wager's server: the wager tools
+  aren't in highwire-mcp, docs/boundaries.md 5.2), with `HIGHWIRE_CLUSTER=devnet`, the devnet `HIGHWIRE_HOME` and the
+  fighter's `HIGHWIRE_KEYPAIR_PATH`. The daemon, in its own terminal, with the same three:
+  `npm run dev -w highwire-wager -- run`.
 - **An agent to play it**, for a series between agents rather than the script: a folder per fighter, outside the
   repository and outside the devnet home (so the agent can't read the secrets file), holding
   - `.mcp.json`: the server above as `highwire`, its `SOLANA_RPC_URL` set to `${SOLANA_RPC_URL:-https://api.devnet.solana.com}`
@@ -119,14 +120,14 @@ its own devnet home, so nothing touches its mainnet policy:
 
 Each agent calls `line_stake` with `stake: 0.01`, a fallback and `confirm: true`, and again while it answers `waiting`.
 Once paired, A opens, B accepts, and both play with `line_state` and `line_move` (passing the series) until it ends.
-Watch it with `line_wagers`, `npm run wager-admin -w highwire-mcp -- status` (the open stake) and the series account on
+Watch it with `line_wagers`, `npm run wager-admin -w highwire-wager -- status` (the open stake) and the series account on
 an explorer.
 
 W1 is done when (docs/wager-mode.md 13): two agents play full best-of-5 series with every round revealed and verified,
 through the local signer and the daemon; one series has a daemon killed mid-match that recovers on restart; the
 referee records each outcome and rates it; and the audit logs, the chain and the referee agree on every stake and payout.
 
-`npm run wager-pair -w highwire-mcp -- --a HOME:KEY --b HOME:KEY` plays one scripted series between two fighters through
+`npm run wager-pair -w highwire-wager -- --a HOME:KEY --b HOME:KEY` plays one scripted series between two fighters through
 the same tools, and checks the result against the closing event, the referee and both balances.
 
 ## 8. W1's devnet series (2026-11-09 and 10)
@@ -168,11 +169,11 @@ there too, and restart them. Devnet's program was last deployed before that chan
 1. Stop new series, and let the live ones finish. A dry run, then the same with `--send`:
 
    ```bash
-   npm run wager-admin -w highwire-mcp -- pause --authority ~/.highwire-devnet/devnet-keypair.json
+   npm run wager-admin -w highwire-wager -- pause --authority ~/.highwire-devnet/devnet-keypair.json
    ```
 
    ```bash
-   npm run wager-admin -w highwire-mcp -- status
+   npm run wager-admin -w highwire-wager -- status
    ```
 
    Wait until `status` shows the open stake at 0 (a series takes about 20 minutes; `freeze --series <id>` refunds one
@@ -204,7 +205,7 @@ there too, and restart them. Devnet's program was last deployed before that chan
 - `STOP-WAGERS` in a player's devnet home stops new stakes; `STOP` stops everything, reveals included.
 - An open series nobody accepts: either daemon cancels it after the accept deadline, refunding A.
 - A stuck series: anyone can refund it after 24 idle hours (the daemon asks), and the authority can freeze-and-refund
-  it at any time, both stakes back in full: `npm run wager-admin -w highwire-mcp -- freeze --series <id> --authority
+  it at any time, both stakes back in full: `npm run wager-admin -w highwire-wager -- freeze --series <id> --authority
   ~/.highwire-devnet/devnet-keypair.json`, a dry run, then the same with `--send`.
 - New series to stop: `wager-admin -- pause --authority …` (then `--send`); live ones play on, and one opened but not
   accepted can only be cancelled until `unpause`.

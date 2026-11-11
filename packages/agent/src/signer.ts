@@ -5,9 +5,6 @@ import bs58 from "bs58";
 import { ed25519 } from "@noble/curves/ed25519";
 import {
   checkPostText,
-  decodeSeriesAccount,
-  describeTransaction,
-  wagerProgram,
   checkSignInMessage,
   HigherError,
   isRefreshable,
@@ -28,7 +25,8 @@ import { confirmByPolling } from "./confirm.ts";
 import { jitoClient, JitoRejected, tipFor, type JitoClient } from "./jito.ts";
 import { withFileLock } from "./lock.ts";
 import type { AgentPaths } from "./paths.ts";
-import { checkPolicy, isWagerMove, loadPolicy, plural, policyWarnings, STAKE_KINDS, type Action, type Intent, type Policy } from "./policy.ts";
+import { EXTENSION_ACTIONS, isMove, type ActionExtension } from "./extension.ts";
+import { checkPolicy, loadPolicy, plural, policyWarnings, type Action, type Intent, type Policy } from "./policy.ts";
 
 // The local signer: signs and sends what Highwire built, for the one wallet whose
 // keypair the user pointed it at, and only inside the user's policy. Dry run
@@ -59,7 +57,7 @@ export interface ExecuteRequest {
   envelope: Envelope;
   /** The standing order this fills, for the audit log. */
   order?: string;
-  /** A wager's series account, for the audit log (set by the signer from the bytes). */
+  /** What an extension's instruction acts on (a wager's series account), for the audit log: set by the signer from the bytes. */
   series?: string;
 }
 
@@ -122,26 +120,14 @@ export const GENESIS_HASHES: Record<Cluster, string> = {
 export const RENT_AND_FEE_ALLOWANCE_LAMPORTS = 30_000_000n;
 
 /**
- * The most a wager move (a reveal, a timeout, a settle...) may spend: its network fee, with the priority fee at
- * Highwire's cap. Moves are exempt from the daily limit (a refused reveal forfeits the match), not from this.
+ * The most an extension's move (a wager's reveal, timeout, settle...) may spend: its network fee, with the priority fee
+ * at Highwire's cap. Moves are exempt from the daily limit (a refused reveal forfeits the match), not from this, and
+ * the cap is the signer's: no extension sets it.
  */
 export const WAGER_MOVE_FEE_CAP_LAMPORTS = 1_000_000n;
 
-/** How long a stake that was sent counts as an open series, whether or not the chain shows it yet. */
-const RECENT_STAKE_MS = 10 * 60 * 1000;
-/** A recent stake confirmed this long ago whose series account is gone has closed (the account is visible by then). */
-const CLOSED_AFTER_MS = 30_000;
-
-/** What a wager envelope does, read from its bytes: one transaction, one wager instruction. */
-export function wagerFacts(env: Envelope, cluster: Cluster): { kind: string; series: string; stake?: bigint } {
-  if (env.transactions.length !== 1) throw new UnsafeTransactionError("a wager is exactly one transaction");
-  const d = describeTransaction(VersionedTransaction.deserialize(Buffer.from(env.transactions[0]!.base64, "base64")), cluster);
-  if (d.wagers.length !== 1) throw new UnsafeTransactionError("the transaction doesn't carry exactly one wager instruction");
-  return d.wagers[0]!;
-}
-
-/** The kill switch: a STOP file, or anything else at that path, even a dangling link. */
-function stopped(path: string): boolean {
+/** Whether a kill-switch file is there (a link to nothing counts: it's there). */
+export function stopped(path: string): boolean {
   try {
     lstatSync(path);
     return true;
@@ -155,7 +141,9 @@ const lamportsOf = (sol: number) => BigInt(Math.round(sol * 1e9));
 /** How an action's sends go out: Jito's route covers trades and claims (the sends worth front-running); launches and transfers go the ordinary way. */
 export const routeOf = (policy: Policy, action: Action): "jito" | "rpc" => (policy.send?.route === "jito" && (action === "trade" || action === "claim") ? "jito" : "rpc");
 
-const refused = (rule: string, reason: string) => new HigherError(`The policy refused this: ${reason}.`, { code: "policy_refused", body: { rule } });
+/** A refusal by one of the policy's rules, as every tool reports it. */
+export const policyRefused = (rule: string, reason: string) => new HigherError(`The policy refused this: ${reason}.`, { code: "policy_refused", body: { rule } });
+const refused = policyRefused;
 
 export class LocalSigner {
   readonly audit: AuditLog;
@@ -169,8 +157,18 @@ export class LocalSigner {
     readonly keypairWarning?: string,
     now: () => Date = () => new Date(),
     private readonly jito: JitoClient = jitoClient(),
+    /** Extensions for the actions this signer can't check by itself (extension.ts), passed in code by their package. */
+    private readonly extensions: readonly ActionExtension[] = [],
   ) {
     this.audit = new AuditLog(paths.audit, now);
+    for (const [n, e] of extensions.entries()) {
+      if (!EXTENSION_ACTIONS.includes(e.action)) throw new Error(`"${e.action}" is checked by the signer itself: it takes no extension`);
+      if (extensions.slice(0, n).some((o) => o.action === e.action)) throw new Error(`two extensions for "${e.action}"`);
+    }
+  }
+
+  private extensionFor(action: Action): ActionExtension | undefined {
+    return this.extensions.find((e) => e.action === action);
   }
 
   get wallet(): string {
@@ -242,13 +240,14 @@ export class LocalSigner {
 
   /** Checks the built envelope against the policy, then signs and sends it, or dry-runs it. */
   execute(connection: Connection, req: ExecuteRequest): Promise<ExecuteResult> {
-    // A wager move spends only its capped fee and is exempt from the daily limit, so it needn't wait for the lock: a
-    // reveal queued behind a slow trade could miss its window and forfeit the match.
-    if (req.intent.action === "wager") {
+    // An extension's move spends only its capped fee and is exempt from the daily limit, so it needn't wait for the
+    // lock: a reveal queued behind a slow trade could miss its window and forfeit the match.
+    const ext = this.extensionFor(req.intent.action);
+    if (ext) {
       try {
-        if (!STAKE_KINDS.includes(wagerFacts(req.envelope, req.intent.cluster).kind)) return this.executeNow(connection, req);
+        if (!ext.stakes(ext.facts(req.envelope, req.intent.cluster).kind)) return this.executeNow(connection, req);
       } catch {
-        /* not a readable wager: executeNow refuses it, in turn */
+        /* not readable as this action: executeNow refuses it, in turn */
       }
     }
     // One at a time in this process, and across processes through the lock file.
@@ -290,89 +289,37 @@ export class LocalSigner {
     this.audit.append({ tool, action: order.kind === "fee_claim" ? "claim" : "trade", cluster: order.cluster, wallet: this.wallet, outcome: "order", sol: "0", lamports: "0", ...(order.mint ? { mint: order.mint } : {}), order: order.id, reason });
   }
 
-  /**
-   * The series this wallet has money in: every stake its audit log shows it sent in the last 30 days whose series
-   * account is still on-chain (one getMultipleAccounts, never getProgramAccounts, which public RPCs throttle), plus any
-   * sent in the last ten minutes, which the chain may not show yet.
-   */
-  private async openSeries(connection: Connection, cluster: Cluster): Promise<number> {
-    const program = wagerProgram(cluster);
-    if (!program) throw refused("wagers", `wagering isn't deployed on ${cluster}`);
-    // Open: a series staked in whose account is still the program's, and any recent stake unless it has provably closed:
-    // its latest send confirmed a while ago, and its account gone at a slot no earlier than that confirmation's (an RPC
-    // that lags, or a load balancer's other node, can't make an open series look closed).
-    const recent = this.audit.recentStakes(cluster, RECENT_STAKE_MS);
-    const staked = [...new Set(this.audit.stakedSeriesSince(cluster, 30 * 86_400_000))];
-    const open = new Set<string>();
-    const now = Date.now();
-    for (let i = 0; i < staked.length; i += 100) {
-      const chunk = staked.slice(i, i + 100);
-      const infos = await connection.getMultipleAccountsInfo(chunk.map((a) => new PublicKey(a)), "confirmed");
-      chunk.forEach((a, j) => {
-        if (infos[j]?.owner.equals(program) || recent.has(a)) open.add(a);
-      });
-    }
-    for (const [a, r] of recent) {
-      if (!open.has(a)) continue;
-      const c = r.confirmed;
-      if (!c || c.at < r.sent || now - c.at <= CLOSED_AFTER_MS) continue;
-      if (await this.closedSince(connection, program, a, c.signature)) open.delete(a);
-    }
-    return open.size;
-  }
-
-  /** Whether a series account is gone as of a slot no earlier than the stake that created or filled it: closed. */
-  private async closedSince(connection: Connection, program: PublicKey, series: string, stakeSignature: string): Promise<boolean> {
-    try {
-      const slot = (await connection.getSignatureStatuses([stakeSignature], { searchTransactionHistory: true })).value[0]?.slot;
-      if (!slot) return false;
-      const info = await connection.getAccountInfo(new PublicKey(series), { commitment: "confirmed", minContextSlot: slot });
-      return !info || !info.owner.equals(program);
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * A wager's intent, from the transaction's bytes and the chain rather than the caller: its instruction, the stake (an
-   * open's from its data, an accept's from the series account), and for a stake, the wallet's open series counted now,
-   * under the lock.
-   */
-  private async wagerIntent(connection: Connection, req: ExecuteRequest): Promise<Intent> {
-    const { intent } = req;
-    const f = wagerFacts(req.envelope, intent.cluster);
-    if (intent.wager?.kind && intent.wager.kind !== f.kind) throw new UnsafeTransactionError(`the transaction is a wager ${f.kind}, not the ${intent.wager.kind} it says`);
-    if (!STAKE_KINDS.includes(f.kind)) {
-      if (intent.solOut !== 0n) throw new UnsafeTransactionError("a wager move stakes nothing");
-      return { ...intent, wager: { kind: f.kind } };
-    }
-    let stake = f.stake;
-    if (f.kind === "accept") {
-      const acc = await connection.getAccountInfo(new PublicKey(f.series), "confirmed");
-      if (!acc) throw refused("wagers", "the series to accept isn't on-chain");
-      stake = decodeSeriesAccount(Buffer.from(acc.data)).header.stake;
-    }
-    const solOut = stake !== undefined && stake > intent.solOut ? stake : intent.solOut;
-    return { ...intent, solOut, wager: { kind: f.kind, stake, openSeries: await this.openSeries(connection, intent.cluster) } };
-  }
-
   private async executeNow(connection: Connection, req: ExecuteRequest): Promise<ExecuteResult> {
     let { intent } = req;
+    const ext = this.extensionFor(intent.action);
     const env = req.envelope;
     let policy: Policy;
     try {
       policy = this.checkStatic(intent.action, intent.cluster);
-      if (intent.action === "wager") {
-        intent = await this.wagerIntent(connection, req);
-        req = { ...req, intent, series: wagerFacts(env, intent.cluster).series };
+      if (EXTENSION_ACTIONS.includes(intent.action) && !ext) {
+        throw refused("actions", `this signer can't check ${plural(intent.action)}: they need the package that builds them`);
+      }
+      if (ext) {
+        // The intent comes from the bytes and the chain, through the extension, never from the caller. What comes back
+        // is still held to the signer's own terms: the same action and cluster, never less than the caller declared,
+        // and nothing at all for a move.
+        const facts = ext.facts(env, intent.cluster);
+        const resolved = await ext.intent({ connection, req, facts, audit: this.audit });
+        if (resolved.action !== intent.action || resolved.cluster !== intent.cluster) throw new UnsafeTransactionError("an extension may not change the action or the cluster");
+        if (resolved.solOut < intent.solOut) throw new UnsafeTransactionError("an extension may not lower what the transaction spends");
+        if (!ext.stakes(facts.kind) && resolved.solOut !== 0n) throw new UnsafeTransactionError(`a ${intent.action} move stakes nothing`);
+        if (resolved.wager?.kind !== facts.kind) throw new UnsafeTransactionError("an extension's intent must name the instruction in the bytes");
+        intent = resolved;
+        req = { ...req, intent, series: facts.subject };
       }
       if (env.wallet !== this.wallet || env.cluster !== intent.cluster) throw new UnsafeTransactionError("the transactions aren't for this signer's wallet and cluster");
       const failed = env.transactions.find((t) => !t.simulation.ok && !t.simulation.skipped);
       if (failed) throw new HigherError(`Transaction ${failed.index + 1} (${failed.label}) failed simulation: ${failed.simulation.error}`, { code: "simulation_failed" });
-      if (intent.action === "wager" && (intent.wager?.kind === "open" || intent.wager?.kind === "accept") && stopped(this.paths.stopWagers)) {
-        throw new HigherError(`No new wagers: ${this.paths.stopWagers} exists. Open series still play out.`, { code: "signer_stopped" });
+      if (ext && intent.wager && ext.stakes(intent.wager.kind)) {
+        const why = ext.stopped?.(this.paths);
+        if (why) throw new HigherError(why, { code: "signer_stopped" });
       }
-      const refusal = checkPolicy(policy, intent, this.audit.spentSince(intent.cluster));
+      const refusal = checkPolicy(policy, intent, this.audit.spentSince(intent.cluster), ext);
       if (refusal) throw refused(refusal.rule, refusal.reason);
       const route = routeOf(policy, intent.action);
       const cap = lamportsOf(policy.send?.max_tip_sol ?? 0);
@@ -440,9 +387,9 @@ export class LocalSigner {
         // What the simulation shows leaving the wallet, and never less than the intended spend on the first transaction.
         const floor = sent.length === 0 ? intent.solOut : 0n;
         const cost = simulated > floor ? simulated : floor;
-        const move = isWagerMove(intent);
+        const move = isMove(intent, ext);
         if (move && cost > WAGER_MOVE_FEE_CAP_LAMPORTS) {
-          throw refused("wagers", `a wager move would spend ${lamportsNumber(cost)} SOL, over its ${lamportsNumber(WAGER_MOVE_FEE_CAP_LAMPORTS)} SOL fee cap`);
+          throw refused(plural(intent.action), `a ${intent.action} move would spend ${lamportsNumber(cost)} SOL, over its ${lamportsNumber(WAGER_MOVE_FEE_CAP_LAMPORTS)} SOL fee cap`);
         }
         if (charged + cost > perTx) {
           throw refused("max_sol_per_tx", `it would spend ${lamportsNumber(charged + cost)} SOL, rent and fees included, past the policy's ${policy.max_sol_per_tx} SOL per transaction (plus ${lamportsNumber(RENT_AND_FEE_ALLOWANCE_LAMPORTS)} SOL for rent and fees)`);

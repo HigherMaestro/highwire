@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
+import { EXTENSION_ACTIONS, isMove, type ActionExtension } from "./extension.ts";
 import { CLUSTERS, HigherError, MAX_SLIPPAGE_BPS, solToLamports, type Cluster } from "highwire-core";
 
 // The user's policy: the only thing that lets the local signer sign. It's a file
@@ -185,17 +186,12 @@ export interface Refusal {
   reason: string;
 }
 
-/** Opening and accepting stake; every other wager instruction is a move that spends only its network fee. */
-export const STAKE_KINDS: readonly string[] = ["open", "accept"];
-
-/**
- * A wager move (a reveal, a timeout, a settle...): exempt from the daily limit, because an open series must always be
- * able to reveal and settle (a refused reveal forfeits the match, and so the stake). The signer bounds its fee instead.
- */
-export const isWagerMove = (intent: Intent) => intent.action === "wager" && intent.solOut === 0n && !!intent.wager && !STAKE_KINDS.includes(intent.wager.kind);
-
 /** The first rule the intent breaks, or null when the policy allows it. `spentToday` is the last 24 hours, in lamports. */
-export function checkPolicy(policy: Policy, intent: Intent, spentToday: bigint): Refusal | null {
+/**
+ * `ext` is the signer's extension for the intent's action, when it has one (extension.ts): an action that needs one is
+ * refused without it.
+ */
+export function checkPolicy(policy: Policy, intent: Intent, spentToday: bigint, ext?: ActionExtension): Refusal | null {
   const no = (rule: string, reason: string): Refusal => ({ rule, reason });
   if (intent.cluster !== policy.cluster) return no("cluster", `the policy is for ${policy.cluster}, and this server builds on ${intent.cluster}`);
   if (!policy.actions.includes(intent.action)) return no("actions", `the policy doesn't allow ${plural(intent.action)}`);
@@ -206,7 +202,7 @@ export function checkPolicy(policy: Policy, intent: Intent, spentToday: bigint):
   const perTx = solToLamports(policy.max_sol_per_tx);
   if (intent.solOut > perTx) return no("max_sol_per_tx", `it spends more than the policy's ${policy.max_sol_per_tx} SOL per transaction`);
   const perDay = solToLamports(policy.max_sol_per_day);
-  if (!isWagerMove(intent) && spentToday + intent.solOut > perDay) return no("max_sol_per_day", `it would take the last 24 hours past the policy's ${policy.max_sol_per_day} SOL`);
+  if (!isMove(intent, ext) && spentToday + intent.solOut > perDay) return no("max_sol_per_day", `it would take the last 24 hours past the policy's ${policy.max_sol_per_day} SOL`);
   if (intent.mint && (intent.action === "trade" || intent.action === "transfer")) {
     if (policy.coins?.deny?.includes(intent.mint)) return no("coins.deny", `the policy denies coin ${intent.mint}`);
     if (policy.coins?.allow && !policy.coins.allow.includes(intent.mint)) return no("coins.allow", `coin ${intent.mint} isn't on the policy's allow list`);
@@ -215,20 +211,10 @@ export function checkPolicy(policy: Policy, intent: Intent, spentToday: bigint):
     if (!intent.creator) return no("creators.allow", "the coin's creator couldn't be found, and the policy only allows some creators");
     if (!policy.creators.allow.includes(intent.creator)) return no("creators.allow", `the coin's creator ${intent.creator} isn't on the policy's allow list`);
   }
-  if (intent.action === "wager") {
-    const w = policy.wagers;
-    if (!w) return no("wagers", "the policy has no wagers section, so it doesn't allow wagering");
-    const kind = intent.wager?.kind;
-    if (!kind) return no("wagers", "the wager's instruction isn't known");
-    if (kind === "open" || kind === "accept") {
-      const stake = intent.wager?.stake;
-      if (stake === undefined || !w.tiers.some((t) => solToLamports(t) === stake)) return no("wagers.tiers", `the stake isn't one of the policy's tiers (${w.tiers.join(", ")} SOL)`);
-      if (stake > solToLamports(w.max_stake_sol)) return no("wagers.max_stake_sol", `the stake is over the policy's ${w.max_stake_sol} SOL`);
-      const open = intent.wager?.openSeries;
-      if (open === undefined) return no("wagers.max_open", "the wallet's open series couldn't be counted on-chain");
-      if (open >= w.max_open) return no("wagers.max_open", `${open} series already open, the policy's most`);
-    }
-    if (kind === "retire" && !w.allow_retire) return no("wagers.allow_retire", "the policy doesn't allow retiring from a staked series");
+  if (EXTENSION_ACTIONS.includes(intent.action)) {
+    if (!ext || ext.action !== intent.action) return no("actions", `this signer can't check ${plural(intent.action)}: they need the package that builds them`);
+    const refusal = ext.check(policy, intent);
+    if (refusal) return refusal;
   }
   if (intent.action === "transfer" && (!intent.recipient || !policy.transfer_allowlist.includes(intent.recipient))) {
     return no("transfer_allowlist", `${intent.recipient ?? "the recipient"} isn't on the policy's transfer allowlist`);
