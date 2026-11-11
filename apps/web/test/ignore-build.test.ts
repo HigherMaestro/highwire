@@ -23,6 +23,7 @@ test("a push the site can't see is skipped: the program, research notes, a packa
   assert.equal(decide("docs/research/new-games.md"), SKIP);
   assert.equal(decide("packages/core/test/arena.test.ts", "packages/wager/test/fixtures/x.json"), SKIP);
   assert.equal(decide("packages/core/scripts/games-sim.ts", "packages/wager/scripts/wager-admin.ts"), SKIP);
+  assert.equal(decide(".github/workflows/ci.yml", ".github/scripts/freeze.mjs"), SKIP);
 });
 
 test("anything the site reads or might read builds, alone or beside skippable files", () => {
@@ -49,6 +50,7 @@ test("anything the site reads or might read builds, alone or beside skippable fi
     "packages/scripts/x.ts", // not inside a package
     "apps/web/public/thing.rs", // a file type is never skipped by itself
     "programs", // not under the folder
+    "apps/web/.github/x.yml", // not the repository's own
   ]) {
     assert.equal(decide(file), BUILD, file);
     assert.equal(decide("programs/line-wager/src/lib.rs", file, "docs/research/new-games.md"), BUILD, `${file}, mixed`);

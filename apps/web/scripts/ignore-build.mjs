@@ -12,10 +12,11 @@
 import { execFileSync } from "node:child_process";
 
 /**
- * Paths the site's build never reads: the wager program, research notes, and every package's tests and scripts. Whole
- * folders only, never a file type: a `.rs` file under apps/web/public would be something the site serves.
+ * Paths the site's build never reads: the wager program, research notes, every package's tests and scripts, and CI's
+ * own files. Whole folders only, never a file type: a `.rs` file under apps/web/public would be something the site
+ * serves.
  */
-export const SKIPPABLE = [/^programs\//, /^docs\/research\//, /^packages\/[^/]+\/test\//, /^packages\/[^/]+\/scripts\//];
+export const SKIPPABLE = [/^programs\//, /^docs\/research\//, /^packages\/[^/]+\/test\//, /^packages\/[^/]+\/scripts\//, /^\.github\//];
 
 /** Whether a build may be skipped for these changed paths (from the repository's root): all of them skippable, and at least one. */
 export function maySkip(files) {
