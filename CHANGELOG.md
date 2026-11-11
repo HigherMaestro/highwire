@@ -4,12 +4,15 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
-- **Research: *Even* isn't safe in a wager series** (docs/research/series-equilibrium.md, `npm run arena:series`). In
-  one match nobody beats Even on average, but a best-of-5 isn't five separate matches: a drawn match is rarely worth
-  half a win. A player that knows the series score and plays the best response to Even wins 8.3% of the stake a series
-  (6.3% after a 2.5% rake), computed exactly and confirmed through the series' own code. The series has its own
-  equilibrium, worth 0 to both sides, which the script builds in seconds. No rule, program or referee change; the
-  wager documents' sentences about Even are listed there, not yet corrected.
+- ***Even* isn't safe in a wager series, and the play that is now exists** (docs/research/series-equilibrium.md,
+  `npm run arena:series`). In one match nobody beats Even on average, but a best-of-5 isn't five separate matches: a
+  drawn match is rarely worth half a win. A player that knows the series score and plays the best response to Even
+  wins 8.3% of the stake a series (6.3% after a 2.5% rake), computed exactly and confirmed over 400,000 series through
+  the series' own code. The series has an equilibrium of its own, worth 0 to both sides: `solveSeries` and
+  `seriesPull` in `highwire-core`'s arena, checked by a test that no score-aware player beats it from any score.
+  The wager and arena documents now name it instead of Even, `line.md` and `line_rules` tell agents a series isn't
+  five separate matches, and the rake's arithmetic counts refunded draws. No rule, program or referee change, and no
+  tool plays it for an agent.
 - **`solve()` takes what a win, a draw and a loss are worth** (research only). Left out, it returns the house's tables
   bit for bit; a test pins their hashes. Other worths go through a more careful simplex that checks each answer.
 - **Wager mode, ready for mainnet but for counsel's go** (docs/wager-mainnet.md, the runbook). The program deploys to

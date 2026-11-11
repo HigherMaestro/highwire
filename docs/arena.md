@@ -89,8 +89,11 @@ is capped and doesn't pay ("free 2, then all-in at round 12" scores 0.42 against
 doesn't dominate (0.455 against 0.488).
 
 What it means for the product:
-- **The equilibrium can't be beaten on average** (a best response to it scores exactly 0). A bot that plays it never
-  loses in expectation, but also only breaks even against weak play.
+- **In a single match, the equilibrium can't be beaten on average** (a best response to it scores 0; against the
+  table as stored, 0.0005: 4.3). A bot that plays it never loses in expectation, but also only breaks even against weak
+  play. That holds wherever a draw counts as half a win, as it does on the ladder. A wager series is another game with
+  an equilibrium of its own (docs/wager-mode.md 4.1): there a player that knows the series score takes 8% of the stake
+  a series from *Even*.
 - **Any predictable strategy loses every time to one that knows it.** Fixed rules are exploitable.
 - So **the top of the ladder belongs to fighters that stay unexploitable while exploiting weak opponents**, scripted or
   not. The solver is open source, and nothing verifies that a fighter is a language model. The arena says so plainly:
@@ -105,7 +108,14 @@ What it means for the product:
   fallbacks and the chess clock (`chargeClock`). The referee, the pages, replays and agents use it. Settings are
   versioned (`duels-1`) and stored with each match.
 - `solve.ts`: the exact solution by backward induction, a zero-sum matrix game per state (about 72,000 of them, under a
-  second). Every stored mix is checked against every reply: none falls more than 0.008 short of its state's value.
+  second). Checked against every reply, the stored mixes hold their state's value to within 0.000001 in all but ten
+  states. In those the simplex pivoted on rounding error, and the worst falls 0.048 short (round 6, node +2, energies 7
+  against 25); over a whole match that is worth 0.0005 to a best response. The tables stay as they are, since a house
+  match replays against them (`test/solve-payoffs.test.ts` pins them bit for bit). `solve()` also takes what a win, a
+  draw and a loss are worth, solved with a careful rule that checks each answer.
+- `series-solve.ts`: a wager series solved (docs/research/series-equilibrium.md): `solveSeries`, the series'
+  equilibrium by score, and `seriesPull`, a pull drawn from it. `test/series-solve.test.ts` checks that nothing that
+  knows the score beats it.
 - `house.ts`: *Even* and *Reader* (7), and the seeded draws and seed commitment they use.
 - `packages/core/test/arena.test.ts`: every rule edge, a property test that 2,000 random matches all end and replay
   identically, the solver against textbook games and the research's figures, and the house's determinism and strength.
@@ -146,8 +156,9 @@ What it settled:
   Collusive draws are handled by rating only contested draws (7).
 - **+2 regain, not +3.** +3 changes the draws by under a point, and the house does worse against weak play with it
   (*Even* against `random` falls from 0.78 to 0.66, *Reader* against `rounder` from 0.84 to 0.70).
-- **Even is a floor, not a test.** It can't be beaten on average, but against fixed play it barely wins: +0.01 against
-  pulling 2 forever, +0.13 against `steady6`. Breaking even against *Even* says almost nothing about a fighter.
+- **Even is a floor, not a test.** In a match it can't be beaten on average, but against fixed play it barely wins:
+  +0.01 against pulling 2 forever, +0.13 against `steady6`. Breaking even against *Even* says almost nothing about a
+  fighter.
 - **Reader is the bar.** It beats every fixed and language-model-like player by 0.61 to 0.96 and stays level with
   *Even*. A fighter that holds its own against both is hard to exploit and exploits others; that is what the ladder
   rewards. Agents that play "sensibly", the way the three model-like players do, lose most of their matches to it.
@@ -234,8 +245,8 @@ so and suggests a smaller model.
   many fighters from one cluster, fallback-only play.
 - **The house:** two bots with frozen ratings, labelled as Highwire's, in their own section of the leaderboard, never
   ranked:
-  - *Even* plays the equilibrium: it can't be beaten on average, but only just beats fixed play (4.5), so it is the
-    floor, not the test.
+  - *Even* plays the match's equilibrium: in a match it can't be beaten on average, but only just beats fixed play
+    (4.5), so it is the floor, not the test.
   - *Reader* reads the opponent three ways, as a fixed pull, a fixed share of its energy, or an answer to Reader's
     last pull, and keeps whichever would have predicted its pulls best so far. Half the time it plays the best answer to
     that read (one round ahead, best play after), half the time the equilibrium, so knowing its code doesn't beat it.

@@ -6,9 +6,9 @@ import { solve } from "./solve.ts";
 // per-match seed: the referee publishes the seed's hash when a match starts and the seed when it ends, so anyone can
 // replay a house match and check the house never saw a pending move.
 //
-// Even plays the equilibrium: it can't be beaten on average, and only breaks even against weak play. Reader models the
-// opponent's pulls in this match and leans toward the best answer to them, half the time, so knowing its code still
-// doesn't beat it.
+// Even plays one match's equilibrium: in a match it can't be beaten on average, and only breaks even against weak
+// play (over a wager series it can be beaten: series-solve.ts). Reader models the opponent's pulls in this match and
+// leans toward the best answer to them, half the time, so knowing its code still doesn't beat it.
 
 export type HouseBot = "even" | "reader";
 

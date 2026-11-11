@@ -1,7 +1,10 @@
 # Research: Even in a best-of-5, against a player that knows the score
 
-Research only (2026-11-10). Nothing here changes the program, the referee or a shipped rule. It measures one claim that
-`docs/wager-mode.md` 4.1 and `docs/arena.md` 4.2 rest on: that nobody beats *Even* on average.
+Research (2026-11-10), and what was built from it. Nothing here changes the program, the referee or a shipped rule. It
+measures one claim that `docs/wager-mode.md` 4.1 and `docs/arena.md` 4.2 rested on: that nobody beats *Even* on average.
+
+The fix it recommends (5, A) is made: the series' equilibrium is `solveSeries` in `highwire-core`'s arena, and the two
+documents are corrected.
 
 Everything below comes from one command: about 15 seconds of computing, then half an hour of simulation.
 
@@ -26,7 +29,7 @@ with intervals three times as wide; `--no-sim` skips the simulation.)
   and the best response to that play scores +0.000000. It takes 11 match tables, and the script's whole computation 12
   seconds. It differs from Even only when the score isn't level, mostly when a draw would settle the series (3).
 - **So the document's conclusion survives and its sentence doesn't.** A free, open strategy that cancels all skill
-  exists. It isn't Even. An owner who adopts Even for a wager, as 4.1 says they safely can, loses 8% of the stake a
+  exists. It isn't Even. An owner who adopts Even for a wager, as 4.1 said they safely could, loses 8% of the stake a
   series to anyone who runs this script (5).
 - **The series equilibrium barely beats Even itself** (+0.0021 a series). The 8% belongs to a player built against
   Even specifically, not to one that just "solves each match for the score". The earlier prototype's 8% to 10% matches
@@ -48,7 +51,8 @@ those three values, solved from the last match back. Three players were measured
   not a game. One pass over a match's 72,075 states for each of the 25 scores a series can pass through.
 - **The series equilibrium.** Both sides know the score. Each score's match is a zero-sum game with the next scores'
   values as its worths. `solve()` now takes those worths as an optional second argument; left out, it returns the
-  tables it always did, bit for bit (a test pins their hashes).
+  tables it always did, bit for bit (a test pins their hashes). The series loop is `solveSeries` in
+  `packages/core/src/arena/series-solve.ts`, and the script measures that function, not a copy.
 
 "Computed" means dynamic programming in double precision over every state, with nothing sampled. The equilibrium's
 matches come from a simplex that checks each of its answers to 1e-6 (6), and the whole equilibrium is then checked from
@@ -169,7 +173,9 @@ The series equilibrium's gain over Even is too small for this many series to tel
 
 ## 5. What it means for wager mode
 
-### Statements that are wrong as written
+### Statements that were wrong as written
+
+All of them are corrected in the change that built A below. They are quoted here as they stood.
 
 `docs/wager-mode.md`:
 
@@ -178,7 +184,7 @@ The series equilibrium's gain over Even is too small for this many series to tel
   adopt it for nothing, and then no one can beat them on average"), **5.2** ("any owner can neutralise all skill for
   free … Series reduce variance; they don't change this") and **17** (the same sentence). Wrong for Even: in a
   best-of-5 a best response to it scores +0.0832. Right once "the equilibrium" means the series' own, which Even
-  doesn't play and nothing ships.
+  doesn't play.
 - **4.1**, "a rational owner either plays the equilibrium (and the match is a fair coin)" and "a fair coin stays a fair
   coin". An owner playing Even is not a fair coin across a series to an opponent that knows the score: it wins 35.3% of
   series, draws 21.1% and loses 43.6%.
@@ -205,20 +211,24 @@ The series equilibrium's gain over Even is too small for this many series to tel
 None of this helps a skill argument, and the plan in `wager-mode.md` 5 doesn't change. A free strategy that cancels
 all skill does exist; the series equilibrium is more work to describe than "play Even", and that is all.
 
-### What a fix would cost
+### What a fix costs
 
-Nothing below is built.
+A is built. B, C and D are not.
 
-**A. Publish a mix for each series score.** Make the document's sentence true by shipping the strategy it describes.
+**A. Publish a mix for each series score (built).** Make the document's sentence true by shipping the strategy it
+describes.
 
-- What exists after this change: `solve(rules, worths)`, and a script that builds the series equilibrium from it in 12
-  seconds: 11 tables (one for each worth a draw takes; the 25 scores share them), about 55 MB held as flat arrays.
-- What's left: move the series loop from the script into `packages/core/src/arena/` behind one function (score in,
-  mix out), with the outside check as a test; say in `line.md` and the wager tools' guide that a series is not five
-  separate matches; correct the sentences above. No change to the rules, the program, the referee, the fixtures or the
-  audits. Even stays as it is for free play.
-- What remains after: nothing measurable. The best response to it is 0 to six places.
-- A day or two of work. This is the one I'd do.
+- `solveSeries(rules)` in `packages/core/src/arena/series-solve.ts`: score in, mix out, with the series' value and a
+  draw's worth at every score. 11 tables (one for each worth a draw takes; the 25 scores share them), about ten seconds
+  and 60 MB, once. `seriesPull(series, player, u)` draws a pull from it for the round in play.
+- The outside check is a test (`packages/core/test/series-solve.test.ts`): the best any score-aware player does
+  against it is 0 from every one of the 25 scores, and the same player takes 0.0832 from Even.
+- `line.md` and `line_rules` say a series is not five separate matches; the sentences above are corrected, with a
+  note in `docs/wager-mode.md` 17.5.
+- No change to the rules, the program, the referee, the fixtures or the audits. Even stays as it is for free play.
+- What it leaves: no tool plays it for an agent. An owner wires `seriesPull` into their own loop, with a secret random
+  number for every pull. A tool would have to draw that number where nothing else can read it, and would make every
+  wager between agents that use it a coin flip by construction; whether to offer that is a product decision.
 
 **B. A tie-break, so a match is never drawn.** If a match has only two results, playing to win it is right at every
 score, whatever the win is worth, and the match's equilibrium is the series'. Every sentence in 4.1 becomes true as
@@ -253,10 +263,10 @@ the gain comes back near it, falling by half or more with every two matches the 
 cuts drawn series from 14% to almost none, which the format may want anyway. Worth it only if the format is being
 reopened; A is still needed underneath, since a capped series still has its own equilibrium.
 
-**D. Leave it, and correct the documents.** The wording above is an hour. What it leaves: the honest sentence is "an
-owner who plays Even in a wager loses 8% of the stake a series to an opponent who knows it, and the play that can't be
-beaten takes a 12-second computation nobody has packaged". That is A with the last step missing. Since the document's
-whole argument is that the unbeatable strategy is free, it should be.
+**D. Leave it, and correct the documents.** The wording alone was an hour. It would have left the honest sentence as
+"an owner who plays Even in a wager loses 8% of the stake a series to an opponent who knows it, and the play that
+can't be beaten takes a computation nobody has packaged". That is A with the last step missing. Since the document's
+whole argument is that the unbeatable strategy is free, it should be, and now is.
 
 ## 6. Two things found on the way
 
@@ -283,3 +293,4 @@ Neither is fixed here; both belong to follow-ups.
   plays five matches.
 - `npm run arena:series -- --fee 0.05`: another rake.
 - `packages/core/test/solve-payoffs.test.ts` pins the default tables' hashes and checks the solver on other worths.
+- `packages/core/test/series-solve.test.ts` checks the series equilibrium from the outside, in about 12 seconds.
