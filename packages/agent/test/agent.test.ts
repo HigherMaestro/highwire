@@ -181,6 +181,21 @@ test("live, it signs with the wallet's key only, sends, confirms, and logs the s
   assert.equal(signer.audit.entries().at(-1)?.outcome, "refused");
 });
 
+test("a transaction that also claims says so in every audit line", async () => {
+  const { signer } = signerWith(policy({ actions: ["trade", "transfer", "claim"] }));
+  const { connection } = fakeConnection();
+  const intent: Intent = { ...send(0.05), also: ["claim"] };
+  await signer.execute(connection, { tool: "order fee_claim", intent, envelope: envelopeFor(signer.publicKey, solToLamports(0.05)) });
+  const [e] = signer.audit.entries();
+  assert.equal(e?.outcome, "dry_run");
+  assert.equal(e?.action, "transfer");
+  assert.deepEqual(e?.also, ["claim"]);
+
+  // One that takes a single action carries no `also`.
+  await signer.execute(connection, { tool: "execute_transfer", intent: send(0.05), envelope: envelopeFor(signer.publicKey, solToLamports(0.05)) });
+  assert.equal("also" in signer.audit.entries().at(-1)!, false);
+});
+
 test("two executes at once can't both fit under the daily limit", async () => {
   const { signer } = signerWith(policy({ live: true, max_sol_per_tx: 0.3, max_sol_per_day: 0.5 }));
   const { connection, sent } = fakeConnection();

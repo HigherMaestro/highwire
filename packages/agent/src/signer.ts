@@ -265,6 +265,7 @@ export class LocalSigner {
     this.audit.append({
       tool: req.tool,
       action: req.intent.action,
+      ...(req.intent.also?.length ? { also: req.intent.also } : {}),
       cluster: req.intent.cluster,
       wallet: this.wallet,
       outcome,
