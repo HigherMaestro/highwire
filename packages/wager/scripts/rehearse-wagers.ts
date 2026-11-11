@@ -16,11 +16,14 @@
 //
 //   (cd programs/line-wager && cargo build-sbf)    # once, for target/deploy/line_wager.so
 //   npm run rehearse-wagers -w highwire-wager [-- --quick]    # --quick skips the missed commit (2 minutes of waiting)
+//   npm run rehearse-wagers -w highwire-wager -- --draw       # both players pull 0, so series 1 is drawn and refunded
+//
+// The players pull at random, so series 1 is sometimes drawn anyway: its checks expect either outcome.
 //
 // About 8 minutes in all (3 with --quick).
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,6 +44,7 @@ import { registerWagerTools } from "../src/tools.ts";
 import { wagerSigner } from "../src/signing.ts";
 
 const QUICK = process.argv.includes("--quick");
+const DRAW = process.argv.includes("--draw");
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const SO = join(ROOT, "programs/line-wager/target/deploy/line_wager.so");
 const PORT = 18_899;
@@ -61,6 +65,15 @@ const check = (what: string, ok: boolean, detail = "") => {
 
 if (!existsSync(SO)) {
   console.error(`rehearse-wagers: build the program first: (cd programs/line-wager && cargo build-sbf)`);
+  process.exit(2);
+}
+// A build older than the program's source rehearses the wrong program: every move it no longer understands is refused,
+// the fallbacks play every round, and the series still closes, so the checks below can pass on nothing.
+const PROGRAM_DIR = join(ROOT, "programs/line-wager");
+const sources = [...readdirSync(join(PROGRAM_DIR, "src")).map((f) => join(PROGRAM_DIR, "src", f)), join(PROGRAM_DIR, "Cargo.toml"), join(PROGRAM_DIR, "Cargo.lock")];
+const stale = sources.filter((f) => statSync(f).mtimeMs > statSync(SO).mtimeMs);
+if (stale.length) {
+  console.error(`rehearse-wagers: ${SO} is older than ${stale.map((f) => f.slice(ROOT.length + 1)).join(", ")}; rebuild it: (cd programs/line-wager && cargo build-sbf)`);
   process.exit(2);
 }
 
@@ -266,6 +279,7 @@ async function stakeIn(p: Agent, accept = true): Promise<string> {
 }
 
 /** Plays until the series ends; `skip` names one (match, round) this side won't commit, so its fallback plays. */
+const moves: Record<string, { sent: number; refused: number }> = {};
 async function play(p: Agent, series: string, skip?: { match: number; round: number }): Promise<any> {
   for (;;) {
     const s = await p.call("line_state", { series, wait: true });
@@ -283,9 +297,13 @@ async function play(p: Agent, series: string, skip?: { match: number; round: num
       await sleep(5_000);
       continue;
     }
-    const pull = Math.floor(Math.random() * (Math.min(6, s.energy.you) + 1));
+    const pull = DRAW ? 0 : Math.floor(Math.random() * (Math.min(6, s.energy.you) + 1));
     const m = await p.call("line_move", { series, series_match: s.match, round: s.round, pull });
-    if (m.error) log(p.name, `line_move: ${m.error.error}`);
+    const count = (moves[p.name] ??= { sent: 0, refused: 0 });
+    if (m.error) {
+      count.refused++;
+      log(p.name, `line_move: ${m.error.error}`);
+    } else count.sent++;
   }
 }
 
@@ -306,20 +324,31 @@ try {
   check("both sides staked into one series", s1a === s1b, s1a.slice(0, 8));
   const [ea, eb] = await Promise.all([play(a, s1a, QUICK ? undefined : { match: 1, round: 2 }), play(b, s1a)]);
   const o1 = await waitClosed(s1a, 60_000);
+  check("both players' moves landed", [a, b].every((p) => (moves[p.name]?.sent ?? 0) > 0 && (moves[p.name]?.refused ?? 0) === 0), JSON.stringify(moves));
   check("the program closed it, settled", o1.state === "closed" && "how" in o1 && o1.how === "settled", JSON.stringify(o1));
   const winnerSide = o1.state === "closed" && o1.how === "settled" ? o1.winner : null;
   check("both agents' views agree with the program", (ea.result === "win") === (ea.you === winnerSide) && (eb.result === "win") === (eb.you === winnerSide), `${ea.result}/${eb.result}, winner ${winnerSide}`);
   const after = { a: await balance(a.wallet), b: await balance(b.wallet), fee: await balance(keys.fee.publicKey.toBase58()) };
-  const fee = Math.round(2 * STAKE_SOL * SOL * 0.025);
-  check("the fee account got 2.5% of the pot", after.fee - before.fee === fee, `${after.fee - before.fee} lamports`);
   const net = { a: after.a - before.a, b: after.b - before.b };
-  const won = ea.result === "win" ? net.a : net.b;
-  const lost = ea.result === "win" ? net.b : net.a;
-  check("the winner gained about the other's stake less the fee", Math.abs(won - (STAKE_SOL * SOL - fee)) < 0.002 * SOL, `${won} lamports`);
-  check("the loser lost about its stake", Math.abs(lost + STAKE_SOL * SOL) < 0.002 * SOL, `${lost} lamports`);
+  if (winnerSide === null) {
+    // A drawn series refunds both stakes with no fee (docs/wager-mode.md 6.4): each side is down only its network fees.
+    check("the fee account got nothing from a draw", after.fee === before.fee, `${after.fee - before.fee} lamports`);
+    for (const [name, n] of [["A", net.a], ["B", net.b]] as const) {
+      check(`side ${name} got its stake back from the draw`, n <= 0 && n > -0.002 * SOL, `${n} lamports`);
+    }
+  } else {
+    const fee = Math.round(2 * STAKE_SOL * SOL * 0.025);
+    check("the fee account got 2.5% of the pot", after.fee - before.fee === fee, `${after.fee - before.fee} lamports`);
+    const won = ea.result === "win" ? net.a : net.b;
+    const lost = ea.result === "win" ? net.b : net.a;
+    check("the winner gained about the other's stake less the fee", Math.abs(won - (STAKE_SOL * SOL - fee)) < 0.002 * SOL, `${won} lamports`);
+    check("the loser lost about its stake", Math.abs(lost + STAKE_SOL * SOL) < 0.002 * SOL, `${lost} lamports`);
+  }
   await sleep(32_000);
   const w = await a.call("line_wagers");
-  check("the referee recorded and rated it", (w.you?.record?.win ?? 0) + (w.you?.record?.loss ?? 0) === 1, JSON.stringify(w.you?.record));
+  const rec = w.you?.record ?? {};
+  const recorded = winnerSide === null ? rec.draw === 1 && (rec.win ?? 0) + (rec.loss ?? 0) === 0 : (rec.win ?? 0) + (rec.loss ?? 0) === 1 && (rec.draw ?? 0) === 0;
+  check("the referee recorded and rated it", recorded, JSON.stringify(w.you?.record));
 
   // 2. Retire.
   log("rehearse", "2. a series one side retires from");
