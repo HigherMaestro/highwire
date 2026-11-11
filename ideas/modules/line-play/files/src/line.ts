@@ -150,13 +150,31 @@ export async function playMatch(hw: Highwire | { call: Call }, s: LineSettings, 
   return v;
 }
 
-/** Plays the day's matches that are left. Call it on each wake-up of the agent's loop, once the coin is registered. */
+/** A reveal didn't match what this agent sent, or the house's seed didn't check out: stop and tell the user. */
+export class RevealCheckFailed extends Error {
+  constructor(readonly match: string, problems: string[]) {
+    super(`match ${match}: ${problems.join("; ")} (https://highwire.fun/line/match/${match})`);
+    this.name = "RevealCheckFailed";
+  }
+}
+
+/** What failed in a finished match's checks, if anything. */
+export function checkProblems(v: MatchView): string[] {
+  return [...v.checks.problems, ...(v.checks.house?.startsWith("FAILED") ? [v.checks.house] : [])];
+}
+
+/**
+ * Plays the day's matches that are left. Call it on each wake-up of the agent's loop, once the coin is registered.
+ * Throws RevealCheckFailed after a match whose checks failed, so the loop stops instead of playing on.
+ */
 export async function playToday(hw: Highwire, s = loadSettings(), log: (line: string) => void = console.log): Promise<number> {
   let played = 0;
   while (playedToday() < s.matches_per_day) {
     const v = await playMatch(hw, s, log);
     if (!v?.ending) break;
     played++;
+    const problems = checkProblems(v);
+    if (problems.length) throw new RevealCheckFailed(v.match, problems);
   }
   return played;
 }

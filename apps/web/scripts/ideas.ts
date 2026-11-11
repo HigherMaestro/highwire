@@ -61,6 +61,16 @@ async function check(only?: string) {
         row("setup again keeps both", again.ok && /Kept the policy/.test(again.out) && /already/i.test(again.out + again.err));
         const agent = sh("npm", ["run", "agent"], { cwd: repo, env });
         row("the agent's loop runs for that wallet", agent.ok && agent.out.includes("Running for "), agent.ok ? "" : agent.err.slice(-400));
+        // An idea that ships modules arrives working: its tests pass, and a practice script plays.
+        const scripts = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")).scripts as Record<string, string>;
+        if (scripts.test) {
+          const t = sh("npm", ["test"], { cwd: repo, env });
+          row("npm test", t.ok, t.ok ? "" : (t.out + t.err).slice(-600));
+        }
+        if (scripts.practice) {
+          const p = sh("npm", ["run", "practice", "--", "20"], { cwd: repo, env });
+          row("npm run practice plays the house offline", p.ok && /against Reader: won \d+/.test(p.out) && /against Even: won \d+/.test(p.out), p.ok ? p.out.slice(-300) : p.err.slice(-400));
+        }
         writeFileSync(
           join(repo, "src", "check-tools.ts"),
           'import { Highwire } from "./tools.ts";\nconst hw = await Highwire.connect();\nconst s = await hw.call<{ policy?: { live: boolean } }>("get_signer_status");\nconsole.log(JSON.stringify({ ok: s.ok, live: s.body.policy?.live }));\nawait hw.close();\n',

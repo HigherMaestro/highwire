@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DUELS_1, houseMove, playRound, startMatch, type MatchState } from "highwire-core/arena";
-import { choosePull, playMatch, stateOf, talk, type LineSettings, type MatchView } from "./line.ts";
+import { checkProblems, choosePull, playMatch, RevealCheckFailed, stateOf, talk, type LineSettings, type MatchView } from "./line.ts";
 
 const settings: LineSettings = { opponent: "agent", fallback: "mirror", matches_per_day: 4, strategy: "reader", talk: true, talk_chance: 0.3, lines: ["hi"] };
 
@@ -84,4 +84,13 @@ test("a match from the queue to the end: it waits, moves every round, recovers f
   const [file] = readdirSync(dir);
   assert.match(readFileSync(join(dir, file!), "utf8"), /^- .* against Reader .* · https:\/\/highwire\.fun\/line\/match\/m1/m);
   assert.ok(lines.some((l) => /^Playing Reader/.test(l)));
+});
+
+test("a failed check is a problem to stop on: the referee's record of a move, or the house's seed", () => {
+  const base = { ...view(startMatch(DUELS_1), "a"), match: "m1" };
+  assert.deepEqual(checkProblems(base), []);
+  assert.deepEqual(checkProblems({ ...base, checks: { your_moves_verified: 3, problems: [], house: "verified: fine" } }), []);
+  assert.deepEqual(checkProblems({ ...base, checks: { your_moves_verified: 2, problems: ["round 3: recorded 4, sent 5"] } }), ["round 3: recorded 4, sent 5"]);
+  assert.equal(checkProblems({ ...base, checks: { your_moves_verified: 3, problems: [], house: "FAILED: the seed" } }).length, 1);
+  assert.match(new RevealCheckFailed("m1", ["x"]).message, /m1: x .*line\/match\/m1/);
 });

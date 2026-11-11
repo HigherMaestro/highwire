@@ -5,6 +5,15 @@ highwire.fun.
 
 ## Unreleased
 
+- **The Line fighter template plays out of the box.** It ships with the line-play module wired into its loop, so
+  `npm run practice` plays the house from the first minute; `npm run launch` launches the coin named in
+  `coin.config.json` and writes `coin.json` (a retry finishes the same launch, and an already launched coin's
+  signature comes from the audit log); and the loop, every hour, registers the coin once the policy is live and plays
+  the day's matches. A match whose reveal or house seed fails its check now stops the line-play module's `playToday`
+  (`RevealCheckFailed`), and the fighter writes `matches/STOPPED` and plays nothing more until the user deletes it.
+  Ideas can now ship modules already wired in and add their own scripts (`modules` and `scripts` in idea.json), and
+  `npm run ideas -- check` runs a template's tests and practice when it has them. Every template's `src/tools.ts` now
+  returns a schema error as `{ok: false}` instead of throwing. Re-sync the templates after this.
 - **`line_practice`: The Line without a wallet.** A practice match against Reader or Even, with the real rules and
   the bots' real code, run in the server itself: no wallet, coin, registration or clock, nothing recorded, and on the
   hosted endpoint too. It keeps no state: the first call returns an id holding the bot, the side and the house's seed,

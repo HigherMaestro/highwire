@@ -56,6 +56,24 @@ test("every template assembles with nothing left unfilled, valid JSON, and the c
   }
 });
 
+test("an idea that ships a module arrives with it wired in: its files, its spec and its scripts", () => {
+  const files = assemble("line-fighter", { version: VERSION, siteUrl: "https://highwire.fun" });
+  for (const f of ["src/line.ts", "src/line.test.ts", "src/practice.ts", "line.json", "modules/line-play.md", "src/launch.ts", "src/coin.ts", "coin.config.json"]) assert.ok(files.has(f), f);
+  assert.equal(files.get("src/line.ts"), readFileSync(join(process.cwd(), "../../ideas/modules/line-play/files/src/line.ts"), "utf8"), "the module's code, as is");
+  const scripts = JSON.parse(files.get("package.json") as string).scripts;
+  assert.equal(scripts.practice, "tsx src/practice.ts");
+  assert.equal(scripts.test, "tsx --test src/*.test.ts");
+  assert.equal(scripts.launch, "tsx src/launch.ts");
+  assert.equal(scripts.start, "tsx src/start.ts", "the starter's scripts stay");
+  // The idea's own loop replaces the starter's, and plays through the module.
+  assert.match(files.get("src/agent.ts") as string, /from "\.\/line\.ts"/);
+  const policy = JSON.parse(files.get("policy.example.json") as string);
+  assert.ok(policy.actions.includes("register"), "it can register without highwire add asking");
+  // Ideas without modules assemble as before: the starter's package.json, untouched.
+  const plain = assemble("dip-buyer", { version: VERSION, siteUrl: "https://highwire.fun" });
+  assert.equal(plain.get("package.json"), readFileSync(join(process.cwd(), "../../ideas/starter/package.json"), "utf8").replaceAll("{{slug}}", "dip-buyer").replace("{{oneLiner}}", listIdeas().find((i) => i.slug === "dip-buyer")!.oneLiner).replaceAll("{{version}}", VERSION));
+});
+
 test("every starting policy is a valid Highwire policy, on mainnet, and a dry run", () => {
   for (const idea of ideas) {
     const raw = JSON.parse(readFileSync(join(process.cwd(), "../../ideas", idea.slug, "policy.example.json"), "utf8"));
@@ -128,7 +146,8 @@ test("every module is complete: its spec's sections, its settings, its files and
     const files = moduleFiles(m.slug);
     for (const idea of m.worksWith) {
       const project = assemble(idea, { version: VERSION, siteUrl: "https://highwire.fun" });
-      for (const rel of files.keys()) assert.ok(!project.has(rel), `${m.slug}'s ${rel} would clash with ${idea}'s own`);
+      // An idea that ships the module already has its files, unchanged (highwire add leaves those be).
+      for (const [rel, text] of files) assert.ok(!project.has(rel) || project.get(rel) === text, `${m.slug}'s ${rel} would clash with ${idea}'s own`);
     }
     for (const [rel, text] of files) {
       if (rel.endsWith(".json")) assert.doesNotThrow(() => JSON.parse(text), `${m.slug}/${rel}`);
