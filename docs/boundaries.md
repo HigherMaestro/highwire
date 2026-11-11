@@ -1,7 +1,8 @@
 # PRD: Boundaries inside the repository
 
-Status: **approved 2026-11-10, with the recommended answer to each decision in 9. Phases 1 to 3 are built (the switch,
-the package and its hooks, the deploy rule); the tag, the freeze and CI aren't.** Not legal advice: who may distribute or operate wagering software is
+Status: **approved 2026-11-10, with the recommended answer to each decision in 9. All four phases are built (the switch,
+the package and its hooks, the deploy rule, CI and the freeze). The audit tag itself is the maintainer's to make, when
+a commit is sent.** Not legal advice: who may distribute or operate wagering software is
 counsel's question (docs/wager-mode.md 5), and nothing here answers it.
 
 Highwire started as an MCP server for higher.fun. It now also holds a game (The Line), a referee, a wager program and
@@ -137,7 +138,7 @@ wager's stake against the owner's limits.
 
 - **The rule:** an `ignoreCommand` in `apps/web/vercel.json` (`apps/web/scripts/ignore-build.mjs`) that skips the build
   only when **every** changed file is under a short skip list: `programs/`, `docs/research/`, `packages/*/test/`,
-  `packages/*/scripts/`. Anything else builds. Whole folders only: the draft's `*.rs` went, since a `.rs` file under
+  `packages/*/scripts/`, and (since CI arrived) `.github/`. Anything else builds. Whole folders only: the draft's `*.rs` went, since a `.rs` file under
   `apps/web/public` would be something the site serves, and the program's Rust is all under `programs/` anyway.
 - **When it can't tell, it builds:** no earlier deployment of the branch, a commit it can't find, git failing, or
   nothing changed at all (a redeploy asked for on purpose, as when a setting changes).
@@ -229,6 +230,9 @@ Each phase is its own pull request, and each needs the one before it merged.
    changelog-only push, a code push and a mixed push. *Built, and shown* (5.3).
 4. **The tag, the freeze and CI.** *Done when* the pack names the tag and its build hash, CI is green on `main` and red
    on a branch that deliberately breaks parity, and a pull request touching the program after the tag is flagged.
+   *Built:* the workflow and the freeze check, with the pack saying how to tag. *Not done here:* the tag and its hash
+   (nothing has been sent to an auditor, and which commit is sent is the maintainer's call), and "green on `main`",
+   which waits for the merge; it ran green on its own pull request, and red on a deliberate parity break.
 
 ## 8. The later split
 

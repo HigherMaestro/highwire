@@ -114,6 +114,31 @@ The reproducible build, whose hash the deployed program must match (docs/wager-m
 (cd programs/line-wager && solana-verify build)
 ```
 
+## The tag and the freeze
+
+The commit sent to the auditors gets a tag, and from then on a change to what they were sent is flagged
+(docs/boundaries.md 5.4). The maintainer does both steps; nothing tags or labels by itself.
+
+1. **Tag the commit sent,** and push the tag:
+
+   ```bash
+   git tag -a audit/line-wager-1 <the commit sent> -m "Sent to the auditors"
+   ```
+
+   ```bash
+   git push origin audit/line-wager-1
+   ```
+
+2. **Record its build:** the program's SHA-256 from `solana-verify build` at that commit, here, beside the tag's name.
+   *(Not yet tagged: nothing has been sent.)*
+3. **From then on,** CI's "the audited program" check fails on any pull request that changes `programs/line-wager/src/`
+   or the program's `Cargo.toml` or `Cargo.lock`, until the maintainer adds the label `audited-program-change` to it:
+   their say-so, and their cue to tell the auditors. Tests under `programs/line-wager/tests/` and the TypeScript client
+   aren't frozen. A second round is `audit/line-wager-2`; the newest tag is the one named in the message.
+
+CI also runs `npm run test:program` on every pull request that touches the program, the rules it mirrors
+(`packages/core/src/arena/`), the codec or the fixture writers, so a change that breaks parity can't merge unnoticed.
+
 ## What to look at hardest
 
 - `ticket.rs`: the introspection and every offset; replaying a ticket across series, clusters or programs.
