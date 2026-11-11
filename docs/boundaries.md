@@ -1,7 +1,7 @@
 # PRD: Boundaries inside the repository
 
-Status: **approved 2026-11-10, with the recommended answer to each decision in 9. Phase 1 (the switch) and the first half
-of phase 2 (the package, without the signer's hooks) are built; the rest isn't.** Not legal advice: who may distribute or operate wagering software is
+Status: **approved 2026-11-10, with the recommended answer to each decision in 9. Phases 1 and 2 are built (the switch,
+then the package and its hooks); the deploy rule and CI aren't.** Not legal advice: who may distribute or operate wagering software is
 counsel's question (docs/wager-mode.md 5), and nothing here answers it.
 
 Highwire started as an MCP server for higher.fun. It now also holds a game (The Line), a referee, a wager program and
@@ -199,7 +199,10 @@ Each phase is its own pull request, and each needs the one before it merged.
    - **2b. The codec and the signer's hooks.** `wager-codec.ts`, the wager branches of `decode.ts` (`assertSafe` and
      the plain-language decoding) and of the signer and policy move behind the decoder and policy hooks in 5.2, each
      refusing by default. *Done when* `highwire-core` and `highwire-agent` have no wager code, `attacks.test.ts`
-     passes unchanged, and new tests cover a host with no hook, a wrong hook and a hook for another program.
+     passes unchanged, and new tests cover a host with no hook, a wrong hook and a hook for another program. *Built:* core takes
+     `ProgramGuard`s and the signer `ActionExtension`s. The wager attacks moved with the checks, their refusals word
+     for word; the rest of `attacks.test.ts` is unchanged. What stays in `highwire-agent` is the policy's `wagers` shape,
+     the audit log's `wager` and `series` fields and the paths of the wager files: data, not checks.
 3. **The deploy rule.** *Done when* a preview branch has shown a skip for a program-only push and a build for a
    changelog-only push, a code push and a mixed push.
 4. **The tag, the freeze and CI.** *Done when* the pack names the tag and its build hash, CI is green on `main` and red

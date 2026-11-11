@@ -29,7 +29,7 @@ solana-keygen pubkey ~/.highwire-devnet/line-wager-program.json
 ```
 
 Give the address to the assistant. It sets `declare_id!` in `programs/line-wager/src/lib.rs` and
-`WAGER_PROGRAM_IDS.devnet` in `packages/core/src/tx/wager-codec.ts` to it, rebuilds, runs `npm run test:program` and
+`WAGER_PROGRAM_IDS.devnet` in `packages/wager/src/codec.ts` to it, rebuilds, runs `npm run test:program` and
 the full checks, and commits. (A later `cargo build-sbf` makes a new keypair in `target/deploy/` if it's missing; it
 doesn't matter, the deploy uses the moved one.)
 

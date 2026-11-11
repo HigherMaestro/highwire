@@ -42,7 +42,7 @@ usb://ledger?key=0` before every use: the bare `usb://ledger` is a different acc
 mkdir -p ~/.highwire-mainnet && chmod 700 ~/.highwire-mainnet && solana-keygen new --no-bip39-passphrase -o ~/.highwire-mainnet/line-wager-program.json && chmod 600 ~/.highwire-mainnet/line-wager-program.json && solana-keygen pubkey ~/.highwire-mainnet/line-wager-program.json
 ```
 
-The assistant sets `WAGER_PROGRAM_IDS.mainnet` in `packages/core/src/tx/wager-codec.ts` to that address, and it ships in
+The assistant sets `WAGER_PROGRAM_IDS.mainnet` in `packages/wager/src/codec.ts` to that address, and it ships in
 the next release. It's inert until the switch: agents' `line_stake` refuses while the referee's desk is on devnet, and
 the program refuses to open anything while its config is paused.
 

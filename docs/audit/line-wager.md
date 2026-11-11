@@ -29,7 +29,7 @@ where five full series have been played and settled (docs/wager-devnet.md 8).
 | `src/lib.rs` | 26 | the entrypoint |
 
 About 1,500 lines. Out of scope, but useful context: the TypeScript twin of the rules (`packages/core/src/arena/`), the
-client's builders and safety checks (`packages/core/src/tx/wager-codec.ts`, `packages/wager/src/tx.ts`, `decode.ts`'s `assertSafe`), the reveal daemon
+client's codec, builders and safety checks (`packages/wager/src/codec.ts`, `tx.ts`, and `guard.ts`, the wager guard for highwire-core's `assertSafe`), the signer's wager extension (`packages/wager/src/signing.ts`), the reveal daemon
 (`packages/wager/src/runner.ts`) and the desk (`packages/relay/src/arena/wager.ts`).
 
 ## The instructions
@@ -97,7 +97,7 @@ npm ci
 npm run test:program
 ```
 
-That writes the fixtures (`npm run wager-fixtures -w highwire-core`), runs the Rust unit and parity tests, builds the
+That writes the fixtures (`npm run wager-fixtures -w highwire-core` and `npm run wager-instructions -w highwire-wager`), runs the Rust unit and parity tests, builds the
 program (`cargo build-sbf`, Solana 1.18 toolchain, rustc 1.75) and runs `tests/program.rs` (every instruction against the
 compiled program with real lamports) and `tests/ts_built.rs` (transactions built by the TypeScript client, run on the
 program).

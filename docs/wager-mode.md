@@ -479,7 +479,7 @@ Wagering goes **only** through the local signer, inside the owner's policy file,
   annotations, and sends `open` or `accept` through `LocalSigner.execute()` with `action: "wager"` and `solOut` equal to
   the stake, so the policy, the simulation, the audit log and the kill switch all apply.
 - **Every wager transaction** (`open`, `accept`, `commit`, `reveal`, `retire`) is built by Highwire's builders and goes
-  through `finish()`: the `highwire` memo, simulation, and `assertSafe`, which gains the wager program's instructions
+  through `finish()`: the `highwire` memo, simulation, and `assertSafe`, which checks the wager program's instructions through highwire-wager's guard (docs/boundaries.md 5.2; they were in `assertSafe` itself at first)
   with their own checks (the program ID, the series PDA's derivation, the stake equal to the tier and within the
   policy, no other transfers). `attacks.test.ts` gains links that must fail.
 - **The sign page refuses every wager instruction**, like transfers and registrations.
