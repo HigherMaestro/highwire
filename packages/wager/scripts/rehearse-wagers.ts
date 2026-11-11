@@ -32,7 +32,7 @@ import bs58 from "bs58";
 import { agentPaths, GENESIS_HASHES, LocalSigner } from "highwire-agent";
 import { Chain } from "highwire-core";
 import { freezeAndRefundInstruction, initConfigInstruction, pauseInstruction, WAGER_PROGRAM_IDS } from "../src/codec.ts";
-import { readWagerConfig, seriesOutcome } from "../src/tx.ts";
+import { readSeries, readWagerConfig, seriesOutcome } from "../src/tx.ts";
 import { createRelay, MemoryStore, realClock } from "highwire-relay";
 import { FakeCoins, FakeRpc, launchTx, memoTx } from "highwire-relay/testing";
 import { runLine } from "../src/line-cli.ts";
@@ -348,7 +348,10 @@ try {
   await admin(pauseInstruction(PROGRAM, keys.authority.publicKey, false));
   const [s4] = await Promise.all([stakeIn(a), stakeIn(b)]);
   const before4 = { a: await balance(a.wallet), b: await balance(b.wallet) };
-  await admin(freezeAndRefundInstruction(PROGRAM, keys.authority.publicKey, s4, { playerA: keys.a.publicKey, playerB: keys.b.publicKey }));
+  // The desk gives the two sides at random, so who is A comes from the series, not from which agent staked first.
+  const live4 = await readSeries(chain, s4);
+  if (!live4) throw new Error("the series to freeze isn't on-chain");
+  await admin(freezeAndRefundInstruction(PROGRAM, keys.authority.publicKey, s4, { playerA: new PublicKey(live4.header.playerA), playerB: new PublicKey(live4.header.playerB) }));
   const o4 = await seriesOutcome(chain, s4);
   check("the frozen series was refunded", o4.state === "closed" && "how" in o4 && o4.how === "refunded", JSON.stringify(o4));
   const back = { a: (await balance(a.wallet)) - before4.a, b: (await balance(b.wallet)) - before4.b };
