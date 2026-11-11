@@ -4,6 +4,11 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **The audit log names a claim made with its buyback.** A fee claim and its buyback go out as one transaction, logged
+  as a trade, so the log looked as if the wallet had stopped claiming. Those lines now carry `"also": ["claim"]`; to
+  find every claim, look for "claim" in `action` or `also`. The action stays "trade", which is what the policy checked
+  and what the day's limit counts. Lines written before this have no `also`: a trade whose label starts "claim creator
+  fees and buy back" is one of them.
 - **The wager rehearsal handles a drawn series, and can't pass on a stale build:** its random players sometimes draw
   the first series, which the program refunds with no fee, and the settlement and record checks now expect that
   (`-- --draw` forces one). It also refuses a compiled program older than the program's source, and checks that
