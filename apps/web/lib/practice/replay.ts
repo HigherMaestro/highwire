@@ -1,5 +1,5 @@
 import { commit, DUELS_1, playerOf, retire, reveal, sideOf, startSeries, timeout, type MatchResult, type MatchState, type Player, type SeriesState } from "highwire-core/arena";
-import type { ClosedOutcome, SeriesHistory } from "highwire-core";
+import type { ClosedOutcome, SeriesHistory } from "highwire-wager/chain";
 
 // A practice series replayed from its on-chain moves through the TypeScript twin of the program's rules
 // (highwire-core/arena, series.ts), so every commitment is checked against its reveal and every round and match is

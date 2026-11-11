@@ -1,9 +1,9 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { commitDeadline, revealDeadline, sideIndexOf, type SeriesAccountData } from "highwire-core";
-import { lockHolder } from "./lock.ts";
-import type { WagerFallback, WagerSecrets } from "./wager-secrets.ts";
+import { commitDeadline, revealDeadline, sideIndexOf, type SeriesAccountData } from "./codec.ts";
+import { lockHolder } from "highwire-agent";
+import type { WagerFallback, WagerSecrets } from "./secrets.ts";
 
-// The reveal daemon (docs/wager-mode.md 7.3): `highwire line run` watches the wallet's wager series and, through the
+// The reveal daemon (docs/wager-mode.md 7.3): `highwire-wager run` watches the wallet's wager series and, through the
 // local signer and inside the policy, does what the series needs from this side and no more: reveals every committed
 // move and every owed fallback from the secrets file, applies deadlines that have passed, settles a finished series,
 // cancels an opened series nobody accepted, and refunds one idle for a day. It takes no instruction from the agent and

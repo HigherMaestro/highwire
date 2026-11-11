@@ -42,7 +42,7 @@
     "arena:sim": "tsx --conditions=highwire-source scripts/arena-sim.ts",
     "arena:series": "tsx --conditions=highwire-source scripts/arena-series.ts",
     "prepack": "npm run build && cp ../../LICENSE .",
-    "wager-fixtures": "tsx --conditions=highwire-source scripts/wager-fixtures.ts && tsx --conditions=highwire-source scripts/wager-instructions.ts"
+    "wager-fixtures": "tsx --conditions=highwire-source scripts/wager-fixtures.ts"
   },
   "dependencies": {
     "@noble/curves": "1.9.7",

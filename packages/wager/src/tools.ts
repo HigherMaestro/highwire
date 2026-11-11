@@ -1,41 +1,22 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { PublicKey } from "@solana/web3.js";
-import { AuditLog, daemonStatus, WagerSecrets, type ExecuteResult, type WagerFallback } from "highwire-agent";
-import {
-  arena,
-  buildWagerAccept,
-  buildWagerMove,
-  buildWagerOpen,
-  commitDeadline,
-  HigherError,
-  lamportsNumber,
-  listWalletSeries,
-  readSeries,
-  readSeriesMany,
-  revealDeadline,
-  seriesAddress,
-  seriesOutcome,
-  sideIndexOf,
-  solToLamports,
-  ValidationError,
-  wagerProgram,
-  type SeriesAccountData,
-  type WagerTicket,
-} from "highwire-core";
-import { run } from "../result.ts";
-import { EXECUTE, READ_ONLY, type Deps, type ExecutionSigner } from "./shared.ts";
+import { AuditLog, type ExecuteResult } from "highwire-agent";
+import { daemonStatus } from "./runner.ts";
+import { WagerSecrets, type WagerFallback } from "./secrets.ts";
+import { arena, HigherError, lamportsNumber, solToLamports, ValidationError } from "highwire-core";
+import { commitDeadline, revealDeadline, seriesAddress, sideIndexOf, wagerProgram, type SeriesAccountData, type WagerTicket } from "./codec.ts";
+import { buildWagerAccept, buildWagerMove, buildWagerOpen, listWalletSeries, readSeries, readSeriesMany, seriesOutcome } from "./tx.ts";
+import { EXECUTE, READ_ONLY, run, type Deps, type ExecutionSigner, type RelayCall, type StakedSeries } from "highwire-mcp";
 
 // Wagers on The Line (docs/wager-mode.md 7.3, 7.6): series staked from the local signer's wallet, on the cluster the
 // referee's wager desk plays on (devnet now; mainnet after the switch, docs/wager-mainnet.md).
 // line_stake stakes (an execute: the policy's wagers section, the simulation and the audit log apply); line_state,
 // line_move and line_retire take a `series` for a staked series; line_wagers lists them. A wager move is a commit sent
-// at once: the reveal daemon (`highwire line run`) reveals it, so staking and moving refuse unless the daemon is
+// at once: the reveal daemon (`highwire-wager run`) reveals it, so staking and moving refuse unless the daemon is
 // really working for this wallet. Moves carry no table talk, and no tool ever returns a nonce or a salt.
 
-export const SERIES_ID = z.string().regex(/^[0-9a-f]{64}$/).describe("The wager series' id (64 hex characters), from line_stake or line_wagers.");
 
-type Relay = (method: "GET" | "POST", path: string, body?: unknown) => Promise<any>;
 
 /** A commit must land strictly before its deadline: moves this close to it are refused, as they'd likely land late. */
 const COMMIT_MARGIN_SECONDS = 5;
@@ -123,7 +104,7 @@ export function wagerView(s: SeriesAccountData, wallet: string, now = Math.floor
   };
 }
 
-export function registerWagerTools(server: McpServer, deps: Deps, signer: ExecutionSigner, relay: Relay) {
+export function registerWagerTools(server: McpServer, deps: Deps, signer: ExecutionSigner, relay: RelayCall): StakedSeries {
   const { chain } = deps;
   const secrets = () => new WagerSecrets(signer.paths.wagerSecrets);
   const wallet = new PublicKey(signer.wallet);
@@ -135,7 +116,7 @@ export function registerWagerTools(server: McpServer, deps: Deps, signer: Execut
   const daemon = () => daemonStatus(signer.paths, { wallet: signer.wallet, cluster: chain.cluster, programId: program().toBase58() });
   const needDaemon = (what: string) => {
     const d = daemon();
-    if (!d.ok) throw new HigherError(`${d.reason}, so ${what}. Ask the user to start \`highwire line run\` (same HIGHWIRE_CLUSTER, keypair and policy as this server).`, { code: "line_daemon_off" });
+    if (!d.ok) throw new HigherError(`${d.reason}, so ${what}. Ask the user to start \`highwire-wager run\` (same HIGHWIRE_CLUSTER, keypair and policy as this server).`, { code: "line_daemon_off" });
   };
   const execute = (tool: string, kind: string, solOut: bigint, envelope: Parameters<ExecutionSigner["execute"]>[1]["envelope"]): Promise<ExecuteResult> =>
     signer.execute(chain.connection, { tool, intent: { action: "wager", cluster: chain.cluster, solOut, wager: { kind } }, envelope });
@@ -161,7 +142,7 @@ export function registerWagerTools(server: McpServer, deps: Deps, signer: Execut
       description:
         "Stake SOL on a best-of-5 series against another agent, on the cluster the referee wagers on. Pairs you at a stake tier, then " +
         "stakes from this wallet through the local signer, inside the user's policy (\"wager\" in its actions, and a wagers " +
-        "section allowing the tier). Needs the reveal daemon working for this wallet (`highwire line run`): a move nobody " +
+        "section allowing the tier). Needs the reveal daemon working for this wallet (`highwire-wager run`): a move nobody " +
         "reveals forfeits its match. If it answers waiting, call it again within a minute. Paired as B, call it again once " +
         "A has opened, to accept. Declare a fallback for rounds you miss: zero, mirror, or steady:<n>.",
       inputSchema: {
@@ -264,7 +245,7 @@ export function registerWagerTools(server: McpServer, deps: Deps, signer: Execut
           tiers_sol: Array.isArray(info?.tiers) ? (info.tiers as unknown[]).filter((t) => /^\d{1,20}$/.test(String(t))).map((t) => lamportsNumber(BigInt(String(t)))) : null,
           ...(info ? {} : { referee: "not answering: the series above come from the chain" }),
           program: p.toBase58(),
-          reveal_daemon: d.ok ? "working" : `NOT working: ${d.reason}. Start \`highwire line run\` before staking.`,
+          reveal_daemon: d.ok ? "working" : `NOT working: ${d.reason}. Start \`highwire-wager run\` before staking.`,
         };
       }),
   );

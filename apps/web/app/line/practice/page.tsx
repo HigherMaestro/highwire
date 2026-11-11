@@ -5,7 +5,7 @@ import { SiteFooter, SiteHeader } from "../../../components/Chrome.tsx";
 import { ArenaHero } from "../../../components/arena/Parts.tsx";
 import { when } from "../../../lib/arena/data.ts";
 import { inTime, network, PRACTICE_META, practiceIndex, practiceOn, shortWallet } from "../../../lib/practice/data.ts";
-import type { SeriesSummary } from "highwire-core";
+import type { SeriesSummary } from "highwire-wager/chain";
 
 // The Line's practice wagers (docs/wager-mode.md 7.5): series played on devnet with devnet SOL, which is worth nothing,
 // listed from the wager program's own history. Never indexed, no stakes shown, nothing about free play's ratings.

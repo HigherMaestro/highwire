@@ -1,13 +1,13 @@
 // A scripted practice series on devnet (docs/wager-devnet.md 7): two fighters, each through its own MCP server, local
 // signer, devnet home and policy, play one best-of-5 wager series against each other, start to finish, using only the
-// tools an agent uses (line_stake, line_state, line_move). The two reveal daemons (`highwire line run`) must be running:
+// tools an agent uses (line_stake, line_state, line_move). The two reveal daemons (`highwire-wager run`) must be running:
 // they reveal and settle. At the end it checks the result three ways: the program's closing event, the referee's record,
 // and both wallets' balances.
 //
 // It signs and sends real devnet transactions from both wallets, inside their devnet policies. Run by the maintainer;
 // it never prints a key, a nonce or a salt.
 //
-//   npm run wager-pair -w highwire-mcp -- --a ~/.highwire-lgtm-devnet:~/.highwire/buyback-coin/wallet.json \
+//   npm run wager-pair -w highwire-wager -- --a ~/.highwire-lgtm-devnet:~/.highwire/buyback-coin/wallet.json \
 //     --b ~/.highwire-mc-devnet:~/.highwire/second-fighter/wallet.json [--stake 0.01]
 //
 // Each side is HIGHWIRE_HOME:keypair file. SOLANA_RPC_URL sets the devnet RPC (default devnet's public one).
@@ -17,8 +17,11 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { agentPaths, loadKeypair, LocalSigner } from "highwire-agent";
-import { Chain, DEFAULT_RPC_URLS, lamportsNumber, seriesOutcome } from "highwire-core";
-import { createServer } from "../src/server.ts";
+import { Chain, DEFAULT_RPC_URLS, lamportsNumber } from "highwire-core";
+import { seriesOutcome } from "../src/tx.ts";
+import { createServer } from "highwire-mcp";
+import { registerWagerTools } from "../src/tools.ts";
+import { wagerSigner } from "../src/signing.ts";
 
 const { values } = parseArgs({ options: { a: { type: "string" }, b: { type: "string" }, stake: { type: "string" } } });
 const expand = (p: string) => p.replace(/^~(?=\/)/, homedir());
@@ -38,8 +41,8 @@ async function player(spec: string | undefined, label: string): Promise<Player> 
   const [home, key] = spec.split(":").map(expand) as [string, string];
   const { keypair, warning } = loadKeypair(key);
   if (warning) console.error(`warning (${label}): ${warning}`);
-  const signer = new LocalSigner(keypair, agentPaths({ HIGHWIRE_HOME: home }));
-  const server = createServer({ cluster: "devnet", rpcUrl, signer, arena: true });
+  const signer = wagerSigner(keypair, agentPaths({ HIGHWIRE_HOME: home }));
+  const server = createServer({ cluster: "devnet", rpcUrl, signer, arena: true, wagers: registerWagerTools });
   const client = new Client({ name: `wager-pair-${label}`, version: "0" });
   const [x, y] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(x), client.connect(y)]);

@@ -15,5 +15,3 @@ export * from "./sign-link.ts";
 export * from "./trade.ts";
 export * from "./transfer.ts";
 export * from "./units.ts";
-export * from "./wager.ts";
-export * from "./wager-history.ts";

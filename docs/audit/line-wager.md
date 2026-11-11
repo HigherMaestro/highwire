@@ -29,8 +29,8 @@ where five full series have been played and settled (docs/wager-devnet.md 8).
 | `src/lib.rs` | 26 | the entrypoint |
 
 About 1,500 lines. Out of scope, but useful context: the TypeScript twin of the rules (`packages/core/src/arena/`), the
-client's builders and safety checks (`packages/core/src/tx/wager*.ts`, `decode.ts`'s `assertSafe`), the reveal daemon
-(`packages/agent/src/wager-runner.ts`) and the desk (`packages/relay/src/arena/wager.ts`).
+client's codec, builders and safety checks (`packages/wager/src/codec.ts`, `tx.ts`, and `guard.ts`, the wager guard for highwire-core's `assertSafe`), the signer's wager extension (`packages/wager/src/signing.ts`), the reveal daemon
+(`packages/wager/src/runner.ts`) and the desk (`packages/relay/src/arena/wager.ts`).
 
 ## The instructions
 
@@ -97,7 +97,7 @@ npm ci
 npm run test:program
 ```
 
-That writes the fixtures (`npm run wager-fixtures -w highwire-core`), runs the Rust unit and parity tests, builds the
+That writes the fixtures (`npm run wager-fixtures -w highwire-core` and `npm run wager-instructions -w highwire-wager`), runs the Rust unit and parity tests, builds the
 program (`cargo build-sbf`, Solana 1.18 toolchain, rustc 1.75) and runs `tests/program.rs` (every instruction against the
 compiled program with real lamports) and `tests/ts_built.rs` (transactions built by the TypeScript client, run on the
 program).
@@ -105,7 +105,7 @@ program).
 The whole stack, on a local validator:
 
 ```bash
-npm run rehearse-wagers -w highwire-mcp
+npm run rehearse-wagers -w highwire-wager
 ```
 
 The reproducible build, whose hash the deployed program must match (docs/wager-mainnet.md 2 and 10):
@@ -113,6 +113,31 @@ The reproducible build, whose hash the deployed program must match (docs/wager-m
 ```bash
 (cd programs/line-wager && solana-verify build)
 ```
+
+## The tag and the freeze
+
+The commit sent to the auditors gets a tag, and from then on a change to what they were sent is flagged
+(docs/boundaries.md 5.4). The maintainer does both steps; nothing tags or labels by itself.
+
+1. **Tag the commit sent,** and push the tag:
+
+   ```bash
+   git tag -a audit/line-wager-1 <the commit sent> -m "Sent to the auditors"
+   ```
+
+   ```bash
+   git push origin audit/line-wager-1
+   ```
+
+2. **Record its build:** the program's SHA-256 from `solana-verify build` at that commit, here, beside the tag's name.
+   *(Not yet tagged: nothing has been sent.)*
+3. **From then on,** CI's "the audited program" check fails on any pull request that changes `programs/line-wager/src/`
+   or the program's `Cargo.toml` or `Cargo.lock`, until the maintainer adds the label `audited-program-change` to it:
+   their say-so, and their cue to tell the auditors. Tests under `programs/line-wager/tests/` and the TypeScript client
+   aren't frozen. A second round is `audit/line-wager-2`; the newest tag is the one named in the message.
+
+CI also runs `npm run test:program` on every pull request that touches the program, the rules it mirrors
+(`packages/core/src/arena/`), the codec or the fixture writers, so a change that breaks parity can't merge unnoticed.
 
 ## What to look at hardest
 

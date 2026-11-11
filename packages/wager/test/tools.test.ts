@@ -8,12 +8,17 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Keypair, PublicKey, VersionedTransaction, type Connection } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
 import bs58 from "bs58";
-import { agentPaths, holdProcessLock, LocalSigner, writeBeat, type ExecuteRequest, type ExecuteResult } from "highwire-agent";
-import { arena, decodeSeriesAccount, decodeWager, describeTransaction, seriesAddress, wagerConfigAddress, WAGER_PROGRAM_IDS } from "highwire-core";
+import { agentPaths, holdProcessLock, LocalSigner, type ExecuteRequest, type ExecuteResult } from "highwire-agent";
+import { writeBeat } from "../src/runner.ts";
+import { arena, describeTransaction } from "highwire-core";
+import { decodeSeriesAccount, decodeWager, seriesAddress, wagerConfigAddress, WAGER_PROGRAM_IDS } from "../src/codec.ts";
 import { createRelay, FakeClock, MemoryStore, type Relay, type WagerChain } from "highwire-relay";
 import { FakeCoins, FakeRpc, launchTx, memoTx } from "highwire-relay/testing";
-import { createServer } from "../src/server.ts";
-import { FAKE_OPTIONS } from "./fake.ts";
+import { createServer } from "highwire-mcp";
+import { FAKE_OPTIONS } from "../../mcp/test/fake.ts";
+import { registerWagerTools } from "../src/tools.ts";
+import { wagerFacts, wagerGuard } from "../src/guard.ts";
+import { wagerSigning } from "../src/signing.ts";
 
 // The wager tools end to end (docs/wager-mode.md 7.6), on devnet: an agent on the local server is paired by the
 // referee's wager desk (in process, with a fake chain), stakes through its policy, commits a move whose nonce never
@@ -144,12 +149,12 @@ async function setup(policy: object = POLICY, cluster: "devnet" | "mainnet" = "d
   const paths = agentPaths({ HIGHWIRE_HOME: mkdtempSync(join(tmpdir(), "highwire-wager-tools-")) });
   writeFileSync(paths.policy, JSON.stringify(policy));
   const key = Keypair.generate();
-  const signer = new CapturingSigner(key, paths);
+  const signer = new CapturingSigner(key, paths, undefined, undefined, undefined, [wagerSigning]);
   const mint = bs58.encode(new Uint8Array(32).fill(201));
   const coins = (w.relay.referee as any).coins as FakeCoins;
   coins.coins.set(mint, { name: "Staker", ticker: "STK", createdAt: 0, holders: 1, volumeSol: 0, rugFlag: false, creatorHolds: true, creator: key.publicKey.toBase58() });
   await enroll(w, key, mint, paths);
-  const server = createServer({ ...FAKE_OPTIONS, fetch: w.fetch, relayUrl: "https://relay.test", arena: true, cluster, signer });
+  const server = createServer({ ...FAKE_OPTIONS, fetch: w.fetch, relayUrl: "https://relay.test", arena: true, wagers: registerWagerTools, cluster, signer });
   const client = new Client({ name: "test", version: "0" });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(a), client.connect(b)]);
@@ -202,8 +207,11 @@ test("an agent is paired, then stakes and opens as A through the signer; its fal
     const req = s.signer.sent[0]!;
     assert.deepEqual([req.tool, req.intent.action, req.intent.wager?.kind, req.intent.solOut], ["line_stake", "wager", "open", 100_000_000n]);
     const tx = VersionedTransaction.deserialize(Buffer.from(req.envelope.transactions[0]!.base64, "base64"));
-    const d = describeTransaction(tx, "devnet");
-    assert.deepEqual(d.wagers.map((x) => [x.kind, x.stake]), [["open", 100_000_000n]]);
+    const d = describeTransaction(tx, "devnet", [], [wagerGuard()]);
+    const facts = wagerFacts(req.envelope, "devnet");
+    assert.deepEqual([facts.kind, facts.stake], ["open", 100_000_000n]);
+    // Without the guard, core reads the same transaction as two instructions it doesn't know.
+    assert.equal(describeTransaction(tx, "devnet").instructions.filter((i) => !i.known).length, 2);
     assert.ok(d.instructions.some((i) => /matchmaker's signature/.test(i.text)));
     // The fallback committed in the open is the one saved, and its salt appears in no answer.
     const open = tx.message.compiledInstructions.find((ix) => tx.message.staticAccountKeys[ix.programIdIndex]!.equals(PROGRAM))!;
@@ -374,7 +382,7 @@ test("a settled series reads as its outcome, not 'not found'; another pair's ser
   const s = await setup();
   const id = "11".repeat(32);
   // This wallet was A (its fallback is on file); the program's closing event says B won.
-  const { WagerSecrets } = await import("highwire-agent");
+  const { WagerSecrets } = await import("../src/secrets.ts");
   new WagerSecrets(s.paths.wagerSecrets).newFallback(id, "A", { kind: "zero", pull: 0 });
   const b64 = (b: Uint8Array | string) => Buffer.from(b).toString("base64");
   s.w.history.set(seriesAddress(PROGRAM, id).toBase58(), [[`Program ${PROGRAM.toBase58()} invoke [1]`, `Program data: ${b64("line-wager")} ${b64(Uint8Array.of(1))} ${b64(Buffer.from(id, "hex"))} ${b64(Uint8Array.of(1))}`, `Program ${PROGRAM.toBase58()} success`]]);
