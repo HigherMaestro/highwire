@@ -157,10 +157,23 @@ function sync(dryRun: boolean, message: string) {
         GIT_COMMITTER_EMAIL: TEMPLATE_AUTHOR.email,
       },
     });
+  // A token GitHub turns down makes every repository look missing, so check whose it is before reading any of them.
+  const me = sh("gh", ["api", "user", "--jq", ".login"]);
+  if (!me.ok) {
+    throw new Error(
+      `GitHub didn't accept GH_TOKEN, so nothing was checked or changed:\n${me.err || me.out}\n` +
+        `Set it to ${TEMPLATE_OWNER}'s token: GH_TOKEN=$(gh auth token --hostname github.com --user ${TEMPLATE_OWNER})`,
+    );
+  }
+  if (me.out !== TEMPLATE_OWNER) throw new Error(`GH_TOKEN is ${me.out}'s, not ${TEMPLATE_OWNER}'s, so nothing was checked or changed`);
   for (const idea of listIdeas()) {
     const name = templateRepo(idea.slug);
     const full = `${TEMPLATE_OWNER}/${name}`;
     const exists = sh("gh", ["api", `repos/${full}`, "--jq", ".is_template"]);
+    // Only GitHub's 404 means missing: any other failure stops the sync rather than creating a repository.
+    if (!exists.ok && !exists.err.includes("(HTTP 404)")) {
+      throw new Error(`${full}: couldn't look it up, so the sync stopped here (the repositories before it are done):\n${exists.err || exists.out}`);
+    }
     if (!exists.ok) {
       console.log(`${full}: missing${dryRun ? " (would create it as a public template)" : ", creating it"}`);
       if (dryRun) continue;
