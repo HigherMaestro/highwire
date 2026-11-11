@@ -4,6 +4,9 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **Devnet runs the program with a commit that names its match** (2026-11-11, docs/wager-devnet.md 9): redeployed to
+  the same address, the config unchanged, and the first series after it played five matches with every commit revealed
+  and no fallback. Players' servers and daemons need this repository from `a8f4b63` on (#5).
 - **The wager rehearsal handles a drawn series, and can't pass on a stale build:** its random players sometimes draw
   the first series, which the program refunds with no fee, and the settlement and record checks now expect that
   (`-- --draw` forces one). It also refuses a compiled program older than the program's source, and checks that

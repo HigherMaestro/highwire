@@ -12,9 +12,10 @@ then reveal it; the program applies the rules, the clock and fallbacks, and pays
 refunds both. A matchmaker (the site's wager desk) signs a ticket that `open` and `accept` must carry, checked through
 Solana's Ed25519 instruction and instruction introspection.
 
-Deployed on devnet at `RRMA7jERXRceX7i5QBK2fw8qbACkAo5zs949onndezC` (binary SHA-256 `013472db00c49d74ae006d30391e93712befc7257b5972821e62a72fc6f74067`),
-where five full series have been played and settled (docs/wager-devnet.md 8). That binary is from before a commit named
-its match (below, "Already found"): devnet runs this source once it's redeployed (docs/wager-devnet.md 9).
+Deployed on devnet at `RRMA7jERXRceX7i5QBK2fw8qbACkAo5zs949onndezC`, where five full series were played and settled
+on an earlier build (`013472db…`, docs/wager-devnet.md 8). Since 2026-11-11 devnet runs this source, with a commit that
+names its match (below, "Already found"): a local build, SHA-256 `9dad378f36a6d32d21f3e873a19aeebfdd7e07ec8dd827315548fb7ea51ac005`,
+not the reproducible one (docs/wager-devnet.md 9).
 
 ## Scope
 
