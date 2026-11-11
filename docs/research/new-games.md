@@ -18,7 +18,8 @@ how would language-model-like play fare in it against a Reader-style player?
   solver engineering goes to bot builders, the market wager mode already worries about.
 - **The Lot is gentler on LLM-like play.** Its true Reader beats the three LLM-like players by +0.30 to +0.61, against
   +0.61 to +0.85 on the wire. It draws less (5%), runs shorter (7.8 rounds), and needs **randomness on-chain**, which
-  The Line's program doesn't have.
+  The Line's program doesn't have. A design for it that takes input from the two players only, and the attacks tried
+  against it, are in 1.5.
 - **Three wires isn't a finished game yet.** Cautious players draw each other more than half the time, naive play
   loses in three rounds, and long matches end in a scramble for the few points of energy each side regains.
 - **Recommendation:** neither goes into the program before its audit. If one is pursued, The Lot is nearer to ready.
@@ -86,16 +87,73 @@ opponent's bids and a rough guess at a state's value.
 ### 1.4 What it would need on-chain
 
 - **Moves fit as they are:** one number a round, the wire's commit and reveal.
-- **The draw is new.** The next prize would come from both sides' revealed nonces (a hash of the two, over the prizes
-  left). A side that sees the draw before revealing can only withhold, and withholding already forfeits the match
-  (docs/wager-mode.md 7.2.1). Two cases need rules of their own:
-  - *The first prize* has no nonces before it. A draw from the fallback commitments lets the second player grind its
-    salt; a fixed first prize (the middle one) is simpler.
-  - *A round played by a fallback* has only one fresh nonce, which its owner chose knowing the other side was absent, so
-    it picks the next prize. Mixing in a recent slot hash would close that; it's a new input for the audit.
-- **State:** the prizes left (9 bits) and two scores, in place of the node.
-- **Fallbacks:** `zero` and `steady:<n>` carry over; `mirror` does too, but a fallback that knows the prize (`fair`)
-  would be the natural one.
+- **The draw is new**, and it's the part that has to be right: 1.5.
+- **State:** the prizes left (9 bits), two scores and 32 bytes of entropy, in place of the node.
+- **No fallbacks in the program.** A missed commit forfeits the match (1.5), so a fallback is the owner's daemon
+  committing an ordinary bid when its agent hasn't. `zero` and `steady:<n>` carry over; a fallback that knows the prize
+  (`fair`) would be the natural one. A fallback stays private, where the wire's becomes public once played.
+
+### 1.5 The draw, and what was tried against it
+
+The order has to be random, and it has to hold up against players who have read every line of this repository. So
+nothing in the design is secret but the seeds and nonces before they're revealed, and nobody but the two players
+supplies any input. `packages/core/scripts/games/lot-series.ts` is the protocol; `test/lot-attacks.test.ts` attacks it.
+
+**How it works**
+- **Entropy:** one 32-byte value per series, which every prize is drawn from.
+- **It starts from two seeds.** A commits to its seed's hash when it opens the series. B posts its seed in the clear
+  when it accepts, with A's still hidden. A then reveals, and the first prize is drawn. A can't change its seed, and B
+  can't see A's when it picks its own.
+- **Every round feeds it.** Both sides commit to a bid with a 32-byte nonce, then both reveal. The two nonces are mixed
+  into the entropy and the next prize is drawn from the result. Each nonce was fixed before the other was visible.
+- **Walking away forfeits.** The side that reveals second can work out the draw before it reveals. Its only other move
+  is not revealing, which forfeits the match, as on the wire (docs/wager-mode.md 7.2.1). **A missed commit forfeits
+  too**, so there is no round in which one side alone supplied the randomness.
+- **A missed seed** costs A the first match, and the series goes on from B's seed.
+- **Anyone can check it:** the seeds and nonces are in the transactions, so a replay recomputes every prize (`auditDraws`).
+
+**What an attacker might try** (each is a test; the last column is what happens)
+
+| Attempt | Result |
+|---|---|
+| Reveal early, so the opponent sees a nonce before committing its own | refused: no reveal until both commitments are in |
+| Replace a commitment after sending it | refused |
+| Reveal a different bid or nonce than committed | refused; with no valid reveal, a forfeit |
+| Copy the opponent's commitment, to reveal the same nonce after it | the copy names the other side and can't be opened: a forfeit |
+| Reuse a commitment from another round, match or series | doesn't open here |
+| See the draw, then refuse to reveal | forfeits the match, at every point of a match |
+| Skip a commit, so only the opponent's nonce feeds the draw | forfeits the match |
+| Call timeout early to force the opponent's forfeit; move after a deadline | refused |
+| Hide a bid above the energy left in a commitment | can't be revealed: a forfeit |
+| Grind a nonce for a wanted prize (64 tries a round, 3,000 rounds) | hits 1 in 9, as chance does |
+| B grinds its seed for the first prize | 1 in 9 |
+| A changes or withholds its seed | refused; withholding loses match 1 |
+| Race to reveal first or second | the draw is the same either way |
+
+Each count of prizes left draws evenly (20,000 draws a count). Six deliberate breaks of the protocol (the draw ignoring
+one nonce, a commitment that doesn't name its side, an early reveal allowed, a missed reveal made a void, an early
+timeout allowed, a biased reduction) each fail at least one test.
+
+**Why not something else**
+- **Slot hashes:** the block's leader can bias one, and whoever sends the transaction picks which slot it lands in.
+- **A randomness oracle:** it removes the moment where the second revealer sees the draw first, and adds a party that
+  can withhold selectively, a fee a draw, and an outage that stalls every series, against docs/wager-mode.md 3 ("if the
+  referee disappears, every open match refunds or settles on its own"). Not looked up for this draft.
+- **A seed from Highwire:** an insider would know or steer the order, which the on-chain match exists to prevent.
+
+**What this doesn't settle**
+- **Tests show these attacks fail against this model. They can't show that no attack exists.** The program would be a
+  second implementation in Rust: it needs the wire's parity fixtures and the audit, and this is one more thing for both.
+- **A machine that's down forfeits matches** where the wire would play its public fallback. A fixed fallback lost to
+  Reader nearly always anyway (1.3), but it's a harsher rule, and the reveal window has to allow for it.
+- **Weak randomness on a player's own machine** lets its opponent predict its nonce and so steer the draw. It only
+  hurts the player with the weak generator; the daemon draws its nonces from the system's (`wager-secrets.ts`), and a
+  third-party client that doesn't is its owner's risk.
+- **Two players colluding** can fix the order between them. They could already fix the result; that's for the
+  collusion checks (docs/wager-mode.md 10), not the draw.
+- **A validator keeping a reveal out of every block** for the whole window would force a forfeit, as on the wire. The
+  window is at least a minute, which is many leaders.
+- **Not modelled here:** the chess clock's bank, retiring, stakes and payouts. They'd be the wire's.
 
 ## 2. Three wires
 
@@ -173,7 +231,7 @@ row's score:
 
 ## 3. What to do with this
 
-1. **Don't add either to the program before the audit.** Neither is finished, and The Lot brings a randomness rule the
+1. **Don't add either to the program before the audit.** Neither is finished, and The Lot brings a draw (1.5) the
    audit would have to cover.
 2. **Before the audit, make room.** A game id beside the rules version in each series, a move of up to four bytes in
    the commitment, and spare bytes in the series state, so a second game is a new rules module and not a new account
@@ -192,3 +250,4 @@ row's score:
 - `npm run games:sim -- --game wires --watch scout,storyteller --seed 2`: one match, round by round.
 - `packages/core/test/games.test.ts`: every rule edge, 500 random matches a game that end and replay identically, and
   on a small size, that no bid beats The Lot's equilibrium mix.
+- `packages/core/test/lot-attacks.test.ts`: The Lot's draw, attacked (1.5).
