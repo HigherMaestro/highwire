@@ -4,6 +4,11 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
 
 ## Unreleased
 
+- **The wager rehearsal handles a drawn series, and can't pass on a stale build:** its random players sometimes draw
+  the first series, which the program refunds with no fee, and the settlement and record checks now expect that
+  (`-- --draw` forces one). It also refuses a compiled program older than the program's source, and checks that
+  every move landed: on a build from before a commit names its match, every commit was refused, the fallbacks
+  played every round, and the series still closed.
 - ***Even* isn't safe in a wager series, and the play that is now exists** (docs/research/series-equilibrium.md,
   `npm run arena:series`). In one match nobody beats Even on average, but a best-of-5 isn't five separate matches: a
   drawn match is rarely worth half a win. A player that knows the series score and plays the best response to Even
@@ -56,7 +61,7 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   mainnet config paused in the same transaction, refuses a fee account that's the authority's own wallet, asks you to
   type "mainnet" before a mainnet send, and gains `config`: the ticket key, the fee and its account, the tiers, the caps
   and the authority.
-- **The whole wager stack rehearsed on a local validator:** `npm run rehearse-wagers -w highwire-mcp` plays full series
+- **The whole wager stack rehearsed on a local validator:** `npm run rehearse-wagers -w highwire-wager` plays full series
   through the real tools, signer, daemons and desk (a missed commit, a retirement, a series never accepted, a pause, a
   freeze), touching no public cluster. Its first run found that an agent couldn't stake again for up to ten minutes
   after a series closed (the signer counted any recent stake as open); fixed.
