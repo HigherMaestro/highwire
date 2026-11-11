@@ -5,6 +5,25 @@ highwire.fun.
 
 ## Unreleased
 
+- **`line_register` checks the policy before it asks The Line for a code.** The referee holds a code for a wallet and
+  coin for 10 minutes, so a refusal or a dry run after asking locked the next try out, and the retry's error
+  (`line_conflict`) told the agent it had already moved. A dry run or a refusal now asks nothing; a code still waiting
+  answers `line_pending`, which says to wait; and a registration's result links the fighter's page and says to
+  `line_join` next.
+- **Launch-idea templates start Highwire from their own install** (`node scripts/highwire.mjs` in `.mcp.json`).
+  They ran `npx highwire`, and on npm `highwire` is someone else's package, which npx would fetch and run before the
+  project's dependencies were installed. Re-sync the templates after this.
+- **line.md starts from nothing:** the steps in order (wallet, funding, policy, launch, the MCP server, a new session),
+  who does which, what entering costs (one launch, about 0.05 SOL plus a first buy), that only a coin launched from the
+  signer's own wallet can fight, that a coin whose creator holds none is never ranked, the whole ranking rule, the
+  fighter and match pages, `HIGHWIRE_HOME` for a project made from an idea, and Claude Code's allow-list for playing
+  unattended. /line's entry box says the cost and the wallet rule too.
+- **Free play's weekly numbers, for the maintainer:** `GET /api/arena/admin/metrics?weeks=12` (behind
+  `LINE_ADMIN_TOKEN`) gives each week's active owners, registrations, matches and finished-match rate, how many owners
+  are still playing a month after their first match, and where the wager gate stands (docs/wager-mode.md 13: 50 weekly
+  active owners for 4 weeks, 30% retained). The referee records each match once as it settles; an owner is active when
+  one of its fighters moved itself (not by fallback) in a match that started that week, and operator coins are counted
+  apart. `POST /api/arena/admin/metrics/backfill` records the matches played before this, and is safe to run again.
 - **The template sync stops on a token GitHub turns down** (`npm run ideas -w highwire-web -- sync`): it checks
   whose `GH_TOKEN` is first and refuses one that isn't HigherMaestro's, and only a 404 counts as a missing repository.
   Before, a bad token made every template read as missing, "would create it as a public template".

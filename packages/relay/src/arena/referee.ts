@@ -15,6 +15,7 @@ import type { Clock } from "../clock.ts";
 import { fail, RelayError } from "../errors.ts";
 import { randomHex, sha256Hex, sameHex, TOKEN_SECONDS, type Verified } from "../registration.ts";
 import { update, type Store } from "../store.ts";
+import { readMetrics, recordMatch, type Metrics } from "./metrics.ts";
 import { applyMove, contested, forfeitMatch, newAgentMatch, newHouseMatch, settle } from "./match.ts";
 import type { CoinStanding, Fighter, Match, Outage, Tally } from "./types.ts";
 import { viewFighter, viewMatch, type FighterView, type MatchView } from "./view.ts";
@@ -588,6 +589,8 @@ export class Referee {
       if (score !== null) await update<Tally>(this.store, `arena:house:${h.bot}`, (cur) => tally(cur ?? empty(), score));
     }
     await this.flag(m!, before);
+    // The numbers are bookkeeping: a failure here mustn't undo or hold up a result already applied.
+    await recordMatch(this.store, m!, Object.fromEntries(sides.map((s) => [m!.sides[s].id, before[s]]))).catch((err) => console.error("referee: couldn't record a match's metrics", err));
     return m!;
   }
 
@@ -649,6 +652,40 @@ export class Referee {
     if (found.length) await update<typeof found>(this.store, FLAGS, (cur) => [...(cur ?? []), ...found].slice(-500));
   }
 
+  /** Free play's weekly numbers, for the maintainer (docs/arena.md 2). */
+  async metrics(weeks = 12): Promise<Metrics> {
+    return readMetrics(this.store, this.clock.now(), await this.allFighters(), Math.min(Math.max(Math.trunc(weeks) || 12, 1), 52));
+  }
+
+  /**
+   * Records every ended match the indexes still hold (each fighter's last 50, and the recent list) into the weekly
+   * numbers. Safe to run again: recording a match twice changes nothing.
+   */
+  async backfillMetrics(): Promise<{ matches: number }> {
+    const fighters = await this.allFighters();
+    const byId = Object.fromEntries(fighters.map((f) => [f.id, f]));
+    const ids = new Set((await this.store.get<string[]>(RECENT))?.value ?? []);
+    for (const f of fighters) for (const id of (await this.store.get<string[]>(fighterMatches(f.id)))?.value ?? []) ids.add(id);
+    let n = 0;
+    for (const id of ids) {
+      const m = (await this.store.get<Match>(`arena:match:${id}`))?.value;
+      if (!m?.ending) continue;
+      await recordMatch(this.store, m, byId);
+      n++;
+    }
+    return { matches: n };
+  }
+
+  private async allFighters(): Promise<Fighter[]> {
+    const ids = (await this.store.get<string[]>(FIGHTERS))?.value ?? [];
+    const all: Fighter[] = [];
+    for (const id of ids) {
+      const f = await this.store.get<Fighter>(`arena:fighter:${id}`);
+      if (f) all.push(f.value);
+    }
+    return all;
+  }
+
   /** Flags waiting for review, oldest first. */
   async flags() {
     return (await this.store.get<{ fighter: string; match: string; reason: string; at: number }[]>(FLAGS))?.value ?? [];
@@ -667,12 +704,7 @@ export class Referee {
    * established fighters), by r − 2·RD; then every fighter's record; then the house, never ranked.
    */
   async leaderboard(): Promise<{ ranked: (FighterView & { score: number })[]; fighters: FighterView[]; house: { bot: HouseBot; name: string; rating: number; record: Tally }[] }> {
-    const ids = (await this.store.get<string[]>(FIGHTERS))?.value ?? [];
-    const all: Fighter[] = [];
-    for (const id of ids) {
-      const f = await this.store.get<Fighter>(`arena:fighter:${id}`);
-      if (f) all.push(f.value);
-    }
+    const all = await this.allFighters();
     const ranked = all
       .filter((f) => !f.operator && f.standing?.listedOk && f.rating.rd < PROVISIONAL_RD && new Set(f.opponentOwners).size >= 5 && new Set(f.establishedOpponents).size >= 5)
       .map((f) => ({ ...viewFighter(f, PROVISIONAL_RD), score: Math.round(conservative(f.rating)) }))

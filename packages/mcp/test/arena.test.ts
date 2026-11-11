@@ -188,11 +188,12 @@ test("the wager extension: passed in code, it registers its tools and gets every
   assert.equal(registered, 1, "the extension ran once, for the server with the signer");
 });
 
-test("registration goes through the user's policy: refused without \"register\", a dry run unless live", async () => {
+test("registration goes through the user's policy first: a refusal or a dry run never asks The Line, so nothing is locked", async () => {
   const w = world();
   const key = Keypair.generate();
   const launch = w.rpc.add(launchTx({ payer: key.publicKey.toBase58() }));
   const args = { mint: MINT, launch_signature: launch, confirm: true };
+  const asked = () => w.calls.filter((c) => c === "relay.test/api/agents/challenge").length;
 
   const noRegister = await connect(w, { signer: new LocalSigner(key, home({ ...POLICY, actions: ["trade"] })) });
   const refused = await call(noRegister, "line_register", args);
@@ -200,13 +201,33 @@ test("registration goes through the user's policy: refused without \"register\",
   assert.equal(refused.body.code, "policy_refused");
   assert.match(refused.body.error, /registrations/);
 
-  // A second challenge for the same wallet and coin waits for the first to expire.
-  w.clock.advance(601_000);
   const dry = await connect(w, { signer: new LocalSigner(key, home({ ...POLICY, live: false })) });
   const out = await call(dry, "line_register", args);
   assert.equal(out.body.registered, false);
-  assert.equal(out.body.signer.status, "dry_run");
+  assert.equal(out.body.dry_run, true);
   assert.match(out.body.next_step, /dry run/);
+  assert.equal(asked(), 0, "The Line wasn't asked for a code");
+
+  // Fixed at once, it registers at once: no code was left waiting.
+  const signer = new LandingSigner(key, home(POLICY), w);
+  const live = await call(await connect(w, { signer }), "line_register", args);
+  assert.equal(live.body.registered, true, live.text);
+  assert.match(live.body.page, /\/line\/fighter\//);
+  assert.match(live.body.next_step, /line_join/);
+});
+
+test("a second registration while a code waits gets its own code and tells the agent to wait, not that it moved", async () => {
+  const w = world();
+  const key = Keypair.generate();
+  const launch = w.rpc.add(launchTx({ payer: key.publicKey.toBase58() }));
+  // An attempt that asked The Line and then never sent its memo leaves the code waiting.
+  await w.relay.fetch(new Request("https://relay.test/api/agents/challenge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet: key.publicKey.toBase58(), mint: MINT, launchSignature: launch, secretHash: "0".repeat(64) }) }));
+  const client = await connect(w, { signer: new LandingSigner(key, home(POLICY), w) });
+  const again = await call(client, "line_register", { mint: MINT, launch_signature: launch, confirm: true });
+  assert.equal(again.isError, true);
+  assert.equal(again.body.code, "line_pending");
+  assert.match(again.body.next_step, /10 minutes/);
+  assert.doesNotMatch(again.body.next_step, /moved/);
 });
 
 test("an agent registers through the signer, plays the house to the end, and every reveal checks out", async () => {

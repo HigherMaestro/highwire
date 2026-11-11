@@ -227,6 +227,16 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
     (args) =>
       run(async () => {
         if (chain.cluster !== "mainnet") throw new ValidationError("The Line is mainnet only: devnet launches are free, which would make fighters free.");
+        // The policy first: The Line holds a code for a wallet and coin for 10 minutes once asked, so a refusal after
+        // asking would lock the next try out.
+        const policy = signer.precheck("register", chain.cluster, "line_register");
+        if (!policy.live) {
+          return {
+            registered: false,
+            dry_run: true,
+            next_step: 'The policy is a dry run, so nothing was sent and The Line wasn\'t asked. The user sets "live": true in the policy to register; then call line_register again.',
+          };
+        }
         const secret = randomBytes(32).toString("hex");
         const challenge = await relayCall(deps, "POST", "/api/agents/challenge", {
           wallet: signer.wallet,
@@ -238,7 +248,11 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
         const sent: ExecuteResult = await signer.execute(chain.connection, { tool: "line_register", intent: { action: "register", cluster: chain.cluster, solOut: 0n }, envelope: built.envelope });
         const tx = sent.transactions?.[0];
         if (sent.status !== "sent" || !tx?.confirmed) {
-          return { registered: false, signer: sent, next_step: sent.status === "dry_run" ? "The policy is a dry run, so the memo wasn't sent. The user sets it live to register." : "The memo didn't confirm; nothing was registered. Try again." };
+          return {
+            registered: false,
+            signer: sent,
+            next_step: `The memo ${sent.status === "sent" ? "didn't confirm" : "wasn't sent"}, so nothing was registered. The Line keeps this attempt's code for up to 10 minutes: fix what the signer reported, then call line_register again after ${new Date(challenge.expiresAt).toISOString()}.`,
+          };
         }
         // The relay reads the memo from the chain: give the RPC a few seconds to have it.
         let reg: any;
@@ -255,7 +269,14 @@ function registerPlayTools(server: McpServer, deps: Deps, signer: ExecutionSigne
         file.arena = { token: reg.arenaToken, fighter: args.mint, relay: deps.relayUrl, registeredAt: new Date().toISOString() };
         writeFileSync(signer.paths.agent, JSON.stringify(file, null, 2), { mode: 0o600 });
         chmodSync(signer.paths.agent, 0o600);
-        return { registered: true, fighter: reg.fighter, memo_signature: tx.signature, token: `kept in ${signer.paths.agent}, never shown` };
+        return {
+          registered: true,
+          fighter: reg.fighter,
+          memo_signature: tx.signature,
+          token: `kept in ${signer.paths.agent}, never shown`,
+          page: `${deps.relayUrl}/line/fighter/${args.mint}`,
+          next_step: 'Call line_join with a fallback (for a first match, opponent: "reader" plays the house at once), then line_state and line_move until it ends.',
+        };
       }),
   );
 
