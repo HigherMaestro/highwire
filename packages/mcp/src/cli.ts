@@ -66,6 +66,7 @@ Local signer (off unless HIGHWIRE_KEYPAIR_PATH is set):
   HIGHWIRE_KEYPAIR_PATH    a Solana CLI keypair file; turns on the execute tools for that wallet
   HIGHWIRE_HOME            default ~/.highwire (policy.json, audit.jsonl, and the STOP kill switch)
   HIGHWIRE_POLICY_PATH     default $HIGHWIRE_HOME/policy.json
+  HIGHWIRE_WAGERS          1 turns on The Line's wager tools (line_stake, line_wagers); off by default
 
 Commands:
   highwire new <idea>      start a project from one of highwire.fun's launch ideas (highwire new lists them)

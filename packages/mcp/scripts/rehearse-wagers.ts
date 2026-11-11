@@ -219,7 +219,7 @@ async function agent(name: string, key: Keypair, n: number): Promise<Agent> {
   // Its reveal daemon, as `highwire line run` with the same environment as its server.
   const env = { HIGHWIRE_CLUSTER: "devnet", HIGHWIRE_HOME: home, HIGHWIRE_KEYPAIR_PATH: keyFile, SOLANA_RPC_URL: RPC, HIGHWIRE_RELAY_URL: "https://relay.test" };
   void runLine(["run"], { env, signal: daemons.signal, out: () => undefined, err: (l) => (/WARNING|refused|failed/i.test(l) ? log(`${name} run`, l.slice(9)) : undefined) });
-  const server = createServer({ cluster: "devnet", rpcUrl: RPC, relayUrl: "https://relay.test", arena: true, signer: new LocalSigner(key, paths) });
+  const server = createServer({ cluster: "devnet", rpcUrl: RPC, relayUrl: "https://relay.test", arena: true, wagers: true, signer: new LocalSigner(key, paths) });
   const client = new Client({ name: `rehearse-${name}`, version: "0" });
   const [x, y] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(x), client.connect(y)]);

@@ -111,6 +111,12 @@ export interface ServerOptions {
   liveSocket?: LiveSocketFactory;
   /** The Line's tools (docs/arena.md 6). Default on; HIGHWIRE_ARENA=0 turns them off. */
   arena?: boolean;
+  /**
+   * The Line's wager tools: line_stake, line_wagers, and `series` on line_state, line_move and line_retire
+   * (docs/boundaries.md 5.1). Default off; HIGHWIRE_WAGERS=1 turns them on. They need the local signer too, and the
+   * user's policy still decides what may be staked.
+   */
+  wagers?: boolean;
   /** Where The Line's referee runs. Default https://highwire.fun; HIGHWIRE_RELAY_URL for a local one. */
   relayUrl?: string;
 }
@@ -165,7 +171,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
     if (!opts.hosted) registerLocalTools(server, deps);
   }
   // The play tools need the local signer, which the hosted endpoint never has; there only the rules and leaderboard.
-  if (opts.arena !== false) registerArenaTools(server, deps);
+  if (opts.arena !== false) registerArenaTools(server, deps, { wagers: opts.wagers === true });
   registerPrompts(server);
 
   server.registerResource(

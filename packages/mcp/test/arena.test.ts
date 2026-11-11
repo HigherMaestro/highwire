@@ -12,7 +12,7 @@ import { createRelay, FakeClock, MemoryStore, type Relay } from "highwire-relay"
 import { FakeCoins, FakeRpc, launchTx, memoTx, MINT } from "highwire-relay/testing";
 import { createServer, type ServerOptions } from "../src/server.ts";
 import { agentView } from "../src/tools/arena.ts";
-import { ALL_TOOLS, EXECUTE_TOOLS, FAKE_OPTIONS, HOSTED_TOOLS } from "./fake.ts";
+import { ALL_TOOLS, EXECUTE_TOOLS, FAKE_OPTIONS, HOSTED_TOOLS, WAGER_TOOLS } from "./fake.ts";
 
 // The arena's tools end to end (docs/arena.md 12, phase 2): an agent on the local server registers its coin through
 // the local signer, plays the house to the end, and checks every reveal and the house's seed; against Highwire's
@@ -121,6 +121,45 @@ test("The Line's tools: on by default, off with arena: false, and only the rules
   assert.ok(PLAY_TOOLS.every((t) => EXECUTE_TOOLS.includes(t)));
   const rules = await call(hosted, "line_rules");
   assert.equal(rules.body.rules.id, "duels-1");
+});
+
+test("the wager tools are off unless asked for: no staking tool, no word of staking, and a series is refused, never dropped", async () => {
+  const SERIES = "ab".repeat(32);
+  const w = world();
+  const off = await connect(w, { signer: new LocalSigner(Keypair.generate(), home()) });
+  const tools = (await off.listTools()).tools;
+  assert.ok(WAGER_TOOLS.every((t) => !tools.some((x) => x.name === t)), "no line_stake, no line_wagers");
+  for (const name of ["line_state", "line_move", "line_retire"]) {
+    const t = tools.find((x) => x.name === name)!;
+    assert.doesNotMatch(JSON.stringify(t), /stake|wager|on-chain|daemon/i, `${name} says nothing of staking`);
+    assert.ok("series" in (t.inputSchema.properties as object), `${name} still takes a series, to refuse it`);
+  }
+  // A dropped `series` would send these to the free match: line_retire would forfeit it.
+  const before = w.calls.length;
+  for (const [name, args] of [
+    ["line_state", { series: SERIES }],
+    ["line_move", { series: SERIES, series_match: 1, round: 1, pull: 3 }],
+    ["line_move", { series_match: 1, round: 1, pull: 3 }],
+    ["line_retire", { confirm: true, series: SERIES }],
+    ["line_retire", { confirm: true, series: "" }],
+  ] as const) {
+    const res = await call(off, name, args);
+    assert.equal(res.isError, true, name);
+    assert.equal(res.body.code, "wagers_off", name);
+    assert.match(res.body.error, /HIGHWIRE_WAGERS=1/);
+    assert.match(res.body.next_step, /Nothing was staked, committed or retired/);
+  }
+  assert.equal(w.calls.length, before, "nothing reached the relay or the RPC");
+
+  const on = await connect(w, { signer: new LocalSigner(Keypair.generate(), home()), wagers: true });
+  const onTools = (await on.listTools()).tools;
+  assert.deepEqual(onTools.map((t) => t.name).sort(), [...ALL_TOOLS, ...EXECUTE_TOOLS, ...WAGER_TOOLS].sort());
+  assert.match(onTools.find((t) => t.name === "line_move")!.description!, /staked series/);
+  // Without the local signer there is nothing to switch on, and never on the hosted endpoint.
+  const noSigner = await connect(w, { wagers: true });
+  assert.deepEqual((await noSigner.listTools()).tools.map((t) => t.name).sort(), ALL_TOOLS);
+  const hosted = await connect(w, { hosted: true, wagers: true });
+  assert.deepEqual((await hosted.listTools()).tools.map((t) => t.name).sort(), HOSTED_TOOLS);
 });
 
 test("registration goes through the user's policy: refused without \"register\", a dry run unless live", async () => {

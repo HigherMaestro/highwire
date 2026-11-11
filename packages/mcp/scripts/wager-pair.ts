@@ -39,7 +39,7 @@ async function player(spec: string | undefined, label: string): Promise<Player> 
   const { keypair, warning } = loadKeypair(key);
   if (warning) console.error(`warning (${label}): ${warning}`);
   const signer = new LocalSigner(keypair, agentPaths({ HIGHWIRE_HOME: home }));
-  const server = createServer({ cluster: "devnet", rpcUrl, signer, arena: true });
+  const server = createServer({ cluster: "devnet", rpcUrl, signer, arena: true, wagers: true });
   const client = new Client({ name: `wager-pair-${label}`, version: "0" });
   const [x, y] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(x), client.connect(y)]);

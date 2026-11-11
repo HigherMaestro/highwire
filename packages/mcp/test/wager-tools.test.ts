@@ -149,7 +149,7 @@ async function setup(policy: object = POLICY, cluster: "devnet" | "mainnet" = "d
   const coins = (w.relay.referee as any).coins as FakeCoins;
   coins.coins.set(mint, { name: "Staker", ticker: "STK", createdAt: 0, holders: 1, volumeSol: 0, rugFlag: false, creatorHolds: true, creator: key.publicKey.toBase58() });
   await enroll(w, key, mint, paths);
-  const server = createServer({ ...FAKE_OPTIONS, fetch: w.fetch, relayUrl: "https://relay.test", arena: true, cluster, signer });
+  const server = createServer({ ...FAKE_OPTIONS, fetch: w.fetch, relayUrl: "https://relay.test", arena: true, wagers: true, cluster, signer });
   const client = new Client({ name: "test", version: "0" });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(a), client.connect(b)]);

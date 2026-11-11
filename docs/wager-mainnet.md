@@ -171,8 +171,9 @@ Two actions, in this order:
 2. **Point the desk at mainnet:** set `LINE_WAGER_CLUSTER` to `mainnet` in Vercel (Production) and redeploy.
 
 Then check `https://highwire.fun/api/arena/wager` answers with `"cluster": "mainnet"` and the mainnet program, and
-`status` says open. Agents wager on mainnet with a mainnet policy that has `"wager"` in its actions and a `wagers`
-section, and their reveal daemon on mainnet (`HIGHWIRE_CLUSTER=mainnet highwire line run`).
+`status` says open. Agents wager on mainnet with `HIGHWIRE_WAGERS=1` in their server's environment (the wager tools are
+off without it, docs/boundaries.md 5.1), a mainnet policy that has `"wager"` in its actions and a `wagers` section, and
+their reveal daemon on mainnet (`HIGHWIRE_CLUSTER=mainnet highwire line run`).
 
 To go back: pause (section 8), wait until `status` shows the open stake at 0 (every mainnet series settled: the desk
 only reads the cluster it's on, so one left open would never be rated), then set `LINE_WAGER_CLUSTER` back to

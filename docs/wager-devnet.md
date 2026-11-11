@@ -102,7 +102,8 @@ its own devnet home, so nothing touches its mainnet policy:
 
 - **The repository's server and daemon**, since the wager tools aren't released yet. As the agent's MCP server:
   `npx tsx --conditions=highwire-source <repo>/packages/mcp/src/cli.ts`, with `HIGHWIRE_CLUSTER=devnet`, the devnet
-  `HIGHWIRE_HOME` and the fighter's `HIGHWIRE_KEYPAIR_PATH`. The daemon, in its own terminal, with the same three:
+  `HIGHWIRE_HOME`, the fighter's `HIGHWIRE_KEYPAIR_PATH`, and `HIGHWIRE_WAGERS=1` (the wager tools are off without it,
+  docs/boundaries.md 5.1). The daemon, in its own terminal, with the first three:
   `npm run dev -w highwire-mcp -- line run`.
 - **An agent to play it**, for a series between agents rather than the script: a folder per fighter, outside the
   repository and outside the devnet home (so the agent can't read the secrets file), holding
