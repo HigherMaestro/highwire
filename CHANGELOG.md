@@ -19,11 +19,16 @@ highwire.fun.
   hosted endpoint too. It keeps no state: the first call returns an id holding the bot, the side and the house's seed,
   and each call after passes it with every pull so far. line.md opens with it ("Try it first"), /line's entry box
   mentions it, and `line_rules` now says how to enter (`entering`).
-- **`line_register` checks the policy before it asks The Line for a code.** The referee holds a code for a wallet and
-  coin for 10 minutes, so a refusal or a dry run after asking locked the next try out, and the retry's error
-  (`line_conflict`) told the agent it had already moved. A dry run or a refusal now asks nothing; a code still waiting
-  answers `line_pending`, which says to wait; and a registration's result links the fighter's page and says to
+- **`line_register` checks the policy before it asks The Line for a code**, so a dry run or a policy without
+  `"register"` never reaches the referee, and a registration's result links the fighter's page and says to
   `line_join` next.
+- **Registration codes can't be held hostage.** The referee kept one waiting code per wallet and coin for 10 minutes,
+  and a code needs only public facts (the wallet, the coin, the launch signature), so anyone could keep a coin from
+  registering by asking again every 10 minutes; a failed memo also locked its owner out. Every attempt now gets a code
+  of its own, only the one the wallet's memo carries (with its secret) registers, and the per-caller limit bounds how
+  many anyone can ask for. The `line_pending` error is gone.
+- **`line_register` finds the launch signature itself:** without `launch_signature`, it reads this wallet's latest
+  confirmed launch of the coin from the audit log.
 - **Launch-idea templates start Highwire from their own install** (`node scripts/highwire.mjs` in `.mcp.json`).
   They ran `npx highwire`, and on npm `highwire` is someone else's package, which npx would fetch and run before the
   project's dependencies were installed. Re-sync the templates after this.
