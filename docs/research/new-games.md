@@ -18,8 +18,8 @@ how would language-model-like play fare in it against a Reader-style player?
   solver engineering goes to bot builders, the market wager mode already worries about.
 - **The Lot is gentler on LLM-like play.** Its true Reader beats the three LLM-like players by +0.30 to +0.61, against
   +0.61 to +0.85 on the wire. It draws less (5%), runs shorter (7.8 rounds), and needs **randomness on-chain**, which
-  The Line's program doesn't have. A design for it that takes input from the two players only, and the attacks tried
-  against it, are in 1.5.
+  The Line's program doesn't have. A design for it that takes input from the two players only is in 1.5; two adversarial
+  reviews broke its first version and found more (1.6).
 - **Three wires isn't a finished game yet.** Cautious players draw each other more than half the time, naive play
   loses in three rounds, and long matches end in a scramble for the few points of energy each side regains.
 - **Recommendation:** neither goes into the program before its audit. If one is pursued, The Lot is nearer to ready.
@@ -100,16 +100,19 @@ nothing in the design is secret but the seeds and nonces before they're revealed
 supplies any input. `packages/core/scripts/games/lot-series.ts` is the protocol; `test/lot-attacks.test.ts` attacks it.
 
 **How it works**
-- **Entropy:** one 32-byte value per series, which every prize is drawn from.
-- **It starts from two seeds.** A commits to its seed's hash when it opens the series. B posts its seed in the clear
-  when it accepts, with A's still hidden. A then reveals, and the first prize is drawn. A can't change its seed, and B
-  can't see A's when it picks its own.
+- **Two seeds start it.** A commits to its seed's hash when it opens the series. B posts its seed in the clear when it
+  accepts, with A's still hidden. A then reveals. A can't change its seed, and B can't see A's when it picks its own.
+- **Nothing is drawn until both seeds are in.** If A doesn't reveal in time it forfeits the match and the window opens
+  again, so no prize ever comes from B's seed alone.
+- **Each match has its own entropy**, from the two seeds and the match's number. How one match ends can't change a
+  draw in a later one.
 - **Every round feeds it.** Both sides commit to a bid with a 32-byte nonce, then both reveal. The two nonces are mixed
-  into the entropy and the next prize is drawn from the result. Each nonce was fixed before the other was visible.
+  into the match's entropy and the next prize is drawn from the result. Each nonce was fixed before the other was
+  visible.
 - **Walking away forfeits.** The side that reveals second can work out the draw before it reveals. Its only other move
   is not revealing, which forfeits the match, as on the wire (docs/wager-mode.md 7.2.1). **A missed commit forfeits
   too**, so there is no round in which one side alone supplied the randomness.
-- **A missed seed** costs A the first match, and the series goes on from B's seed.
+- **A commitment names its match** as well as its round, when it's sent and in its hash.
 - **Anyone can check it:** the seeds and nonces are in the transactions, so a replay recomputes every prize (`auditDraws`).
 
 **What an attacker might try** (each is a test; the last column is what happens)
@@ -127,12 +130,15 @@ supplies any input. `packages/core/scripts/games/lot-series.ts` is the protocol;
 | Hide a bid above the energy left in a commitment | can't be revealed: a forfeit |
 | Grind a nonce for a wanted prize (64 tries a round, 3,000 rounds) | hits 1 in 9, as chance does |
 | B grinds its seed for the first prize | 1 in 9 |
-| A changes or withholds its seed | refused; withholding loses match 1 |
+| A changes or withholds its seed | refused; withholding loses the match, and the window opens again |
+| Lose a match by forfeit, not by revealing, to change the next match's opening | the same opening either way |
+| Land a commitment from the last match in this one | refused: it names the other match |
 | Race to reveal first or second | the draw is the same either way |
 
-Each count of prizes left draws evenly (20,000 draws a count). Six deliberate breaks of the protocol (the draw ignoring
-one nonce, a commitment that doesn't name its side, an early reveal allowed, a missed reveal made a void, an early
-timeout allowed, a biased reduction) each fail at least one test.
+Each count of prizes left draws evenly (20,000 draws a count). Ten deliberate breaks of the protocol each fail at least
+one test: the draw ignoring one nonce, a commitment that doesn't name its side, an early reveal allowed, a missed
+reveal made a void, an early timeout allowed, a biased reduction, entropy running on from match to match, a commit
+that doesn't check its match, a missed seed drawing from B's alone, and a clock checked only against the phase.
 
 **Why not something else**
 - **Slot hashes:** the block's leader can bias one, and whoever sends the transaction picks which slot it lands in.
@@ -142,10 +148,11 @@ timeout allowed, a biased reduction) each fail at least one test.
 - **A seed from Highwire:** an insider would know or steer the order, which the on-chain match exists to prevent.
 
 **What this doesn't settle**
-- **Tests show these attacks fail against this model. They can't show that no attack exists.** The program would be a
-  second implementation in Rust: it needs the wire's parity fixtures and the audit, and this is one more thing for both.
-- **A machine that's down forfeits matches** where the wire would play its public fallback. A fixed fallback lost to
-  Reader nearly always anyway (1.3), but it's a harsher rule, and the reveal window has to allow for it.
+- **Tests show these attacks fail against this model. They can't show that no attack exists**, and 1.6 is the proof:
+  the first version passed its own tests and was wrong. The program would be a second implementation in Rust: it
+  needs the wire's parity fixtures and the audit, and this is one more thing for both.
+- **A machine that's down forfeits matches** where the wire would play its public fallback, and each forfeit opens the
+  next match at once: six minutes offline loses a series from any score.
 - **Weak randomness on a player's own machine** lets its opponent predict its nonce and so steer the draw. It only
   hurts the player with the weak generator; the daemon draws its nonces from the system's (`wager-secrets.ts`), and a
   third-party client that doesn't is its owner's risk.
@@ -153,7 +160,45 @@ timeout allowed, a biased reduction) each fail at least one test.
   collusion checks (docs/wager-mode.md 10), not the draw.
 - **A validator keeping a reveal out of every block** for the whole window would force a forfeit, as on the wire. The
   window is at least a minute, which is many leaders.
-- **Not modelled here:** the chess clock's bank, retiring, stakes and payouts. They'd be the wire's.
+- **Not modelled here:** the chess clock's bank, retiring, stakes and payouts (1.6 on the clock).
+
+### 1.6 What two adversarial reviews found
+
+Two reviewers with no part in the design were given the code and told to cheat it: one the protocol (encodings, the
+state machine, deadlines), one the incentives (payoffs across a series, timing, ordering). Both found real problems.
+
+**Fixed in the model**
+
+| Finding | What it was | Now |
+|---|---|---|
+| **The loser of a match picked the next opening** | The entropy ran on from match to match. In a round that lost it the match anyway, a side could reveal or withhold: both lost the match, each led to a different first prize for the next. It took the better of two, free: its wanted prize opened 21% of the time, not 11% | each match's entropy comes from the seeds and its number alone |
+| **A commitment could land in the next match** | `commit` checked the round, not the match. A copy sent for match 1 was accepted as match 2's same round, couldn't be opened there, and forfeited it | a commitment names its match |
+| **B's seed alone, if A missed** | with A's seed missing, every later draw started from a seed B chose: about 9 tries to pick an opening | nothing is drawn until both seeds are in |
+| **The clock** | an act's time was checked against its phase's start, not the act before | never before the last act |
+| **The audit** | accepted records out of order, repeated or beyond the series | refused, with the reason |
+
+The first was worth little (0.05% to 0.5% of a stake a series, on 5 to 8 prizes), and it was exactly the case 1.5
+claimed couldn't happen: "walking away forfeits" is only a penalty when the match isn't already lost.
+
+**Not fixed: they're about the game, not the draw**
+- **Bidding for the series beats the match's equilibrium, by 8% to 10% of the stake a series** (exact, on 5 to 8
+  prizes; the draft's size wasn't run). The solver treats a drawn match as half a win. In a best-of-5 it rarely is: a
+  side one match up with one to play wins the series on a draw, so it steers for burned prizes. A player that solves
+  each match for the series' score beats one on the published mix, breaking no rule. So **Even is not a series'
+  equilibrium**, here and very likely on the wire, which draws more often (11%) and wasn't tested. Two ways out:
+  settle a level match by a draw from the entropy, which makes a draw worth half a win again and adds luck; or solve
+  and publish the mix per series score.
+- **Stalling is free.** With no clock across rounds, a side that uses every window in full stretches a two-minute
+  series to over two hours. The wire's bank would have to charge reveals as well as commits, and running out would
+  have to forfeit the match, since there's no fallback to play.
+- **The solver throws on some states.** `solveMatrix` reports an "unbounded game" (a numerical failure) in a few
+  reachable states where the side to move has less energy: 2 at 7 prizes, 30 at 8. A daemon that asked it for a bid
+  and didn't catch that would miss its commit. The wire's own solve doesn't hit it.
+
+**One finding reaches the wire.** The Line's series (`src/arena/series.ts`, the wager program's twin) also checks a
+commitment's round and not its match, and its instruction carries no match. Checked: a copy of a match-1 round-1
+commitment is accepted as match 2's round 1, and forfeits it. It needs a signed commit that hadn't landed (a retry),
+arriving at the same round of the next match, so it's narrow. It's a change to the program, not to this prototype.
 
 ## 2. Three wires
 
@@ -250,4 +295,4 @@ row's score:
 - `npm run games:sim -- --game wires --watch scout,storyteller --seed 2`: one match, round by round.
 - `packages/core/test/games.test.ts`: every rule edge, 500 random matches a game that end and replay identically, and
   on a small size, that no bid beats The Lot's equilibrium mix.
-- `packages/core/test/lot-attacks.test.ts`: The Lot's draw, attacked (1.5).
+- `packages/core/test/lot-attacks.test.ts`: The Lot's draw, attacked (1.5), with a test for each review finding (1.6).
