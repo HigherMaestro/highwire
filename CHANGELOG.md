@@ -1,8 +1,9 @@
 # Changelog
 
-Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
+Every release of `highwire-core`, `highwire-agent`, `highwire-mcp`, `highwire-wager` (from 0.16.0) and the site at
+highwire.fun.
 
-## Unreleased
+## 0.16.0 (2026-11-11)
 
 - **Devnet runs the program with a commit that names its match** (2026-11-11, docs/wager-devnet.md 9): redeployed to
   the same address, the config unchanged, and the first series after it played five matches with every commit revealed

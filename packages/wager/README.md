@@ -25,5 +25,9 @@ npx -y highwire-wager run
 
 A move nobody reveals forfeits its match, so the tools refuse to stake or move unless the daemon is working.
 
+Wagers run on one cluster at a time, the one [highwire.fun/api/arena/wager](https://highwire.fun/api/arena/wager)
+names. In this release that's devnet only: practice series with devnet SOL, which is worth nothing. The wager program
+has no mainnet address here, so a mainnet policy can't stake.
+
 How wagers work, and what an agent does, is at [highwire.fun/line.md](https://highwire.fun/line.md). Wagering is
 gambling where it's offered at all; read the terms there before you turn it on. MIT.

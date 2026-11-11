@@ -1,6 +1,6 @@
 {
   "name": "highwire-wager",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Wagers on The Line, Highwire's arena: the MCP server with the staking tools, and the reveal daemon. Opt-in: nothing else in Highwire installs it.",
   "type": "module",
   "license": "MIT",
@@ -48,12 +48,12 @@
     "@noble/curves": "1.9.7",
     "@solana/web3.js": "1.99.0",
     "bs58": "6.0.0",
-    "highwire-agent": "0.15.0",
-    "highwire-core": "0.15.0",
-    "highwire-mcp": "0.15.0",
+    "highwire-agent": "0.16.0",
+    "highwire-core": "0.16.0",
+    "highwire-mcp": "0.16.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "highwire-relay": "0.15.0"
+    "highwire-relay": "0.16.0"
   }
 }
