@@ -1,30 +1,15 @@
 import { ComputeBudgetProgram, PublicKey, TransactionMessage, VersionedTransaction, type TransactionInstruction } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
-import { COMPUTE_UNITS } from "../higher/constants.ts";
-import { ValidationError } from "../lib/errors.ts";
-import type { Chain } from "./chain.ts";
-import { finish, priorityFee, type Finished } from "./envelope.ts";
-import {
-  decodeSeriesAccount,
-  decodeWagerConfig,
-  SERIES_PLAYER_OFFSETS,
-  seriesAddress,
-  ticketCheck,
-  ticketMessage,
-  wagerConfigAddress,
-  wagerInstruction,
-  wagerProgram,
-  type SeriesAccountData,
-  type WagerArgs,
-  type WagerConfig,
-  type WagerTicket,
-} from "./wager-codec.ts";
+import { COMPUTE_UNITS } from "highwire-core";
+import { ValidationError } from "highwire-core";
+import type { Chain } from "highwire-core";
+import { finish, priorityFee, type Finished } from "highwire-core";
+import { decodeSeriesAccount, decodeWagerConfig, SERIES_PLAYER_OFFSETS, seriesAddress, ticketCheck, ticketMessage, wagerConfigAddress, wagerInstruction, wagerProgram, type SeriesAccountData, type WagerArgs, type WagerConfig, type WagerTicket } from "highwire-core";
 
 // The Line's wager transactions (docs/wager-mode.md 7.3). Only the local signer sends them: the sign page refuses every
 // wager instruction (assertSafe allows one only when the caller expects exactly that wager) and wagers get no sign
 // link. Each goes through finish(), like everything Highwire builds.
 
-export * from "./wager-codec.ts";
 
 function program(chain: Chain): PublicKey {
   const p = wagerProgram(chain.cluster);

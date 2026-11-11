@@ -23,5 +23,9 @@ export {
   createServer,
   type ServerOptions,
 } from "./server.ts";
+export { run } from "./result.ts";
+export { localLaunchSecret, signerFromEnv } from "./signer-env.ts";
+export { SERIES_ID, type RelayCall, type StakedSeries, type WagerExtension } from "./tools/arena.ts";
 export { LIST_ONLY_SIGNER } from "./tools/execute.ts";
+export { EXECUTE, READ_ONLY, type Deps, type ExecutionSigner } from "./tools/shared.ts";
 export { BUILD_TOOL_NAMES } from "./tools/transactions.ts";

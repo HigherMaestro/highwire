@@ -212,7 +212,7 @@ export interface WagerConfigInit {
 }
 
 /**
- * The one-time `InitConfig`, for the maintainer's tool only (packages/mcp/scripts/wager-admin.ts): signed by the
+ * The one-time `InitConfig`, for the maintainer's tool only (packages/wager/scripts/wager-admin.ts): signed by the
  * program's upgrade authority, never by an agent's signer, and assertSafe refuses it everywhere.
  */
 export function initConfigInstruction(program: PublicKey, c: WagerConfigInit): TransactionInstruction {

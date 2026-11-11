@@ -8,7 +8,6 @@ import { runClaim, runLaunch, runPolicyInit, runPost, runWallet } from "./launch
 import { runNew } from "./new-cli.ts";
 import { runAdd } from "./add-cli.ts";
 import { runOrders } from "./orders-cli.ts";
-import { runLine } from "./line-cli.ts";
 import { runWatch } from "./watch.ts";
 
 const args = process.argv.slice(2);
@@ -39,10 +38,14 @@ if (args[0] === "add") {
     : undefined;
   process.exit(await runAdd(args.slice(1), { ...io, ask }));
 }
-if (args[0] === "watch" || args[0] === "orders" || args[0] === "line") {
+if (args[0] === "line") {
+  io.err("The Line's wager commands moved to their own package: `npx -y highwire-wager run` (the reveal daemon) and `npx -y highwire-wager series`, with the same environment.");
+  process.exit(2);
+}
+if (args[0] === "watch" || args[0] === "orders") {
   const ctl = new AbortController();
   process.once("SIGINT", () => ctl.abort());
-  const code = await (args[0] === "watch" ? runWatch : args[0] === "line" ? runLine : runOrders)(args.slice(1), {
+  const code = await (args[0] === "watch" ? runWatch : runOrders)(args.slice(1), {
     apiUrl: serverOptionsFromEnv().apiUrl,
     ...io,
     signal: ctl.signal,
@@ -66,7 +69,6 @@ Local signer (off unless HIGHWIRE_KEYPAIR_PATH is set):
   HIGHWIRE_KEYPAIR_PATH    a Solana CLI keypair file; turns on the execute tools for that wallet
   HIGHWIRE_HOME            default ~/.highwire (policy.json, audit.jsonl, and the STOP kill switch)
   HIGHWIRE_POLICY_PATH     default $HIGHWIRE_HOME/policy.json
-  HIGHWIRE_WAGERS          1 turns on The Line's wager tools (line_stake, line_wagers); off by default
 
 Commands:
   highwire new <idea>      start a project from one of highwire.fun's launch ideas (highwire new lists them)
@@ -84,8 +86,8 @@ Commands:
   highwire orders limit-buy  buy a coin once its price falls to a level (--mint, --sol, --price or --drop-pct)
   highwire orders claim    claim creator fees on a schedule (--every-hours 24), and optionally buy back with them
   highwire orders list     the open orders; highwire orders cancel <id> cancels one
-  highwire line run        the reveal daemon for The Line's wager series (devnet): reveals, deadlines, settling
-  highwire line series     the wallet's wager series on-chain
+
+Wagers on The Line are a separate package: npx -y highwire-wager (the server with the staking tools, the reveal daemon).
 
 Without a local signer Highwire never signs: build tools return unsigned transactions and a sign_url for your own
 wallet. With one, it signs only inside your policy, and only sends when the policy says "live": true.`);

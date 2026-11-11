@@ -74,8 +74,6 @@ export const TRANSACTION_TOOLS = ["build_claim_creator_fees", "build_launch", "b
 export const LOCAL_ONLY_TOOLS = ["build_transfer"];
 /** Only with a local signer. */
 export const EXECUTE_TOOLS = ["cancel_order", "execute_claim", "execute_launch", "execute_trade", "execute_transfer", "get_signer_status", "line_join", "line_move", "line_register", "line_retire", "line_state", "list_orders", "place_order", "post_chat", "post_comment"];
-/** Only with a local signer and `wagers: true` (HIGHWIRE_WAGERS=1). */
-export const WAGER_TOOLS = ["line_stake", "line_wagers"];
 export const BUILD_TOOLS = ["build_claim_creator_fees", "build_launch", "build_trade", "build_transfer"];
 export const HOSTED_TOOLS = [...READ_TOOLS, ...TRANSACTION_TOOLS].sort();
 export const ALL_TOOLS = [...HOSTED_TOOLS, ...LOCAL_ONLY_TOOLS].sort();

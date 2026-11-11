@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Keypair, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 import bs58 from "bs58";
-import { seriesAddress, seriesHistory, wagerConfigAddress, wagerInstruction, WAGER_PROGRAM_IDS, type Chain } from "../src/index.ts";
+import { seriesAddress, wagerConfigAddress, wagerInstruction, WAGER_PROGRAM_IDS, type Chain } from "highwire-core";
+import { seriesHistory } from "../src/history.ts";
 
 // The practice pages' reader (tx/wager-history.ts) against a fake RPC: wager instructions are read wherever they run,
 // including called from another program; a history that can't be read whole throws rather than returning part of it;
@@ -15,7 +16,7 @@ const SERIES = seriesAddress(PROGRAM, ID);
 const A = Keypair.generate().publicKey;
 const B = Keypair.generate().publicKey;
 const PROXY = Keypair.generate().publicKey;
-const config = Buffer.from(JSON.parse(readFileSync(new URL("./fixtures/wager-codec.json", import.meta.url), "utf8")).config, "hex");
+const config = Buffer.from(JSON.parse(readFileSync(new URL("../../core/test/fixtures/wager-codec.json", import.meta.url), "utf8")).config, "hex");
 
 interface FakeTx {
   sig: string;

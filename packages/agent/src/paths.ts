@@ -28,7 +28,7 @@ export interface AgentPaths {
   stopWagers: string;
   /** Every wager move's nonce and every fallback's salt, mode 600, written before the commit is sent. Losing one forfeits a match. */
   wagerSecrets: string;
-  /** Held by the one `highwire line run` process (the reveal daemon). */
+  /** Held by the one `highwire-wager run` process (the reveal daemon). */
   wagerRunner: string;
   /** The daemon's heartbeat: its wallet, cluster and program, and when it last read the wallet's series. */
   wagerBeat: string;

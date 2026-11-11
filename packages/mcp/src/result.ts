@@ -66,9 +66,9 @@ const NEXT_STEPS: Record<string, string> = {
   line_bad_request: "Fix the parameters as the error says, and try again.",
   line_unavailable: "The Line's referee answered with an error. Try again shortly, and tell the user if it persists.",
   line_daemon_off:
-    "Tell the user the reveal daemon must be running for this wallet: `highwire line run`, with the same HIGHWIRE_CLUSTER, keypair and policy as this server. Nothing was staked or committed.",
+    "Tell the user the reveal daemon must be running for this wallet: `highwire-wager run`, with the same HIGHWIRE_CLUSTER, keypair and policy as this server. Nothing was staked or committed.",
   wagers_off:
-    "Tell the user staked series are off on this server: they turn them on with HIGHWIRE_WAGERS=1 in its environment (highwire.fun/line.md). Nothing was staked, committed or retired. Free matches work as they are.",
+    "Tell the user staked series need the highwire-wager server: they change this server's command to `npx -y highwire-wager` (highwire.fun/line.md). Nothing was staked, committed or retired. Free matches work as they are.",
   wager_late: "Too late for that: call line_state with the series and act on what it says (a missed commit plays your fallback).",
   wager_conflict: "You already committed this round; it's final. Call line_state with the series and wait for the reveal.",
   wager_not_found: "Check the series id with line_wagers. A series that has ended is settled and closed; line_state with its id says how it ended.",

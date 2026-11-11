@@ -34,24 +34,8 @@ import { parseArgs } from "node:util";
 import { ed25519 } from "@noble/curves/ed25519";
 import bs58 from "bs58";
 import { Connection, PublicKey, TransactionMessage, VersionedTransaction, type TransactionInstruction } from "@solana/web3.js";
-import {
-  Chain,
-  configUpdateInstruction,
-  DEFAULT_RPC_URLS,
-  decodeSeriesAccount,
-  decodeWagerConfig,
-  freezeAndRefundInstruction,
-  initConfigInstruction,
-  lamportsNumber,
-  pauseInstruction,
-  seriesAddress,
-  solToLamports,
-  uncreditable,
-  wagerConfigAddress,
-  WAGER_PROGRAM_IDS,
-  type Cluster,
-  type WagerConfigUpdate,
-} from "highwire-core";
+import { Chain, configUpdateInstruction, DEFAULT_RPC_URLS, decodeSeriesAccount, decodeWagerConfig, freezeAndRefundInstruction, initConfigInstruction, lamportsNumber, pauseInstruction, seriesAddress, solToLamports, wagerConfigAddress, WAGER_PROGRAM_IDS, type Cluster, type WagerConfigUpdate } from "highwire-core";
+import { uncreditable } from "../src/tx.ts";
 import { confirmByPolling, GENESIS_HASHES, loadKeypair } from "highwire-agent";
 
 const LOADER = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");

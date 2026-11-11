@@ -6,26 +6,9 @@ import { join } from "node:path";
 import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction, type Connection, type TransactionInstruction } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
 import { arena, decodeSeriesAccount, ENVELOPE_FORMAT, HOW_TO_SIGN, solToLamports, ticketCheck, ticketMessage, WAGER_PROGRAM_IDS, wagerInstruction, type Envelope, type SeriesAccountData } from "highwire-core";
-import {
-  agentPaths,
-  CANCEL_MARGIN_SECONDS,
-  SETTLE_GRACE_SECONDS,
-  checkPolicy,
-  DEADLINE_MARGIN_SECONDS,
-  GENESIS_HASHES,
-  LocalSigner,
-  nextWagerAction,
-  POLICY_TEMPLATE,
-  PolicySchema,
-  WagerRunner,
-  daemonStatus,
-  holdProcessLock,
-  WagerSecrets,
-  withFileLock,
-  writeBeat,
-  type Intent,
-  type Policy,
-} from "../src/index.ts";
+import { agentPaths, checkPolicy, GENESIS_HASHES, LocalSigner, POLICY_TEMPLATE, PolicySchema, holdProcessLock, withFileLock, type Intent, type Policy } from "highwire-agent";
+import { CANCEL_MARGIN_SECONDS, SETTLE_GRACE_SECONDS, DEADLINE_MARGIN_SECONDS, nextWagerAction, WagerRunner, daemonStatus, writeBeat } from "../src/runner.ts";
+import { WagerSecrets } from "../src/secrets.ts";
 
 // The wager side of the local signer (docs/wager-mode.md 7.3): the policy's wagers section, STOP-WAGERS, the secrets
 // file and the reveal daemon's decisions. A fake RPC and series states only: nothing here touches a cluster.
@@ -464,7 +447,7 @@ test("the open-series count is this wallet's stakes still on-chain, read by addr
   const { seriesAddress } = await import("highwire-core");
   const old = seriesAddress(program, "99".repeat(32)).toBase58();
   // A stake sent two hours ago (outside the ten-minute window): it counts only while its series is still on-chain.
-  const { AuditLog } = await import("../src/index.ts");
+  const { AuditLog } = await import("highwire-agent");
   const log = new AuditLog(paths.audit, () => new Date(Date.now() - 2 * 3_600_000));
   log.append({ tool: "line_stake", action: "wager", cluster: "devnet", wallet: signer.wallet, outcome: "sent", sol: "0.1", lamports: "100000000", wager: "open", series: old });
   const open = () => signer.execute(fakeConnection({ spend: 104_000_000, onChain: new Set([old]) }), { tool: "t", intent: ask("open"), envelope: wagerEnvelope(signer.publicKey, "open", "aa".repeat(32)) });

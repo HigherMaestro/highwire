@@ -1,20 +1,21 @@
 import { lstatSync, readFileSync } from "node:fs";
-import { agentPaths, holdProcessLock, loadPolicy, lockHolder, WagerRunner, WagerSecrets, writeBeat, type LocalSigner, type WagerAction } from "highwire-agent";
-import { buildWagerMove, lamportsNumber, listWalletSeries, readSeriesMany, wagerProgram, type Chain, type SeriesAccountData, type WagerMoveRequest } from "highwire-core";
-import { serverOptionsFromEnv } from "./env.ts";
-import { createDeps } from "./server.ts";
-import { signerFromEnv } from "./signer-env.ts";
+import { agentPaths, holdProcessLock, loadPolicy, lockHolder, type LocalSigner } from "highwire-agent";
+import { WagerRunner, writeBeat, type WagerAction } from "./runner.ts";
+import { WagerSecrets } from "./secrets.ts";
+import { lamportsNumber, wagerProgram, type Chain, type SeriesAccountData } from "highwire-core";
+import { buildWagerMove, listWalletSeries, readSeriesMany, type WagerMoveRequest } from "./tx.ts";
+import { createDeps, serverOptionsFromEnv, signerFromEnv } from "highwire-mcp";
 
-// `highwire line run|series`: The Line's wager series for the wallet in HIGHWIRE_KEYPAIR_PATH. `run` is the reveal
+// `highwire-wager run|series`: The Line's wager series for the wallet in HIGHWIRE_KEYPAIR_PATH. `run` is the reveal
 // daemon (docs/wager-mode.md 7.3): until Ctrl-C it reveals every committed move and owed fallback, applies passed
 // deadlines, settles, and cancels or refunds, through the local signer and inside the policy. One at a time.
 
-export const LINE_USAGE = `highwire line: The Line's wager series, for HIGHWIRE_KEYPAIR_PATH's wallet
+export const LINE_USAGE = `highwire-wager: The Line's wager series, for HIGHWIRE_KEYPAIR_PATH's wallet
 
-  highwire line run      the reveal daemon: reveal every committed move and owed fallback, apply passed deadlines,
+  highwire-wager run      the reveal daemon: reveal every committed move and owed fallback, apply passed deadlines,
                          settle finished series, until Ctrl-C. Wagering needs it running: a commit nobody reveals
                          forfeits its match
-  highwire line series   the wallet's open and live series on-chain
+  highwire-wager series   the wallet's open and live series on-chain
 
 It acts only through the local signer, inside the policy ("wager" in actions, and a wagers section). STOP halts it,
 and then open matches are forfeited; STOP-WAGERS stops new stakes and lets it finish what's open.`;
@@ -35,7 +36,7 @@ function argsFor(action: WagerAction): WagerMoveRequest["args"] {
 }
 
 /** Builds one daemon action and sends it through the signer. */
-export async function actOnSeries(chain: Chain, signer: LocalSigner, seriesId: string, action: WagerAction, tool = "highwire line run"): Promise<string> {
+export async function actOnSeries(chain: Chain, signer: LocalSigner, seriesId: string, action: WagerAction, tool = "highwire-wager run"): Promise<string> {
   const built = await buildWagerMove(chain, { wallet: signer.publicKey, seriesId, args: argsFor(action) });
   const r = await signer.execute(chain.connection, { tool, intent: { action: "wager", cluster: chain.cluster, solOut: 0n, wager: { kind: action.kind } }, envelope: built.envelope });
   const sig = r.transactions[0]?.signature;
@@ -97,7 +98,7 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
   }
   const signer = signerFromEnv(env, io.err);
   if (!signer) {
-    io.err(`highwire line ${cmd}: set HIGHWIRE_KEYPAIR_PATH to the signer's keypair file, as for the MCP server.`);
+    io.err(`highwire-wager ${cmd}: set HIGHWIRE_KEYPAIR_PATH to the signer's keypair file, as for the MCP server.`);
     return 2;
   }
   const paths = agentPaths(env);
@@ -106,7 +107,7 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
     if (cmd === "series") {
       const all = await listWalletSeries(deps.chain, signer.publicKey);
       const pid = lockHolder(paths.wagerRunner);
-      io.err(pid !== null ? `The reveal daemon is running (pid ${pid}).` : "The reveal daemon isn't running: start it with `highwire line run`.");
+      io.err(pid !== null ? `The reveal daemon is running (pid ${pid}).` : "The reveal daemon isn't running: start it with `highwire-wager run`.");
       if (!all.length) io.out("No open or live series.");
       for (const s of all) {
         const h = s.header;
@@ -119,15 +120,15 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
     // A daemon that can't read any series would hold the lock and reveal nothing: refuse to start instead.
     const program = wagerProgram(deps.chain.cluster);
     if (!program) {
-      io.err(`highwire line run: wagering isn't deployed on ${deps.chain.cluster}. Set HIGHWIRE_CLUSTER to the cluster the MCP server you wager with uses.`);
+      io.err(`highwire-wager run: wagering isn't deployed on ${deps.chain.cluster}. Set HIGHWIRE_CLUSTER to the cluster the MCP server you wager with uses.`);
       return 2;
     }
     const startPolicy = loadPolicy(paths.policy);
     if (startPolicy.cluster !== deps.chain.cluster) {
-      io.err(`highwire line run: the policy is for ${startPolicy.cluster}, and this daemon is on ${deps.chain.cluster}. Run it with the same HIGHWIRE_CLUSTER and policy as the MCP server you wager with.`);
+      io.err(`highwire-wager run: the policy is for ${startPolicy.cluster}, and this daemon is on ${deps.chain.cluster}. Run it with the same HIGHWIRE_CLUSTER and policy as the MCP server you wager with.`);
       return 2;
     }
-    const release = holdProcessLock(paths.wagerRunner, "highwire line run");
+    const release = holdProcessLock(paths.wagerRunner, "highwire-wager run");
     try {
       const policy = loadPolicy(paths.policy);
       io.err(
@@ -185,7 +186,7 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
       release();
     }
   } catch (err) {
-    io.err(`highwire line: ${err instanceof Error ? err.message : String(err)}`);
+    io.err(`highwire-wager: ${err instanceof Error ? err.message : String(err)}`);
     return 1;
   }
 }

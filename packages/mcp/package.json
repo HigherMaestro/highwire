@@ -43,10 +43,7 @@
     "simulate": "tsx --conditions=highwire-source scripts/simulate.ts",
     "prepack": "npm run build && cp ../../LICENSE . && rm -rf ideas && cp -R ../../ideas ideas",
     "postpack": "rm -rf ideas",
-    "rehearse": "tsx --conditions=highwire-source scripts/rehearse.ts",
-    "wager-admin": "tsx --conditions=highwire-source scripts/wager-admin.ts",
-    "wager-pair": "tsx --conditions=highwire-source scripts/wager-pair.ts",
-    "rehearse-wagers": "tsx --conditions=highwire-source scripts/rehearse-wagers.ts"
+    "rehearse": "tsx --conditions=highwire-source scripts/rehearse.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
