@@ -20,6 +20,7 @@
     "smoke": "npm run smoke --workspaces --if-present",
     "simulate": "npm run simulate -w highwire-mcp",
     "arena:sim": "npm run arena:sim -w highwire-core --",
+    "arena:series": "npm run arena:series -w highwire-core --",
     "dev": "npm run dev -w highwire-mcp",
     "dev:web": "npm run dev -w highwire-web",
     "test:program": "npm run wager-fixtures -w highwire-core && cargo test --release --manifest-path programs/line-wager/Cargo.toml && cd programs/line-wager && cargo build-sbf && SBF_OUT_DIR=$PWD/target/deploy cargo test --release --test program --test ts_built"
