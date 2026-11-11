@@ -62,6 +62,7 @@ export const READ_TOOLS = [
   "get_trade_tape",
   "get_wallet_profile",
   "line_leaderboard",
+  "line_practice",
   "line_rules",
   "list_coins",
   "rug_check",

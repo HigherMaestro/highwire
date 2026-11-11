@@ -20,7 +20,7 @@ import { ALL_TOOLS, EXECUTE_TOOLS, FAKE_OPTIONS, HOSTED_TOOLS } from "./fake.ts"
 // relay, in process, with an in-memory store and a fake RPC. Nothing touches a network.
 
 const PLAY_TOOLS = ["line_join", "line_move", "line_register", "line_retire", "line_state"];
-const READ = ["line_leaderboard", "line_rules"];
+const READ = ["line_leaderboard", "line_practice", "line_rules"];
 const BLOCKHASH = bs58.encode(new Uint8Array(32).fill(9));
 
 /** A fake Solana RPC for building the registration transaction: fees, a blockhash and a clean simulation. */
@@ -186,6 +186,42 @@ test("the wager extension: passed in code, it registers its tools and gets every
   const hosted = await connect(w, { hosted: true, wagers: extension });
   assert.deepEqual((await hosted.listTools()).tools.map((t) => t.name).sort(), HOSTED_TOOLS);
   assert.equal(registered, 1, "the extension ran once, for the server with the signer");
+});
+
+test("practice: anyone, even on the hosted endpoint, plays the house to the end with no wallet, and the replay is exact", async () => {
+  const w = world();
+  const hosted = await connect(w, { hosted: true });
+  const start = await call(hosted, "line_practice", { opponent: "even" });
+  assert.equal(start.isError, false, start.text);
+  assert.match(start.body.practice, /^p1\.even\.[ab]\.[0-9a-f]{32}$/);
+  assert.equal(start.body.round, 1);
+  assert.deepEqual(start.body.energy, { you: 30, them: 30 });
+  const id = start.body.practice;
+  const pulls: number[] = [];
+  let v = start.body;
+  while (v.round !== null) {
+    pulls.push(Math.min(3, v.energy.you));
+    const next = await call(hosted, "line_practice", { practice: id, pulls });
+    assert.equal(next.isError, false, next.text);
+    // The same id and pulls always give the same match: the house's moves come from the seed.
+    assert.deepEqual((await call(hosted, "line_practice", { practice: id, pulls })).body.rounds, next.body.rounds);
+    v = next.body;
+  }
+  assert.ok(["win", "draw", "loss"].includes(v.ending.result));
+  assert.equal(v.rounds.length, pulls.length);
+  assert.match(v.next_step, /line\.md/);
+  assert.deepEqual(w.calls, [], "practice reaches no network");
+
+  // A pull past the end is refused: by the tool when the match ended early, by the schema after all 15 rounds.
+  const tooMany = await hosted.callTool({ name: "line_practice", arguments: { practice: id, pulls: [...pulls, 0] } });
+  assert.equal(tooMany.isError, true);
+  if (pulls.length < 15) assert.match(JSON.stringify(tooMany.content), /ended after round/);
+  assert.equal((await hosted.callTool({ name: "line_practice", arguments: { practice: id, pulls: [31] } })).isError, true, "the schema caps a pull");
+  const broke = await call(hosted, "line_practice", { practice: id, pulls: [30, 30] });
+  assert.equal(broke.isError, true);
+  assert.match(broke.body.error, /Round 2: a pull can't be more than the 2 energy left/);
+  assert.equal((await call(hosted, "line_practice", { pulls: [1] })).isError, true, "pulls need an id");
+  assert.equal((await hosted.callTool({ name: "line_practice", arguments: { practice: "p1.reader.c.00", pulls: [] } })).isError, true);
 });
 
 test("registration goes through the user's policy first: a refusal or a dry run never asks The Line, so nothing is locked", async () => {

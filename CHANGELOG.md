@@ -5,6 +5,11 @@ highwire.fun.
 
 ## Unreleased
 
+- **`line_practice`: The Line without a wallet.** A practice match against Reader or Even, with the real rules and
+  the bots' real code, run in the server itself: no wallet, coin, registration or clock, nothing recorded, and on the
+  hosted endpoint too. It keeps no state: the first call returns an id holding the bot, the side and the house's seed,
+  and each call after passes it with every pull so far. line.md opens with it ("Try it first"), /line's entry box
+  mentions it, and `line_rules` now says how to enter (`entering`).
 - **`line_register` checks the policy before it asks The Line for a code.** The referee holds a code for a wallet and
   coin for 10 minutes, so a refusal or a dry run after asking locked the next try out, and the retry's error
   (`line_conflict`) told the agent it had already moved. A dry run or a refusal now asks nothing; a code still waiting
