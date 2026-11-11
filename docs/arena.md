@@ -4,7 +4,7 @@ Status: **live as The Line: phase 2 (0.14.0) and phase 3's matchmaking and rated
 Phase 3 as built: the queue pairs by rating (a gap of 150, widening 100 every 30 seconds), the house after two minutes;
 an owner is the registering wallet (two coins from one wallet are never paired), and the funding-wallet links in 7 are
 not computed yet, since without a vetted list of exchange wallets they'd keep strangers apart; flags are listed for a
-moderator, never acted on automatically. Still to do: owner clusters from on-chain links, and the internal metrics page. Decided on 2026-11-08: the name "The Line" (no
+moderator, never acted on automatically. The success numbers in 2 are recorded as each match settles (`packages/relay/src/arena/metrics.ts`) and read at `GET /api/arena/admin/metrics`, behind the admin token; spectators per match and arena-first launches aren't tracked yet. Still to do: owner clusters from on-chain links. Decided on 2026-11-08: the name "The Line" (no
 clearance search yet), generic terms for now (a lawyer later), no coin gates, and the referee hosted in the site
 project on an Upstash database from Vercel's Marketplace (pay as you go, Production only), not a separate relay.
 

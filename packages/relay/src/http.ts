@@ -25,6 +25,7 @@ import type { Store } from "./store.ts";
 //   GET  /api/arena/wager/state                                               (arena token) the fighter's series
 //   POST /api/arena/wager/leave                                               (arena token) leaves the queue
 //   GET  /api/arena/admin/flags (cheating signals), POST /api/arena/admin/hide { match, round, side } (legal takedowns)
+//   GET  /api/arena/admin/metrics?weeks=12 (free play's weekly numbers), POST /api/arena/admin/metrics/backfill
 //                                  (LINE_ADMIN_TOKEN; off without it)
 
 export interface RelayOptions {
@@ -123,6 +124,8 @@ export function createRelay(o: RelayOptions): Relay {
     if (path.startsWith("/api/arena/admin/")) {
       if (!o.adminToken || bearer(req) !== o.adminToken) throw new RelayError("not_found", "No such route.");
       if (m === "GET" && path === "/api/arena/admin/flags") return json(await referee.flags());
+      if (m === "GET" && path === "/api/arena/admin/metrics") return json(await referee.metrics(Number(url.searchParams.get("weeks") ?? 12)));
+      if (m === "POST" && path === "/api/arena/admin/metrics/backfill") return json(await referee.backfillMetrics());
       if (m === "POST" && path === "/api/arena/admin/hide") {
         const b = await body(req);
         if (typeof b.match !== "string" || typeof b.round !== "number" || (b.side !== "a" && b.side !== "b")) throw new RelayError("bad_request", "match, round and side.");

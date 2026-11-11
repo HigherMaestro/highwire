@@ -174,7 +174,7 @@ export class Registration {
     const now = this.now();
     const pair = `reg:pair:${wallet}:${mint}`;
     if ((await this.store.cas(pair, 0, code, CODE_SECONDS)) === null) {
-      fail("conflict", "A registration for this wallet and coin is already waiting; finish it or wait 10 minutes for it to expire.");
+      fail("pending", "A registration for this wallet and coin is already waiting; finish it or wait up to 10 minutes for it to expire.");
     }
     const pending: Pending = { wallet: wallet as string, mint: mint as string, secretHash: secretHash as string, createdAt: now };
     await this.store.cas(`reg:code:${code}`, 0, pending, CODE_SECONDS);

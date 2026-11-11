@@ -48,6 +48,9 @@ test("every template assembles with nothing left unfilled, valid JSON, and the c
     assert.match(files.get("README.md") as string, new RegExp(`https://highwire.fun/ideas/${idea.slug}`));
     const mcp = JSON.parse(files.get(".mcp.json") as string);
     assert.equal(mcp.mcpServers.highwire.env.HIGHWIRE_HOME, `\${HOME}/.highwire/${idea.slug}`);
+    // The project's own install, never `npx highwire`: on npm, "highwire" is someone else's package, which npx would
+    // fetch and run before this project's dependencies are installed.
+    assert.deepEqual([mcp.mcpServers.highwire.command, ...mcp.mcpServers.highwire.args], ["node", "scripts/highwire.mjs"]);
     const ignore = files.get(".gitignore") as string;
     for (const pattern of ["wallet.json", "*keypair*.json", ".env", ".highwire*/"]) assert.ok(ignore.split("\n").includes(pattern), `.gitignore covers ${pattern}`);
   }
