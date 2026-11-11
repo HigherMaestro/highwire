@@ -229,6 +229,6 @@ only reads the cluster it's on, so one left open would never be rated), then set
 | the release that records the reproducible build (2026-11-10) | `63b8fd6a68b89c7508e18c89d72a2d3bdaf4d5cdd13b72036d2c2d8c005d9f5f` | never deployed: superseded by the line below |
 | "A wager commit names its match" (2026-11-10; docs/wager-mode.md 7.2.6) | `b2fd967c0910cbb02df2ffc3dc754d1160d9fc5140b1230ed95a6b04e30ee9a7` | not deployed yet |
 
-Rebuild and record a new line whenever the program or its `Cargo.lock` changes. Devnet runs an earlier build
-(`013472db…` by SHA-256), from before a commit named its match and before test-only dependencies were pinned back for
-the reproducible build: it takes the earlier, 34-byte commit, until it's redeployed (docs/wager-devnet.md 9).
+Rebuild and record a new line whenever the program or its `Cargo.lock` changes. Devnet runs the second line's source
+since 2026-11-11, but from a local `cargo build-sbf` (`solana-verify` hash `e8e5ea5f…`), not the reproducible build, so
+its hash isn't the one above (docs/wager-devnet.md 9).

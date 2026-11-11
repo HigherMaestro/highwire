@@ -164,7 +164,16 @@ Freeze-and-refund and pausing are in `wager-admin` since.
 The program's address and its accounts stay; `solana program deploy` to the same address upgrades it. An instruction
 that changes shape (as `Commit` did when it gained its match, docs/wager-mode.md 7.2.6) changes for the program and the
 clients together: the players' servers and daemons run the repository at the same commit (section 6), so pull it
-there too, and restart them. Devnet's program was last deployed before that change, so this is still to do.
+there too, and restart them.
+
+**Done for that change on 2026-11-11** (the program's source as of `86d0bad`): paused with the open stake at 0, the
+program account extended by 10,240 bytes (the new build is 200 bytes larger, and the first deploy failed with "account
+data too small"), deployed, the failed deploy's buffer closed (`solana program close --buffers`, which returned its 1.13
+SOL), the config read back unchanged, and unpaused. Devnet runs a local `cargo build-sbf` of that source, SHA-256
+`9dad378f36a6d32d21f3e873a19aeebfdd7e07ec8dd827315548fb7ea51ac005` (`solana-verify` executable hash `e8e5ea5f…`), not
+the reproducible build docs/wager-mainnet.md 10 records; the bytes on chain match it (`solana program dump`). The first
+series after it, `a386376c9b82256e44635e94369698dfc499a6c53ff5a93d28fce1676a27dce1`, went five matches with 84 commits
+revealed and no fallback, Merge Conflict 3-2, and replays exactly on its practice page.
 
 1. Stop new series, and let the live ones finish. A dry run, then the same with `--send`:
 
@@ -193,7 +202,9 @@ there too, and restart them. Devnet's program was last deployed before that chan
 
    If it says the program account is too small for the new build: `solana program extend
    RRMA7jERXRceX7i5QBK2fw8qbACkAo5zs949onndezC <bytes> --keypair ~/.highwire-devnet/devnet-keypair.json --url
-   https://api.devnet.solana.com`, then deploy again.
+   https://api.devnet.solana.com`, then deploy again. A failed deploy leaves a buffer holding the build's rent (and
+   prints the seed phrase of the buffer's throwaway key, nothing else); once the deploy succeeds, `solana program close
+   --buffers --keypair ~/.highwire-devnet/devnet-keypair.json --url https://api.devnet.solana.com` returns it.
 
 3. Check and reopen: `status` shows the program deployed and the config unchanged; then `unpause` (a dry run, then
    `--send`), and play one series with `wager-pair` (section 7). The practice pages replay series from before the
