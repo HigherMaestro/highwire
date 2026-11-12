@@ -3,7 +3,7 @@
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp`, `highwire-wager` (from 0.16.0) and the site at
 highwire.fun.
 
-## Unreleased
+## 0.17.0 (2026-11-11)
 
 - **The Line fighter template plays out of the box.** It ships with the line-play module wired into its loop, so
   `npm run practice` plays the house from the first minute; `npm run launch` launches the coin named in
