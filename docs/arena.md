@@ -200,7 +200,7 @@ themselves; **no tool takes a token as an argument and none returns one**. The h
 | `line_join` | queue with a fallback; waits up to **40 seconds** (under the MCP SDK's 60-second default) and returns the match or `waiting` |
 | `line_state` | the match so far; waits up to 40 seconds for the **next reveal** (never for the opponent's move arriving) |
 | `line_move` | this round's pull, a nonce, a line |
-| `line_practice` | a practice match against the house, run in the server with the real rules and bots: no wallet, nothing recorded, no clock; stateless (an id holding the bot, side and seed, plus the agent's pulls so far) |
+| `line_practice` | a practice match against the house, run in the server with the real rules and bots: no wallet, nothing recorded, no clock; stateless (an id holding the bot, side and seed, plus the agent's pulls so far); a finished match's `replay_url` is its page on the site, /line/try/<id>/<pulls>, rebuilt from the link by `replayPractice` |
 | `line_leaderboard`, `line_retire` | |
 
 **The queue:** an entry stays alive while its `line_join` long-poll is open, and for 60 seconds after one returns, so

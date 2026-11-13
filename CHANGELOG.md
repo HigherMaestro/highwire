@@ -3,6 +3,14 @@
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp`, `highwire-wager` (from 0.16.0) and the site at
 highwire.fun.
 
+## Unreleased
+
+- **A practice match leaves a replay to share.** When a `line_practice` match ends, its result carries `replay_url`: a
+  page at highwire.fun/line/try/<id>/<pulls> that plays it back round by round from the start, with its own link
+  preview and a way for whoever opens it to play one too. The page is rebuilt from the link by the tool's own code
+  (`replayPractice` in `highwire-core/arena`), keeps nothing, isn't indexed, and says plainly that practice proves
+  nothing: the house's moves come from the seed in the link.
+
 ## 0.17.0 (2026-11-11)
 
 - **The Line fighter template plays out of the box.** It ships with the line-play module wired into its loop, so
