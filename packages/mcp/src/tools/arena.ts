@@ -198,15 +198,15 @@ export function registerArenaTools(server: McpServer, deps: Deps, opts: { wagers
     {
       title: "The Line: practice against the house",
       description:
-        "A practice match against one of The Line's house bots, with the real rules and the bots' real code, run here: no wallet, coin or registration, nothing recorded, no clock. Start with no `practice`; then call again with the `practice` id it returned and every pull you've made so far, the newest last (it replays them). Practice proves nothing: the house's moves come from the seed in the id. To play for a record, see highwire.fun/line.md.",
+        "A practice match against one of The Line's house bots, with the real rules and the bots' real code, run here: no wallet, coin or registration, nothing recorded, no clock. Start with no `practice`; then call again with the `practice` id it returned and every pull you've made so far, the newest last (it replays them). When the match ends, `replay_url` is a page on highwire.fun that replays it, to watch or share. Practice proves nothing: the house's moves come from the seed in the id. To play for a record, see highwire.fun/line.md.",
       inputSchema: {
         opponent: z.enum(["reader", "even"]).default("reader").describe('"reader" (reads your habits) or "even" (the exact equilibrium). Only when starting.'),
-        practice: z.string().regex(PRACTICE_ID).optional().describe("The id from the first call. Omit to start a new match."),
+        practice: z.string().regex(arena.PRACTICE_ID).optional().describe("The id from the first call. Omit to start a new match."),
         pulls: z.array(z.number().int().min(0).max(30)).max(15).default([]).describe("All your pulls so far, in order, the newest last."),
       },
       annotations: { title: "The Line: practice against the house", readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
-    (args) => run(async () => practiceView(args)),
+    (args) => run(async () => practiceView(args, deps.siteUrl)),
   );
 
   if (deps.signer) registerPlayTools(server, deps, deps.signer, opts.wagers);
@@ -220,35 +220,28 @@ function launchFromAudit(signer: ExecutionSigner, mint: string): string | null {
   return found.at(-1)?.signature ?? null;
 }
 
-/** `p1.<bot>.<side>.<seed>`: everything a practice match needs, so the tool keeps no state. */
-const PRACTICE_ID = /^p1\.(reader|even)\.(a|b)\.([0-9a-f]{32})$/;
-
-/** Replays a practice match from its id and the agent's pulls; the house's pulls come from the seed. */
-export function practiceView(args: { opponent?: "reader" | "even"; practice?: string; pulls?: number[] }) {
+/** Replays a practice match from its id and the agent's pulls; the house's pulls come from the seed (arena/practice.ts). */
+export function practiceView(args: { opponent?: "reader" | "even"; practice?: string; pulls?: number[] }, siteUrl: string) {
   const pulls = args.pulls ?? [];
-  let bot: arena.HouseBot, me: arena.Side, seed: string;
+  let p: arena.Practice;
   if (args.practice) {
-    const m = PRACTICE_ID.exec(args.practice);
-    if (!m) throw new ValidationError("That isn't a practice id. Start a new match without one.");
-    [bot, me, seed] = [m[1] as arena.HouseBot, m[2] as arena.Side, m[3]!];
+    const parsed = arena.parsePracticeId(args.practice);
+    if (!parsed) throw new ValidationError("That isn't a practice id. Start a new match without one.");
+    p = parsed;
   } else {
     if (pulls.length) throw new ValidationError("Start without pulls: the first call returns the practice id, then pass your pulls with it.");
-    [bot, me, seed] = [args.opponent ?? "reader", randomBytes(1)[0]! % 2 ? "a" : "b", randomBytes(16).toString("hex")];
+    p = { bot: args.opponent ?? "reader", side: randomBytes(1)[0]! % 2 ? "a" : "b", seed: randomBytes(16).toString("hex") };
   }
+  const { state: s, problem } = arena.replayPractice(p, pulls);
+  if (problem) throw new ValidationError(problem);
+  const me = p.side;
   const them = arena.other(me);
-  let s = arena.startMatch(arena.DUELS_1);
-  pulls.forEach((pull, i) => {
-    if (s.ending) throw new ValidationError(`The match ended after round ${s.rounds.length}; pass only the pulls it played (${s.rounds.length}).`);
-    const problem = arena.pullProblem(s, me, pull);
-    if (problem) throw new ValidationError(`Round ${i + 1}: ${problem}`);
-    const house = arena.houseMove(bot, s, them, seed);
-    s = me === "a" ? arena.playRound(s, pull, house) : arena.playRound(s, house, pull);
-  });
   const toMe = (node: number) => (me === "b" ? node : -node);
   const ending = s.ending ? { result: s.ending.winner === null ? "draw" : s.ending.winner === me ? "win" : "loss", reason: s.ending.reason } : null;
+  const replay = ending ? `${siteUrl}${arena.practicePath(p, pulls)}` : null;
   return {
-    practice: `p1.${bot}.${me}.${seed}`,
-    opponent: { kind: "house", name: bot === "reader" ? "Reader" : "Even" },
+    practice: arena.practiceId(p),
+    opponent: { kind: "house", name: p.bot === "reader" ? "Reader" : "Even" },
     you: { side: me, pulling_toward: me === "a" ? -3 : 3 },
     round: s.ending ? null : s.rounds.length + 1,
     node: toMe(s.node),
@@ -256,8 +249,9 @@ export function practiceView(args: { opponent?: "reader" | "even"; practice?: st
     energy: { you: s.energy[me], them: s.energy[them] },
     rounds: s.rounds.map((r, i) => ({ round: i + 1, you: r.pull[me], them: r.pull[them], won: r.winner === null ? "tie" : r.winner === me ? "you" : "them", node: toMe(r.node) })),
     ending,
+    ...(replay ? { replay_url: replay } : {}),
     next_step: ending
-      ? "The match is over. Start another without a practice id, or enter The Line for real: highwire.fun/line.md."
+      ? `The match is over. Its replay, to watch or share: ${replay}. Start another without a practice id, or enter The Line for real: highwire.fun/line.md.`
       : `Choose a pull from 0 to ${s.energy[me]}, then call line_practice with this practice id and all ${pulls.length + 1} of your pulls.`,
     note: "Practice only: nothing is recorded, and there's no clock or fallback. In a real match each pull also carries a nonce and an optional line of table talk.",
   };

@@ -6,6 +6,7 @@ export * from "./house.ts";
 export * from "./glicko.ts";
 export * from "./guide.ts";
 export * from "./series.ts";
+export * from "./practice.ts";
 // A wager series solved (docs/research/series-equilibrium.md). The file's other exports measure strategies against each
 // other; they're for the research script and the tests, imported from the file itself.
 export {

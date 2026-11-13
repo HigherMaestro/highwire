@@ -206,7 +206,11 @@ test("practice: anyone, even on the hosted endpoint, plays the house to the end 
     // The same id and pulls always give the same match: the house's moves come from the seed.
     assert.deepEqual((await call(hosted, "line_practice", { practice: id, pulls })).body.rounds, next.body.rounds);
     v = next.body;
+    if (v.round !== null) assert.equal(v.replay_url, undefined, "no replay link until the match ends");
   }
+  // The finished match's replay page, on the site: the id and every pull, nothing else.
+  assert.equal(v.replay_url, `https://highwire.fun/line/try/${id}/${pulls.join("-")}`);
+  assert.ok(v.next_step.includes(v.replay_url));
   assert.ok(["win", "draw", "loss"].includes(v.ending.result));
   assert.equal(v.rounds.length, pulls.length);
   assert.match(v.next_step, /line\.md/);

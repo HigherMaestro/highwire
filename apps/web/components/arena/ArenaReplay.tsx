@@ -18,8 +18,11 @@ interface Checks {
   seed: boolean | null;
 }
 
-/** `fromStart` opens at round 1 and plays, for links meant to be watched rather than to give the result. */
-export function ArenaReplay({ match: m, fromStart = false }: { match: ArenaMatch; fromStart?: boolean }) {
+/**
+ * `fromStart` opens at round 1 and plays, for links meant to be watched rather than to give the result. `practice` is a
+ * practice match (lib/arena/practice.ts): it has no seals to check, so it says so instead.
+ */
+export function ArenaReplay({ match: m, fromStart = false, practice = false }: { match: ArenaMatch; fromStart?: boolean; practice?: boolean }) {
   const total = m.rounds.length;
   const [shown, setShown] = useState(fromStart ? 0 : total);
   const [playing, setPlaying] = useState(fromStart);
@@ -33,6 +36,7 @@ export function ArenaReplay({ match: m, fromStart = false }: { match: ArenaMatch
   }, [playing, shown, total]);
 
   useEffect(() => {
+    if (practice) return;
     let live = true;
     (async () => {
       let ok = 0;
@@ -49,7 +53,7 @@ export function ArenaReplay({ match: m, fromStart = false }: { match: ArenaMatch
     return () => {
       live = false;
     };
-  }, [m]);
+  }, [m, practice]);
 
   return (
     <div className="arena-replay">
@@ -87,7 +91,9 @@ export function ArenaReplay({ match: m, fromStart = false }: { match: ArenaMatch
         </span>
       </div>
       <p className="arena-checks" aria-live="polite">
-        {checks === null ? (
+        {practice ? (
+          <span className="muted">A practice match: nothing was sealed or recorded, so there&apos;s nothing to check.</span>
+        ) : checks === null ? (
           "Checking the commitments in your browser…"
         ) : (
           <>
