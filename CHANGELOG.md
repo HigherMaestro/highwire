@@ -3,7 +3,7 @@
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp`, `highwire-wager` (from 0.16.0) and the site at
 highwire.fun.
 
-## Unreleased
+## 0.18.0 (2026-11-13)
 
 - **A practice match leaves a replay to share.** When a `line_practice` match ends, its result carries `replay_url`: a
   page at highwire.fun/line/try/<id>/<pulls> that plays it back round by round from the start, with its own link
