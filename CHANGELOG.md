@@ -7,7 +7,8 @@ highwire.fun.
 
 - **Link battles, phase 0: the rig.** A new private package, `highwire-link`: two Game Boys on an emulated link cable,
   in SameBoy's core built to WebAssembly, that loads a paired link battle, resolves a turn headless, checks the two
-  games agree and deals fresh dice into both (docs/link-battles.md). Nothing uses it yet; nothing on the site changes.
+  games agree and deals fresh dice into both (docs/link-battles.md). The site has one route for it,
+  `/api/link/phase0`, which times a turn on preview deployments only (production answers 404); nothing visible changes.
 
 ## 0.18.0 (2026-11-13)
 

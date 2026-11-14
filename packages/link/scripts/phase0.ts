@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { ADDR, dealDice, disagreements, DICE_LENGTH, LINK_STATE, MODEL, Rig, snapshot, type Side, type Snapshot } from "highwire-link";
+import { ADDR, disagreements, DICE_LENGTH, LINK_STATE, MODEL, playTestTurn, Rig, snapshot, type Snapshot } from "highwire-link";
 
 // Phase 0's proof (docs/link-battles.md 14): load a paired link battle, choose a move on both sides, resolve the turn
 // headless, check both games agree, time it, and show that fresh dice change the turn while the same dice repeat it.
@@ -49,42 +49,14 @@ if (args[0] === "--survey") {
 const [path0, path1] = args;
 const states: [Uint8Array, Uint8Array] = [new Uint8Array(readFileSync(path0!)), new Uint8Array(readFileSync(path1!))];
 
-/** The battle menu as each game shows it when the turn starts: its cursor geometry is the decision point's sign. */
-type MenuSign = { top: [number, number]; max: number };
-const menuSign = (s: Snapshot): MenuSign => ({ top: s.menu.top, max: s.menu.max });
-const atMenu = (rig: Rig, side: Side, sign: MenuSign) => {
-  const s = snapshot(rig, side);
-  return s.menu.top[0] === sign.top[0] && s.menu.top[1] === sign.top[1] && s.menu.max === sign.max;
-};
-
-/** One turn: both sides pick move 1 (FIGHT, then the first move), and the games run until both are back at the menu. */
+/** One turn on a fresh pair from the states: both sides pick move 1, and the games run until both are back at the menu. */
 async function turn(dice: Uint8Array | null) {
   const rig = await rigWith(states);
-  const start = [snapshot(rig, 0), snapshot(rig, 1)] as const;
-  if (start[0].linkState !== LINK_STATE.BATTLING || start[1].linkState !== LINK_STATE.BATTLING) throw new Error("Not a link battle.");
-  const signs = [menuSign(start[0]), menuSign(start[1])] as const;
-  if (dice) dealDice(rig, dice);
+  const first = [snapshot(rig, 0), snapshot(rig, 1)];
+  if (first[0]!.linkState !== LINK_STATE.BATTLING || first[1]!.linkState !== LINK_STATE.BATTLING) throw new Error("Not a link battle.");
   // Fast text, no battle animations (docs/link-battles.md 7.1): Yellow keeps them in wOptions.
   if (process.env.FAST) for (const side of [0, 1] as const) rig.write(side, ADDR.options, Number(process.env.FAST));
-  const t0 = performance.now();
-  const f0 = rig.frameCount;
-  // FIGHT is the main menu's first item; the move list opens on the first move.
-  for (const side of [0, 1] as const) rig.press(side, "A");
-  rig.run(20);
-  for (const side of [0, 1] as const) rig.press(side, "A");
-  // Run until both games have moved off the menu and come back to it (or the battle ends), pressing B now and then
-  // to page through the battle's text boxes, as a player would with fast text.
-  let left = false;
-  const ran = rig.runUntil(() => {
-    if (rig.frameCount % Number(process.env.B_EVERY ?? 15) === 0) for (const side of [0, 1] as const) rig.press(side, "B", 2, 2);
-    const here = [atMenu(rig, 0, signs[0]), atMenu(rig, 1, signs[1])];
-    if (!here[0] && !here[1]) left = true;
-    const ended = snapshot(rig, 0).isInBattle === 0 || snapshot(rig, 1).isInBattle === 0;
-    return (left && here[0] && here[1]) || ended;
-  }, 6000);
-  const ms = performance.now() - t0;
-  const end = [snapshot(rig, 0), snapshot(rig, 1)] as const;
-  return { rig, start, end, frames: rig.frameCount - f0, ms, stuck: ran === null };
+  return { rig, ...playTestTurn(rig, { dice: dice ?? undefined, bEvery: Number(process.env.B_EVERY ?? 15) }) };
 }
 
 console.log(`before: side 0 ${brief(snapshot(await rigWith(states), 0))}`);
