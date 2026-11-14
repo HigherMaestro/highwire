@@ -427,8 +427,14 @@ Max) with Clawseum's paired save states (slot 6, a mid-battle turn at the battle
   their index are identical.
 - **Speed:** 850 to 1,100 frames a turn (both games), about 630 frames a second for the pair in WebAssembly in Node:
   **1.3 to 1.7 seconds a turn** on this Mac. Fast text and no animations in wOptions changed little; the link's own
-  waits and the text boxes dominate. A Vercel function is plausibly two to three times slower, 3 to 5 seconds a turn,
-  inside 8.2's design (resolution after the response) and under its 10-second line.
+  waits and the text boxes dominate.
+- **On Vercel** (a preview deployment, iad1, the site's default function; `/api/link/phase0`, 16 turns on fresh dice):
+  about **255 frames a second** for the pair, 2.4 times slower than this Mac, so **2.0 to 4.3 seconds a turn**
+  (550 to 1,118 frames; most near 3.5 s). Inside 8.2's design (resolution after the response) and well under its
+  10-second line, so the rig stays in WebAssembly. The first call on a cold instance read the game and both states
+  from the private Blob store in 345 ms; making the pair and loading the states takes 1 to 2 ms warm (67 ms cold),
+  saving both states 1 ms, and the function sits at about 110 MB. Both games agreed on every turn, and none overran
+  its frame budget.
 - **The dice:** dealing the same 10 bytes repeats a turn exactly; fresh bytes gave 8 different outcomes in 8 turns, and
   the games stayed in step after every deal.
 - **State:** 116,240 bytes a game (SameBoy's format, CGB with the cartridge's RAM), about 230 KB a pair before
@@ -439,8 +445,7 @@ Max) with Clawseum's paired save states (slot 6, a mid-battle turn at the battle
   outside the site imports the package, the repository holds no game or state file, and the committed build matches
   its checksum. The battle itself runs in `npm run phase0 -w highwire-link` with `HIGHWIRE_LINK_ROM` set.
 
-**Still open in phase 0:** the run in a Vercel function on a preview deployment (it needs the Blob store and the game in
-it, decision 4), the version stamp on saved states, the turn through a real decision-point detector rather than "back at
+**Still open in phase 0:** the version stamp on saved states, the turn through a real decision-point detector rather than "back at
 the same menu" (phase 1's first job), and the format's team.
 
 ## 15. Decisions needed from you
@@ -448,14 +453,15 @@ the same menu" (phase 1's first job), and the format's team.
 1. **The format:** three-a-side fixed mirror teams first (recommended), or six, or team building from the start.
 2. **The go-ahead for phase 0.**
 3. **A name.**
-4. **Private storage for the game:** a Vercel Blob store in the site's project (Production and Preview), holding the
-   game and the bootstraps, with its token as an environment variable.
+4. **Private storage for the game:** done. The private Blob store `highwire-link` (iad1), connected to Production and
+   Preview as `BLOB_READ_WRITE_TOKEN`, holds the game (`link/game.gbc`) and phase 0's paired battle
+   (`link/phase0/side0.state`, `side1.state`, Clawseum's slot 6).
 5. **The two hand-played saves** (7.4): made once, on your machine, or from Clawseum's if they load.
 
 ## 16. Open questions
 
-- How fast WebAssembly runs a turn in a Vercel function, cold and warm. (Phase 0, first.)
-- How many frames a turn takes with fast text and no animations. (Phase 0.)
+- ~~How fast WebAssembly runs a turn in a Vercel function~~: 2 to 4.3 seconds, about 255 pair-frames a second (14.1).
+- ~~How many frames a turn takes with fast text and no animations~~: 550 to 1,118; the options barely change it (14.1).
 - Whether re-dealing the dice at a decision point is ever caught mid-roll; the fuzzer checks both games stay in step.
   (Phase 1.)
 - Which other moves desync, beyond the banned five. (Phase 1.)
