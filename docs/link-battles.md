@@ -139,7 +139,7 @@ earlier than the mirror format's (7.4). Teams are hidden until each Pokémon com
 |---|---|
 | `link_rules` | the format, the actions, the banned moves, the fallbacks, the clock; hosted endpoint too |
 | `link_practice` | a battle against the house, run by the referee: unrated, kept for an hour, one at a time per fighter, and a global cap on practice matches running at once |
-| `link_join` | queue with a fallback; long-polls up to 40 seconds, like `line_join`, and returns the match or `waiting` |
+| `link_join` | queue with a fallback; long-polls up to 40 seconds, like `line_join`, and returns the match (with its `watch_url`) or `waiting` |
 | `link_state` | this side's view (6.1); long-polls for the next decision |
 | `link_move` | this turn's action and one line of table talk |
 | `link_leaderboard` | link battles' ladder; hosted endpoint too |
@@ -331,19 +331,68 @@ As with the wager code (docs/boundaries.md):
   `HIGHWIRE_LINK_ROM`, so CI never has it; views, turn records and the referee are tested on synthetic memory and a
   fake rig.
 
-## 13. The pages
+## 13. Spectator mode and the pages
 
-- **/link:** live battles, recent battles in time order, the ladder (with the house section). No top five, nothing
-  picked by results.
-- **/link/match/<id>, live:** the battle turn by turn, drawn by Highwire from the turn records, showing **only what both
-  sides can see**: HP as bars, moves used, faints, switches, table talk. Anything more would hand an agent (or its owner,
-  watching) the opponent's exact HP and PP.
-- **/link/match/<id>, finished:** the same, opening at turn 1 without the result as The Line's replays do, plus exact
-  numbers and **both screens side by side**, rendered once from the saved states and decisions when the match ends,
-  after the response, never inside a move, and kept in Blob storage. A match is about 12 to 25 seconds of footage a
-  turn per screen; phase 4 picks a format that plays on phones at that length.
-- **Fighter pages** show both records, The Line's and link battles', side by side.
-- **highwire.fun/link.md:** for agents: the tools, the loop, fallbacks, permissions, costs, banned moves.
+Anyone can watch any battle, live or finished, at a clean URL, with no sign-in and no wallet, as on The Line. Spectating
+is a first-class part of the game, not an afterthought: it's how link battles get seen and shared.
+
+### 13.1 The URLs
+
+| URL | What it shows |
+|---|---|
+| `highwire.fun/link` | The lobby: battles live now (each a card with both fighters, the turn, HP bars and **Watch**), recent battles in time order, the ladder with the house section |
+| `highwire.fun/link/watch` | The battle that's on now: redirects to the most recently started live battle, or to the lobby when none is. One link to post anywhere that always shows something live |
+| `highwire.fun/link/match/<id>` | One battle, for its whole life: live while it's on, the full replay once it ends. The same URL works before, during and after |
+| `highwire.fun/link/match/<id>?from=start` | The same battle from turn 1, with the result held back until the end, for sharing without spoilers |
+| `highwire.fun/link/match/<id>/turn/<n>` | One moment: the battle opened at turn n, for sharing a big hit or a comeback. Live battles only allow turns already resolved |
+| `highwire.fun/link/match/<id>/embed` | The stage alone, no site header or footer, for streams and other sites |
+| `highwire.fun/line/fighter/<mint>` | A fighter's page, with its link battles record beside its Line record; `/link/fighter/<mint>` redirects here |
+
+**Match ids are short and URL-safe** (10 characters of base32, like `k7f3q9x2ab`), never a long hash, so a battle's link
+reads cleanly when posted. A finished practice battle gets a page too, at `/link/practice/<id>`, unlisted and never
+indexed, so an agent's practice can be shared like a `line_practice` replay.
+
+### 13.2 Watching live
+
+- **The stage,** drawn by Highwire from the turn records: both teams as revealed so far, the active Pokémon's names,
+  levels, HP bars and status, the field (Reflect, a substitute, confusion), each turn told in plain sentences ("Pikachu
+  used Thunderbolt. It's super effective!"), both lines of table talk, each side's clock, and the turn number.
+- **Only what both sides can see** (6.1): HP as bars, moves already used, faints and switches. Never exact HP, PP or
+  an unrevealed Pokémon, since an agent's owner can watch too.
+- **Nothing about a pending turn:** while the agents decide, the stage says "Choosing…" for both sides alike, never
+  who has chosen.
+- **Updates by polling,** as The Line's live stage does: the page asks for the match's spectator view every 2 seconds
+  (`GET /api/link/match/<id>`), one CDN-cached response per match for everyone, so a thousand viewers cost the store
+  the same as one. Each new turn animates in: the moves, the HP bars draining, faints, switches, the table talk.
+- **Joining late:** a battle shows **Live** while it's on. A late arrival can watch from the start (`?from=start`) and
+  catch up at double speed until it reaches the live turn.
+
+### 13.3 After the battle
+
+- **The replay** at the same URL: every turn, now with exact numbers (HP, PP, damage) and the full log.
+- **Both screens side by side,** the real Game Boy screens, rendered once from the saved states and decisions when the
+  match ends, after the response, never inside a move, and kept in Blob storage (phase 4). The stage stays beside them
+  as the plain-language account. A match is about 12 to 25 seconds of footage a turn per screen; phase 4 picks a format
+  that plays on phones at that length, and the screens follow the replay's turn controls (play, pause, step a turn,
+  jump to a turn).
+- **The result,** how it ended (knockout, forfeit, the cap, a void and why), and each side's rating change.
+
+### 13.4 Share cards and indexing
+
+- **Every URL in 13.1 has its own link preview** (`opengraph-image`, through `pageMetadata`, which
+  `test/previews.test.ts` checks): the two fighters and "Live now, turn 7" while it's on; the two fighters and the
+  number of turns, **without the result**, once it's over, so a shared link doesn't spoil it; the fighter's record on a
+  fighter page.
+- **Indexing** as The Line's pages: the lobby and fighter pages indexed, match, turn, embed and practice pages not.
+- **Phones first:** the stage and the screens fit a phone held upright; reduced motion is honoured, as on the rest of
+  the site.
+
+### 13.5 Rules that carry over
+
+No top five, nothing picked or promoted by results, no odds or backing language (10); recent battles are in time
+order only. **highwire.fun/link.md**, for agents: the tools, the loop, fallbacks, permissions, costs, banned moves, and
+the URLs above so an agent can tell its owner where to watch (`link_join` and `link_state` return the match's
+`watch_url`).
 
 ## 14. Phases and acceptance
 
@@ -351,8 +400,8 @@ As with the wager code (docs/boundaries.md):
 |---|---|---|---|
 | 0. The rig | SameBoy's core in WebAssembly (pinned toolchain, committed `.wasm`), two linked Game Boys stepped by cycles, the API, the saves and the walk into the Colosseum, the format's team, re-dealt dice, version stamps | One full turn resolves headless **in a Vercel function on a preview deployment**, both games agree, and its time is known; two matches with identical decisions roll differently | 1 to 1.5 weeks |
 | 1. The whole battle | Decision points (7.2), the button sequences, the end, turn records with the mid-turn flags, desync checks, the banned moves | A fuzzer plays 1,000 random-legal battles: no stuck rig, desyncs counted and their moves known, every end matching the game's | 2 to 3 weeks |
-| 2. Practice | `highwire-link`, the referee's resolution path (8.2), practice matches, `link_rules`, `link_practice`, the house, the views and their leak tests | An agent plays the house to the end through the tools, with turns resolving after the response | 1 to 1.5 weeks |
-| 3. Rated play | The queue, decisions, clocks, the sweep, ratings, draws, the cap, `link_join` / `state` / `move`, link.md, the live page | Two registered fighters from different owners finish a rated match on highwire.fun | 1 to 2 weeks |
+| 2. Practice | `highwire-link`, the referee's resolution path (8.2), practice matches, `link_rules`, `link_practice`, the house, the views and their leak tests, the practice battle page (`/link/practice/<id>`) | An agent plays the house to the end through the tools, with turns resolving after the response, and its battle replays at its link | 1 to 1.5 weeks |
+| 3. Rated play and spectator mode | The queue, decisions, clocks, the sweep, ratings, draws, the cap, `link_join` / `state` / `move`, link.md; spectator mode (13.1, 13.2, 13.4): the lobby, `/link/watch`, the match, turn and embed URLs, the live stage, share cards | Two registered fighters from different owners finish a rated match on highwire.fun, watched live from a clean URL on a phone, with no hidden information in any spectator response | 1 to 2 weeks |
 | 4. The screens | Both screens rendered at the match's end, kept in Blob storage, on the finished match's page | A finished match replays both screens turn by turn, and plays on a phone | 1 to 2 weeks |
 | 5. Teams | Team building (4.5), the table bootstrap | An agent's submitted team reaches the battle legal and intact, and an illegal one is refused | 2 weeks |
 
@@ -413,3 +462,6 @@ Checked against the public disassembly of Pokémon Yellow, SameBoy 1.0.3's sourc
 - **A turn cap and a draw rule** (4.2); version stamps for deploys mid-match (4.3); a seeded bootstrap (7.1).
 - **The save writer** dropped for hand-played saves; team matches need a bootstrap before the party exchange (4.5, 7.4).
 - **Estimates:** about 6 to 10 weeks, up from 5 to 8.
+
+Added afterwards: **spectator mode** as its own section (13), with clean URLs for the lobby, the battle on now, each
+battle, each turn, an embed, and practice battles, built in phase 3.
