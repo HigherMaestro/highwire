@@ -407,6 +407,42 @@ the URLs above so an agent can tell its owner where to watch (`link_join` and `l
 
 About 6 to 10 weeks to rated play with screens, most of it in phase 1.
 
+### 14.1 Phase 0 as built (2026-11-14)
+
+`packages/link` (`highwire-link`, private): the rig and its first proof. Built and run on the maintainer's Mac (M3
+Max) with Clawseum's paired save states (slot 6, a mid-battle turn at the battle menu); not yet in a Vercel function.
+
+- **The build:** SameBoy 1.0.3's core (the release tarball, checked by SHA-256, identical to Clawseum's vendored copy)
+  and `native/rig.c`, built by Emscripten 6.0.13 at `-O3` into one 217 KB `.mjs` with the WebAssembly inlined (no
+  separate file to trace into a route). The container image is pinned by digest, but Docker Desktop hung on every pull
+  on this machine, so the build also runs from an activated emsdk of the same version, and checks the version.
+- **The link:** the two Game Boys share one cable through the core's serial callbacks and are stepped together by
+  `GB_run` and cycle debt, a frame ending when both have reached a vertical blank. Clawseum's states load as they are
+  (SameBoy's CGB model), so the hand-played saves of 7.4 can start from them.
+- **Memory:** the battle addresses come from the disassembly's RAM layout alone, assembled and linked into a symbol
+  list with no game built; every address Clawseum used matched.
+- **One turn, headless:** both sides choose FIGHT and their highlighted move; the rig presses B through the text and
+  runs until both games are back at the battle menu. Mew's Psychic and Lapras's Swift landed, HP 79 → 42 and
+  459 → 444, and **both games agree**: each game's own Pokémon matches the other's view of its enemy, and the dice and
+  their index are identical.
+- **Speed:** 850 to 1,100 frames a turn (both games), about 630 frames a second for the pair in WebAssembly in Node:
+  **1.3 to 1.7 seconds a turn** on this Mac. Fast text and no animations in wOptions changed little; the link's own
+  waits and the text boxes dominate. A Vercel function is plausibly two to three times slower, 3 to 5 seconds a turn,
+  inside 8.2's design (resolution after the response) and under its 10-second line.
+- **The dice:** dealing the same 10 bytes repeats a turn exactly; fresh bytes gave 8 different outcomes in 8 turns, and
+  the games stayed in step after every deal.
+- **State:** 116,240 bytes a game (SameBoy's format, CGB with the cartridge's RAM), about 230 KB a pair before
+  compression.
+- **Power-on memory** is seeded with a constant, so a fresh pair is identical every time (7.1).
+- **Tests** (`npm test -w highwire-link`, no game needed): the pair steps together, memory goes to the right Game Boy,
+  states restore and the run from them repeats byte for byte, a damaged state is refused, the dice deal alike, nothing
+  outside the site imports the package, the repository holds no game or state file, and the committed build matches
+  its checksum. The battle itself runs in `npm run phase0 -w highwire-link` with `HIGHWIRE_LINK_ROM` set.
+
+**Still open in phase 0:** the run in a Vercel function on a preview deployment (it needs the Blob store and the game in
+it, decision 4), the version stamp on saved states, the turn through a real decision-point detector rather than "back at
+the same menu" (phase 1's first job), and the format's team.
+
 ## 15. Decisions needed from you
 
 1. **The format:** three-a-side fixed mirror teams first (recommended), or six, or team building from the start.
