@@ -428,7 +428,7 @@ Max) with Clawseum's paired save states (slot 6, a mid-battle turn at the battle
 - **Speed:** 850 to 1,100 frames a turn (both games), about 630 frames a second for the pair in WebAssembly in Node:
   **1.3 to 1.7 seconds a turn** on this Mac. Fast text and no animations in wOptions changed little; the link's own
   waits and the text boxes dominate.
-- **On Vercel** (a preview deployment, iad1, the site's default function; `/api/link/phase0`, 16 turns on fresh dice):
+- **On Vercel** (a preview deployment, iad1, the site's default function; `/api/link/phase0`, 13 turns on fresh dice):
   about **255 frames a second** for the pair, 2.4 times slower than this Mac, so **2.0 to 4.3 seconds a turn**
   (550 to 1,118 frames; most near 3.5 s). Inside 8.2's design (resolution after the response) and well under its
   10-second line, so the rig stays in WebAssembly. The first call on a cold instance read the game and both states
