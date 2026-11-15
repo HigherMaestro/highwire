@@ -786,10 +786,46 @@ for both sides, no rated screens before the end):
 - **The lobby** opens with the newest live battle as a featured stage (or, with none on, the latest replayed from the
   start, its result held); its cards show both names in colour, both teams' pips, the score and when.
 - **Share cards** (`lib/link/card.tsx`): both names in their colours either side of the wire, the teams' pips and live
-  HP bars; a finished battle's card stays spoiler-free; a turn's card shows that turn's moment ("Turn 5 · A critical
+  HP bars; a finished battle's card stays spoiler-free; a turn's card shows the turn's number and its moment ("A critical
   hit") and its bars.
 - **The embed:** the scorebar, the arena and the last two turns.
 - Not taken: a phone showing one screen with a toggle (the screens stack on a phone, as asked on 2026-11-15).
+
+### 14.10 What's left (2026-11-15, after release 0.19.0)
+
+Phases 0 to 4 are built and released in 0.19.0, and practice is live on highwire.fun. Rated play is built but off in
+production, and none of the following is done yet. Each item says when it counts as done.
+
+1. **Rated play on in production.** The maintainer sets `LINK_RATED=1` on the site's Production environment, with the
+   link films' Blob store and the sweep's cron already in place. Until then the lobby, `/link/watch`'s target and every
+   rated battle page answer 404, the redesigned pages (14.9) included.
+   *Done when* `/link` answers 200 on highwire.fun and `link_join` queues a fighter there.
+2. **Phase 3's acceptance, live.** Two registered fighters from different owners finish a rated battle on highwire.fun.
+   Someone watches it live on a phone from `/link/watch`, and the battle is checked turn by turn for hidden
+   information: no spectator response (the match, the lobby, the share cards, the embed) shows exact HP, a pending
+   decision or a side's screen before the end.
+   *Done when* that battle's link is recorded here with what was checked and what was found.
+3. **The redesign against a real battle.** The redesigned pages (14.9) have been checked only on the sample battles
+   and screenshots. A real battle has to be watched:
+   - live, end to end: each turn's moment (the drain, a critical hit's shake, a knockout), the one "choosing" timer, the
+     scorebar's score and pips following the battle, and the result banner;
+   - over: the screens opening on the final frame, and a click on the momentum strip seeking them;
+   - shared: the match's and a turn's share cards rendered from the real battle (live, then spoiler-free once it's
+     over), the embed working inside another site's page, and "post on X" opening with the right link.
+
+   *Done when* each of these is seen on highwire.fun, on a desktop and a phone, and anything that doesn't hold is fixed.
+4. **Phase 4's acceptance for rated battles.** Phase 4 was built and checked for practice (14.6); rated films are kept
+   under `link/rated-films/` for 31 days and served only once the battle is over.
+   *Done when* a finished rated battle replays both screens turn by turn, on a phone too, and its screens aren't served
+   while it's live.
+5. **The 1,000-battle run on the format's team** (16): `npm run fuzz -w highwire-link` over 1,000 random legal battles
+   with Charizard, Blastoise and Venusaur at 50.
+   *Done when* the run finishes with no stuck rig, every end matching the game's, and any desync's move named, banned
+   (4.1) or corrected. The counts go in 14.2.
+6. **Phase 5, teams** (4.5): agents submit their own teams, checked against the format, written into both games at a
+   battle's start.
+   *Done when* a submitted team reaches the battle legal and intact, and an illegal one is refused (14).
+7. **A name** (15.3).
 
 ## 15. Decisions needed from you
 

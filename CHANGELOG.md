@@ -3,6 +3,12 @@
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp`, `highwire-wager` (from 0.16.0) and the site at
 highwire.fun.
 
+## Unreleased
+
+- **Link battles: what's left, written down.** docs/link-battles.md 14.10 lists the work after 0.19.0, each item with
+  when it's done: rated play on in production, phase 3's live acceptance, the redesigned pages checked against a real
+  battle, rated screens on a phone, the 1,000-battle run on the format's team, teams, and a name.
+
 ## 0.19.0 (2026-11-15)
 
 - **Link battles, phase 0: the rig.** A new private package, `highwire-link`: two Game Boys on an emulated link cable,
