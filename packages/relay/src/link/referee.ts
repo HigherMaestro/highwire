@@ -30,6 +30,8 @@ export interface LinkStep {
   /** The format and the rig version the battle runs on (the engine refuses to resume another version's battle). */
   format: string;
   version: string;
+  /** What to film once the step is kept (the engine's own description, opaque here); handed back through `film`. */
+  film?: unknown;
 }
 
 /**
@@ -41,6 +43,11 @@ export interface LinkEngine {
   start(agent: 0 | 1, labels: [string, string]): Promise<LinkStep>;
   /** The agent's action and on to its next decision; a null action continues a battle where the agent isn't asked. */
   move(state: unknown, packed: Uint8Array, agent: 0 | 1, action: LinkAction | null, labels: [string, string]): Promise<LinkStep>;
+  /**
+   * Films a kept step's turns (docs/link-battles.md 13.3): both screens, stored where the site serves them. Called only
+   * after the step is saved, through the config's `defer`, so it never holds up the answer.
+   */
+  film?(match: string, film: unknown): Promise<void>;
 }
 
 export interface LinkConfig {
@@ -51,6 +58,11 @@ export interface LinkConfig {
   maxPractices?: number;
   /** How long a practice is kept after its last move, in ms. */
   practiceMs?: number;
+  /**
+   * Runs a task after the response has gone (the host's waitUntil). Without it nothing is filmed: work started and not
+   * awaited might be cut off with the request.
+   */
+  defer?: (task: Promise<unknown>) => void;
 }
 
 interface Practice {
@@ -108,6 +120,7 @@ export class LinkReferee {
   private agent: 0 | 1;
   private max: number;
   private ttlMs: number;
+  private defer?: (task: Promise<unknown>) => void;
 
   constructor(
     private store: Store,
@@ -119,6 +132,18 @@ export class LinkReferee {
     this.agent = config.agentSide ?? 1;
     this.max = config.maxPractices ?? 20;
     this.ttlMs = config.practiceMs ?? 3_600_000;
+    this.defer = config.defer;
+  }
+
+  /** Films a step that was just kept, after the answer. A film that fails is only missing from the page. */
+  private filmLater(id: string, step: LinkStep) {
+    const { engine, defer } = this;
+    if (!defer || !engine.film || step.film === undefined) return;
+    defer(
+      engine.film(id, step.film).catch((err: unknown) => {
+        console.error("link: a film failed", err);
+      }),
+    );
   }
 
   async rules() {
@@ -187,6 +212,7 @@ export class LinkReferee {
       }
       const p = await this.save({ id, fighter: f.id, name: f.name, agent: this.agent, format: step.format, version: step.version, startedAt: now, updatedAt: now, turn: 0, state: null, stateKey: null, view: null, spectator: null, ended: null, lines: [] }, step, 0);
       await update<string>(this.store, PRACTICE_OF(f.id), () => id, this.ttl());
+      this.filmLater(id, step);
       return this.out(p);
     } finally {
       await this.store.del(STARTING(f.id)).catch(() => undefined);
@@ -242,6 +268,7 @@ export class LinkReferee {
       }
       const lines = line ? [...p.lines, { turn: p.turn + 1, line }] : p.lines;
       const next = await this.save({ ...p, lines }, step, doc!.version);
+      this.filmLater(id, step);
       await this.touch(id);
       return this.out(next);
     } finally {

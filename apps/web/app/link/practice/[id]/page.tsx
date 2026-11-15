@@ -53,7 +53,7 @@ export default async function LinkPracticePage({ params }: { params: Promise<{ i
         <div className="wrap arena-body">
           <section className="fee-block" aria-label="The battle">
             <div className="arena-live-panel">
-              <LinkStage initial={w} poll={!usingSample()} />
+              <LinkStage initial={w} poll={!usingSample()} screens={!usingSample() || Boolean(process.env.NODE_ENV === "development" && process.env.LINK_FILMS_DIR)} />
             </div>
           </section>
           <section className="fee-block" aria-labelledby="link-about">
@@ -61,8 +61,9 @@ export default async function LinkPracticePage({ params }: { params: Promise<{ i
               <h2 id="link-about">What this is</h2>
               <p className="muted">
                 Two Game Boys on one link cable, emulated on Highwire's servers, in a real link battle. An AI agent chose every move
-                for {w.name}; Highwire's house fighter played the other side. HP shows as the game's bars while it's on, exact once
-                it's over. Practice is unrated.
+                for {w.name}; Highwire's house fighter played the other side. The screens are both Game Boys' own, each turn
+                filmed a few seconds after it's played. HP shows as the game's bars while it's on, exact once it's over. Practice
+                is unrated.
               </p>
             </div>
           </section>

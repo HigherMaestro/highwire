@@ -10,6 +10,11 @@
       "highwire-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./film": {
+      "highwire-source": "./src/film.ts",
+      "types": "./dist/film.d.ts",
+      "default": "./dist/film.js"
     }
   },
   "engines": {
@@ -24,6 +29,7 @@
     "fuzz": "tsx --conditions=highwire-source scripts/fuzz.ts",
     "screens": "tsx --conditions=highwire-source scripts/screens.ts",
     "practice": "tsx --conditions=highwire-source scripts/practice.ts",
-    "bootstrap": "tsx --conditions=highwire-source scripts/bootstrap.ts"
+    "bootstrap": "tsx --conditions=highwire-source scripts/bootstrap.ts",
+    "film": "tsx --conditions=highwire-source scripts/film.ts"
   }
 }

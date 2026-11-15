@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { type Action, BattleError, type Outcome } from "./battle.ts";
 import { LinkMatch, type MatchState, watch } from "./match.ts";
+import type { FilmJob } from "./record.ts";
 import type { Side } from "./rig.ts";
 import { BANNED_MOVES, DICE_LENGTH } from "./yellow.ts";
 import { narrate, type PlayerView, type SpectatorView } from "./view.ts";
@@ -20,6 +21,8 @@ export interface PracticeStep {
   spectator: SpectatorView | null;
   turn: number;
   ended: null | { reason: "knockout" | "draw" | "void"; winner: "you" | "house" | null; message?: string };
+  /** The turns this step played, to film after the answer (record.ts); the opening's too, on a start. */
+  film: FilmJob[];
 }
 
 /** A side's labels for narration: the house's and the fighter's names. */
@@ -30,6 +33,11 @@ const dice = () => new Uint8Array(randomBytes(DICE_LENGTH));
 export const TURN_CAP = 60;
 /** How long one step plays turns the agent isn't asked about before handing back (the next call continues). */
 const STEP_MS = 20_000;
+
+/** A turn just played, as a film job: from the battle before it, with its decisions and dice. */
+function job(before: Uint8Array, decisions: [Action | null, Action | null], dice: Uint8Array, r: ReturnType<LinkMatch["play"]>): FilmJob[] {
+  return r.turn ? [{ turn: r.turn.turn, before, decisions, dice: [...dice], events: JSON.stringify(r.turn.events) }] : [];
+}
 
 const chosenTurns = (state: MatchState) => state.turns.filter((t) => t.decisions.some((d) => d !== null)).length;
 
@@ -45,13 +53,15 @@ function ended(state: MatchState, agent: Side): PracticeStep["ended"] {
  * Plays turns the agent isn't asked about (the house's alone, or nobody's) until it is, the battle ends or the step's
  * time is up, then builds the step. Every turn since the agent's last decision is told in its view.
  */
-async function settle(rom: Uint8Array, match: LinkMatch, state: MatchState, packed: Uint8Array | null, agent: Side, labels: Labels, since: number): Promise<PracticeStep> {
+async function settle(rom: Uint8Array, match: LinkMatch, state: MatchState, packed: Uint8Array | null, agent: Side, labels: Labels, since: number, film: FilmJob[]): Promise<PracticeStep> {
   const house = (1 - agent) as Side;
   const until = performance.now() + STEP_MS;
   while (packed && !match.asked(agent) && performance.now() < until) {
     const decisions: [Action | null, Action | null] = [null, null];
     decisions[house] = match.asked(house) ? match.house(house) : null;
-    const r = match.play(decisions, dice());
+    const d = dice();
+    const r = match.play(decisions, d);
+    film = [...film, ...job(packed, decisions, d, r)];
     state = r.state;
     packed = r.packed;
     if (packed) match = await LinkMatch.open(rom, state, packed);
@@ -64,12 +74,13 @@ async function settle(rom: Uint8Array, match: LinkMatch, state: MatchState, pack
   const view = match.view(agent, state);
   const told = state.turns.filter((t) => t.turn > since);
   view.last_turn = told.flatMap((t) => [...(told.length > 1 ? [`Turn ${t.turn}:`] : []), ...narrate(t, match.data, (s) => (s === agent ? "Your" : "Their"))]);
-  return { state, packed, view, spectator: watch(state, match.data, labels, live), turn: state.turn, ended: ended(state, agent) };
+  return { state, packed, view, spectator: watch(state, match.data, labels, live), turn: state.turn, ended: ended(state, agent), film };
 }
 
 export async function practiceStart(rom: Uint8Array, bootstrap: [Uint8Array, Uint8Array], agent: Side, labels: Labels): Promise<PracticeStep> {
   const { match, packed } = await LinkMatch.start(rom, bootstrap);
-  return settle(rom, match, match.state, packed, agent, labels, 0);
+  const opening: FilmJob = { turn: 0, before: null, decisions: [null, null], dice: [], events: "" };
+  return settle(rom, match, match.state, packed, agent, labels, 0, [opening]);
 }
 
 /**
@@ -80,7 +91,7 @@ export async function practiceMove(rom: Uint8Array, state: MatchState, packed: U
   const match = await LinkMatch.open(rom, state, packed);
   if (!match.asked(agent)) {
     if (action) throw new BattleError("illegal", "It isn't your turn to choose; call with no action to let the battle go on.");
-    return settle(rom, match, state, packed, agent, labels, state.turn);
+    return settle(rom, match, state, packed, agent, labels, state.turn, []);
   }
   if (!action) throw new BattleError("illegal", "Choose one of the legal actions in your view.");
   const legal = match.legal(agent);
@@ -94,9 +105,10 @@ export async function practiceMove(rom: Uint8Array, state: MatchState, packed: U
   const decisions: [Action | null, Action | null] = [null, null];
   decisions[agent] = action;
   decisions[house] = match.asked(house) ? match.house(house) : null;
-  const r = match.play(decisions, dice());
+  const d = dice();
+  const r = match.play(decisions, d);
   const next = r.packed ? await LinkMatch.open(rom, r.state, r.packed) : match;
-  return settle(rom, next, r.state, r.packed, agent, labels, state.turn);
+  return settle(rom, next, r.state, r.packed, agent, labels, state.turn, job(packed, decisions, d, r));
 }
 
 /** The rules, for link_rules (6): the format, the actions, what's banned and how practice works. */
