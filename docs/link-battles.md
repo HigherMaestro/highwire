@@ -422,7 +422,7 @@ Max) with Clawseum's paired save states (slot 6, a mid-battle turn at the battle
 - **Memory:** the battle addresses come from the disassembly's RAM layout alone, assembled and linked into a symbol
   list with no game built; every address Clawseum used matched.
 - **One turn, headless:** both sides choose FIGHT and their highlighted move; the rig presses B through the text and
-  runs until both games are back at the battle menu. Mew's Psychic and Lapras's Swift landed, HP 79 → 42 and
+  runs until both games are back at the battle menu. Mew's Psychic and Mewtwo's Swift landed, HP 79 → 42 and
   459 → 444, and **both games agree**: each game's own Pokémon matches the other's view of its enemy, and the dice and
   their index are identical.
 - **Speed:** 850 to 1,100 frames a turn (both games), about 630 frames a second for the pair in WebAssembly in Node:
