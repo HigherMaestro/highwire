@@ -481,7 +481,15 @@ phase 1's, 14.2.)
   bus, and between frames a game is often inside its vertical blank's sprite DMA, when the bus ignores CPU writes. The
   rig now writes work RAM and high RAM directly. Before the fix, 7 of 24 battles desynced; after it, none.
 - **The fuzzer** plays from Clawseum's slot 6 (the same six Pokémon a side, levels 89 to 93, among them Mew with Transform and Metronome), every decision uniformly random among the
-  legal ones, fresh dice every turn, on worker threads. FUZZ_SUMMARY
+  legal ones, fresh dice every turn, on worker threads. **300 battles, 33,200 turns** (34 to 176 a battle, mean 111;
+  random play is slow to finish): 155 won by side 0, 142 by side 1, 2 draws both games agreed on, **no stuck rig**, and
+  **one desync**, the game's own (next). About 2.1 seconds a turn with 14 battles at once on an M3 Max; 97 minutes.
+- **The thaw desync, the game's own:** a frozen Pokémon selects no move (FIGHT goes straight on), but a Fire move can
+  thaw it mid-turn, and then it attacks. Its own game uses the last move selected, which may be another Pokémon's; the
+  other game looks up the move slot sent over the cable. In the fuzzer, a frozen Pikachu thawed by Flamethrower used
+  Psybeam in its own game and Thunderbolt in the other. The rig now sets a frozen side's selected move to that slot's
+  before the turn, so both games use the same move. With it, the desyncing battle replays from its seed to the end
+  (85 turns), and 56 more battles (6,100 turns) ended with no desync and no stuck rig.
 
 **Still open in phase 1:** the 1,000-battle run on the format's own team (decision 1), status changes and stat stages in
 the turn records, and table talk's place in them (phase 2 builds the referee around this).
@@ -502,7 +510,9 @@ the turn records, and table talk's place in them (phase 2 builds the referee aro
 - ~~How many frames a turn takes with fast text and no animations~~: 550 to 1,118; the options barely change it (14.1).
 - ~~Whether re-dealing the dice at a decision point is ever caught mid-roll~~: no; the one failure was the write
   itself, dropped during DMA (14.2).
-- Which other moves desync, beyond the banned five. (Phase 1.)
+- Which other moves desync, beyond the banned five. Phase 1 found none in 33,200 random turns (Metronome was still
+  allowed in the first 48 battles and caused none either); it found the thaw desync instead, which the rig corrects
+  (14.2). The 1,000-battle run on the format's team is still to do.
 - ~~The cheapest way to catch critical hits, misses and effectiveness~~: execution callbacks, read at the instant the
   game decides them (14.2).
 - The screens' format (animated WebP, a sprite sheet, or video), by size and how it plays on phones. (Phase 4.)

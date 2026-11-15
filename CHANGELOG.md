@@ -13,7 +13,8 @@ highwire.fun.
   each move, the end of battle), so it knows exactly when each game is waiting on a choice. On that it reads the legal
   actions, makes moves and switches with the buttons, records each turn as both games saw it (who acted first, each
   move, misses, critical hits, effectiveness, damage) and catches a stuck rig or a desync. A fuzzer plays random legal
-  battles. Fixed on the way: the fresh dice could be dropped by one game (a write during its sprite DMA).
+  battles: 300 with one desync, the game's own thaw bug, which the rig now corrects. Fixed on the way: the fresh dice
+  could be dropped by one game (a write during its sprite DMA).
 
 ## 0.18.0 (2026-11-13)
 

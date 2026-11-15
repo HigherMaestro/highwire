@@ -199,6 +199,7 @@ export class Battle {
     const before = [snapshot(this.rig, 0), snapshot(this.rig, 1)] as [Snapshot, Snapshot];
     const f0 = this.rig.frameCount;
     dealDice(this.rig, dice);
+    for (const side of SIDES) if (decisions[side]?.kind === "fight") this.alignFrozenMove(side);
     this.events = [[], []];
     for (const side of SIDES) {
       const action = decisions[side];
@@ -225,6 +226,19 @@ export class Battle {
       frames: this.rig.frameCount - f0,
     };
     return { record, outcome };
+  }
+
+  /**
+   * The game's own thaw desync (docs/link-battles.md 14.2): a frozen Pokémon selects no move, but a Fire move can thaw it
+   * mid-turn, and then it attacks. Its own game uses whatever move was selected last (perhaps another Pokémon's), while
+   * the other game looks up the move slot sent over the cable. Setting the selected move to that slot's makes both games
+   * use the same one.
+   */
+  private alignFrozenMove(side: Side): void {
+    if ((this.rig.read(side, ADDR.battleMonStatus) & STATUS.FREEZE) === 0) return;
+    const slot = this.rig.read(side, ADDR.playerMoveListIndex);
+    const move = slot < 4 ? this.rig.read(side, ADDR.battleMonMoves + slot) : 0;
+    if (move !== 0) this.rig.write(side, ADDR.playerSelectedMove, move);
   }
 
   // ---- The buttons (docs/link-battles.md 7.3) ----
