@@ -21,7 +21,7 @@ async function setup(arena = {}) {
   };
   const a = await r.register(MINT);
   const b = await r.register(MINT2, OTHER);
-  return { r, engine, flush, a, b };
+  return { r, engine, flush, a, b, tasks };
 }
 
 /** Pairs the two fighters: the first queues, the second finds it. */
@@ -114,9 +114,10 @@ test("an empty bank takes the fallback at once, every turn after", async () => {
   const s = await setup({ bankMs: 5_000 });
   const match = await pair(s);
   await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.a);
+  // The public page doesn't move the battle on (it never writes); the sweep does: the fallback goes in, the turn resolves.
   s.r.clock.advance(6_000);
-  // Any read plays the clock forward: the silent side's fallback goes in and the turn resolves.
-  await s.r.call("GET", `/api/link/match/${match}`);
+  assert.equal((await s.r.call("GET", `/api/link/match/${match}`)).body.turn, 0);
+  await s.r.advance(1_000);
   await s.flush();
   const v = await s.r.call("GET", `/api/link/state?match=${match}`, undefined, s.b);
   assert.equal(v.body.turn, 1, "resolved with the fallback");
@@ -142,8 +143,10 @@ test("both sides silent is a void; leaving is a forfeit", async () => {
   await s.r.advance(125_000);
   const v = (await s.r.call("GET", `/api/link/match/${match}`)).body;
   assert.equal(v.ended.reason, "void");
+  // Both went silent, so both wait out the cooldown before joining again.
+  await s.r.advance(300_000);
   const again = await pair(s);
-  assert.deepEqual((await s.r.call("POST", "/api/link/leave", {}, s.a)).body, { left: true });
+  assert.deepEqual((await s.r.call("POST", "/api/link/leave", {}, s.a)).body, { left: true, from: "battle" });
   const e = (await s.r.call("GET", `/api/link/match/${again}`)).body.ended;
   assert.equal(e.reason, "forfeit");
 });
@@ -172,11 +175,11 @@ test("two fighters of one owner are never paired; unpaired for two minutes, the 
   await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a);
   assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, same)).body.waiting, true);
   // A queued fighter keeps its place by calling again within a minute.
-  for (let t = 0; t < 2; t++) {
-    s.r.clock.advance(50_000);
+  for (let t = 0; t < 3; t++) {
+    s.r.clock.advance(40_000);
     await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a);
   }
-  s.r.clock.advance(25_000);
+  s.r.clock.advance(5_000);
   const late = await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a);
   assert.equal(late.body.opponent?.house, true, "after two minutes, the house");
 });
@@ -214,4 +217,160 @@ test("an outage of the store stops the clocks: nobody forfeits time it couldn't 
   await s.r.advance(70_000);
   const end = (await s.r.call("GET", `/api/link/match/${match}`)).body;
   assert.equal(end.ended?.reason, "forfeit", "once two minutes of it are outside the outage, it is");
+});
+
+// ---------------------------------------------------------------- the adversarial review's findings (2026-11-15)
+
+/** A gate the test opens when it's ready. */
+function gate() {
+  let open!: () => void;
+  const p = new Promise<void>((r) => (open = r));
+  return { p, open };
+}
+
+test("a poll during a resolution doesn't lose the turn, nor does any write that leaves the turn alone", async () => {
+  const s = await setup();
+  const match = await pair(s);
+  await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.a);
+  s.r.clock.advance(11_000);
+  await s.r.call("POST", "/api/link/move", { match, turn: 0, action: WAIT }, s.b);
+  const g = gate();
+  s.engine.gateResolve = g.p;
+  const running = s.tasks.shift()!();
+  await new Promise((r) => setTimeout(r, 10));
+  // A, who decided 11 seconds ago, polls while the turn is played; and something else writes the document meanwhile.
+  await s.r.call("GET", `/api/link/state?match=${match}`, undefined, s.a);
+  const d = (await s.r.store.get<any>(`link:match:${match}`))!;
+  await s.r.store.cas(`link:match:${match}`, d.version, { ...d.value, updatedAt: d.value.updatedAt + 1 });
+  s.engine.gateResolve = null;
+  g.open();
+  await running;
+  await s.flush();
+  assert.equal((await s.r.call("GET", `/api/link/match/${match}`)).body.turn, 1, "the turn played is kept");
+  assert.equal(s.engine.resolves, 1, "once");
+});
+
+test("a fighter is never in two battles: it's claimed before a battle is made, and waits while it is", async () => {
+  const s = await setup();
+  const MINT3 = "Cn8eVZaH5DWrRVHzbWZ4Eh4E9HFeuF2RwN4sx1ZSH8Fx";
+  s.r.coins.coins.set(MINT3, { ...s.r.coins.coins.get(MINT)!, name: "Third", ticker: "TRI" });
+  const c = await s.r.register(MINT3, "6nB5vWUTMBe2aQRrYzWvBrcHm8DKFxkUUXr5oULHXqX1");
+  await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a);
+  const g = gate();
+  s.engine.gateStart = g.p;
+  const bJoin = s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.b);
+  await new Promise((r) => setTimeout(r, 10));
+  // While B's battle with A is being made: A polls, then C joins. A must not be queued again, nor paired with C.
+  const a2 = await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a);
+  assert.equal(a2.body.waiting, true);
+  assert.equal(a2.body.pairing, true, "A is told its battle is being made");
+  const cJoin = await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, c);
+  assert.equal(cJoin.body.waiting, true, "C finds nobody: A is claimed");
+  s.engine.gateStart = null;
+  g.open();
+  const b = await bJoin;
+  assert.match(b.body.match, /^[a-z2-9]{10}$/);
+  const a3 = await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a);
+  assert.equal(a3.body.match, b.body.match, "A is in B's battle, and only that one");
+  assert.equal((await s.r.call("GET", "/api/link/matches")).body.live.length, 1);
+});
+
+test("a turn the rig keeps failing on voids the battle and frees both fighters", async () => {
+  const s = await setup();
+  const match = await pair(s);
+  s.engine.failAlways = new Error("boom");
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.a);
+    await s.r.call("POST", "/api/link/move", { match, turn: 0, action: WAIT }, s.b);
+    await s.flush();
+    for (let i = 0; i < 15; i++) {
+      await s.r.advance(60_000);
+      await s.flush();
+    }
+  } finally {
+    console.error = quiet;
+  }
+  const v = (await s.r.call("GET", `/api/link/match/${match}`)).body;
+  assert.equal(v.ended?.reason, "void");
+  assert.ok(s.engine.resolves <= 4, `tried ${s.engine.resolves} times`);
+  s.engine.failAlways = null;
+  assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a)).body.waiting, true, "free to join again");
+});
+
+test("an action is the same however its keys are ordered, and a resent decision never says whether the other side's is in", async () => {
+  const s = await setup();
+  const match = await pair(s);
+  const ok = await s.r.call("POST", "/api/link/move", { match, turn: 0, action: { slot: 0, kind: "move" } }, s.a);
+  assert.equal(ok.status, 200, ok.text);
+  const before = (await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.a)).body.error;
+  await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.b);
+  const after = (await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.a)).body.error;
+  assert.equal(before, after);
+});
+
+test("leaving the queue leaves it; a fighter that went silent waits to join again; an early forfeit isn't counted as rated", async () => {
+  const s = await setup();
+  await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a);
+  assert.deepEqual((await s.r.call("POST", "/api/link/leave", {}, s.a)).body, { left: true, from: "queue" });
+  assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.b)).body.waiting, true, "B finds nobody: A left");
+  await s.r.call("POST", "/api/link/leave", {}, s.b);
+  const match = await pair(s);
+  await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.a);
+  await s.r.advance(125_000);
+  const silent = (await s.r.call("GET", `/api/link/match/${match}`)).body.ended;
+  assert.equal(silent.reason, "forfeit");
+  const loser = silent.winner === 0 ? 1 : 0;
+  const ids = (await s.r.call("GET", `/api/link/match/${match}`)).body.sides.map((x: { fighter: string }) => x.fighter);
+  const loserToken = ids[loser] === MINT ? s.a : s.b;
+  const again = await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, loserToken);
+  assert.equal(again.status, 429);
+  assert.match(again.body.error, /stopped answering/);
+  const rows = (await s.r.call("GET", "/api/link/leaderboard")).body.fighters;
+  for (const f of rows) {
+    assert.equal(f.record.rated.win + f.record.rated.loss, 0, "a forfeit before turn 3 isn't a rated result");
+    assert.equal(f.record.unrated.win + f.record.unrated.loss, 1);
+  }
+});
+
+test("a join that finds its battle counts as answering", async () => {
+  const s = await setup();
+  await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a);
+  const b = await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.b);
+  await s.r.call("POST", "/api/link/move", { match: b.body.match, turn: 0, action: HIT }, s.b);
+  s.r.clock.advance(40_000);
+  // A comes back within the minute it was told, finds its battle, and thinks for 100 seconds.
+  assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a)).body.match, b.body.match);
+  await s.r.advance(100_000);
+  assert.equal((await s.r.call("GET", `/api/link/match/${b.body.match}`)).body.live, true);
+});
+
+test("link_state waits for the next turn by default, and practice waits for a rated battle", async () => {
+  const s = await setup();
+  const match = await pair(s);
+  await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.a);
+  const t0 = s.r.clock.now();
+  const v = await s.r.call("GET", "/api/link/state?wait=1", undefined, s.a);
+  assert.equal(v.body.status, "waiting");
+  assert.ok(s.r.clock.now() - t0 >= 40_000, "it held for the long-poll, not answering at once");
+  const p = await s.r.call("POST", "/api/link/practice", {}, s.a);
+  assert.equal(p.status, 409);
+});
+
+test("a rated battle settled records each side's rating change; the house's battles are capped", async () => {
+  const s = await setup({ maxHouse: 1 });
+  const match = await pair(s);
+  for (let turn = 0; turn < 3; turn++) {
+    await s.r.call("POST", "/api/link/move", { match, turn, action: HIT }, s.a);
+    await s.r.call("POST", "/api/link/move", { match, turn, action: WAIT }, s.b);
+    await s.flush();
+  }
+  const page = (await s.r.call("GET", `/api/link/match/${match}`)).body;
+  const changes = page.sides.map((x: { rating_change: number }) => x.rating_change);
+  assert.ok(changes[0] !== null && changes[1] !== null && changes[0] === -changes[1], JSON.stringify(changes));
+  const mine = (await s.r.call("GET", `/api/link/state?match=${match}`, undefined, s.a)).body.ended.rating_change;
+  assert.equal(typeof mine, "number");
+  assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", opponent: "house" }, s.a)).status, 200);
+  assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", opponent: "house" }, s.b)).status, 429);
 });

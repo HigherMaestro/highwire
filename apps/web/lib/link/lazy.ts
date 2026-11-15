@@ -7,9 +7,13 @@ import type { LinkEngine } from "highwire-relay";
 export const linkConfigured = () =>
   Boolean(process.env.BLOB_READ_WRITE_TOKEN) && (process.env.VERCEL_ENV !== "production" || process.env.LINK_PRACTICE === "1");
 
-/** Where a turn's film is kept in the private Blob store (engine.ts writes it, app/api/link/film serves it). */
-export const FILMS = "link/films/";
-export const filmPath = (match: string, turn: number) => `${FILMS}${match}/${turn}.film`;
+/**
+ * Where a turn's film is kept in the private Blob store (engine.ts writes it, app/api/link/film serves it): practice's
+ * and rated battles' under prefixes of their own, since they're kept for different times and a rated battle's are
+ * served only once it's over.
+ */
+export const FILMS = { practice: "link/films/", rated: "link/rated-films/" } as const;
+export const filmPath = (match: string, turn: number, kind: keyof typeof FILMS = "practice") => `${FILMS[kind]}${match}/${turn}.film`;
 
 const engine = () => import("./engine.ts").then((m) => m.linkEngine);
 

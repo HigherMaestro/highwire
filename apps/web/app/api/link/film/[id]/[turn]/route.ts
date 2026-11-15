@@ -27,10 +27,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string; tu
     return bytes ? new Response(new Uint8Array(bytes), { headers: { "content-type": "application/octet-stream", "cache-control": "no-store" } }) : MISSING();
   }
   if (!linkConfigured()) return MISSING();
-  // A rated battle's screens show each side's exact HP and PP: only once it's over (13.3). Practice's are shown as played.
-  const visible = await lineRelay()?.linkArena?.filmsVisible(id).catch(() => false);
+  // A rated battle's screens show each side's exact HP and PP: only once it's over (13.3), whether or not rated play is
+  // switched on now, and from their own prefix. Practice's are shown as played. Anything unknown fails closed.
+  const relay = lineRelay();
+  if (!relay) return MISSING();
+  const visible = await relay.linkFilmsVisible(id).catch(() => false);
   if (visible === false) return MISSING();
-  const blob = await get(filmPath(id, Number(turn)), { access: "private" }).catch(() => null);
+  const blob = await get(filmPath(id, Number(turn), visible === true ? "rated" : "practice"), { access: "private" }).catch(() => null);
   if (!blob || blob.statusCode !== 200) return MISSING();
   return new Response(blob.stream, {
     headers: {

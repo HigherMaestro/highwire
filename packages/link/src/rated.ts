@@ -56,9 +56,13 @@ const chosenTurns = (state: MatchState) => state.turns.filter((t) => t.decisions
  * game), `random` a move chosen by the match's seed and the turn. No usable move at all: the first switch.
  */
 export function fallbackAction(legal: Legal, facts: SideFacts, data: GameData, kind: FallbackKind, seed: string, turn: number, side: Side): Action {
-  if (legal.kind === "forced") return { kind: "switch", to: legal.switches[0]! };
+  const firstSwitch = (): Action => {
+    if (legal.switches[0] === undefined) throw new BattleError("illegal", `Side ${side} has no legal action to fall back on.`);
+    return { kind: "switch", to: legal.switches[0] };
+  };
+  if (legal.kind === "forced") return firstSwitch();
   if (legal.fight) return { kind: "fight" };
-  if (!legal.moves.length) return { kind: "switch", to: legal.switches[0]! };
+  if (!legal.moves.length) return firstSwitch();
   if (kind === "strongest") {
     const power = (slot: number) => data.move(facts.mineMoves[slot] ?? 0)?.power ?? 0;
     const best = [...legal.moves].sort((a, b) => power(b) - power(a) || a - b)[0]!;
@@ -106,12 +110,13 @@ function stepAt(match: LinkMatch, state: MatchState, packed: Uint8Array | null, 
 async function settle(rom: Uint8Array, match: LinkMatch, state: MatchState, packed: Uint8Array | null, sides: RatedSides, labels: Labels, since: number, film: FilmJob[]): Promise<RatedStep> {
   const until = performance.now() + STEP_MS;
   const agentAsked = (m: LinkMatch) => ([0, 1] as const).some((s) => !sides.kinds[s].house && m.asked(s));
-  while (packed && !agentAsked(match) && performance.now() < until) {
+  // The cap is checked before each turn, so turns no agent chose can't carry a battle past it.
+  while (packed && !agentAsked(match) && performance.now() < until && chosenTurns(state) < TURN_CAP) {
     const decisions: [Action | null, Action | null] = [null, null];
     for (const s of [0, 1] as const) if (match.asked(s)) decisions[s] = match.house(s);
     const d = dice();
     const r = match.play(decisions, d);
-    if (r.turn) film = [...film, { turn: r.turn.turn, before: packed, decisions, dice: [...d], events: JSON.stringify(r.turn.events) }];
+    if (r.turn) film = [...film, { turn: r.turn.turn, before: packed, decisions, dice: [...d], events: JSON.stringify(r.turn.events), sides: JSON.stringify(r.turn.sides) }];
     state = r.state;
     packed = r.packed;
     if (packed) match = await LinkMatch.open(rom, state, packed);
@@ -144,7 +149,7 @@ export async function ratedResolve(rom: Uint8Array, state: MatchState, packed: U
   }
   const d = dice();
   const r = match.play(decisions, d);
-  const film: FilmJob[] = r.turn ? [{ turn: r.turn.turn, before: packed, decisions, dice: [...d], events: JSON.stringify(r.turn.events) }] : [];
+  const film: FilmJob[] = r.turn ? [{ turn: r.turn.turn, before: packed, decisions, dice: [...d], events: JSON.stringify(r.turn.events), sides: JSON.stringify(r.turn.sides) }] : [];
   const next = r.packed ? await LinkMatch.open(rom, r.state, r.packed) : match;
   return settle(rom, next, r.state, r.packed, sides, labels, state.turn, film);
 }

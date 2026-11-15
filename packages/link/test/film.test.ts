@@ -99,3 +99,20 @@ test("the film module stays browser-safe: it imports nothing", async () => {
   const source = readFileSync(new URL("../src/film.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source, /^\s*import\s/m, "the practice page's player loads highwire-link/film in the browser");
 });
+
+test("a film with no frames reads back, and one that inflates past its frames is refused", async () => {
+  const none = await decodeFilm(await new FilmEncoder(0).finish());
+  assert.equal(none.frames, 0);
+  assert.equal(new FilmPlayer(none).next(), false);
+  // A hostile film: one frame's header, and a body of a megabyte of zeros.
+  const one = new FilmEncoder(1);
+  one.add([rgba(new Uint8Array(PIXELS)), rgba(new Uint8Array(PIXELS))]);
+  const real = await one.finish();
+  const zeros = new Uint8Array(new Blob([new Uint8Array(1 << 20)]).size);
+  const body = new Uint8Array(await new Response(new Blob([zeros]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
+  const headerLength = 16 + real[15]! * 3;
+  const bomb = new Uint8Array(headerLength + body.length);
+  bomb.set(real.subarray(0, headerLength));
+  bomb.set(body, headerLength);
+  await assert.rejects(decodeFilm(bomb), /bigger than its frames/);
+});

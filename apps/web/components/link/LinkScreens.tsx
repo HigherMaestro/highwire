@@ -14,6 +14,8 @@ const GIVE_UP_MS = 30_000;
 /** What the screens show, for the stage to follow: the turn on screen, and whether it has played to its end. */
 export type Shown = { turn: number; done: boolean } | null;
 type Load = { state: "loading" } | { state: "ready"; film: Film } | { state: "missing" };
+/** A finished battle's film asked for this many times and still missing isn't coming (its screens weren't kept). */
+const TRIES_WHEN_OVER = 3;
 
 async function fetchFilm(match: string, turn: number): Promise<Film | null> {
   const res = await fetch(`/api/link/film/${match}/${turn}`);
@@ -33,6 +35,12 @@ export function LinkScreens({ match, turns, live, left, names, onShow }: { match
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  // A finished battle whose opening film is gone: its screens are no longer kept.
+  const [noScreens, setNoScreens] = useState(false);
+  const liveRef = useRef(live);
+  liveRef.current = live;
+  const playingRef = useRef(playing);
+  playingRef.current = playing;
   const canvases = [useRef<HTMLCanvasElement>(null), useRef<HTMLCanvasElement>(null)] as const;
   const player = useRef<FilmPlayer | null>(null);
   const films = useRef(new Map<number, Promise<Film | null>>());
@@ -91,22 +99,46 @@ export function LinkScreens({ match, turns, live, left, names, onShow }: { match
     let gone = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
     const since = Date.now();
+    let tries = 0;
     report(turn, false);
+    const again = () => {
+      // A hidden tab doesn't keep asking; it asks again once it's shown.
+      retry = setTimeout(() => (document.hidden ? again() : void attempt()), RETRY_MS * Math.min(4, 1 + tries));
+    };
     const attempt = async () => {
+      tries++;
       const film = await get(turn);
       if (gone) return;
       if (!film) {
         setLoad({ state: "missing" });
-        // A film that never came (its filming failed): go past it, or, at the newest turn, stop holding the stage back.
-        if (Date.now() - since > GIVE_UP_MS) {
-          if (turn < latest.current) return setTurn(turn + 1);
-          tell.current?.(null);
+        if (!liveRef.current) {
+          // Over: its films are made, or never will be. A missing opening means its screens weren't kept.
+          if (tries >= TRIES_WHEN_OVER) {
+            if (turn === 0) {
+              setNoScreens(true);
+              tell.current?.(null);
+            } else if (playingRef.current && turn < latest.current) setTurn(turn + 1);
+            return;
+          }
+        } else if (Date.now() - since > GIVE_UP_MS) {
+          // Live: a film that never came (its filming failed). Followed, go past it; at the newest turn, stop holding the stage back.
+          if (playingRef.current && turn < latest.current) return setTurn(turn + 1);
+          if (turn >= latest.current) tell.current?.(null);
         }
-        retry = setTimeout(attempt, RETRY_MS);
+        again();
         return;
       }
-      player.current = new FilmPlayer(film);
-      player.current.next();
+      const p = new FilmPlayer(film);
+      try {
+        p.next();
+      } catch {
+        // A damaged film: no screens for this turn; the stage isn't held back by it.
+        setLoad({ state: "missing" });
+        report(turn, true);
+        if (playingRef.current && turn < latest.current) setTurn(turn + 1);
+        return;
+      }
+      player.current = p;
       draw();
       setLoad({ state: "ready", film });
       if (turn < latest.current) void get(turn + 1);
@@ -138,9 +170,11 @@ export function LinkScreens({ match, turns, live, left, names, onShow }: { match
         try {
           more = p.next();
         } catch {
-          // A damaged film: this turn shows no screens, and playing stops.
-          setPlaying(false);
+          // A damaged film: this turn shows no more; the stage moves on, and so do the screens if there's a next turn.
           setLoad({ state: "missing" });
+          report(turn, true);
+          if (turn < turns) setTurn(turn + 1);
+          else setPlaying(false);
           return;
         }
         if (!more) {
@@ -158,10 +192,12 @@ export function LinkScreens({ match, turns, live, left, names, onShow }: { match
     return () => cancelAnimationFrame(raf);
   }, [playing, load, speed, turn, turns, live, draw, report]);
 
-  // Following a live battle: a new turn arrives while the last one has finished playing.
+  // Following a live battle: a new turn arrives after the one on screen has played to its end. Only that turn's own film
+  // counts (while the next one loads, the player still holds the last one's).
   useEffect(() => {
-    if (live && following.current && playing && player.current && player.current.frame >= player.current.film.frames - 1 && turn < turns) setTurn(turn + 1);
-  }, [turns, live, playing, turn]);
+    const p = player.current;
+    if (live && following.current && playing && load.state === "ready" && p && p.film.turn === turn && p.frame >= p.film.frames - 1 && turn < turns) setTurn(turn + 1);
+  }, [turns, live, playing, turn, load]);
 
   const go = (t: number) => {
     following.current = t >= turns;
@@ -181,12 +217,16 @@ export function LinkScreens({ match, turns, live, left, names, onShow }: { match
         p.rewind();
         p.next();
         draw();
+        report(turn, false);
       }
     }
     setPlaying(!playing);
   };
 
   const label = turn === 0 ? "The opening" : `Turn ${turn} of ${turns}`;
+  if (noScreens) {
+    return <p className="link-screens-later muted">This battle&apos;s screens are no longer kept. Every turn is still told below.</p>;
+  }
   return (
     <figure className="link-screens" aria-label="Both Game Boys' screens">
       <div className="link-screens-pair">
@@ -209,7 +249,8 @@ export function LinkScreens({ match, turns, live, left, names, onShow }: { match
         </button>
         <span className="link-screens-turn">
           {label}
-          {load.state === "missing" ? <span className="muted small"> · {live && turn >= turns ? "filming…" : "no screens yet"}</span> : null}
+          {load.state === "missing" ? <span className="muted small"> · {live && turn >= turns ? "filming…" : live ? "no screens yet" : "no screens for this turn"}</span> : null}
+          {load.state === "loading" ? <span className="muted small" role="status"> · loading the screens…</span> : null}
         </span>
         <button type="button" className="link-screens-btn link-screens-speed" onClick={() => setSpeed(speed === 1 ? 2 : 1)} aria-label={`Speed: ${speed}×`}>
           {speed}×

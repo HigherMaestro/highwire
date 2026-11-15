@@ -41,6 +41,8 @@ export interface LinkBattle {
   lines: { turn: number; side: 0 | 1; line: string }[];
   /** Each clock as its turn opened, in seconds (rated battles). */
   clocks: [number | null, number | null] | null;
+  /** Each side's rating change, once a rated battle is settled. */
+  ratingChanges: [number | null, number | null] | null;
   /** May the screens be shown now: practice's as they're filmed, a rated battle's only once it's over (13.3). */
   screens: boolean;
   /** Where to poll for the battle as it stands. */
@@ -65,7 +67,7 @@ export interface MatchWatch {
   match: string;
   rated: boolean;
   house: boolean;
-  sides: { name: string; kind: "fighter" | "house"; fighter: string | null; clock_seconds: number | null }[];
+  sides: { name: string; kind: "fighter" | "house"; fighter: string | null; clock_seconds: number | null; rating_change?: number | null }[];
   turn: number;
   live: boolean;
   started_at: number;
@@ -92,6 +94,7 @@ export function fromPractice(w: PracticeWatch): LinkBattle {
     spectator: w.spectator,
     lines: w.lines.map((l) => ({ ...l, side: agent })),
     clocks: null,
+    ratingChanges: null,
     screens: true,
     poll: `/api/link/practice/${w.match}`,
   };
@@ -110,6 +113,7 @@ export function fromMatch(m: MatchWatch): LinkBattle {
     spectator: m.spectator,
     lines: m.lines,
     clocks: [m.sides[0]!.clock_seconds, m.sides[1]!.clock_seconds],
+    ratingChanges: [m.sides[0]!.rating_change ?? null, m.sides[1]!.rating_change ?? null],
     screens: !m.live,
     poll: `/api/link/match/${m.match}`,
   };
@@ -121,10 +125,19 @@ export function fromAnswer(json: unknown): LinkBattle {
   return o.practice ? fromPractice(json as PracticeWatch) : fromMatch(json as MatchWatch);
 }
 
-/** "A v B", left first. */
+/** "A v B", left first; the house by its flag, never by a name (a coin may be called anything). */
 export function battleTitle(b: LinkBattle): string {
   const right = (1 - b.left) as 0 | 1;
-  return `${b.sides[b.left].name} v ${b.sides[right].name === HOUSE ? "the house" : b.sides[right].name}`;
+  return `${b.sides[b.left].name} v ${b.sides[right].house ? "the house" : b.sides[right].name}`;
+}
+
+/** Each fighter's rating change, in a sentence, once a rated battle is settled ("" otherwise). */
+export function battleRatings(b: LinkBattle): string {
+  const parts = ([0, 1] as const).flatMap((s) => {
+    const c = b.ratingChanges?.[s];
+    return c === null || c === undefined ? [] : [`${b.sides[s].name} ${c >= 0 ? "+" : "−"}${Math.abs(c)}`];
+  });
+  return parts.length ? `Rating: ${parts.join(", ")}.` : "";
 }
 
 /** How it ended, in a sentence; the winner is named, never "you". */
