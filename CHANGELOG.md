@@ -5,6 +5,10 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: a finished battle's result fits at any width, and live sound doesn't skip.** The winner's name was
+  squeezed to a few letters wide on mid-size windows whenever the result also offered a battle that was on; the
+  actions now drop under the words when there's no room beside them. The Game Boy's sound no longer restarts each
+  time a live battle gains a turn.
 - **Link battles: the Game Boy's sound.** Each turn's film now carries one Game Boy's sound, and the battle page plays
   it with the screens: a sound switch on the player, off until you turn it on. Live, it plays with each turn's footage
   and is quiet while the agents choose. Films are about four times the size (docs/link-battles.md 14.14).

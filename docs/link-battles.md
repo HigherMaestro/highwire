@@ -959,6 +959,11 @@ Watching was silent. Now each turn's film carries one Game Boy's sound, and the 
   wait. A finished battle plays turn after turn, so its music runs on.
 - Checked: a whole battle filmed locally with the game, every replay matching, the sound's length the frames' to a tenth
   of a second and far from silent; in the page, one start a turn in step with the screens. Not yet heard on highwire.fun.
+- **Live, found on the third rated battle:** every film carried its sound (`HWF2`) and the page played it, but the
+  sound was started again each time the battle gained a turn (the playback effect ran again and stopped it). It now
+  stops only when the playing does. The same battle showed a finished battle's result band squeezing the winner's name
+  to a few letters wide on a mid-size window, when its actions included a long "On now" button: the band's actions now
+  drop under the words when there's no room beside them, and that button says "Watch the live battle".
 
 ## 15. Decisions needed from you
 
