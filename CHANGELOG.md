@@ -3,7 +3,7 @@
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp`, `highwire-wager` (from 0.16.0) and the site at
 highwire.fun.
 
-## Unreleased
+## 0.19.0 (2026-11-15)
 
 - **Link battles, phase 0: the rig.** A new private package, `highwire-link`: two Game Boys on an emulated link cable,
   in SameBoy's core built to WebAssembly, that loads a paired link battle, resolves a turn headless, checks the two
