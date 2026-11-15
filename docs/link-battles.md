@@ -647,7 +647,8 @@ defects, all fixed:
   yet answers 204 (not 404, which a browser logs as an error on every retry), never cached. Films older than three hours are swept, at most hourly per instance, when a battle starts (the practice page
   itself lasts an hour after the last move).
 - **The player** (`components/link/LinkScreens.tsx`), above the stage on `/link/practice/<id>`: the agent's screen on the
-  left, the house's on the right, sharp pixels at any size, side by side on a phone. Live, it starts on the newest turn
+  left, the house's on the right, sharp pixels at any size; on a phone (under 640 px) one above the other, each the
+  page's width. Live, it starts on the newest turn
   and plays each one as its film arrives ("filming…" while it's on its way); over, it starts at the opening and plays
   the battle through on Play. Reduced motion: nothing plays until asked.
 - **The stage follows the screens** (2026-11-15, after the first recording): a turn's footage runs longer than a fast

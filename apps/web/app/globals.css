@@ -5663,9 +5663,10 @@ a.card:hover,
 @media (prefers-reduced-motion: reduce) {
   .link-hp-fill { transition: none; }
 }
-@media (max-width: 520px) {
-  .link-screens-pair { gap: 8px; }
-  .link-screen { padding: 6px 6px 8px; border-radius: 10px; }
+/* A phone: one screen above the other, each the width of the page (side by side they were about 150 px each). */
+@media (max-width: 640px) {
+  .link-screens-pair { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .link-screen { padding: 8px 8px 10px; border-radius: 12px; }
 }
 @media (max-width: 720px) {
   .link-stage { grid-template-columns: minmax(0, 1fr); gap: 0; }
