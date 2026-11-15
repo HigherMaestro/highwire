@@ -2,15 +2,33 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// The stage's sound (docs/link-battles.md 14.12): off until someone turns it on, then a few short synthesized tones of
-// Highwire's own for what the director plays (a hit, a critical hit, a miss, a switch, a knockout, the end). Nothing is
-// loaded and nothing is the game's: each is an oscillator or a burst of noise through the Web Audio API, made on the
-// spot. The choice is kept in this browser. A hidden tab stays quiet.
+// The stage's sound (docs/link-battles.md 14.12, 14.14): off until someone turns it on, and the choice kept in this
+// browser. With the Game Boys' screens playing, it's the game's own sound, carried in each turn's film (LinkScreens
+// plays it). Without them, a few short synthesized tones of Highwire's own for what the director plays (a hit, a
+// critical hit, a miss, a switch, a knockout, the end): each an oscillator or a burst of noise, made on the spot. Both
+// go through one AudioContext, which a browser only lets start from a click. A hidden tab stays quiet.
 
 export type Cue = "hit" | "crit" | "soft" | "miss" | "switch" | "ko" | "win" | "turn";
 
 const KEY = "link-sound";
 const LEVEL = 0.07;
+
+let shared: AudioContext | null = null;
+
+/** The page's one AudioContext, made when first asked for; null where there's no Web Audio. Resumed if it was waiting for a click. */
+export function audioContext(): AudioContext | null {
+  try {
+    if (!shared) {
+      const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctor) return null;
+      shared = new Ctor();
+    }
+    if (shared.state === "suspended") void shared.resume().catch(() => undefined);
+    return shared;
+  } catch {
+    return null;
+  }
+}
 
 type Note = { f: number; to?: number; at: number; ms: number; type?: OscillatorType; gain?: number };
 
@@ -27,7 +45,6 @@ const CUES: Record<Cue, { notes: Note[]; noise?: { at: number; ms: number; gain:
 
 export function useSound(): { on: boolean; toggle: () => void; play: (cue: Cue) => void } {
   const [on, setOn] = useState(false);
-  const ctx = useRef<AudioContext | null>(null);
   const onRef = useRef(false);
   onRef.current = on;
 
@@ -41,16 +58,23 @@ export function useSound(): { on: boolean; toggle: () => void; play: (cue: Cue) 
     }
   }, []);
 
-  useEffect(() => () => void ctx.current?.close().catch(() => undefined), []);
+  // Sound saved as on can't start until a click: the first one anywhere on the page starts it.
+  useEffect(() => {
+    if (!on) return;
+    const wake = () => void audioContext();
+    window.addEventListener("pointerdown", wake, { once: true });
+    window.addEventListener("keydown", wake, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", wake);
+      window.removeEventListener("keydown", wake);
+    };
+  }, [on]);
 
   const play = useCallback((cue: Cue) => {
     if (!onRef.current || document.hidden) return;
     try {
-      const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!Ctor) return;
-      const c = (ctx.current ??= new Ctor());
-      if (c.state === "suspended") void c.resume().catch(() => undefined);
-      if (c.state !== "running") return;
+      const c = audioContext();
+      if (!c || c.state !== "running") return;
       const t0 = c.currentTime + 0.01;
       const spec = CUES[cue];
       for (const n of spec.notes) {
@@ -94,8 +118,11 @@ export function useSound(): { on: boolean; toggle: () => void; play: (cue: Cue) 
     } catch {
       // As above.
     }
-    // Turning it on is the click that lets the browser play: a short tone says it worked.
-    if (next) play("turn");
+    // Turning it on is the click that lets the browser play: a short tone, a moment later, says it worked.
+    if (next) {
+      audioContext();
+      setTimeout(() => play("turn"), 80);
+    }
   }, [play]);
 
   return { on, toggle, play };

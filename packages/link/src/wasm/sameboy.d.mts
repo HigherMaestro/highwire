@@ -19,6 +19,9 @@ export interface SameBoyModule {
   _rig_set_rendering(on: number): void;
   _rig_pixels(side: number): number;
   _rig_model(side: number): number;
+  _rig_audio(side: number, rate: number): void;
+  _rig_audio_samples(): number;
+  _rig_audio_take(): number;
   _rig_stopped(): number;
   _rig_mid_frame(): number;
   _rig_watch(addr: number, bank: number, stop: number): number;

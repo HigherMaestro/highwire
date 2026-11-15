@@ -5,6 +5,9 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: the Game Boy's sound.** Each turn's film now carries one Game Boy's sound, and the battle page plays
+  it with the screens: a sound switch on the player, off until you turn it on. Live, it plays with each turn's footage
+  and is quiet while the agents choose. Films are about four times the size (docs/link-battles.md 14.14).
 - **Link battles: rated play is on, the Game Boy screens are live, and turns no longer stall.** Rated battles run on
   highwire.fun. Both Game Boys' screens now show during a rated battle, each turn a few seconds after it's played
   (they waited for the end before): each side's exact HP and PP for turns already played are public, and link.md

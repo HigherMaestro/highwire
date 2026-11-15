@@ -116,3 +116,52 @@ test("a film with no frames reads back, and one that inflates past its frames is
   bomb.set(body, headerLength);
   await assert.rejects(decodeFilm(bomb), /bigger than its frames/);
 });
+
+// ---------------------------------------------------------------- sound (docs/link-battles.md 14.14)
+
+test("a film with sound plays the same frames, and gives the sound back as 8-bit mono", async () => {
+  const { FILM_AUDIO_RATE } = await import("../src/film.ts");
+  const enc = new FilmEncoder(4);
+  const blank = rgba(new Uint8Array(PIXELS));
+  const lit = rgba(new Uint8Array(PIXELS).fill(1));
+  // Two frames, and a square wave gathered in two takes (as the rig hands it over, frame by frame).
+  const wave = Int16Array.from({ length: 600 }, (_, i) => (Math.floor(i / 20) % 2 ? 9000 : -9000));
+  enc.add([blank, lit]);
+  enc.sound(wave.subarray(0, 250));
+  enc.add([lit, blank]);
+  enc.sound(wave.subarray(250));
+  const bytes = await enc.finish();
+  assert.equal(new TextDecoder().decode(bytes.subarray(0, 4)), "HWF2");
+  const film = await decodeFilm(bytes);
+  assert.equal(film.frames, 2);
+  assert.equal(film.turn, 4);
+  assert.equal(film.audio?.rate, FILM_AUDIO_RATE);
+  assert.equal(film.audio?.samples.length, 600);
+  assert.deepEqual([...film.audio!.samples.subarray(0, 3)], [128 + (-9000 >> 8), 128 + (-9000 >> 8), 128 + (-9000 >> 8)]);
+  assert.equal(film.audio!.samples[25], 128 + (9000 >> 8));
+  const p = new FilmPlayer(film);
+  assert.equal(p.next(), true);
+  assert.deepEqual(shown(p.screens[1]), lit);
+  assert.equal(p.next(), true);
+  assert.deepEqual(shown(p.screens[0]), lit);
+  assert.equal(p.next(), false);
+});
+
+test("a film without sound is still an HWF1, and a film claiming more sound than its frames could last is refused", async () => {
+  const quiet = new FilmEncoder(1);
+  quiet.add([rgba(new Uint8Array(PIXELS)), rgba(new Uint8Array(PIXELS))]);
+  const plain = await quiet.finish();
+  assert.equal(new TextDecoder().decode(plain.subarray(0, 4)), "HWF1");
+  assert.equal((await decodeFilm(plain)).audio, undefined);
+  // One frame can't hold ten seconds of sound: a hostile film can't make a browser inflate what it likes.
+  const loud = new FilmEncoder(1);
+  loud.add([rgba(new Uint8Array(PIXELS)), rgba(new Uint8Array(PIXELS))]);
+  loud.sound(new Int16Array(160_000));
+  await assert.rejects(decodeFilm(await loud.finish()), /longer than its frames/);
+  // And one cut short is refused, not played.
+  const ok = new FilmEncoder(1);
+  ok.add([rgba(new Uint8Array(PIXELS)), rgba(new Uint8Array(PIXELS))]);
+  ok.sound(Int16Array.from({ length: 300 }, (_, i) => i * 50));
+  const whole = await ok.finish();
+  await assert.rejects(decodeFilm(whole.subarray(0, whole.length - 8)));
+});
