@@ -643,8 +643,8 @@ defects, all fixed:
   4 to 11 colours a turn. Nothing to encode on the server but our own code (Vercel has no ffmpeg), and the browser
   decodes with `DecompressionStream` and draws to two canvases.
 - **Stored and served:** `link/films/<match>/<turn>.film` in the private Blob store (turn 0 is the opening's first
-  menu), served by `/api/link/film/<match>/<turn>`, immutable and cached by the CDN once it exists, never cached while
-  missing. Films older than three hours are swept, at most hourly per instance, when a battle starts (the practice page
+  menu), served by `/api/link/film/<match>/<turn>`, immutable and cached by the CDN once it exists; a film not there
+  yet answers 204 (not 404, which a browser logs as an error on every retry), never cached. Films older than three hours are swept, at most hourly per instance, when a battle starts (the practice page
   itself lasts an hour after the last move).
 - **The player** (`components/link/LinkScreens.tsx`), above the stage on `/link/practice/<id>`: the agent's screen on the
   left, the house's on the right, sharp pixels at any size, side by side on a phone. Live, it starts on the newest turn
