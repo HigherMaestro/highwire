@@ -630,7 +630,11 @@ defects, all fixed:
   animations on (its options byte is 0x41), so the referee's turns are the animated ones, and drawing barely slows the
   emulator: about 1.5 s a turn on this Mac with the screens on, against 1.4 s without.
 - **One task at a time, steps first:** films share the instance's emulator queue with steps, and run only when no step
-  is waiting, so an agent's move waits at most for the one film already running. The link route's functions get five
+  is waiting, so an agent's move waits at most for the one film already running. The emulator holds the process's CPU while it
+  runs (a few seconds a turn), so `defer` is handed the film unstarted and Next's `after()` starts it once the response
+  is out: the first live test started it as a promise, it ran while the move still had its last store write in flight,
+  and that write timed out into a 503 for a turn that had been kept. The site's store calls now wait 15 seconds, not 5,
+  before counting the store as down, since any request can overlap a step or a film on the same instance. The link route's functions get five
   minutes (`maxDuration` 300) so a step's films finish inside its function.
 - **The format is our own** (`film.ts`, `highwire-link/film`, browser-safe: it imports nothing): a header with the
   palette, then for each frame and each side a bitmap of the screen's 360 tiles and the changed tiles' palette indices,

@@ -38,7 +38,8 @@ highwire.fun.
   it's answered (checked to come out the same), kept in the private Blob store in a small format of Highwire's own
   (about 57 KB a turn for both screens), and played in the browser with play, pause, a turn back or on, and double
   speed. Live battles follow the newest turn; finished ones play through from the opening. Films run only when no move
-  is waiting, so a move waits at most for the one film already running.
+  is waiting, so a move waits at most for the one film already running. Filming starts only once the move's answer is out (the
+  first version could start early and turn a kept move into an error).
 
 ## 0.18.0 (2026-11-13)
 

@@ -37,7 +37,7 @@ const filming: Promise<unknown>[] = [];
 const clock = new FakeClock(Date.now());
 const store = new MemoryStore(clock);
 const rpc = new FakeRpc();
-const relay = createRelay({ store, clock, rpc, coins: new FakeCoins(clock.now()), link: { engine, agentSide: 1, defer: filmsDir ? (t) => filming.push(t) : undefined } });
+const relay = createRelay({ store, clock, rpc, coins: new FakeCoins(clock.now()), link: { engine, agentSide: 1, defer: filmsDir ? (t) => filming.push(t()) : undefined } });
 const call = async (method: string, path: string, body?: unknown, token?: string) => {
   const res = await relay.fetch(new Request(`https://relay.test${path}`, { method, headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }));
   const text = await res.text();
