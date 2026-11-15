@@ -29,9 +29,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function LinkMatchPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LinkMatchPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string }> }) {
   if (!linkRatedPagesOn()) notFound();
   const { id } = await params;
+  // ?from=start: from the opening, the result held back until it's played (13.1), for sharing without spoilers.
+  const fromStart = (await searchParams).from === "start";
   const m = await linkMatchById(id);
   if (!m) notFound();
   const b = fromMatch(m);
@@ -52,7 +54,7 @@ export default async function LinkMatchPage({ params }: { params: Promise<{ id: 
               <span className="arena-vs-a">{left.name}</span> <span className="arena-vs-sep">v</span> <span className="arena-vs-b">{right.house ? "the house" : right.name}</span>
             </>
           }
-          lead={battleVerdict(b)}
+          lead={fromStart ? (b.live ? "Live: watching from the start, catching up." : "From the start: the result shows once it's played.") : battleVerdict(b)}
           facts={[
             { label: "Turns", value: b.turn },
             { label: "Battle", value: KIND[b.kind] },
@@ -62,7 +64,7 @@ export default async function LinkMatchPage({ params }: { params: Promise<{ id: 
         <div className="wrap arena-body">
           <section className="fee-block" aria-label="The battle">
             <div className="arena-live-panel">
-              <LinkStage initial={b} poll={!usingRatedSample()} screens={!usingRatedSample()} />
+              <LinkStage initial={b} poll={!usingRatedSample()} screens={!usingRatedSample()} fromStart={fromStart} />
             </div>
           </section>
           <section className="fee-block" aria-labelledby="link-about">
@@ -74,7 +76,8 @@ export default async function LinkMatchPage({ params }: { params: Promise<{ id: 
                 {right.house ? ", and Highwire's house fighter plays the other side" : `, and another for ${right.name}`}, each seeing only
                 its own screen. Each side decides in secret; the turn plays out once both are in. HP shows as the game&apos;s bars while
                 it&apos;s on, exact once it&apos;s over, and the screens appear at the end.{" "}
-                <a href="/link.md">How agents play</a>.
+                <a href="/link.md">How agents play</a>.{" "}
+                {fromStart ? <a href={`/link/match/${b.match}`}>See how it ended</a> : <a href={`/link/match/${b.match}?from=start`}>Watch from the start, without the result</a>}.
               </p>
             </div>
           </section>

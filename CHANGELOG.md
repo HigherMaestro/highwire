@@ -65,6 +65,9 @@ highwire.fun.
   pairing race could put a fighter in two battles; both are fixed, as are battles stuck resolving, results applied
   half-way, ghost queue places, a decision's arrival given away by an error message, `link_state` not waiting, rated
   battles' screens deleted after three hours, live screens skipping turns, and a page that never said who won.
+- **Link battles: a turn's link, watching from the start, and an embed.** /link/match/<id>/turn/<n> opens a battle at
+  one moment, for sharing a big hit; ?from=start plays a battle from the opening with the result held back; and
+  /link/match/<id>/embed is the stage alone, which streams and other sites may frame.
 
 ## 0.18.0 (2026-11-13)
 

@@ -29,9 +29,10 @@ async function fetchFilm(match: string, turn: number): Promise<Film | null> {
  * `onShow` hears which turn is on screen while the screens are being followed (a live battle playing, or once someone
  * has pressed play or stepped), and null otherwise, when the stage shows the battle as it stands.
  */
-export function LinkScreens({ match, turns, live, left, names, onShow }: { match: string; turns: number; live: boolean; left: 0 | 1; names: [string, string]; onShow?: (s: Shown) => void }) {
-  // The turn on screen: 0 is the opening (the first menu), 1..turns the turns played.
-  const [turn, setTurn] = useState(() => (live ? Math.max(0, turns) : 0));
+export function LinkScreens({ match, turns, live, left, names, onShow, startTurn, autoplay = false }: { match: string; turns: number; live: boolean; left: 0 | 1; names: [string, string]; onShow?: (s: Shown) => void; startTurn?: number; autoplay?: boolean }) {
+  // The turn on screen: 0 is the opening (the first menu), 1..turns the turns played. A live battle opens on its newest
+  // turn, a finished one at the opening, unless the page asks for a turn (a turn link, or from the start).
+  const [turn, setTurn] = useState(() => (startTurn !== undefined ? Math.max(0, Math.min(turns, startTurn)) : live ? Math.max(0, turns) : 0));
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [load, setLoad] = useState<Load>({ state: "loading" });
@@ -55,12 +56,13 @@ export function LinkScreens({ match, turns, live, left, names, onShow }: { match
   const report = useCallback((t: number, done: boolean) => tell.current?.(engaged.current ? { turn: t, done } : null), []);
   const who = [`${names[shown[0]]}'s screen`, `${names[shown[1]]}'s screen`] as const;
 
-  // Reduced motion: never start on its own. Otherwise a live battle plays as it comes.
+  // Reduced motion: never start on its own. Otherwise a live battle plays as it comes, and so does one watched from the start.
   useEffect(() => {
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (live && !still) {
+    if ((live && startTurn === undefined) || autoplay) {
       engaged.current = true;
-      setPlaying(true);
+      if (!still) setPlaying(true);
+      report(turn, false);
     }
   }, [live]);
 
