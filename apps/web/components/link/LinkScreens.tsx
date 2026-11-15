@@ -164,6 +164,9 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
     [hush],
   );
   useEffect(() => hush, [hush]);
+  useEffect(() => {
+    if (!playing) hush();
+  }, [playing, hush]);
 
   const draw = useCallback(() => {
     const p = player.current;
@@ -284,10 +287,9 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(raf);
-      hush();
-    };
+    // The sound isn't stopped here: this runs again whenever a live battle gains a turn, and stopping it each time made a
+    // gap in the turn being played. It stops when the playing does (below), and follows the film by itself.
+    return () => cancelAnimationFrame(raf);
   }, [playing, load, speed, turn, turns, live, draw, report]);
 
   // Following a live battle: a new turn arrives after the one on screen has played to its end. Only that turn's own film

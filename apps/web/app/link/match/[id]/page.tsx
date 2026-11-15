@@ -42,7 +42,6 @@ export default async function LinkMatchPage({ params, searchParams }: { params: 
   const lobby = await linkLobby().catch(() => null);
   const others = lobby ? [...lobby.live, ...lobby.recent].filter((c) => c.match !== b.match).slice(0, 3) : [];
   const nextUp = others[0];
-  const name = (c: (typeof others)[number], x: 0 | 1) => (c.sides[x]!.kind === "house" ? "the house" : c.sides[x]!.name);
   // Each fighter's record so far, and the last time these two met: something to know them by.
   const rows = lobby ? [...lobby.ladder.ranked, ...lobby.ladder.fighters] : [];
   const record = (x: 0 | 1) => {
@@ -84,7 +83,7 @@ export default async function LinkMatchPage({ params, searchParams }: { params: 
         fromStart={fromStart}
         records={[record(0), record(1)]}
         context={context}
-        next={nextUp ? { href: nextUp.live ? `/link/match/${nextUp.match}` : `/link/match/${nextUp.match}?from=start`, label: nextUp.live ? `On now: ${name(nextUp, 0)} v ${name(nextUp, 1)}` : "Watch another" } : null}
+        next={nextUp ? { href: nextUp.live ? `/link/match/${nextUp.match}` : `/link/match/${nextUp.match}?from=start`, label: nextUp.live ? "Watch the live battle" : "Watch another" } : null}
       />
       {others.length ? (
         <section className="link-more-battles" aria-labelledby="more-battles">
