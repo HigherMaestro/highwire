@@ -814,8 +814,8 @@ production, and none of the following is done yet. Each item says when it counts
 | 6. Teams | Deferred until there are real users (4.5) |
 | 7. A name | Open |
 
-**Staking** is not in this list: it's a non-goal here (2). A first draft of what it would take, with nothing built or
-decided, is in docs/link-wager.md.
+**Staking** is not in this list: anything of value tied to results is a non-goal here (2). Practice stakes on devnet,
+with devnet SOL that's worth nothing, are planned in docs/link-wager.md (a draft; nothing built).
 
 1. **Rated play on in production.** The maintainer sets `LINK_RATED=1` on the site's Production environment, with the
    link films' Blob store and the sweep's cron already in place. Until then the lobby, `/link/watch`'s target and every
