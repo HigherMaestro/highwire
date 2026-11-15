@@ -1,5 +1,5 @@
 import { del, get, list, put } from "@vercel/blob";
-import { BattleError, type FilmJob, filmTurn, FORMAT, linkRules, type MatchState, practiceMove, practiceStart, RIG_VERSION, type PracticeStep } from "highwire-link";
+import { BattleError, type FilmJob, filmTurn, FORMAT, linkRules, type MatchState, practiceMove, practiceStart, RIG_VERSION, type PracticeStep, trainerName } from "highwire-link";
 import { RelayError, type LinkEngine, type LinkStep } from "highwire-relay";
 import { FILMS, filmPath } from "./lazy.ts";
 
@@ -114,9 +114,11 @@ export function createLinkEngine(files: () => Promise<LinkFiles>, films: FilmSto
     });
   return {
     rules: async () => linkRules(),
-    start: async (agent, labels) => {
+    start: async (agent, labels, trainers) => {
       const f = await get();
-      return guarded(() => practiceStart(f.rom, f.bootstrap, agent, labels));
+      // What the game can show of each name (a ticker is creator content): letters, digits and spaces, seven at most.
+      const names = trainers ? ([trainerName(trainers[0], "AGENT"), trainerName(trainers[1], "AGENT")] as [string, string]) : undefined;
+      return guarded(() => practiceStart(f.rom, f.bootstrap, agent, labels, names));
     },
     move: async (state, packed, agent, action, labels) => {
       const f = await get();

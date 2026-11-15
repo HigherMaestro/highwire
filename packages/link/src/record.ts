@@ -2,6 +2,7 @@ import { type Action, Battle } from "./battle.ts";
 import { FilmEncoder } from "./film.ts";
 import { Rig } from "./rig.ts";
 import { unpack } from "./state.ts";
+import { writeTrainers } from "./trainers.ts";
 
 // Filming (docs/link-battles.md 13.3, phase 4): a turn played again from the battle as it stood before it, with the same
 // decisions and dice and both screens drawn, after the referee has answered. Drawing changes nothing the games compute,
@@ -15,6 +16,8 @@ export interface FilmJob {
   dice: number[];
   /** The turn's events as the referee recorded them (JSON), to check the replay against. */
   events: string;
+  /** The opening's: the trainers' names the match started with (later turns have them in their packed battle). */
+  trainers?: readonly [string, string];
 }
 
 /**
@@ -30,6 +33,7 @@ export async function filmTurn(rom: Uint8Array, bootstrap: [Uint8Array, Uint8Arr
   } else {
     rig.loadState(0, bootstrap[0]);
     rig.loadState(1, bootstrap[1]);
+    if (job.trainers) writeTrainers(rig, job.trainers);
     battle = new Battle(rig);
   }
   rig.setRendering(true);

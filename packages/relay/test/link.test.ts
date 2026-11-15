@@ -44,7 +44,10 @@ class FakeEngine implements LinkEngine {
     if (this.filmFails) throw new Error("the film broke");
     this.films.push({ match, film });
   }
-  async start() {
+  /** The trainers' names each start was given. */
+  trainers: unknown[] = [];
+  async start(_agent: 0 | 1, _labels: [string, string], trainers?: [string, string]) {
+    this.trainers.push(trainers);
     this.calls++;
     if (this.hold) await this.hold;
     return this.step({ turn: 0, houseHp: 3 });
@@ -281,4 +284,10 @@ test("without a way to defer, nothing is filmed", async () => {
   const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
   await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token);
   assert.deepEqual(engine.films, []);
+});
+
+test("the games name the fighter by its ticker and the house as the house", async () => {
+  const { r, engine, token } = await setup();
+  await r.call("POST", "/api/link/practice", {}, token);
+  assert.deepEqual(engine.trainers[0], ["HOUSE", "WCAT"], "side 0 the house, side 1 the agent by its coin's ticker");
 });

@@ -4,6 +4,7 @@ import { houseChoice } from "./house.ts";
 import { Rig, type Side } from "./rig.ts";
 import { FORMAT, pack, RIG_VERSION, unpack } from "./state.ts";
 import { checkGame, DICE_LENGTH, party, snapshot, ADDR } from "./yellow.ts";
+import { writeTrainers } from "./trainers.ts";
 import { playerView, spectatorView, type PlayerView, type SideFacts, type SpectatorView, type Turn, viewPhase } from "./view.ts";
 
 // A link battle as the referee runs it (docs/link-battles.md 8.2): started from a bootstrap, then, a turn at a time,
@@ -44,12 +45,16 @@ export class LinkMatch {
     readonly data: GameData,
   ) {}
 
-  /** Starts a match from a bootstrap: both games saved at the battle's first menu (7.4). */
-  static async start(rom: Uint8Array, bootstrap: [Uint8Array, Uint8Array]): Promise<{ match: LinkMatch; packed: Uint8Array }> {
+  /**
+   * Starts a match from a bootstrap: both games saved at the battle's first menu (7.4). `trainers` are the names the
+   * games show for each side (trainers.ts); without them the bootstrap's own stay.
+   */
+  static async start(rom: Uint8Array, bootstrap: [Uint8Array, Uint8Array], trainers?: readonly [string, string]): Promise<{ match: LinkMatch; packed: Uint8Array }> {
     checkGame(rom);
     const rig = await Rig.create(rom);
     rig.loadState(0, bootstrap[0]);
     rig.loadState(1, bootstrap[1]);
+    if (trainers) writeTrainers(rig, trainers);
     const battle = new Battle(rig);
     if (battle.runToDecision()) throw new Error("The bootstrap ended before its first decision.");
     const s = snapshot(rig, 0);

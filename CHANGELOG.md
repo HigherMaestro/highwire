@@ -45,6 +45,9 @@ highwire.fun.
   during a fast battle. A finished battle shows its result until someone presses play.
 - **Link battles: the screens stack on a phone.** Under 640 px wide, a practice battle's two Game Boy screens sit one
   above the other at the page's full width, instead of side by side at about 150 px each.
+- **Link battles: the trainers have names.** The Game Boy screens no longer say "Ash sent out…" and "Ash defeated Ash!":
+  each battle names the fighter by its coin's ticker (up to seven letters, the game's limit) and the house as HOUSE, so
+  they read "HOUSE sent out BLASTOISE!" and "LGTM lost to HOUSE!".
 
 ## 0.18.0 (2026-11-13)
 

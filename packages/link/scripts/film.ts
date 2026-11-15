@@ -8,6 +8,7 @@ import { type Action, checkGame, decodeFilm, DICE_LENGTH, type FilmJob, filmTurn
 // check the film. Prints each film's size and time. With an out dir it writes the films there (never into the
 // repository: they're the game's own screens). Needs the game:
 //   HIGHWIRE_LINK_ROM=<the game> npm run film -w highwire-link -- <side 0 state> <side 1 state> [out dir]
+// TRAINERS="HOUSE,LGTM" names the two sides in the games (trainers.ts), as a practice does.
 
 const romPath = process.env.HIGHWIRE_LINK_ROM;
 const [p0, p1, out] = process.argv.slice(2);
@@ -20,10 +21,11 @@ checkGame(rom);
 const boot: [Uint8Array, Uint8Array] = [new Uint8Array(readFileSync(p0)), new Uint8Array(readFileSync(p1))];
 if (out) mkdirSync(out, { recursive: true });
 
-const started = await LinkMatch.start(rom, boot);
+const trainers = process.env.TRAINERS ? (process.env.TRAINERS.split(",").slice(0, 2) as [string, string]) : undefined;
+const started = await LinkMatch.start(rom, boot, trainers);
 let match = started.match;
 let packed: Uint8Array | null = started.packed;
-const jobs: FilmJob[] = [{ turn: 0, before: null, decisions: [null, null], dice: [], events: "" }];
+const jobs: FilmJob[] = [{ turn: 0, before: null, decisions: [null, null], dice: [], events: "", ...(trainers ? { trainers } : {}) }];
 let state = match.state;
 let total = 0, bytes = 0, ms = 0, frames = 0, bad = 0;
 
