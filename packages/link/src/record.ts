@@ -1,12 +1,13 @@
 import { type Action, Battle } from "./battle.ts";
-import { FilmEncoder } from "./film.ts";
+import { FILM_AUDIO_RATE, FilmEncoder } from "./film.ts";
 import { Rig } from "./rig.ts";
 import { unpack } from "./state.ts";
 import { writeTrainers } from "./trainers.ts";
 
 // Filming (docs/link-battles.md 13.3, phase 4): a turn played again from the battle as it stood before it, with the same
-// decisions and dice and both screens drawn, after the referee has answered. Drawing changes nothing the games compute,
-// so the replay is the same turn; it's checked, and a film whose turn came out differently is never kept.
+// decisions and dice, both screens drawn and one Game Boy's sound gathered (14.14), after the referee has answered.
+// Drawing and listening change nothing the games compute, so the replay is the same turn; it's checked, and a film
+// whose turn came out differently is never kept.
 
 /** One turn to film: what the referee played, from where. `before` null is the battle's opening, from the bootstrap. */
 export interface FilmJob {
@@ -39,6 +40,8 @@ export async function filmTurn(rom: Uint8Array, bootstrap: [Uint8Array, Uint8Arr
     battle = new Battle(rig);
   }
   rig.setRendering(true);
+  // Game 0's sound: both Game Boys play the same battle, and one is enough to hear it.
+  rig.audio(0, FILM_AUDIO_RATE);
   const film = new FilmEncoder(job.turn);
   const run = rig.run.bind(rig);
   // Every finished frame, both screens (a run that stops mid-frame finishes it on the next call). A frame at a time, so
@@ -47,16 +50,21 @@ export async function filmTurn(rom: Uint8Array, bootstrap: [Uint8Array, Uint8Arr
     let stop = null;
     for (let i = 0; i < frames && !stop; i++) {
       stop = run(1);
+      film.sound(rig.takeAudio());
       if (!rig.midFrame) film.add([rig.screen(0), rig.screen(1)]);
     }
     return stop;
   };
-  if (job.before) {
-    const { record } = battle.play(job.decisions, Uint8Array.from(job.dice));
-    if (JSON.stringify(record.events) !== job.events) return null;
-    if (job.sides !== undefined && JSON.stringify(record.sides) !== job.sides) return null;
-  } else {
-    battle.runToDecision();
+  try {
+    if (job.before) {
+      const { record } = battle.play(job.decisions, Uint8Array.from(job.dice));
+      if (JSON.stringify(record.events) !== job.events) return null;
+      if (job.sides !== undefined && JSON.stringify(record.sides) !== job.sides) return null;
+    } else {
+      battle.runToDecision();
+    }
+  } finally {
+    rig.audio(null);
   }
   return film.finish();
 }

@@ -23,7 +23,7 @@ CORE=(gb sgb apu memory mbc timing display camera sm83_cpu joypad save_state ran
 CORE_FILES=()
 for f in "${CORE[@]}"; do CORE_FILES+=("SameBoy-${SAMEBOY_VERSION}/Core/$f.c"); done
 
-FUNCS='["_rig_init","_rig_load_rom","_rig_state_size","_rig_save_state","_rig_load_state","_rig_run_frames","_rig_set_key","_rig_read","_rig_write","_rig_direct","_rig_last_size","_rig_set_rendering","_rig_pixels","_rig_model","_rig_stopped","_rig_mid_frame","_rig_watch","_rig_watch_clear","_rig_seq","_rig_pc","_rig_cable_get","_rig_cable_set","_malloc","_free"]'
+FUNCS='["_rig_init","_rig_load_rom","_rig_state_size","_rig_save_state","_rig_load_state","_rig_run_frames","_rig_set_key","_rig_read","_rig_write","_rig_direct","_rig_last_size","_rig_set_rendering","_rig_pixels","_rig_model","_rig_stopped","_rig_mid_frame","_rig_watch","_rig_watch_clear","_rig_seq","_rig_pc","_rig_cable_get","_rig_cable_set","_rig_audio","_rig_audio_samples","_rig_audio_take","_malloc","_free"]'
 
 BUILD="
   set -e

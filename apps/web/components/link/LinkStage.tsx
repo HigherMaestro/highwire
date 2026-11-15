@@ -311,11 +311,12 @@ export function LinkStage({ initial, poll = true, screens = true, at, fromStart 
   }, [beatKey]);
   const sounded = useRef(settledTo);
   useEffect(() => {
-    if (settledTo > sounded.current && (screensLead || speed === 2)) sound.play((stories.get(settledTo) ?? []).some((l) => l.kind === "faint") ? "ko" : "turn");
+    // With the screens leading, the game's own sound plays (in each turn's film): no tones over it.
+    if (settledTo > sounded.current && speed === 2 && !screensLead) sound.play((stories.get(settledTo) ?? []).some((l) => l.kind === "faint") ? "ko" : "turn");
     sounded.current = settledTo;
   }, [settledTo]);
   useEffect(() => {
-    if (over && winner !== null) sound.play("win");
+    if (over && winner !== null && !screensLead) sound.play("win");
   }, [over]);
 
   // The turn on the stage in a sentence, for when nothing's playing: its knockout, its biggest hit, its last move.
@@ -409,6 +410,7 @@ export function LinkStage({ initial, poll = true, screens = true, at, fromStart 
           fresh={screensFresh}
           call={screensLead ? call : ""}
           quiet={compact}
+          sound={sound}
         />
       ) : null}
 

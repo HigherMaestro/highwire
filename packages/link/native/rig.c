@@ -37,6 +37,18 @@ static long delta;
 
 static unsigned side_of(GB_gameboy_t *gb) { return gb == &gbs[1] ? 1 : 0; }
 
+// Sound (docs/link-battles.md 14.14): off unless a film is being made. One Game Boy's output, mixed to mono, gathered
+// here until TypeScript takes it (after each frame). Hearing a Game Boy changes nothing it computes.
+#define AUDIO_CAP 16384
+static int16_t audio[AUDIO_CAP];
+static size_t audio_len;
+static int audio_side = -1;
+
+static void on_sample(GB_gameboy_t *gb, GB_sample_t *sample) {
+  if ((int)side_of(gb) != audio_side || audio_len >= AUDIO_CAP) return;
+  audio[audio_len++] = (int16_t)(((int)sample->left + (int)sample->right) / 2);
+}
+
 static void on_vblank(GB_gameboy_t *gb, GB_vblank_type_t type) {
   (void)type;
   vblank[side_of(gb)] = true;
@@ -84,6 +96,8 @@ EMSCRIPTEN_KEEPALIVE void rig_init(int model) {
   GB_random_seed(0x4C494E4Bu);
   mid_frame = false;
   stopped = 0;
+  audio_side = -1;
+  audio_len = 0;
   watch_count = 0;
   memset(watched, 0, sizeof watched);
   memset(seq, 0, sizeof seq);
@@ -218,3 +232,23 @@ EMSCRIPTEN_KEEPALIVE void rig_set_rendering(int on) {
 EMSCRIPTEN_KEEPALIVE uint32_t *rig_pixels(int side) { return pixels[side]; }
 
 EMSCRIPTEN_KEEPALIVE int rig_model(int side) { return (int)GB_get_model(&gbs[side]); }
+
+/** Starts gathering one Game Boy's sound at `rate` samples a second (side -1: stops, and no sound is rendered). */
+EMSCRIPTEN_KEEPALIVE void rig_audio(int side, int rate) {
+  audio_side = side;
+  audio_len = 0;
+  for (unsigned i = 0; i < SIDES; i++) {
+    bool on = (int)i == side && rate > 0;
+    GB_set_sample_rate(&gbs[i], on ? (unsigned)rate : 0);
+    GB_apu_set_sample_callback(&gbs[i], on ? on_sample : NULL);
+  }
+}
+
+/** The samples gathered since the last take (16-bit mono), and how many: taking them empties the buffer. */
+EMSCRIPTEN_KEEPALIVE int16_t *rig_audio_samples(void) { return audio; }
+
+EMSCRIPTEN_KEEPALIVE size_t rig_audio_take(void) {
+  size_t n = audio_len;
+  audio_len = 0;
+  return n;
+}

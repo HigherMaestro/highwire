@@ -939,6 +939,27 @@ Merge Conflict against Looks Good To Me (two owners, both played by a script thr
 - **Found:** a long fighter's name wrapped on the share card and pushed its HP bar onto the wire; names now stay on
   one line, smaller the longer they are.
 
+### 14.14 The Game Boy's sound (2026-11-15)
+
+Watching was silent. Now each turn's film carries one Game Boy's sound, and the page plays it with the screens.
+
+- **The rig** (`native/rig.c`, rebuilt: a new `WASM_SHA256`, so a battle in flight at the deploy is voided as saved by
+  another rig) gathers one Game Boy's output, mixed to mono, only while a film is made: `rig_audio`, `Rig.audio` and
+  `Rig.takeAudio`. Listening changes nothing the games compute; the replay is still checked against the turn, and a
+  film whose turn came out differently is never kept.
+- **The film** (`film.ts`): with sound it's `HWF2`, the same header and frames, then the sound as 8-bit mono at 16,000
+  samples a second, each sample stored as its difference from the last and deflated. A film without sound is still
+  `HWF1`, and both decode. The decoder refuses more sound than the frames could last. Sound is about 10 KB a second of
+  footage: a 17-second turn's film is about 180 KB where it was about 40, a 19-turn battle about 3 MB.
+- **The page** (`LinkScreens.tsx`): a sound switch on the transport, off until turned on and remembered in this browser
+  (the one switch as the stage's tones, 14.12; with the screens leading, the tones give way to the game's sound). The
+  sound starts where the frames are, is started again if the two drift apart, and is quiet at double speed. A browser
+  only starts sound from a click, so a saved "on" starts at the first click on the page.
+- **Live, there's sound while a turn's footage plays and none while the agents choose**: the film is the turn, not the
+  wait. A finished battle plays turn after turn, so its music runs on.
+- Checked: a whole battle filmed locally with the game, every replay matching, the sound's length the frames' to a tenth
+  of a second and far from silent; in the page, one start a turn in step with the screens. Not yet heard on highwire.fun.
+
 ## 15. Decisions needed from you
 
 1. **The format:** decided (2026-11-15): three-a-side fixed mirror, Charizard, Blastoise and Venusaur at level 50 (4.1).

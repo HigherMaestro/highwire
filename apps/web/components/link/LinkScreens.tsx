@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { decodeFilm, type Film, FilmPlayer, SCREEN_H, SCREEN_W } from "highwire-link/film";
 import { Icon, Transport } from "./StageParts.tsx";
+import { audioContext } from "./useSound.ts";
 
 // Both Game Boys' screens, side by side (docs/link-battles.md 13.3, 14.11): each turn's film, played in order with the turn
 // controls. A film is made after its turn is answered, so a live battle's newest turn may take a few seconds to appear;
@@ -32,7 +33,7 @@ async function fetchFilm(match: string, turn: number): Promise<Film | null> {
  * `onShow` hears which turn is on screen while the screens are being followed (a live battle playing, or once someone
  * has pressed play or stepped), and null otherwise, when the stage shows the battle as it stands.
  */
-export function LinkScreens({ match, turns, live, left, names, onShow, startTurn, autoplay = false, seek, fresh = false, call = "", quiet = false }: { match: string; turns: number; live: boolean; left: 0 | 1; names: [string, string]; onShow?: (s: Shown) => void; startTurn?: number; autoplay?: boolean; seek?: number; fresh?: boolean; /** What the stage is saying, shown between the screens on a phone, where the stage itself is below them. */ call?: string; /** Say nothing when the screens aren't kept (the lobby). */ quiet?: boolean }) {
+export function LinkScreens({ match, turns, live, left, names, onShow, startTurn, autoplay = false, seek, fresh = false, call = "", quiet = false, sound }: { match: string; turns: number; live: boolean; left: 0 | 1; names: [string, string]; onShow?: (s: Shown) => void; startTurn?: number; autoplay?: boolean; seek?: number; fresh?: boolean; /** What the stage is saying, shown between the screens on a phone, where the stage itself is below them. */ call?: string; /** Say nothing when the screens aren't kept (the lobby). */ quiet?: boolean; /** The sound switch: on, each turn's film plays its Game Boy's sound (14.14). */ sound?: { on: boolean; toggle: () => void } }) {
   // The turn on screen: 0 is the opening (the first menu), 1..turns the turns played. A live battle opens on its newest
   // turn; a finished one on its last turn's final frame, so the screens agree with the stage and the result; a page can
   // ask for a turn (a turn link, from the start), and `seek` (the momentum strip) moves it.
@@ -107,6 +108,62 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
     },
     [match],
   );
+
+  // The turn's sound, when its film has it and sound is on: one Game Boy's, kept in step with the frame on screen. It
+  // starts where the frames are, is started again if the two drift apart (a tab that was hidden, a slow frame), and is
+  // quiet at double speed.
+  const soundOn = useRef(false);
+  soundOn.current = Boolean(sound?.on);
+  const voice = useRef<{ src: AudioBufferSourceNode; film: Film; startedAt: number; offset: number } | null>(null);
+  const buffers = useRef(new WeakMap<Film, AudioBuffer>());
+  const hush = useCallback(() => {
+    const v = voice.current;
+    voice.current = null;
+    if (!v) return;
+    try {
+      v.src.stop();
+    } catch {
+      // Already ended.
+    }
+  }, []);
+  const voiceSync = useCallback(
+    (speedNow: number) => {
+      const p = player.current;
+      const a = p?.film.audio;
+      const ctx = soundOn.current && a && a.samples.length && speedNow === 1 && !document.hidden ? audioContext() : null;
+      if (!p || !a || !ctx || ctx.state !== "running" || p.frame < 0) return hush();
+      try {
+        const length = a.samples.length / a.rate;
+        // Sound seconds per second of film: the film's frames are numbered at 60 a second, a Game Boy's run a little slower.
+        const rate = length / (p.film.frames / p.film.fps);
+        const want = (p.frame / p.film.fps) * rate;
+        const v = voice.current;
+        if (v && v.film === p.film && Math.abs(v.offset + (ctx.currentTime - v.startedAt) * rate - want) < 0.15) return;
+        hush();
+        if (want >= length - 0.03) return;
+        let buffer = buffers.current.get(p.film);
+        if (!buffer) {
+          buffer = ctx.createBuffer(1, a.samples.length, a.rate);
+          const channel = buffer.getChannelData(0);
+          for (let i = 0; i < a.samples.length; i++) channel[i] = (a.samples[i]! - 128) / 128;
+          buffers.current.set(p.film, buffer);
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.playbackRate.value = rate;
+        const gain = ctx.createGain();
+        gain.gain.value = 0.6;
+        src.connect(gain).connect(ctx.destination);
+        src.start(0, want);
+        voice.current = { src, film: p.film, startedAt: ctx.currentTime, offset: want };
+      } catch {
+        // No sound here: the screens play on without it.
+        hush();
+      }
+    },
+    [hush],
+  );
+  useEffect(() => hush, [hush]);
 
   const draw = useCallback(() => {
     const p = player.current;
@@ -223,10 +280,14 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
         moved = true;
       }
       if (moved) draw();
+      voiceSync(speed);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      hush();
+    };
   }, [playing, load, speed, turn, turns, live, draw, report]);
 
   // Following a live battle: a new turn arrives after the one on screen has played to its end. Only that turn's own film
@@ -329,6 +390,7 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
           speed={speed}
           onSpeed={() => setSpeed(speed === 1 ? 2 : 1)}
           disabled={load.state !== "ready"}
+          sound={sound}
           status={
             <>
               {load.state === "missing" ? <span className="link-transport-note"> · {live && turn >= turns ? "filming…" : live ? "no screens yet" : "no screens for this turn"}</span> : null}

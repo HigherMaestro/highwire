@@ -744,7 +744,7 @@ export function Icon({ d }: { d: keyof typeof ICON }) {
 }
 
 /** Previous, play or pause, next, where it is, and the speed: for the screens, and for a replay without them. */
-export function Transport({ label, playing, onToggle, onPrev, onNext, canPrev, canNext, speed, onSpeed, status, disabled = false }: { label: string; playing: boolean; onToggle: () => void; onPrev: () => void; onNext: () => void; canPrev: boolean; canNext: boolean; speed: number; onSpeed: () => void; status?: ReactNode; disabled?: boolean }) {
+export function Transport({ label, playing, onToggle, onPrev, onNext, canPrev, canNext, speed, onSpeed, status, disabled = false, sound }: { label: string; playing: boolean; onToggle: () => void; onPrev: () => void; onNext: () => void; canPrev: boolean; canNext: boolean; speed: number; onSpeed: () => void; status?: ReactNode; disabled?: boolean; /** The sound switch, where there's sound to switch. */ sound?: { on: boolean; toggle: () => void } }) {
   return (
     <div className="link-transport">
       <button type="button" className="link-tbtn" onClick={onPrev} disabled={!canPrev} aria-label="Previous turn">
@@ -760,6 +760,11 @@ export function Transport({ label, playing, onToggle, onPrev, onNext, canPrev, c
         {label}
         {status}
       </span>
+      {sound ? (
+        <button type="button" className="link-tbtn link-tbtn-sound" aria-pressed={sound.on} onClick={sound.toggle} aria-label={sound.on ? "Sound on: turn it off" : "Sound off: turn it on"} title="The Game Boy's own sound">
+          <Icon d={sound.on ? "sound" : "mute"} />
+        </button>
+      ) : null}
       <button type="button" className="link-tbtn link-tbtn-speed" onClick={onSpeed} aria-label={`Speed: ${speed}×`}>
         {speed}×
       </button>

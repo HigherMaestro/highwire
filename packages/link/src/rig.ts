@@ -177,6 +177,21 @@ export class Rig {
     return this.m.HEAPU8.slice(ptr, ptr + 160 * 144 * 4);
   }
 
+  /**
+   * Starts gathering one Game Boy's sound at `rate` samples a second, or stops (null). Sound is rendered only while a
+   * film is made (record.ts); hearing a Game Boy changes nothing it computes.
+   */
+  audio(side: Side | null, rate = 0): void {
+    this.m._rig_audio(side ?? -1, side === null ? 0 : rate);
+  }
+
+  /** The sound gathered since the last take, 16-bit mono (take it at least once a frame: the buffer holds about a second). */
+  takeAudio(): Int16Array {
+    const n = this.m._rig_audio_take();
+    const ptr = this.m._rig_audio_samples();
+    return new Int16Array(this.m.HEAPU8.buffer, ptr, n).slice();
+  }
+
   private withBuffer<T>(bytes: Uint8Array, use: (ptr: number) => T): T {
     const ptr = this.m._malloc(bytes.length);
     try {
