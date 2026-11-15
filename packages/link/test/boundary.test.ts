@@ -44,4 +44,5 @@ test("the committed WebAssembly is the build its checksum names", () => {
   const [expected] = readFileSync(join(here, "src/wasm/sameboy.sha256"), "utf8").trim().split(/\s+/);
   const actual = createHash("sha256").update(readFileSync(join(here, "src/wasm/sameboy.mjs"))).digest("hex");
   assert.equal(actual, expected, "src/wasm/sameboy.mjs changed without scripts/build-wasm.sh");
+  assert.match(readFileSync(join(here, "src/wasm/version.ts"), "utf8"), new RegExp(`"${actual}"`), "src/wasm/version.ts names another build");
 });

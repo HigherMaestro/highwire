@@ -15,6 +15,10 @@ highwire.fun.
   move, misses, critical hits, effectiveness, damage) and catches a stuck rig or a desync. A fuzzer plays random legal
   battles: 300 with one desync, the game's own thaw bug, which the rig now corrects. Fixed on the way: the fresh dice
   could be dropped by one game (a write during its sprite DMA).
+- **Link battles, phase 2's engine.** A match as the referee will run it, a turn at a time from stored states (stamped
+  with the rig's version; resuming was checked to give exactly the same battle), each side's view and the spectators'
+  (tested never to show the other side's numbers or decisions), the house opponent, and the game's names and type chart
+  read from the cartridge. Nothing is served yet.
 
 ## 0.18.0 (2026-11-13)
 

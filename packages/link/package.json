@@ -22,6 +22,7 @@
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "phase0": "tsx --conditions=highwire-source scripts/phase0.ts",
     "fuzz": "tsx --conditions=highwire-source scripts/fuzz.ts",
-    "screens": "tsx --conditions=highwire-source scripts/screens.ts"
+    "screens": "tsx --conditions=highwire-source scripts/screens.ts",
+    "practice": "tsx --conditions=highwire-source scripts/practice.ts"
   }
 }

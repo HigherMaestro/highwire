@@ -9,6 +9,8 @@ import {
   party,
   snapshot,
   STATUS,
+  type Field,
+  type Mon,
   type Snapshot,
 } from "./yellow.ts";
 
@@ -59,12 +61,45 @@ export type TurnEvent =
   | { kind: "used"; side: Side; move: number }
   | { kind: "resolved"; side: Side; move: number; missed: boolean; critical: boolean; effectiveness: number; damage: number };
 
+/** What a turn changed on one side, absolute (side 0 and side 1), from both games' agreed view. */
+export interface SideChange {
+  species: [number, number];
+  hp: [number, number];
+  maxHp: number;
+  status: [number, number];
+  /** Stat stages after minus before, by attack, defense, speed, special, accuracy, evasion. */
+  stages: number[];
+  /** Field effects that came on, and that went off. */
+  fieldOn: (keyof Field)[];
+  fieldOff: (keyof Field)[];
+  switched: boolean;
+  fainted: boolean;
+}
+
+function change(before: Mon, after: Mon): SideChange {
+  const keys = Object.keys(after.field) as (keyof Field)[];
+  const switched = before.species !== after.species && !after.field.transformed;
+  return {
+    species: [before.species, after.species],
+    hp: [before.hp, after.hp],
+    maxHp: after.maxHp,
+    status: [before.status, after.status],
+    stages: switched ? after.stages.map(() => 0) : after.stages.map((v, i) => v - (before.stages[i] ?? v)),
+    fieldOn: keys.filter((k) => after.field[k] && !before.field[k]),
+    fieldOff: keys.filter((k) => !after.field[k] && before.field[k]),
+    switched,
+    fainted: before.hp > 0 && after.hp === 0,
+  };
+}
+
 export interface TurnRecord {
   turn: number;
   dice: number[];
   decisions: [Action | null, Action | null];
   /** The events as game 0 saw them; game 1's matched, or the battle would have ended in a desync. */
   events: TurnEvent[];
+  /** What changed on each side. */
+  sides: [SideChange, SideChange];
   before: [Snapshot, Snapshot];
   after: [Snapshot, Snapshot];
   frames: number;
@@ -107,8 +142,19 @@ export class Battle {
   private turnNumber = 0;
   private readonly startCounts: [number, number];
 
-  /** Watches the game's code on `rig`, whose two games are in a link battle. */
-  constructor(private readonly rig: Rig) {
+  private readonly resumed: [Phase, Phase] | null;
+
+  /**
+   * Watches the game's code on `rig`, whose two games are in a link battle. A battle resumed from states saved at a
+   * decision point passes the phases and turn it was saved at: until a menu opens, the rig can't see which menu is up
+   * (the routine that opened it ran before the save), so it trusts them while that menu polls.
+   */
+  constructor(
+    private readonly rig: Rig,
+    resume?: { phases: [Phase, Phase]; turn: number },
+  ) {
+    this.resumed = resume?.phases ?? null;
+    this.turnNumber = resume?.turn ?? 0;
     const ids = {} as Record<keyof typeof CODE, number>;
     for (const [name, [bank, addr]] of Object.entries(CODE) as [keyof typeof CODE, readonly [number, number]][]) {
       ids[name] = rig.watch(addr, bank, STOPS.has(name));
@@ -221,6 +267,8 @@ export class Battle {
       dice: [...dice],
       decisions,
       events: this.events[0],
+      // Game 0's view: its own Pokémon is side 0, its enemy side 1 (the games were just checked to agree).
+      sides: [change(before[0].mine, after[0].mine), change(before[0].theirs, after[0].theirs)],
       before,
       after,
       frames: this.rig.frameCount - f0,
@@ -346,8 +394,11 @@ export class Battle {
     let latest: (typeof CONTEXTS)[number] | null = null;
     for (const name of CONTEXTS) if (!latest || stamps[this.ids[name]]! > stamps[this.ids[latest]]!) latest = name;
     if (latest && stamps[this.ids[latest]]! > 0) return PHASE_OF[latest];
-    // No menu has opened since the rig was made: a battle loaded from a state saved at its menu (the bootstraps are,
-    // docs/link-battles.md 7.4). The main battle menu is known by its cursor's frame: row 14, either column, two rows.
+    // No menu has opened since the rig was made: a battle resumed from saved states trusts the phase it was saved at; a
+    // bootstrap (saved at the battle's first menu, docs/link-battles.md 7.4) is known by the main menu's cursor frame:
+    // row 14, either column, two rows.
+    const saved = this.resumed?.[side];
+    if (saved === "menu" || saved === "forced") return saved;
     const r = (addr: number) => this.rig.read(side, addr);
     const x = r(ADDR.topMenuItemX);
     const mainMenu = r(ADDR.topMenuItemY) === 14 && (x === LEFT_COLUMN || x === RIGHT_COLUMN) && r(ADDR.maxMenuItem) === 1;

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
-import { type Action, Battle, BattleError, checkGame, DICE_LENGTH, type Legal, Rig, type Side } from "highwire-link";
+import { type Action, Battle, BattleError, checkGame, DICE_LENGTH, type Legal, pack, Rig, type Side, unpack } from "highwire-link";
 
 // Phase 1's fuzzer (docs/link-battles.md 14): plays whole link battles from a paired battle state, every decision a
 // uniformly random legal one and fresh dice every turn, and counts how they end: a knockout or draw both games agree
@@ -45,12 +45,15 @@ function choose(legal: Legal, pick: (n: number) => number): Action {
   return options[pick(options.length)]!;
 }
 
+/** With RESUME set, every turn is packed, and played on a fresh rig from the unpacked states, as the referee does. */
+const RESUME = Boolean(process.env.RESUME);
+
 async function battle(rom: Uint8Array, states: [Uint8Array, Uint8Array], seed: number, verbose: boolean): Promise<Result> {
-  const rig = await Rig.create(rom);
+  let rig = await Rig.create(rom);
   rig.loadState(0, states[0]);
   rig.loadState(1, states[1]);
   const pick = rng(seed);
-  const game = new Battle(rig);
+  let game = new Battle(rig);
   const t0 = performance.now();
   const moves = new Set<number>();
   try {
@@ -61,10 +64,16 @@ async function battle(rom: Uint8Array, states: [Uint8Array, Uint8Array], seed: n
         return legal ? choose(legal, pick) : null;
       }) as [Action | null, Action | null];
       const dice = Uint8Array.from({ length: DICE_LENGTH }, () => pick(256));
+      if (RESUME) {
+        const packed = pack(rig, game);
+        rig = await Rig.create(rom);
+        game = unpack(rig, packed).battle;
+      }
       const turn = game.play(decisions, dice);
       outcome = turn.outcome;
       for (const e of turn.record.events) if (e.kind !== "acts") moves.add(e.move);
-      if (verbose) {
+      if (process.env.TRACE) console.log(JSON.stringify([turn.record.turn, turn.record.events, turn.record.sides, turn.record.after.map((a) => a.mine)]));
+      if (verbose && !process.env.TRACE) {
         const [a, b] = turn.record.after;
         console.log(
           `turn ${turn.record.turn} (${turn.record.frames} frames): ${JSON.stringify(decisions)}\n` +

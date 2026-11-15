@@ -26,12 +26,14 @@ export const ADDR = {
   enemyMonHP: 0xcfe5,
   enemyMonPartyPos: 0xcfe7,
   enemyMonStatus: 0xcfe8,
+  enemyMonType: 0xcfe9,
   enemyMonMoves: 0xcfec,
   enemyMonLevel: 0xcff2,
   enemyMonMaxHP: 0xcff3,
   enemyMonPP: 0xcffd,
   battleMonHP: 0xd014,
   battleMonStatus: 0xd017,
+  battleMonType: 0xd018,
   battleMonMoves: 0xd01b,
   battleMonLevel: 0xd021,
   battleMonMaxHP: 0xd022,
@@ -43,8 +45,12 @@ export const ADDR = {
   moveMissed: 0xd05e,
   playerBattleStatus1: 0xd061,
   playerBattleStatus2: 0xd062,
+  playerBattleStatus3: 0xd063,
   enemyBattleStatus1: 0xd066,
   enemyBattleStatus2: 0xd067,
+  enemyBattleStatus3: 0xd068,
+  playerMonStatMods: 0xcd1a,
+  enemyMonStatMods: 0xcd2e,
   playerDisabledMove: 0xd06c,
   enemyDisabledMove: 0xd071,
   damage: 0xd0d6,
@@ -63,7 +69,7 @@ export const ADDR = {
 } as const;
 
 /** A party Pokémon's record: 44 bytes, from wPartyMon1 (and wEnemyMon1 for the other side's party). */
-export const PARTY_MON = { length: 0x2c, hp: 0x01, status: 0x04, moves: 0x08, pp: 0x1d, level: 0x21, maxHp: 0x22 } as const;
+export const PARTY_MON = { length: 0x2c, hp: 0x01, status: 0x04, types: 0x05, moves: 0x08, pp: 0x1d, level: 0x21, maxHp: 0x22 } as const;
 
 /**
  * The one release the rig plays: the English Pokémon Yellow, by its header (title, header checksum, global checksum),
@@ -145,6 +151,7 @@ export interface PartyMon {
   hp: number;
   maxHp: number;
   status: number;
+  types: [number, number];
   moves: number[];
   pp: number[];
 }
@@ -160,6 +167,7 @@ export function party(rig: Rig, side: Side): PartyMon[] {
       hp: rig.read16(side, base + PARTY_MON.hp),
       maxHp: rig.read16(side, base + PARTY_MON.maxHp),
       status: rig.read(side, base + PARTY_MON.status),
+      types: [rig.read(side, base + PARTY_MON.types), rig.read(side, base + PARTY_MON.types + 1)],
       moves: rig.readBytes(side, base + PARTY_MON.moves, 4),
       pp: rig.readBytes(side, base + PARTY_MON.pp, 4).map((pp) => pp & 0x3f),
     };
@@ -178,6 +186,39 @@ export interface Mon {
   hp: number;
   maxHp: number;
   status: number;
+  types: [number, number];
+  /** Stat stages, 7 neutral (1 to 13): attack, defense, speed, special, accuracy, evasion. */
+  stages: number[];
+  /** What's on this side of the field, from the battle status bits. */
+  field: Field;
+}
+
+export interface Field {
+  confused: boolean;
+  substitute: boolean;
+  seeded: boolean;
+  reflect: boolean;
+  lightScreen: boolean;
+  badlyPoisoned: boolean;
+  transformed: boolean;
+  recharging: boolean;
+  mist: boolean;
+  focusEnergy: boolean;
+}
+
+function field(s1: number, s2: number, s3: number): Field {
+  return {
+    confused: (s1 & 0x80) !== 0,
+    mist: (s2 & 0x02) !== 0,
+    focusEnergy: (s2 & 0x04) !== 0,
+    substitute: (s2 & 0x10) !== 0,
+    recharging: (s2 & 0x20) !== 0,
+    seeded: (s2 & 0x80) !== 0,
+    badlyPoisoned: (s3 & 0x01) !== 0,
+    lightScreen: (s3 & 0x02) !== 0,
+    reflect: (s3 & 0x04) !== 0,
+    transformed: (s3 & 0x08) !== 0,
+  };
 }
 
 /** What one game holds about the battle, raw. */
@@ -207,6 +248,9 @@ export function snapshot(rig: Rig, side: Side): Snapshot {
       hp: rig.read16(side, ADDR.battleMonHP),
       maxHp: rig.read16(side, ADDR.battleMonMaxHP),
       status: r(ADDR.battleMonStatus),
+      types: [r(ADDR.battleMonType), r(ADDR.battleMonType + 1)],
+      stages: rig.readBytes(side, ADDR.playerMonStatMods, 6),
+      field: field(r(ADDR.playerBattleStatus1), r(ADDR.playerBattleStatus2), r(ADDR.playerBattleStatus3)),
     },
     theirs: {
       species: r(ADDR.enemyMonSpecies2),
@@ -214,6 +258,9 @@ export function snapshot(rig: Rig, side: Side): Snapshot {
       hp: rig.read16(side, ADDR.enemyMonHP),
       maxHp: rig.read16(side, ADDR.enemyMonMaxHP),
       status: r(ADDR.enemyMonStatus),
+      types: [r(ADDR.enemyMonType), r(ADDR.enemyMonType + 1)],
+      stages: rig.readBytes(side, ADDR.enemyMonStatMods, 6),
+      field: field(r(ADDR.enemyBattleStatus1), r(ADDR.enemyBattleStatus2), r(ADDR.enemyBattleStatus3)),
     },
     myMoves: rig.readBytes(side, ADDR.battleMonMoves, 4),
     myPP: rig.readBytes(side, ADDR.battleMonPP, 4).map((pp) => pp & 0x3f),
@@ -233,8 +280,8 @@ export function disagreements(a: Snapshot, b: Snapshot): string[] {
   const same = (what: string, x: unknown, y: unknown) => {
     if (JSON.stringify(x) !== JSON.stringify(y)) out.push(`${what}: ${JSON.stringify(x)} vs ${JSON.stringify(y)}`);
   };
-  // A fainted Pokémon's own game clears its status; the other game's view keeps it. Down is down.
-  const view = (mon: Mon) => (mon.hp === 0 ? { ...mon, status: 0 } : mon);
+  // Down is down: a fainted Pokémon's own game clears what was on it; the other game's view keeps it.
+  const view = (mon: Mon) => (mon.hp === 0 ? { species: mon.species, level: mon.level, hp: 0, maxHp: mon.maxHp } : mon);
   same("side 0's Pokémon", view(a.mine), view(b.theirs));
   same("side 1's Pokémon", view(b.mine), view(a.theirs));
   same("dice", a.dice, b.dice);
