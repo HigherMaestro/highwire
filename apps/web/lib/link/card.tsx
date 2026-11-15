@@ -19,7 +19,8 @@ export function linkCard(o: { label: string; names: [string, string]; pips: [Pip
   // The cable runs under the names; lower on a turn's card, under its headline, names and bars.
   const y = o.moment ? (o.moment.sub ? 452 : 430) : 330;
   const wire = `M0 ${y} C 300 ${y} 420 ${y + 30} 600 ${y + 30} C 780 ${y + 30} 900 ${y} 1200 ${y}`;
-  const size = (n: string) => Math.min(cap, n.length > 16 ? 54 : n.length > 11 ? 68 : 84);
+  // A name stays on one line in its half of the card: smaller the longer it is.
+  const size = (n: string) => Math.min(cap, n.length > 18 ? 40 : n.length > 14 ? 48 : n.length > 11 ? 58 : n.length > 8 ? 70 : 84);
   const pipRow = (pips: Pip[] | null, color: string, align: "flex-start" | "flex-end") => (
     <div style={{ display: "flex", gap: 10, justifyContent: align, marginTop: 22 }}>
       {(pips ?? Array.from({ length: 3 }, () => null)).map((p, i) => (

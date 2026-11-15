@@ -73,7 +73,7 @@ export default async function LinkLobbyPage() {
             </p>
             {featured ? (
               <>
-                <LinkStage initial={fromMatch(featured)} poll={!usingRatedSample()} screens={!usingRatedSample() && !featured.live} compact fromStart={!featured.live} />
+                <LinkStage initial={fromMatch(featured)} poll={!usingRatedSample()} screens={!usingRatedSample()} compact fromStart={!featured.live} />
                 <p className="link-featured-foot">
                   <a className="link-btn link-btn-primary" href={`/link/match/${featured.match}${featured.live ? "" : "?from=start"}`}>
                     {featured.live ? "Watch the battle" : "Watch it all"}

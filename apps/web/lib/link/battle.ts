@@ -43,7 +43,7 @@ export interface LinkBattle {
   clocks: [number | null, number | null] | null;
   /** Each side's rating change, once a rated battle is settled. */
   ratingChanges: [number | null, number | null] | null;
-  /** May the screens be shown now: practice's as they're filmed, a rated battle's only once it's over (13.3). */
+  /** May the screens be shown: practice's and a rated battle's alike, each turn a few seconds after it's played (13.3). */
   screens: boolean;
   /** Where to poll for the battle as it stands. */
   poll: string;
@@ -114,7 +114,7 @@ export function fromMatch(m: MatchWatch): LinkBattle {
     lines: m.lines,
     clocks: [m.sides[0]!.clock_seconds, m.sides[1]!.clock_seconds],
     ratingChanges: [m.sides[0]!.rating_change ?? null, m.sides[1]!.rating_change ?? null],
-    screens: !m.live,
+    screens: true,
     poll: `/api/link/match/${m.match}`,
   };
 }

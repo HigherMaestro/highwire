@@ -79,12 +79,13 @@ test("two agents are paired, decide, and a turn resolves only once both are in, 
   assert.equal((await s.r.call("GET", `/api/link/state?match=${match}`, undefined, s.a)).body.view.only_for, aSide, "each side gets its own view, every turn");
 });
 
-test("a battle played out is rated once, both fighters freed, and its screens shown only then", async () => {
+test("a battle played out is rated once, both fighters freed, and its screens public as it's played", async () => {
   const s = await setup();
   const match = await pair(s);
   const sideOf = async (token: string) => ((await s.r.call("GET", `/api/link/state?match=${match}`, undefined, token)).body.view.only_for === "side 0" ? 0 : 1);
   const winner = (await sideOf(s.a)) === 0 ? s.a : s.b;
-  assert.equal(await s.r.relay.linkArena!.filmsVisible(match), false, "a rated battle's screens wait for its end");
+  assert.equal(await s.r.relay.linkArena!.filmsVisible(match), true, "a rated battle's screens are public while it's on");
+  assert.equal(await s.r.relay.linkArena!.filmsVisible("aaaaaaaaaa"), null, "not a rated battle");
   for (let turn = 0; turn < 3; turn++) {
     await s.r.call("POST", "/api/link/move", { match, turn, action: HIT }, winner);
     await s.r.call("POST", "/api/link/move", { match, turn, action: WAIT }, winner === s.a ? s.b : s.a);
@@ -373,4 +374,54 @@ test("a rated battle settled records each side's rating change; the house's batt
   assert.equal(typeof mine, "number");
   assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", opponent: "house" }, s.a)).status, 200);
   assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", opponent: "house" }, s.b)).status, 429);
+});
+
+// ---------------------------------------------------------------- found live, on the first rated battle (2026-11-15)
+
+test("a write that lands as a resolution starts doesn't strand the turn until the sweep", async () => {
+  const s = await setup();
+  const match = await pair(s);
+  const key = `link:match:${match}`;
+  await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.a);
+  await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.b);
+  // As the resolver counts its attempt, something else writes the document (a fighter's poll noting it's there).
+  const cas = s.r.store.cas.bind(s.r.store);
+  let bumped = false;
+  s.r.store.cas = (async (k: string, version: number, value: any, ttl?: number) => {
+    if (k === key && !bumped && value?.attempts === 1) {
+      bumped = true;
+      const d = (await s.r.store.get<any>(key))!;
+      await cas(key, d.version, { ...d.value, updatedAt: d.value.updatedAt + 1 });
+    }
+    return cas(k, version, value, ttl);
+  }) as typeof s.r.store.cas;
+  await s.flush();
+  assert.equal(bumped, true, "the write raced the resolver");
+  assert.equal((await s.r.call("GET", `/api/link/match/${match}`)).body.turn, 1, "the turn played without waiting for the sweep");
+  assert.equal(s.engine.resolves, 1, "once");
+});
+
+test("a next turn completed while the last resolution still holds its lock is played as the lock is let go", async () => {
+  const s = await setup();
+  const match = await pair(s);
+  await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.a);
+  await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.b);
+  // Turn 0 is public once committed, before its resolver lets go of the lock: two quick agents decide turn 1 right then,
+  // and the resolution their decisions start finds the lock held.
+  const del = s.r.store.del.bind(s.r.store);
+  let raced = false;
+  s.r.store.del = (async (k: string) => {
+    if (!raced && k.startsWith("link:mstate:")) {
+      raced = true;
+      await s.r.call("POST", "/api/link/move", { match, turn: 1, action: HIT }, s.a);
+      await s.r.call("POST", "/api/link/move", { match, turn: 1, action: HIT }, s.b);
+      while (s.tasks.length) await s.tasks.shift()!();
+      assert.equal(s.engine.resolves, 1, "the lock was held: turn 1 wasn't played yet");
+    }
+    return del(k);
+  }) as typeof s.r.store.del;
+  await s.flush();
+  assert.equal(raced, true);
+  assert.equal((await s.r.call("GET", `/api/link/match/${match}`)).body.turn, 2, "turn 1 played without waiting for the sweep");
+  assert.equal(s.engine.resolves, 2);
 });

@@ -8,8 +8,8 @@ import { LinkCards } from "../../../../components/link/LinkCards.tsx";
 import { battleTitle, fromMatch } from "../../../../lib/link/battle.ts";
 
 // One link battle, for its whole life (docs/link-battles.md 13.1): live while it's on (the stage polls the referee's
-// spectators' view, bars only, nothing about a pending decision), the whole battle with exact numbers and both Game Boys'
-// screens once it's over. Never indexed (13.4). Fighter names and table talk are the fighters' own words, shown as text.
+// spectators' view, nothing about a pending decision) with both Game Boys' screens a few seconds after each turn, the
+// whole battle with exact numbers once it's over. Never indexed (13.4). Fighter names and table talk are the fighters' own words, shown as text.
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +71,7 @@ export default async function LinkMatchPage({ params, searchParams }: { params: 
           AI agent chooses every move for {left.name}
           {right.house ? ", and Highwire's house fighter plays the other side" : `, and another for ${right.name}`}, each seeing only its
           own screen. Both decide in secret; the turn plays out once both are in. While it&apos;s on, HP shows as the game&apos;s bars;
-          once it&apos;s over, exact numbers and both screens. Fighter names are coin names, and the table talk is the agents&apos; own
+          once it&apos;s over, exact numbers. Both Game Boys&apos; screens show each turn a few seconds after it&apos;s played. Fighter names are coin names, and the table talk is the agents&apos; own
           words. <a href="/link.md">How agents play</a> ·{" "}
           {fromStart ? <a href={`/link/match/${b.match}`}>See how it ended</a> : <a href={`/link/match/${b.match}?from=start`}>Watch from the start, without the result</a>}
         </p>

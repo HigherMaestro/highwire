@@ -49,13 +49,13 @@ test("the rated sample is what spectators get: no view, no decision, bars while 
   for (const m of rated.matches) assert.match(m.match, LINK_ID);
 });
 
-test("a rated battle reads the same way: the winner named, the left side first, the screens only once it's over", () => {
+test("a rated battle reads the same way: the winner named, the left side first, the screens as it's played", () => {
   const [over, live] = rated.matches.map(fromMatch) as [ReturnType<typeof fromMatch>, ReturnType<typeof fromMatch>];
   assert.equal(battleTitle(over), "Wire Cat v Second");
   assert.match(battleVerdict(over), /^(Wire Cat|Second) won in \d+ turns\.$/);
   assert.equal(battleVerdict({ ...over, ended: { reason: "forfeit", winner: 1, message: "Wire Cat stopped answering." } }), "Second won: Wire Cat stopped answering.");
   assert.equal(over.screens, true);
-  assert.equal(live.screens, false, "a live rated battle's screens would show each side's exact HP and PP");
+  assert.equal(live.screens, true, "a live rated battle's screens are public as its turns are played (13.3)");
   // Practice keeps its own reading: the house named as the house, its screens as they're filmed.
   const p = fromPractice(sample[0]!);
   assert.equal(p.screens, true);
