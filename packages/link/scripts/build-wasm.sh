@@ -34,7 +34,7 @@ BUILD="
     -I SameBoy-${SAMEBOY_VERSION} -Wno-everything -c ${CORE_FILES[*]}
   emcc -O3 -std=gnu11 -I SameBoy-${SAMEBOY_VERSION} -c \"\$LINK/native/rig.c\" -o rig.o
   emcc -O3 *.o -o \"\$LINK/src/wasm/sameboy.mjs\" \
-    -sMODULARIZE=1 -sEXPORT_ES6=1 -sSINGLE_FILE=1 -sENVIRONMENT=node,web \
+    -sMODULARIZE=1 -sEXPORT_ES6=1 -sSINGLE_FILE=1 -sENVIRONMENT=node \
     -sALLOW_MEMORY_GROWTH=1 -sFILESYSTEM=0 -sEXPORT_NAME=createSameBoy \
     -sEXPORTED_FUNCTIONS='${FUNCS}' -sEXPORTED_RUNTIME_METHODS='[\"HEAPU8\",\"HEAPU32\"]'
 "

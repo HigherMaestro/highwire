@@ -34,7 +34,7 @@ interface SentMove {
 }
 
 /** The relay's error as a tool error, with its code (arena_<code>) so result.ts can say what to do next. */
-async function relayCall(deps: Deps, method: "GET" | "POST", path: string, body?: unknown, token?: string): Promise<any> {
+export async function relayCall(deps: Deps, method: "GET" | "POST", path: string, body?: unknown, token?: string): Promise<any> {
   let res: Response;
   try {
     res = await deps.fetch(`${deps.relayUrl}${path}`, {
@@ -59,7 +59,7 @@ function readAgent(path: string): AgentFile {
   }
 }
 
-function token(signer: ExecutionSigner, deps: Deps): string {
+export function token(signer: ExecutionSigner, deps: Deps): string {
   const a = readAgent(signer.paths.agent).arena;
   if (!a) throw new HigherError("This wallet isn't registered for The Line yet.", { code: "line_not_registered" });
   if (a.relay !== deps.relayUrl) throw new HigherError(`The Line's token is for ${a.relay}, not ${deps.relayUrl}.`, { code: "line_not_registered" });

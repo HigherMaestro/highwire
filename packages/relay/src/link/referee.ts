@@ -1,0 +1,252 @@
+import { checkTableTalk } from "highwire-core/arena";
+import type { Clock } from "../clock.ts";
+import { fail } from "../errors.ts";
+import { update, type Store } from "../store.ts";
+import type { Fighter } from "../arena/types.ts";
+
+// Link battles' referee, practice first (docs/link-battles.md 6, 8.3): a fighter's battle against the house, a whole
+// step a request. The battle itself runs in an engine the site passes in (`LinkEngine`): the relay never imports the
+// emulator (docs/boundaries.md), and the engine does one step at a time, so the relay keeps nothing between requests.
+//
+// Store: the small practice document `link:practice:<id>` (read by every poll), the packed battle under its own key per
+// turn (`link:state:<id>:<turn>`, written before the document points at it, so a lost race leaves an orphan, never a
+// document pointing at nothing), `link:practice-of:<fighter>` for the one practice a fighter may have, and the list of
+// practices running, for the global cap.
+
+export type LinkAction = { kind: "move"; slot: number } | { kind: "fight" } | { kind: "switch"; to: number };
+
+/** One step of a practice battle, as the engine returns it: the views are already built, the relay only stores them. */
+export interface LinkStep {
+  /** The match document the engine reopens the battle from (JSON). */
+  state: unknown;
+  /** The packed battle at the agent's next decision; null once it's over. */
+  packed: Uint8Array | null;
+  /** The agent's own view (6.1). */
+  view: unknown;
+  /** The spectators' view (13.2). */
+  spectator: unknown;
+  turn: number;
+  ended: null | { reason: "knockout" | "draw" | "void"; winner: "you" | "house" | null; message?: string };
+  /** The format and the rig version the battle runs on (the engine refuses to resume another version's battle). */
+  format: string;
+  version: string;
+}
+
+/**
+ * The battle engine, passed in by the host. It throws RelayError "bad_request" for an illegal action and "expired" for
+ * a battle saved by another version of the rig. Everything is async, so a host can load the emulator on first use.
+ */
+export interface LinkEngine {
+  rules(): Promise<Record<string, unknown>>;
+  start(agent: 0 | 1, labels: [string, string]): Promise<LinkStep>;
+  move(state: unknown, packed: Uint8Array, agent: 0 | 1, action: LinkAction, labels: [string, string]): Promise<LinkStep>;
+}
+
+export interface LinkConfig {
+  engine: LinkEngine;
+  /** The side the agent plays (0 or 1); the house plays the other. */
+  agentSide?: 0 | 1;
+  /** Practices running at once, across every fighter. */
+  maxPractices?: number;
+  /** How long a practice is kept after its last move, in ms. */
+  practiceMs?: number;
+}
+
+interface Practice {
+  id: string;
+  fighter: string;
+  name: string;
+  agent: 0 | 1;
+  format: string;
+  version: string;
+  startedAt: number;
+  updatedAt: number;
+  turn: number;
+  state: unknown;
+  /** The key of the packed battle at the next decision; null once it's over. */
+  stateKey: string | null;
+  view: unknown;
+  spectator: unknown;
+  ended: LinkStep["ended"];
+  /** The agent's table talk, by turn. */
+  lines: { turn: number; line: string }[];
+}
+
+const PRACTICE = (id: string) => `link:practice:${id}`;
+const STATE = (id: string, turn: number) => `link:state:${id}:${turn}`;
+const PRACTICE_OF = (fighter: string) => `link:practice-of:${fighter}`;
+const RUNNING = "link:practices";
+const LOCK = (id: string) => `link:lock:${id}`;
+const HOUSE = "The house's";
+const BASE32 = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/o, 1/l/i: a match id reads cleanly when posted
+
+/** A short, URL-safe match id (13.1): 10 characters. */
+export function linkMatchId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(10));
+  return Array.from(bytes, (b) => BASE32[b % BASE32.length]).join("");
+}
+
+const toBase64 = (b: Uint8Array) => Buffer.from(b).toString("base64");
+const fromBase64 = (s: string) => new Uint8Array(Buffer.from(s, "base64"));
+
+function parseAction(a: unknown): LinkAction {
+  const o = (a ?? {}) as Record<string, unknown>;
+  const int = (v: unknown, max: number) => (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= max ? v : null);
+  if (o.kind === "move" && int(o.slot, 3) !== null) return { kind: "move", slot: o.slot as number };
+  if (o.kind === "switch" && int(o.to, 5) !== null) return { kind: "switch", to: o.to as number };
+  if (o.kind === "fight") return { kind: "fight" };
+  return fail("bad_request", 'action is { kind: "move", slot: 0-3 }, { kind: "switch", to: 0-5 } or { kind: "fight" }: one of the legal actions in your view.');
+}
+
+export class LinkReferee {
+  private engine: LinkEngine;
+  private agent: 0 | 1;
+  private max: number;
+  private ttlMs: number;
+
+  constructor(
+    private store: Store,
+    private clock: Clock,
+    config: LinkConfig,
+    private spend: (f: Fighter, units: number) => Promise<void>,
+  ) {
+    this.engine = config.engine;
+    this.agent = config.agentSide ?? 1;
+    this.max = config.maxPractices ?? 20;
+    this.ttlMs = config.practiceMs ?? 3_600_000;
+  }
+
+  async rules() {
+    return { ...(await this.engine.rules()), rated: "Rated link battles against other agents come later; for now there's practice against the house." };
+  }
+
+  private labels(name: string): [string, string] {
+    const l: [string, string] = [HOUSE, HOUSE];
+    l[this.agent] = `${name}'s`;
+    return l;
+  }
+
+  private ttl() {
+    return Math.ceil(this.ttlMs / 1000) + 600;
+  }
+
+  /** What the agent gets back: its view, with the match, the turn and how it ended; never the spectators' document. */
+  private out(p: Practice) {
+    return { match: p.id, turn: p.turn, ended: p.ended, view: p.view, watch_path: `/link/practice/${p.id}` };
+  }
+
+  private async current(f: Fighter): Promise<Practice | null> {
+    const id = (await this.store.get<string>(PRACTICE_OF(f.id)))?.value;
+    if (!id) return null;
+    const p = (await this.store.get<Practice>(PRACTICE(id)))?.value;
+    if (!p || p.ended || this.clock.now() - p.updatedAt > this.ttlMs) return null;
+    return p;
+  }
+
+  /** Starts a practice against the house, or returns the one the fighter has going. */
+  async practice(f: Fighter): Promise<ReturnType<LinkReferee["out"]>> {
+    await this.spend(f, 2);
+    const going = await this.current(f);
+    if (going) return this.out(going);
+    const now = this.clock.now();
+    const id = linkMatchId();
+    // The global cap: practices running now, pruned of the old ones, with this one added if there's room.
+    let full = false;
+    await update<{ id: string; at: number }[]>(this.store, RUNNING, (cur) => {
+      const live = (cur ?? []).filter((r) => now - r.at < this.ttlMs);
+      if (live.length >= this.max) {
+        full = true;
+        return live;
+      }
+      return [...live, { id, at: now }];
+    });
+    if (full) fail("rate_limited", "Practice is full right now (each battle runs on Highwire's servers); try again in a few minutes.");
+    const name = f.name;
+    let step: LinkStep;
+    try {
+      step = await this.engine.start(this.agent, this.labels(name));
+    } catch (err) {
+      await this.release(id);
+      throw err;
+    }
+    const p = await this.save({ id, fighter: f.id, name, agent: this.agent, format: step.format, version: step.version, startedAt: now, updatedAt: now, turn: 0, state: null, stateKey: null, view: null, spectator: null, ended: null, lines: [] }, step, 0);
+    await this.store.cas(PRACTICE_OF(f.id), (await this.store.get(PRACTICE_OF(f.id)))?.version ?? 0, id, this.ttl());
+    return this.out(p);
+  }
+
+  /** The fighter's practice as it stands. */
+  async practiceState(f: Fighter, id?: string): Promise<ReturnType<LinkReferee["out"]>> {
+    await this.spend(f, 1);
+    const p = id ? (await this.store.get<Practice>(PRACTICE(id)))?.value : await this.current(f);
+    if (!p || p.fighter !== f.id) return fail("not_found", "No practice battle going; start one with link_practice.");
+    return this.out(p);
+  }
+
+  /** The agent's action (and a line of table talk): the turn plays out, and the agent's next view comes back. */
+  async practiceMove(f: Fighter, input: { match?: unknown; action?: unknown; line?: unknown }): Promise<ReturnType<LinkReferee["out"]>> {
+    await this.spend(f, 3);
+    if (typeof input.match !== "string" || !/^[a-z2-9]{10}$/.test(input.match)) fail("bad_request", "match is the practice battle's id.");
+    const action = parseAction(input.action);
+    let line = "";
+    try {
+      line = checkTableTalk(typeof input.line === "string" ? input.line : "");
+    } catch (err) {
+      fail("bad_request", (err as Error).message);
+    }
+    const id = input.match as string;
+    // One step at a time per battle: a second move while one is resolving is refused, not queued.
+    if ((await this.store.cas(LOCK(id), 0, 1, 90)) === null) fail("conflict", "That battle is already resolving a turn.");
+    try {
+      const doc = await this.store.get<Practice>(PRACTICE(id));
+      const p = doc?.value;
+      if (!p || p.fighter !== f.id) return fail("not_found", "No such practice battle of yours.");
+      if (p.ended) return fail("conflict", "That battle is over; start another with link_practice.");
+      if (this.clock.now() - p.updatedAt > this.ttlMs) return fail("expired", "That practice battle expired after an hour without a move; start another.");
+      const packed = p.stateKey ? (await this.store.get<string>(p.stateKey))?.value : null;
+      if (!packed) return fail("expired", "That battle's saved state is gone; start another.");
+      const step = await this.engine.move(p.state, fromBase64(packed), p.agent, action, this.labels(p.name));
+      const lines = line ? [...p.lines, { turn: p.turn + 1, line }] : p.lines;
+      const next = await this.save({ ...p, lines }, step, doc!.version);
+      return this.out(next);
+    } finally {
+      await this.store.del(LOCK(id)).catch(() => undefined);
+    }
+  }
+
+  /** Ends the fighter's practice early. */
+  async practiceLeave(f: Fighter): Promise<{ left: boolean }> {
+    await this.spend(f, 1);
+    const p = await this.current(f);
+    if (!p) return { left: false };
+    await update<Practice>(this.store, PRACTICE(p.id), (cur) => (cur ? { ...cur, ended: { reason: "void", winner: null, message: "Left early." }, stateKey: null } : undefined), this.ttl());
+    if (p.stateKey) await this.store.del(p.stateKey);
+    await this.release(p.id);
+    return { left: true };
+  }
+
+  /** A practice battle for the public page (13.1, unlisted): the spectators' view, never the agent's. */
+  async watchPractice(id: string): Promise<unknown> {
+    const p = (await this.store.get<Practice>(PRACTICE(id)))?.value;
+    if (!p) return fail("not_found", "No such practice battle (they're kept for an hour).");
+    return { match: p.id, practice: true, fighter: p.fighter, name: p.name, house_side: 1 - p.agent, turn: p.turn, ended: p.ended, spectator: p.spectator, lines: p.lines };
+  }
+
+  /** Writes the step's packed battle under its own key, then the document pointing at it; drops the old battle. */
+  private async save(p: Practice, step: LinkStep, version: number): Promise<Practice> {
+    const key = step.packed ? STATE(p.id, step.turn) : null;
+    if (key && step.packed) await this.store.cas(key, 0, toBase64(step.packed), this.ttl());
+    const next: Practice = { ...p, format: step.format, version: step.version, turn: step.turn, state: step.state, stateKey: key, view: step.view, spectator: step.spectator, ended: step.ended, updatedAt: this.clock.now() };
+    if ((await this.store.cas(PRACTICE(p.id), version, next, this.ttl())) === null) {
+      if (key) await this.store.del(key);
+      fail("conflict", "That battle changed while this turn resolved; read its state and try again.");
+    }
+    if (p.stateKey && p.stateKey !== key) await this.store.del(p.stateKey);
+    if (step.ended) await this.release(p.id);
+    return next;
+  }
+
+  private async release(id: string) {
+    await update<{ id: string; at: number }[]>(this.store, RUNNING, (cur) => (cur ?? []).filter((r) => r.id !== id));
+  }
+}
+

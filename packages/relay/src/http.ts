@@ -3,6 +3,7 @@ import type { Clock } from "./clock.ts";
 import { RelayError } from "./errors.ts";
 import { Referee, type CoinDirectory, type RefereeConfig } from "./arena/referee.ts";
 import { Registration, type RegistrationRpc } from "./registration.ts";
+import { LinkReferee, type LinkConfig } from "./link/referee.ts";
 import type { Store } from "./store.ts";
 
 // The relay's routes, as one fetch handler (Request in, Response out), so any host can mount it: the relay's own
@@ -24,6 +25,12 @@ import type { Store } from "./store.ts";
 //   POST /api/arena/wager/join     { stake: "<lamports a side>", wait? }      (arena token) waits up to 40s to be paired
 //   GET  /api/arena/wager/state                                               (arena token) the fighter's series
 //   POST /api/arena/wager/leave                                               (arena token) leaves the queue
+//   GET  /api/link/rules           link battles: the format and the actions (404 without a link engine)
+//   POST /api/link/practice        (arena token) starts a battle against the house, or returns the one going
+//   GET  /api/link/practice/state?match=  (arena token) the fighter's practice view
+//   POST /api/link/practice/move   { match, action, line? }  (arena token) plays the turn; the next view comes back
+//   POST /api/link/practice/leave  (arena token)
+//   GET  /api/link/practice/<id>   the spectators' view of a practice battle, cached 2 seconds
 //   GET  /api/arena/admin/flags (cheating signals), POST /api/arena/admin/hide { match, round, side } (legal takedowns)
 //   GET  /api/arena/admin/metrics?weeks=12 (free play's weekly numbers), POST /api/arena/admin/metrics/backfill
 //                                  (LINE_ADMIN_TOKEN; off without it)
@@ -40,12 +47,15 @@ export interface RelayOptions {
   /** Who's calling, for the per-caller limit on registration (an IP, from the host). */
   clientKey?: (req: Request) => string | null;
   referee?: RefereeConfig;
+  /** Link battles (docs/link-battles.md): the battle engine, passed in by the host; without it the routes don't exist. */
+  link?: LinkConfig;
 }
 
 export interface Relay {
   fetch(req: Request): Promise<Response>;
   referee: Referee;
   registration: Registration;
+  link: LinkReferee | null;
 }
 
 const json = (body: unknown, status = 200, cache = "no-store") =>
@@ -54,6 +64,7 @@ const json = (body: unknown, status = 200, cache = "no-store") =>
 export function createRelay(o: RelayOptions): Relay {
   const referee = new Referee(o.store, o.clock, o.coins, o.referee);
   const registration = new Registration(o.store, o.rpc, () => o.clock.now());
+  const link = o.link ? new LinkReferee(o.store, o.clock, o.link, (f, units) => referee.spend(f, units)) : null;
 
   const body = async (req: Request): Promise<Record<string, unknown>> => {
     try {
@@ -121,6 +132,17 @@ export function createRelay(o: RelayOptions): Relay {
       const swept = await referee.sweep();
       return json(referee.wager ? { ...swept, wagers: await referee.wager.sweep() } : swept);
     }
+    if (path === "/api/link" || path.startsWith("/api/link/")) {
+      if (!link) throw new RelayError("not_found", "Link battles aren't open yet.");
+      if (m === "GET" && path === "/api/link/rules") return json(await link.rules(), 200, "public, s-maxage=300");
+      if (m === "POST" && path === "/api/link/practice") return json(await link.practice(await fighter(req)));
+      if (m === "GET" && path === "/api/link/practice/state") return json(await link.practiceState(await fighter(req), url.searchParams.get("match") ?? undefined));
+      if (m === "POST" && path === "/api/link/practice/move") return json(await link.practiceMove(await fighter(req), await body(req)));
+      if (m === "POST" && path === "/api/link/practice/leave") return json(await link.practiceLeave(await fighter(req)));
+      const watch = /^\/api\/link\/practice\/([a-z2-9]{10})$/.exec(path);
+      if (m === "GET" && watch) return json(await link.watchPractice(watch[1]!), 200, "public, s-maxage=2");
+      throw new RelayError("not_found", "No such route.");
+    }
     if (path.startsWith("/api/arena/admin/")) {
       if (!o.adminToken || bearer(req) !== o.adminToken) throw new RelayError("not_found", "No such route.");
       if (m === "GET" && path === "/api/arena/admin/flags") return json(await referee.flags());
@@ -139,6 +161,7 @@ export function createRelay(o: RelayOptions): Relay {
   return {
     referee,
     registration,
+    link,
     async fetch(req) {
       try {
         return await route(req);
