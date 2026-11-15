@@ -59,10 +59,11 @@ export interface LinkConfig {
   /** How long a practice is kept after its last move, in ms. */
   practiceMs?: number;
   /**
-   * Runs a task after the response has gone (the host's waitUntil). Without it nothing is filmed: work started and not
-   * awaited might be cut off with the request.
+   * Starts a task once the response has gone (Next's `after()`), and keeps the function alive until it's done. It's handed
+   * the task unstarted: filming holds the instance's CPU for seconds, so it must not begin while the request still has
+   * store calls to make. Without it nothing is filmed.
    */
-  defer?: (task: Promise<unknown>) => void;
+  defer?: (task: () => Promise<unknown>) => void;
 }
 
 interface Practice {
@@ -120,7 +121,7 @@ export class LinkReferee {
   private agent: 0 | 1;
   private max: number;
   private ttlMs: number;
-  private defer?: (task: Promise<unknown>) => void;
+  private defer?: (task: () => Promise<unknown>) => void;
 
   constructor(
     private store: Store,
@@ -139,8 +140,9 @@ export class LinkReferee {
   private filmLater(id: string, step: LinkStep) {
     const { engine, defer } = this;
     if (!defer || !engine.film || step.film === undefined) return;
-    defer(
-      engine.film(id, step.film).catch((err: unknown) => {
+    const film = step.film;
+    defer(() =>
+      engine.film!(id, film).catch((err: unknown) => {
         console.error("link: a film failed", err);
       }),
     );

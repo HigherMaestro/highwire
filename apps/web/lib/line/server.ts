@@ -116,7 +116,9 @@ export function lineRelay(): Relay | null {
   if (relay) return relay;
   const rpcUrl = serverOptionsFromEnv(process.env).rpcUrl ?? "https://api.mainnet-beta.solana.com";
   const options = {
-    store: new UpstashStore({ url: process.env.LINE_KV_REST_API_URL!, token: process.env.LINE_KV_REST_API_TOKEN! }),
+    // Link battles run the emulator in this process, holding it for a few seconds a turn (a step, or a film after one),
+    // so a store call that overlaps one gets well past that before it counts as the store not answering.
+    store: new UpstashStore({ url: process.env.LINE_KV_REST_API_URL!, token: process.env.LINE_KV_REST_API_TOKEN!, timeoutMs: 15_000 }),
     clock: realClock,
     rpc: new JsonRpc(rpcUrl),
     coins: coinDirectory(rpcUrl),
@@ -131,8 +133,8 @@ export function lineRelay(): Relay | null {
       wager: wagerConfig(),
     },
     // Link battles' practice (docs/link-battles.md): the engine runs the emulator, from the private Blob store.
-    // Each turn is filmed after the answer (13.3), in the same function: after() keeps it running once the response is out.
-    link: linkConfigured() ? { engine: lazyLinkEngine, agentSide: 1, defer: (task: Promise<unknown>) => after(task) } : undefined,
+    // Each turn is filmed after the answer (13.3), in the same function: after() starts it once the response is out.
+    link: linkConfigured() ? { engine: lazyLinkEngine, agentSide: 1, defer: (task: () => Promise<unknown>) => after(task) } : undefined,
   } satisfies Parameters<typeof createRelay>[0];
   try {
     relay = createRelay(options);
