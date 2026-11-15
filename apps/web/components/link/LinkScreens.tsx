@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { decodeFilm, type Film, FilmPlayer, SCREEN_H, SCREEN_W } from "highwire-link/film";
+import { Icon, Transport } from "./StageParts.tsx";
 
-// Both Game Boys' screens, side by side (docs/link-battles.md 13.3): each turn's film, played in order with the turn
+// Both Game Boys' screens, side by side (docs/link-battles.md 13.3, 14.11): each turn's film, played in order with the turn
 // controls. A film is made after its turn is answered, so a live battle's newest turn may take a few seconds to appear;
-// the player waits for it. Reduced motion: nothing plays until asked.
+// the player waits for it. Each screen is drawn at a whole multiple of the Game Boy's 160 by 144 pixels, in a bezel, the
+// link cable between them; a finished battle waits on its last frame under "Watch it back". Reduced motion: nothing
+// plays until asked.
 
 const RETRY_MS = 2500;
 /** A live turn whose film hasn't come in this long is passed over (a later one has), or the stage stops waiting for it. */
@@ -29,7 +32,7 @@ async function fetchFilm(match: string, turn: number): Promise<Film | null> {
  * `onShow` hears which turn is on screen while the screens are being followed (a live battle playing, or once someone
  * has pressed play or stepped), and null otherwise, when the stage shows the battle as it stands.
  */
-export function LinkScreens({ match, turns, live, left, names, onShow, startTurn, autoplay = false, seek }: { match: string; turns: number; live: boolean; left: 0 | 1; names: [string, string]; onShow?: (s: Shown) => void; startTurn?: number; autoplay?: boolean; seek?: number }) {
+export function LinkScreens({ match, turns, live, left, names, onShow, startTurn, autoplay = false, seek, fresh = false }: { match: string; turns: number; live: boolean; left: 0 | 1; names: [string, string]; onShow?: (s: Shown) => void; startTurn?: number; autoplay?: boolean; seek?: number; fresh?: boolean }) {
   // The turn on screen: 0 is the opening (the first menu), 1..turns the turns played. A live battle opens on its newest
   // turn; a finished one on its last turn's final frame, so the screens agree with the stage and the result; a page can
   // ask for a turn (a turn link, from the start), and `seek` (the momentum strip) moves it.
@@ -53,6 +56,24 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
   const shown = [left, (1 - left) as 0 | 1] as const;
   // Followed: playing a live battle on its own, or once someone has pressed play or stepped.
   const engaged = useRef(false);
+  // A finished battle opened on its last frame waits under "Watch it back" until someone plays or steps.
+  const [started, setStarted] = useState(live || startTurn !== undefined || autoplay);
+  const pair = useRef<HTMLDivElement>(null);
+  // Whole pixels: each screen at the largest multiple of 160 by 144 that fits (2 to 4), never stretched between.
+  useEffect(() => {
+    const el = pair.current;
+    if (!el) return;
+    const fit = () => {
+      const stacked = window.matchMedia("(max-width: 640px)").matches;
+      const w = el.clientWidth;
+      const each = stacked ? w - 30 : (w - 56) / 2 - 30;
+      el.style.setProperty("--px", String(Math.max(stacked ? 1 : 2, Math.min(4, Math.floor(each / SCREEN_W)))));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const tell = useRef(onShow);
   tell.current = onShow;
   const report = useCallback((t: number, done: boolean) => tell.current?.(engaged.current ? { turn: t, done } : null), []);
@@ -215,6 +236,7 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
   // The momentum strip asked for a turn: open it and play it, the stage following.
   useEffect(() => {
     if (seek === undefined) return;
+    setStarted(true);
     engaged.current = true;
     following.current = false;
     setTurn(Math.max(0, Math.min(latest.current, seek)));
@@ -222,11 +244,13 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
   }, [seek]);
 
   const go = (t: number) => {
+    setStarted(true);
     following.current = t >= turns;
     engaged.current = true;
     setTurn(Math.max(0, Math.min(turns, t)));
   };
   const toggle = () => {
+    setStarted(true);
     const p = player.current;
     if (!engaged.current) {
       engaged.current = true;
@@ -247,36 +271,67 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
 
   const label = turn === 0 ? "The opening" : `Turn ${turn} of ${turns}`;
   if (noScreens) {
-    return <p className="link-screens-later muted">This battle&apos;s screens are no longer kept. Every turn is still told below.</p>;
+    return <p className="link-screens-later">This battle&apos;s screens are no longer kept. Every turn is still told below.</p>;
   }
+  // Watch it back: from the first turn.
+  const watch = () => {
+    setStarted(true);
+    engaged.current = true;
+    following.current = false;
+    if (turn === (turns > 0 ? 1 : 0)) {
+      const p = player.current;
+      p?.rewind();
+      p?.next();
+      draw();
+      report(turn, false);
+    } else setTurn(turns > 0 ? 1 : 0);
+    setPlaying(true);
+  };
   return (
-    <figure className="link-screens" aria-label="Both Game Boys' screens">
-      <div className="link-screens-pair">
+    <figure className={`link-screens${fresh ? " link-screens-fresh" : ""}`} aria-label="Both Game Boys' screens">
+      <div ref={pair} className="link-screens-pair">
         {([0, 1] as const).map((side) => (
-          <div key={side} className={`link-screen link-screen-${side === 0 ? "a" : "b"}`}>
+          <div key={side} className={`link-screen link-screen-${side === 0 ? "a" : "b"}`} style={{ gridColumn: side === 0 ? 1 : 3 }}>
             <p className="link-screen-who">{who[side]}</p>
             <canvas ref={canvases[side]} width={SCREEN_W} height={SCREEN_H} role="img" aria-label={`${who[side]}, ${label.toLowerCase()}`} />
           </div>
         ))}
+        <span className="link-screens-cable" aria-hidden="true">
+          <span key={turn} className="link-screens-cable-pulse" />
+        </span>
+        {!started && !playing ? (
+          <button type="button" className="link-screens-poster" onClick={watch} disabled={load.state !== "ready"}>
+            <span className="link-screens-poster-btn">
+              <Icon d="play" />
+            </span>
+            <span>Watch it back</span>
+          </button>
+        ) : null}
       </div>
       <figcaption className="link-screens-bar">
-        <button type="button" className="link-screens-btn" onClick={() => go(turn - 1)} disabled={turn <= 0} aria-label="Previous turn">
-          ⏮
-        </button>
-        <button type="button" className="link-screens-btn link-screens-play" onClick={toggle} disabled={load.state !== "ready"} aria-label={playing ? "Pause" : "Play"}>
-          {playing ? "❚❚" : "▶"}
-        </button>
-        <button type="button" className="link-screens-btn" onClick={() => go(turn + 1)} disabled={turn >= turns} aria-label="Next turn">
-          ⏭
-        </button>
-        <span className="link-screens-turn">
-          {label}
-          {load.state === "missing" ? <span className="muted small"> · {live && turn >= turns ? "filming…" : live ? "no screens yet" : "no screens for this turn"}</span> : null}
-          {load.state === "loading" ? <span className="muted small" role="status"> · loading the screens…</span> : null}
-        </span>
-        <button type="button" className="link-screens-btn link-screens-speed" onClick={() => setSpeed(speed === 1 ? 2 : 1)} aria-label={`Speed: ${speed}×`}>
-          {speed}×
-        </button>
+        <Transport
+          label={label}
+          playing={playing}
+          onToggle={toggle}
+          onPrev={() => go(turn - 1)}
+          onNext={() => go(turn + 1)}
+          canPrev={turn > 0}
+          canNext={turn < turns}
+          speed={speed}
+          onSpeed={() => setSpeed(speed === 1 ? 2 : 1)}
+          disabled={load.state !== "ready"}
+          status={
+            <>
+              {load.state === "missing" ? <span className="link-transport-note"> · {live && turn >= turns ? "filming…" : live ? "no screens yet" : "no screens for this turn"}</span> : null}
+              {load.state === "loading" ? (
+                <span className="link-transport-note" role="status">
+                  {" "}
+                  · loading the screens…
+                </span>
+              ) : null}
+            </>
+          }
+        />
       </figcaption>
     </figure>
   );

@@ -5,8 +5,10 @@ import { headline, storyOf, teamsAt } from "../../../../../../lib/link/story.ts"
 import { linkMatchById, linkRatedPagesOn } from "../../../../../../lib/link/watch.ts";
 import { fromMatch } from "../../../../../../lib/link/battle.ts";
 
-// A turn's link preview (13.4): that turn's moment ("Turn 5 · A critical hit"), both teams and HP bars as they stood
-// after it, and nothing after it.
+// A turn's link preview (13.4): that turn's moment as a headline ("CRITICAL HIT"), its number on the cable's node, both
+// teams and HP bars as they stood after it, and nothing after it.
+
+const MOMENT: Record<string, string> = { "A knockout": "KNOCKOUT", "A critical hit": "CRITICAL HIT", "Super effective": "SUPER EFFECTIVE", "A switch": "A SWITCH", "A turn": "A TURN" };
 
 export const alt = "A moment from a link battle on Highwire: AI agents on real Game Boys.";
 export const size = CARD_SIZE;
@@ -30,7 +32,9 @@ export default async function Image({ params }: { params: Promise<{ id: string; 
   const moment = headline(storyOf(t.lines, [`${b.sides[0].name}'s`, `${b.sides[1].name}'s`]));
   return render(
     linkCard({
-      label: `LINK BATTLES · ${moment.toUpperCase()}`,
+      label: "LINK BATTLES",
+      moment: { text: MOMENT[moment] ?? moment, tone: moment === "A knockout" ? "ko" : moment === "A critical hit" || moment === "Super effective" ? "gold" : "plain" },
+      node: String(turn),
       names: [name(l), name(r)],
       pips: [teams[l], teams[r]],
       bars: t.after ? [t.after[l].hp_percent, t.after[r].hp_percent] : null,

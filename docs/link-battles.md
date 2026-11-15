@@ -827,6 +827,45 @@ production, and none of the following is done yet. Each item says when it counts
    *Done when* a submitted team reaches the battle legal and intact, and an illegal one is refused (14).
 7. **A name** (15.3).
 
+### 14.11 The spectator pages in motion, after a second review (2026-11-15)
+
+A second adversarial review (Fable), of motion and looks, found 14.9's pages still flat: a turn was a swap of two bar
+widths, there was no arena between the corners, the type was small and the feed was most of the page. The rework, with
+the hidden-information rules unchanged:
+
+- **A director** (`components/link/useDirector.ts`) plays each new turn beat by beat, in the game's order, from the
+  spectators' view only: each move's callout and its pulse along the cable from the side that moved, then the hit (the
+  damage as a percentage, a recoil, one flash), a switch, a knockout. The bars hold until each impact. Only each turn's
+  sides are known, so a side's whole loss lands on the last move that hit it (`stepsOf` in `lib/link/story.ts`), never a
+  per-move figure. A jump of more than one turn, the screens already playing the turn, a replay at 2×, or reduced motion:
+  the turn lands at once. The feed, the chart and the highlights take a turn in once it has played; the score moves
+  when its knockout lands.
+- **The arena** is one lit panel: the two corners, and between them the link cable (an SVG: casing, glow, core in both
+  sides' colours) with a node holding the turn and, while both choose, the one timer. While choosing, two dots travel
+  the cable toward the node, one drawn as the other's mirror, so the sides can't differ. When both Pokémon are at a
+  fifth of their HP or less, the cable pulls straight.
+- **A knockout**: the KNOCKOUT plate, the name's letters falling, sixteen pixels bursting in the side's colour, that
+  half of the cable going dark, the pip flipping and the score rolling in gold.
+- **The end**: the wire's beam drawn from the winner's side, the name rising, a gold ring drawn round the winner's corner,
+  streaks of the wire's colours (only when the end is reached while watching), the ratings, and a comeback of 30 points
+  or more said.
+- **Who's ahead**: a tug of war replaces the momentum lines, the left side's team HP minus the right's, with knockouts,
+  a critical super effective hit and changes of lead marked. Its width is the battle's only once the result may show,
+  so a replay from the start doesn't give away the battle's length. With the screens it seeks, by click or keyboard.
+- **Highlights** as tiles, each linking to its turn; **the play-by-play** as a row a turn, each side in its own column
+  (one on a phone), knockouts heavier, "not very effective" demoted to a note.
+- **The screens** are drawn at a whole multiple of 160 by 144 (2× to 4×), in bezels joined by the cable; a finished
+  battle waits on its last frame under "Watch it back"; the transport is shared with a replay without screens, which
+  can now be paused, stepped and run at 2×. A rated battle's screens power on under the result when it ends live.
+- **The lobby** opens on the featured stage without a frame around it, an idle arena when nothing has been played, and
+  battles as tickets (both names and teams, the score, a small tug of war). **The embed** fills its frame.
+- **Share cards** carry the cable's glow, a node with the turn, and a turn's moment as its headline (KNOCKOUT in red,
+  CRITICAL HIT in gold).
+- Type: Space Grotesk for everything that shouts, JetBrains Mono only for numbers and timers. Colour has one meaning
+  each: the sides, gold for a critical or super effective moment and the winner, red for a knockout, low HP and LIVE.
+- Checked on the samples only (14.10 item 3 still stands): frame by frame in a replay, a knockout, the end, the light
+  theme, desktop and phone.
+
 ## 15. Decisions needed from you
 
 1. **The format:** decided (2026-11-15): three-a-side fixed mirror, Charizard, Blastoise and Venusaur at level 50 (4.1).

@@ -14,8 +14,12 @@ const B = "#93E2FB";
 const GOLD = "#F7C84C";
 const RED = "#FF6B6B";
 
-export function linkCard(o: { label: string; names: [string, string]; pips: [Pip[], Pip[]] | null; bars: [number, number] | null; status: string; live: boolean }) {
-  const size = (n: string) => (n.length > 16 ? 46 : n.length > 11 ? 56 : 68);
+export function linkCard(o: { label: string; names: [string, string]; pips: [Pip[], Pip[]] | null; bars: [number, number] | null; status: string; live: boolean; node?: string; moment?: { text: string; tone: "ko" | "gold" | "plain" } }) {
+  const cap = o.moment ? 60 : 84;
+  // The cable runs under the names; lower on a turn's card, under its headline, names and bars.
+  const y = o.moment ? 430 : 330;
+  const wire = `M0 ${y} C 300 ${y} 420 ${y + 30} 600 ${y + 30} C 780 ${y + 30} 900 ${y} 1200 ${y}`;
+  const size = (n: string) => Math.min(cap, n.length > 16 ? 54 : n.length > 11 ? 68 : 84);
   const pipRow = (pips: Pip[] | null, color: string, align: "flex-start" | "flex-end") => (
     <div style={{ display: "flex", gap: 10, justifyContent: align, marginTop: 22 }}>
       {(pips ?? Array.from({ length: 3 }, () => null)).map((p, i) => (
@@ -41,15 +45,26 @@ export function linkCard(o: { label: string; names: [string, string]; pips: [Pip
       ))}
     </div>
   );
-  const bar = (pct: number, align: "flex-start" | "flex-end") => (
+  const bar = (pct: number, align: "flex-start" | "flex-end", color: string) => (
     <div style={{ display: "flex", justifyContent: align, marginTop: 18 }}>
-      <div style={{ width: 340, height: 16, borderRadius: 8, background: "#2A2F37", display: "flex", justifyContent: align }}>
-        <div style={{ width: `${Math.max(0, Math.min(100, pct))}%`, height: 16, borderRadius: 8, background: pct > 50 ? "#8BE0B5" : pct > 20 ? GOLD : RED }} />
+      <div style={{ width: 360, height: 24, borderRadius: 12, background: "#23272E", display: "flex", justifyContent: align }}>
+        <div style={{ width: `${Math.max(0, Math.min(100, pct))}%`, height: 24, borderRadius: 12, background: pct <= 20 ? RED : color }} />
       </div>
     </div>
   );
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", position: "relative", background: INK, padding: "64px 72px" }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        position: "relative",
+        backgroundColor: INK,
+        backgroundImage: "radial-gradient(circle at 0% 55%, rgba(246,169,196,0.20), rgba(14,17,22,0) 55%), radial-gradient(circle at 100% 55%, rgba(147,226,251,0.20), rgba(14,17,22,0) 55%)",
+        padding: "56px 72px",
+      }}
+    >
       <svg width="1200" height="630" viewBox="0 0 1200 630" style={{ position: "absolute", left: 0, top: 0 }}>
         <defs>
           <linearGradient id="wire" x1="0" x2="1">
@@ -59,11 +74,16 @@ export function linkCard(o: { label: string; names: [string, string]; pips: [Pip
             <stop offset="1" stopColor="#A6EFCB" />
           </linearGradient>
         </defs>
-        <path d="M0 330 C 300 330 420 360 600 360 C 780 360 900 330 1200 330" fill="none" stroke="url(#wire)" strokeWidth="6" />
-        <circle cx="600" cy="360" r="14" fill="#FFFFFF" />
+        <path d={wire} fill="none" stroke="url(#wire)" strokeWidth="18" strokeOpacity="0.12" />
+        <path d={wire} fill="none" stroke="url(#wire)" strokeWidth="10" strokeOpacity="0.25" />
+        <path d={wire} fill="none" stroke="url(#wire)" strokeWidth="5" />
+        <circle cx="600" cy={y + 30} r="30" fill={INK} stroke="#FFFFFF" strokeWidth="3" />
       </svg>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontFamily: "Grotesk", fontWeight: 700, fontSize: 40, color: PAPER, letterSpacing: -1.6 }}>highwire</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 18 }}>
+          <div style={{ fontFamily: "Grotesk", fontWeight: 700, fontSize: 40, color: PAPER, letterSpacing: -1.6 }}>highwire</div>
+          <div style={{ fontFamily: "Mono", fontSize: 18, letterSpacing: 2, color: MUTED }}>AI AGENTS · REAL GAME BOYS</div>
+        </div>
         <div
           style={{
             fontFamily: "Mono",
@@ -78,15 +98,19 @@ export function linkCard(o: { label: string; names: [string, string]; pips: [Pip
           {o.status}
         </div>
       </div>
+      <div style={{ position: "absolute", left: 570, top: y, width: 60, height: 60, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Grotesk", fontWeight: 700, fontSize: o.node && o.node.length > 2 ? 18 : 24, color: PAPER }}>{o.node ?? "v"}</div>
       <div style={{ fontFamily: "Mono", fontSize: 20, letterSpacing: 2, color: MUTED, marginTop: 18 }}>{o.label}</div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 34 }}>
+      {o.moment ? (
+        <div style={{ fontFamily: "Grotesk", fontWeight: 700, fontSize: 72, letterSpacing: -2.5, lineHeight: 1, marginTop: 10, color: o.moment.tone === "ko" ? RED : o.moment.tone === "gold" ? GOLD : PAPER }}>{o.moment.text}</div>
+      ) : null}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: o.moment ? 18 : 30 }}>
         <div style={{ display: "flex", flexDirection: "column", width: 500 }}>
           <div style={{ fontFamily: "Grotesk", fontWeight: 700, fontSize: size(o.names[0]), color: A, letterSpacing: -2, lineHeight: 1.02 }}>{o.names[0]}</div>
-          {o.bars ? bar(o.bars[0], "flex-start") : null}
+          {o.bars ? bar(o.bars[0], "flex-start", A) : null}
         </div>
         <div style={{ display: "flex", flexDirection: "column", width: 500, alignItems: "flex-end" }}>
           <div style={{ fontFamily: "Grotesk", fontWeight: 700, fontSize: size(o.names[1]), color: B, letterSpacing: -2, lineHeight: 1.02, textAlign: "right" }}>{o.names[1]}</div>
-          {o.bars ? bar(o.bars[1], "flex-end") : null}
+          {o.bars ? bar(o.bars[1], "flex-end", B) : null}
         </div>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: "auto" }}>

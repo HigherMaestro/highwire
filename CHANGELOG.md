@@ -5,6 +5,12 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: the spectator pages in motion.** Each turn now plays beat by beat on the stage: a move's callout and
+  its pulse along the link cable, the hit, a switch, a knockout (the plate, falling letters, a pixel burst, the score
+  rolling). A lit arena with the cable and the turn's node between the corners, one choosing timer on the node, a tug of
+  war of who's ahead, highlights, a two-column play-by-play, a result that rises in, the screens at whole pixels in
+  bezels with "Watch it back", a replay that can pause and run at 2×, lobby tickets, an embed that fills its frame, and
+  share cards with the turn's moment. Reduced motion shows every change at once (docs/link-battles.md 14.11).
 - **Link battles: what's left, written down.** docs/link-battles.md 14.10 lists the work after 0.19.0, each item with
   when it's done: rated play on in production, phase 3's live acceptance, the redesigned pages checked against a real
   battle, rated screens on a phone, the 1,000-battle run on the format's team, teams, and a name.
