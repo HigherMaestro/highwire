@@ -5925,7 +5925,7 @@ a.link-sb-name:hover, a.link-sb-name:focus-visible { text-decoration: underline;
 .link-tbtn-play:hover:not(:disabled) { background: var(--fg); opacity: 0.9; }
 .link-tbtn-speed { font-family: var(--font-code); font-size: 13px; }
 .link-tbtn-sound[aria-pressed="false"] { color: var(--muted); }
-.link-transport-label { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.link-transport-label { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .link-transport-note { color: var(--muted); font-weight: 500; }
 
 /* ---- who's ahead: the tug of war */
@@ -6075,9 +6075,12 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
 .link-screens-cable { grid-column: 2; grid-row: 1; position: relative; height: 4px; margin: 0 -2px; border-radius: 2px; background: var(--wire); opacity: 0.85; }
 .link-screens-cable-pulse { position: absolute; top: -3px; left: 0; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 0 12px #fff; animation: link-run 600ms var(--e-in) forwards; }
 @keyframes link-run { to { transform: translateX(46px); opacity: 0; } }
-.link-screens-poster { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; justify-items: center; gap: 12px; border: 0; border-radius: 18px; background: radial-gradient(160px 110px at 50% 50%, rgba(5, 7, 10, 0.7), rgba(5, 7, 10, 0)); color: #F1F0EC; text-shadow: 0 1px 8px rgba(5, 7, 10, 0.9); font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
+.link-screens-poster { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; justify-items: center; gap: 12px; border: 0; border-radius: 18px; background: none; color: #F1F0EC; font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
 .link-screens-poster-btn { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; background: #F1F0EC; color: #0E1116; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); transition: transform 160ms var(--e-spring); }
 .link-screens-poster-btn svg { width: 30px; height: 30px; }
+/* The label carries its own dark pill, so it reads on the screens and on the page between them, in either theme (a dark
+   halo behind the button smudged a light page). */
+.link-screens-poster-label { padding: 6px 14px; border-radius: 999px; background: rgba(5, 7, 10, 0.86); color: #F1F0EC; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
 .link-screens-poster:hover .link-screens-poster-btn { transform: scale(1.06); }
 .link-screens-poster:focus-visible { outline: 2px solid var(--side-b); outline-offset: 2px; }
 .link-screens-bar { margin: 0; }
@@ -6095,6 +6098,9 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
   .link-screens-cable-pulse { left: -3px; animation-name: link-run-down; }
   @keyframes link-run-down { to { transform: translateY(20px); opacity: 0; } }
   .link-screens-bar { position: sticky; bottom: 12px; z-index: 4; }
+  .link-transport { gap: 2px; }
+  .link-tbtn { min-width: 40px; }
+  .link-transport-label { font-size: 13px; padding-left: 4px; }
   .link-screens-poster { grid-column: 1; grid-row: 1; position: relative; inset: auto; align-self: stretch; justify-self: stretch; }
   /* What the stage is saying, between the two screens: the stage itself is below them here. */
   .link-screens-call { display: block; grid-column: 1; grid-row: 2; z-index: 1; margin: 6px 0; padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-strong); font-size: 14px; font-weight: 500; text-align: center; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: link-swap 180ms ease backwards; }
