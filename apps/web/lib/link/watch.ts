@@ -28,7 +28,14 @@ export interface LinkWatch {
   house_side: 0 | 1;
   turn: number;
   ended: null | { reason: "knockout" | "draw" | "void"; winner: "you" | "house" | null; message?: string };
-  spectator: { live: boolean; turn: number; sides: [LinkSide, LinkSide]; turns: { turn: number; lines: string[] }[] } | null;
+  spectator: {
+    live: boolean;
+    turn: number;
+    sides: [LinkSide, LinkSide];
+    /** Both sides before the first turn, and after each turn (missing from battles saved before 2026-11-15): the stage follows the screens with them. */
+    start?: [LinkSide, LinkSide];
+    turns: { turn: number; lines: string[]; after?: [LinkSide, LinkSide] }[];
+  } | null;
   /** The fighter's table talk: its own words. */
   lines: { turn: number; line: string }[];
 }

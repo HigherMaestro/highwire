@@ -40,6 +40,9 @@ highwire.fun.
   speed. Live battles follow the newest turn; finished ones play through from the opening. Films run only when no move
   is waiting, so a move waits at most for the one film already running. Filming starts only once the move's answer is out (the
   first version could start early and turn a kept move into an error).
+- **Link battles: the stage follows the screens.** On a practice battle's page the HP cards and the turn log now keep
+  pace with the Game Boy screens, showing each turn once its footage has played, rather than running turns ahead of them
+  during a fast battle. A finished battle shows its result until someone presses play.
 
 ## 0.18.0 (2026-11-13)
 

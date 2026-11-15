@@ -5,19 +5,19 @@
   "fighter": "sample-fighter",
   "name": "Wire Cat",
   "house_side": 0,
-  "turn": 13,
+  "turn": 15,
   "ended": {
    "reason": "knockout",
    "winner": "house"
   },
   "spectator": {
    "live": false,
-   "turn": 13,
+   "turn": 15,
    "sides": [
     {
      "species": "Venusaur",
      "level": 50,
-     "hp_percent": 85,
+     "hp_percent": 40,
      "status": null,
      "field": [],
      "seen": [
@@ -25,11 +25,11 @@
       "Venusaur"
      ],
      "fainted": 1,
-     "hp": 160,
+     "hp": 77,
      "max_hp": 187
     },
     {
-     "species": "Blastoise",
+     "species": "Charizard",
      "level": 50,
      "hp_percent": 0,
      "status": null,
@@ -41,7 +41,35 @@
      ],
      "fainted": 3,
      "hp": 0,
-     "max_hp": 186
+     "max_hp": 185
+    }
+   ],
+   "start": [
+    {
+     "species": "Charizard",
+     "level": 50,
+     "hp_percent": 100,
+     "status": null,
+     "field": [],
+     "seen": [
+      "Charizard"
+     ],
+     "fainted": 0,
+     "hp": 185,
+     "max_hp": 185
+    },
+    {
+     "species": "Charizard",
+     "level": 50,
+     "hp_percent": 100,
+     "status": null,
+     "field": [],
+     "seen": [
+      "Charizard"
+     ],
+     "fainted": 0,
+     "hp": 185,
+     "max_hp": 185
     }
    ],
    "turns": [
@@ -49,39 +77,148 @@
      "turn": 1,
      "lines": [
       "The house's Charizard used Flamethrower.",
-      "A critical hit!",
       "It's not very effective…",
       "Wire Cat's Charizard used Flamethrower.",
       "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 81,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 154,
+       "max_hp": 185
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 83,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 155,
+       "max_hp": 185
+      }
      ]
     },
     {
      "turn": 2,
      "lines": [
-      "Wire Cat's Charizard used Flamethrower.",
-      "It's not very effective…",
       "The house's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "Wire Cat's Charizard used Flamethrower.",
       "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 67,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 125,
+       "max_hp": 185
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 67,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 125,
+       "max_hp": 185
+      }
      ]
     },
     {
      "turn": 3,
      "lines": [
-      "Wire Cat's Charizard used Flamethrower.",
-      "It's not very effective…",
       "The house's Charizard used Flamethrower.",
-      "A critical hit!",
+      "It's not very effective…",
+      "Wire Cat's Charizard used Flamethrower.",
       "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 50,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 96,
+       "max_hp": 185
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 50,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 96,
+       "max_hp": 185
+      }
      ]
     },
     {
      "turn": 4,
      "lines": [
       "Wire Cat's Charizard used Flamethrower.",
-      "A critical hit!",
       "It's not very effective…",
       "The house's Charizard used Flamethrower.",
       "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 35,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 68,
+       "max_hp": 185
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 33,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 64,
+       "max_hp": 185
+      }
      ]
     },
     {
@@ -90,6 +227,35 @@
       "Wire Cat's side sent out Venusaur.",
       "The house's Charizard used Flamethrower.",
       "It's super effective!"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 35,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 68,
+       "max_hp": 185
+      },
+      {
+       "species": "Venusaur",
+       "level": 50,
+       "hp_percent": 46,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 0,
+       "hp": 88,
+       "max_hp": 187
+      }
      ]
     },
     {
@@ -98,52 +264,260 @@
       "The house's Charizard used Flamethrower.",
       "It's super effective!",
       "Wire Cat's Venusaur fainted!"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 35,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 68,
+       "max_hp": 185
+      },
+      {
+       "species": "Venusaur",
+       "level": 50,
+       "hp_percent": 0,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 1,
+       "hp": 0,
+       "max_hp": 187
+      }
      ]
     },
     {
      "turn": 7,
      "lines": [
       "Wire Cat's side sent out Charizard."
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 35,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 68,
+       "max_hp": 185
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 33,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 1,
+       "hp": 64,
+       "max_hp": 185
+      }
      ]
     },
     {
      "turn": 8,
      "lines": [
-      "Wire Cat's Charizard used Flamethrower.",
-      "It's not very effective…",
       "The house's Charizard used Flamethrower.",
       "It's not very effective…",
-      "Wire Cat's Charizard fainted!"
+      "Wire Cat's Charizard used Flamethrower.",
+      "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 19,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 38,
+       "max_hp": 185
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 19,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 1,
+       "hp": 37,
+       "max_hp": 185
+      }
      ]
     },
     {
      "turn": 9,
      "lines": [
-      "Wire Cat's side sent out Blastoise."
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "Wire Cat's Charizard used Flamethrower.",
+      "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 4,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 8,
+       "max_hp": 185
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 4,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 1,
+       "hp": 8,
+       "max_hp": 185
+      }
      ]
     },
     {
      "turn": 10,
      "lines": [
-      "The house's Charizard used Earthquake.",
-      "Wire Cat's Blastoise used Seismic Toss.",
-      "The house's Charizard fainted!"
+      "Wire Cat's side sent out Blastoise.",
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 4,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0,
+       "hp": 8,
+       "max_hp": 185
+      },
+      {
+       "species": "Blastoise",
+       "level": 50,
+       "hp_percent": 83,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur",
+        "Blastoise"
+       ],
+       "fainted": 1,
+       "hp": 156,
+       "max_hp": 186
+      }
      ]
     },
     {
      "turn": 11,
      "lines": [
-      "The house's side sent out Venusaur."
+      "The house's Charizard used Earthquake.",
+      "Wire Cat's Blastoise used Surf.",
+      "It's super effective!",
+      "The house's Charizard fainted!"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 0,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 1,
+       "hp": 0,
+       "max_hp": 185
+      },
+      {
+       "species": "Blastoise",
+       "level": 50,
+       "hp_percent": 60,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur",
+        "Blastoise"
+       ],
+       "fainted": 1,
+       "hp": 116,
+       "max_hp": 186
+      }
      ]
     },
     {
      "turn": 12,
      "lines": [
-      "The house's Venusaur used Razor Leaf.",
-      "A critical hit!",
-      "It's super effective!",
-      "Wire Cat's Blastoise used Surf.",
-      "It's not very effective…"
+      "The house's side sent out Venusaur."
+     ],
+     "after": [
+      {
+       "species": "Venusaur",
+       "level": 50,
+       "hp_percent": 100,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 1,
+       "hp": 187,
+       "max_hp": 187
+      },
+      {
+       "species": "Blastoise",
+       "level": 50,
+       "hp_percent": 60,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur",
+        "Blastoise"
+       ],
+       "fainted": 1,
+       "hp": 116,
+       "max_hp": 186
+      }
      ]
     },
     {
@@ -153,6 +527,114 @@
       "A critical hit!",
       "It's super effective!",
       "Wire Cat's Blastoise fainted!"
+     ],
+     "after": [
+      {
+       "species": "Venusaur",
+       "level": 50,
+       "hp_percent": 100,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 1,
+       "hp": 187,
+       "max_hp": 187
+      },
+      {
+       "species": "Blastoise",
+       "level": 50,
+       "hp_percent": 0,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur",
+        "Blastoise"
+       ],
+       "fainted": 2,
+       "hp": 0,
+       "max_hp": 186
+      }
+     ]
+    },
+    {
+     "turn": 14,
+     "lines": [
+      "Wire Cat's side sent out Charizard."
+     ],
+     "after": [
+      {
+       "species": "Venusaur",
+       "level": 50,
+       "hp_percent": 100,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 1,
+       "hp": 187,
+       "max_hp": 187
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 4,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur",
+        "Blastoise"
+       ],
+       "fainted": 2,
+       "hp": 8,
+       "max_hp": 185
+      }
+     ]
+    },
+    {
+     "turn": 15,
+     "lines": [
+      "Wire Cat's Charizard used Flamethrower.",
+      "It's super effective!",
+      "The house's Venusaur used Body Slam.",
+      "Wire Cat's Charizard fainted!"
+     ],
+     "after": [
+      {
+       "species": "Venusaur",
+       "level": 50,
+       "hp_percent": 40,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 1,
+       "hp": 77,
+       "max_hp": 187
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 0,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur",
+        "Blastoise"
+       ],
+       "fainted": 3,
+       "hp": 0,
+       "max_hp": 185
+      }
      ]
     }
    ]
@@ -179,7 +661,7 @@
     {
      "species": "Charizard",
      "level": 50,
-     "hp_percent": 6,
+     "hp_percent": 19,
      "status": null,
      "field": [],
      "seen": [
@@ -190,14 +672,38 @@
     {
      "species": "Charizard",
      "level": 50,
-     "hp_percent": 0,
+     "hp_percent": 19,
      "status": null,
      "field": [],
      "seen": [
       "Charizard",
       "Venusaur"
      ],
-     "fainted": 2
+     "fainted": 1
+    }
+   ],
+   "start": [
+    {
+     "species": "Charizard",
+     "level": 50,
+     "hp_percent": 100,
+     "status": null,
+     "field": [],
+     "seen": [
+      "Charizard"
+     ],
+     "fainted": 0
+    },
+    {
+     "species": "Charizard",
+     "level": 50,
+     "hp_percent": 100,
+     "status": null,
+     "field": [],
+     "seen": [
+      "Charizard"
+     ],
+     "fainted": 0
     }
    ],
    "turns": [
@@ -205,39 +711,132 @@
      "turn": 1,
      "lines": [
       "The house's Charizard used Flamethrower.",
-      "A critical hit!",
       "It's not very effective…",
       "Wire Cat's Charizard used Flamethrower.",
       "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 81,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 83,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      }
      ]
     },
     {
      "turn": 2,
      "lines": [
-      "Wire Cat's Charizard used Flamethrower.",
-      "It's not very effective…",
       "The house's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "Wire Cat's Charizard used Flamethrower.",
       "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 67,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 67,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      }
      ]
     },
     {
      "turn": 3,
      "lines": [
-      "Wire Cat's Charizard used Flamethrower.",
-      "It's not very effective…",
       "The house's Charizard used Flamethrower.",
-      "A critical hit!",
+      "It's not very effective…",
+      "Wire Cat's Charizard used Flamethrower.",
       "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 50,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 50,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      }
      ]
     },
     {
      "turn": 4,
      "lines": [
       "Wire Cat's Charizard used Flamethrower.",
-      "A critical hit!",
       "It's not very effective…",
       "The house's Charizard used Flamethrower.",
       "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 35,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 33,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      }
      ]
     },
     {
@@ -246,6 +845,31 @@
       "Wire Cat's side sent out Venusaur.",
       "The house's Charizard used Flamethrower.",
       "It's super effective!"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 35,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      },
+      {
+       "species": "Venusaur",
+       "level": 50,
+       "hp_percent": 46,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 0
+      }
      ]
     },
     {
@@ -254,22 +878,96 @@
       "The house's Charizard used Flamethrower.",
       "It's super effective!",
       "Wire Cat's Venusaur fainted!"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 35,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      },
+      {
+       "species": "Venusaur",
+       "level": 50,
+       "hp_percent": 0,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 1
+      }
      ]
     },
     {
      "turn": 7,
      "lines": [
       "Wire Cat's side sent out Charizard."
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 35,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 33,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 1
+      }
      ]
     },
     {
      "turn": 8,
      "lines": [
-      "Wire Cat's Charizard used Flamethrower.",
-      "It's not very effective…",
       "The house's Charizard used Flamethrower.",
       "It's not very effective…",
-      "Wire Cat's Charizard fainted!"
+      "Wire Cat's Charizard used Flamethrower.",
+      "It's not very effective…"
+     ],
+     "after": [
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 19,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard"
+       ],
+       "fainted": 0
+      },
+      {
+       "species": "Charizard",
+       "level": 50,
+       "hp_percent": 19,
+       "status": null,
+       "field": [],
+       "seen": [
+        "Charizard",
+        "Venusaur"
+       ],
+       "fainted": 1
+      }
      ]
     }
    ]

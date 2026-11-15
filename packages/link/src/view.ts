@@ -297,8 +297,10 @@ export interface SpectatorView {
   live: boolean;
   turn: number;
   sides: [SpectatorSide, SpectatorSide];
-  /** Every turn, told in plain sentences. */
-  turns: { turn: number; lines: string[] }[];
+  /** Both sides as they stood before the first turn, so the stage can follow the screens from the opening. */
+  start?: [SpectatorSide, SpectatorSide];
+  /** Every turn, told in plain sentences, with both sides as they stood after it (the same rules as `sides`). */
+  turns: { turn: number; lines: string[]; after?: [SpectatorSide, SpectatorSide] }[];
 }
 
 /**
@@ -320,11 +322,33 @@ export function spectatorView(o: { live: boolean; turn: number; facts0: SideFact
       ...(o.live ? {} : { hp: m.hp, max_hp: m.maxHp }),
     };
   };
+  // Each side as it stood at a turn's start or end, from the turn's own record (13.2: the stage follows the screens).
+  const levels = [facts0.mine.level, facts0.theirs.level] as const;
+  const at = (s: 0 | 1, i: number, end: 0 | 1): SpectatorSide => {
+    const c = o.turns[i]!.sides[s];
+    const field = { ...c.was };
+    if (end) {
+      for (const k of c.fieldOn) field[k] = true;
+      for (const k of c.fieldOff) field[k] = false;
+    }
+    const seen = revealed(s, o.opening[s], o.turns.slice(0, i + end));
+    return {
+      species: names.species(c.species[end]),
+      level: levels[s],
+      hp_percent: hpBar(c.hp[end], c.maxHp),
+      status: statusName(c.status[end], field),
+      field: fieldList(field),
+      seen: seen.species.map((x) => names.species(x)),
+      fainted: seen.fainted.length,
+      ...(o.live ? {} : { hp: c.hp[end], max_hp: c.maxHp }),
+    };
+  };
   return {
     live: o.live,
     turn: o.turn,
     sides: [side(0, facts0.mine), side(1, facts0.theirs)],
-    turns: o.turns.map((t) => ({ turn: t.turn, lines: narrate(t, names, (s) => o.labels[s]) })),
+    ...(o.turns.length ? { start: [at(0, 0, 0), at(1, 0, 0)] as [SpectatorSide, SpectatorSide] } : {}),
+    turns: o.turns.map((t, i) => ({ turn: t.turn, lines: narrate(t, names, (s) => o.labels[s]), after: [at(0, i, 1), at(1, i, 1)] as [SpectatorSide, SpectatorSide] })),
   };
 }
 

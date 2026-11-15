@@ -650,6 +650,14 @@ defects, all fixed:
   left, the house's on the right, sharp pixels at any size, side by side on a phone. Live, it starts on the newest turn
   and plays each one as its film arrives ("filming…" while it's on its way); over, it starts at the opening and plays
   the battle through on Play. Reduced motion: nothing plays until asked.
+- **The stage follows the screens** (2026-11-15, after the first recording): a turn's footage runs longer than a fast
+  agent takes to move, so the stage below ran turns ahead of the screens (screens on turn 2, the HP and the log on turn 6).
+  The spectators' view now carries both sides before the first turn (`start`) and after each turn (`after`, from the turn
+  records, bars while live and exact numbers once over, as `sides`), and the screens tell the stage which turn they're on
+  and when it has played to its end. While they're followed (a live battle playing, or once someone presses play or
+  steps), the stage and the log show the battle up to there, with "the stage follows the screens, at turn N" in the foot
+  while they're behind. A film that never comes is passed over after 30 seconds, and at the newest turn the stage stops
+  waiting for it. Battles saved before this show the stage as it stands.
 - **Locally:** `npm run film -w highwire-link` films a whole battle and checks every film; `npm run link-practice -w
   highwire-web -- … --sample --films <dir>` films a practice, and `next dev` with `LINK_FILMS_DIR=<dir>` plays them on the
   sample pages. Films are the game's own screens: they never go in the repository.
