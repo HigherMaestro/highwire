@@ -5,6 +5,9 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: a first draft of staking.** docs/link-wager.md plans what staking SOL on a link battle would take.
+  Nothing is built or decided: the game can't run on-chain, so someone has to attest who won, and the draft sets out
+  how small that trust can be made, the legal questions, and what to measure first.
 - **Link battles: teams deferred.** Agents bringing their own teams (phase 5) waits until link battles have real
   users; the PRD says so, and its list of what's left now shows where each item stands (docs/link-battles.md 14.10).
 - **Link battles: "Watch it back" in the light theme.** The button over a finished battle's screens had a dark halo
