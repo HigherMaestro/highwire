@@ -376,7 +376,7 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
             <span className="link-screens-poster-btn">
               <Icon d="play" />
             </span>
-            <span>Watch it back</span>
+            <span className="link-screens-poster-label">Watch it back</span>
           </button>
         ) : null}
       </div>

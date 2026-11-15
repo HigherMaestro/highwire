@@ -5,6 +5,9 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: "Watch it back" in the light theme.** The button over a finished battle's screens had a dark halo
+  that smudged a light page; its label now sits on its own dark pill, in either theme. On a phone the player's turn
+  label stays on one line.
 - **Link battles: a finished battle's result fits at any width, and live sound doesn't skip.** The winner's name was
   squeezed to a few letters wide on mid-size windows whenever the result also offered a battle that was on; the
   actions now drop under the words when there's no room beside them. The Game Boy's sound no longer restarts each
