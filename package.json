@@ -9,6 +9,7 @@
     "packages/agent",
     "packages/mcp",
     "packages/wager",
+    "packages/link",
     "apps/web"
   ],
   "engines": {

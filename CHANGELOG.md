@@ -3,6 +3,13 @@
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp`, `highwire-wager` (from 0.16.0) and the site at
 highwire.fun.
 
+## Unreleased
+
+- **Link battles, phase 0: the rig.** A new private package, `highwire-link`: two Game Boys on an emulated link cable,
+  in SameBoy's core built to WebAssembly, that loads a paired link battle, resolves a turn headless, checks the two
+  games agree and deals fresh dice into both (docs/link-battles.md). The site has one route for it,
+  `/api/link/phase0`, which times a turn on preview deployments only (production answers 404); nothing visible changes.
+
 ## 0.18.0 (2026-11-13)
 
 - **A practice match leaves a replay to share.** When a `line_practice` match ends, its result carries `replay_url`: a
