@@ -13,7 +13,8 @@
     "smoke": "tsx scripts/smoke.ts",
     "ideas": "tsx --conditions=highwire-source scripts/ideas.ts",
     "arena-sample": "tsx --conditions=highwire-source scripts/arena-sample.ts",
-    "link-practice": "tsx --conditions=highwire-source scripts/link-practice.ts"
+    "link-practice": "tsx --conditions=highwire-source scripts/link-practice.ts",
+    "link-rated": "tsx --conditions=highwire-source scripts/link-rated.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

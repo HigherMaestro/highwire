@@ -18,4 +18,9 @@ export const lazyLinkEngine: LinkEngine = {
   start: async (...args) => (await engine()).start(...args),
   move: async (...args) => (await engine()).move(...args),
   film: async (...args) => (await engine()).film!(...args),
+  startMatch: async (...args) => (await engine()).startMatch!(...args),
+  resolveMatch: async (...args) => (await engine()).resolveMatch!(...args),
 };
+
+/** Rated link battles (docs/link-battles.md 14.7): off until LINK_RATED=1, wherever the engine runs. */
+export const linkRatedOn = () => linkConfigured() && process.env.LINK_RATED === "1";

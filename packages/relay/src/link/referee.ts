@@ -3,6 +3,7 @@ import type { Clock } from "../clock.ts";
 import { fail, RelayError } from "../errors.ts";
 import { update, type Store } from "../store.ts";
 import type { Fighter } from "../arena/types.ts";
+import type { LinkArenaConfig, RatedEngine } from "./arena.ts";
 
 // Link battles' referee, practice first (docs/link-battles.md 6, 8.3): a fighter's battle against the house, a whole
 // step a request. The battle itself runs in an engine the site passes in (`LinkEngine`): the relay never imports the
@@ -49,6 +50,10 @@ export interface LinkEngine {
    * after the step is saved, through the config's `defer`, so it never holds up the answer.
    */
   film?(match: string, film: unknown): Promise<void>;
+  /** Rated battles (link/arena.ts): starts one; without these, rated play doesn't exist. */
+  startMatch?: RatedEngine["startMatch"];
+  /** Resolves a rated battle's turn. */
+  resolveMatch?: RatedEngine["resolveMatch"];
 }
 
 export interface LinkConfig {
@@ -65,6 +70,10 @@ export interface LinkConfig {
    * store calls to make. Without it nothing is filmed.
    */
   defer?: (task: () => Promise<unknown>) => void;
+  /** Rated battles (link/arena.ts): on only when true and the engine can play them. */
+  rated?: boolean;
+  /** Rated battles' clocks and waits, for tests. */
+  arena?: LinkArenaConfig;
 }
 
 interface Practice {

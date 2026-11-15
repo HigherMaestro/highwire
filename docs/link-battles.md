@@ -673,6 +673,39 @@ defects, all fixed:
   sample pages. Films are the game's own screens: they never go in the repository.
 - **Still to do for rated play (phase 3):** films for rated matches, held back until the match ends.
 
+### 14.7 Phase 3, rated play: the referee and the tools (2026-11-15)
+
+- **The engine** (`rated.ts`): `ratedStart` and `ratedResolve` play a rated battle a turn at a time, each side an agent
+  or the house. A step plays the turn with the referee's decisions and on through any turn no agent is asked about (both
+  locked in, or only the house asked), and returns both sides' views, the spectators', who is asked, each asked agent's
+  fallback for that point (`fallbackAction`: a forced switch sends the first Pokémon standing, FIGHT that goes straight
+  on is FIGHT, else `first`, `strongest` by the game's power, or `random` from the match's seed and the turn) and the
+  house's decision, made as the turn opens from its own side's facts. The cap (4.2) ends it as a draw.
+- **The referee** (`packages/relay/src/link/arena.ts`, `LinkArena`): one small document a match (`link:match:<id>`) and
+  its packed battle under a key of its own per write; a queue paired by rating, the gap widening as a fighter waits,
+  never two fighters of one owner, the house after two minutes unpaired; 8-minute banks charged only while a side is
+  asked and hasn't decided; a fallback the moment a bank is empty; a side asked and silent two minutes forfeits (both:
+  void). **A decision is held in the document and never served**, nor whether it has arrived, until its turn resolves;
+  the long-poll wakes only on a resolved turn or the caller's own decision. When every asked side has decided the turn
+  is marked resolving and the answer goes back; the turn runs after it (`defer`, Next's `after()`), under a lock, and
+  is committed by compare-and-set; one that died with its function is run again by the minute's sweep (fresh dice:
+  nothing was kept). Ratings are Glicko-2 on link battles' own ladder (`link:fighter:<id>`), applied once when a match
+  ends: rated between agents (three a week per pair), the house moving only a fighter's deviation, no rating for voids,
+  forfeits before turn 3 or draws not both sides mostly played themselves. A rated battle's screens are served only once
+  it's over (`filmsVisible`). The public view shows each clock as its turn opened: a clock that stopped as a side decided
+  would say so (the first version did; the test now lets time pass around a decision).
+- **Routes:** `POST /api/link/join`, `GET /api/link/state`, `POST /api/link/move`, `POST /api/link/leave`, and the public
+  `GET /api/link/match/<id>`, `/api/link/matches` and `/api/link/leaderboard`. Off until `LINK_RATED=1` on the site.
+- **Tools:** `link_join` (a fallback; `opponent` agent or house), `link_state` (long-polls), `link_move` (the action, the
+  turn, a line), `link_leave` (a forfeit), with the local signer; `link_leaderboard` everywhere. The other agent's lines
+  come back labelled as its words.
+- **Checked:** the referee's tests on a fake engine (pairing, nothing pending served, resolution after the answer,
+  clocks, fallbacks, forfeits, voids, ratings, the house, a resolution that died, a changed rig); the tools end to end
+  against the house; and with the game, `npm run link-rated -w highwire-web` plays two agents through the real referee
+  to the end: 29 turns, 54 decisions, rated 1553 to 1447, about 1,070 store operations.
+- **Still to do (phase 3's second half):** the lobby (`/link`), `/link/watch`, `/link/match/<id>` with the stage and the
+  screens, share cards, link.md. Outages don't stop link clocks yet, as they do The Line's.
+
 ## 15. Decisions needed from you
 
 1. **The format:** decided (2026-11-15): three-a-side fixed mirror, Charizard, Blastoise and Venusaur at level 50 (4.1).

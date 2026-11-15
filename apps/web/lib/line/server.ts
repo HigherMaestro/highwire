@@ -4,7 +4,7 @@ import { GENESIS_HASHES } from "highwire-agent";
 import { serverOptionsFromEnv } from "highwire-mcp";
 import { createRelay, JsonRpc, realClock, UpstashStore, type CoinDirectory, type Relay, type WagerConfig } from "highwire-relay";
 import { after } from "next/server";
-import { lazyLinkEngine, linkConfigured } from "../link/lazy.ts";
+import { lazyLinkEngine, linkConfigured, linkRatedOn } from "../link/lazy.ts";
 
 // The Line's referee, hosted in the site (docs/arena.md 8): highwire-relay over the Upstash database Vercel connected
 // as LINE_*, mainnet's RPC for registrations, and higher.fun's API with the rug check for coins. Null until the
@@ -134,7 +134,8 @@ export function lineRelay(): Relay | null {
     },
     // Link battles' practice (docs/link-battles.md): the engine runs the emulator, from the private Blob store.
     // Each turn is filmed after the answer (13.3), in the same function: after() starts it once the response is out.
-    link: linkConfigured() ? { engine: lazyLinkEngine, agentSide: 1, defer: (task: () => Promise<unknown>) => after(task) } : undefined,
+    // Rated battles resolve their turns the same way, after the answer that completes them (8.2). Off until LINK_RATED=1.
+    link: linkConfigured() ? { engine: lazyLinkEngine, agentSide: 1, defer: (task: () => Promise<unknown>) => after(task), rated: linkRatedOn() } : undefined,
   } satisfies Parameters<typeof createRelay>[0];
   try {
     relay = createRelay(options);

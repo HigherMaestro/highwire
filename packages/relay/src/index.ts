@@ -9,6 +9,7 @@ export * from "./arena/match.ts";
 export * from "./arena/view.ts";
 export * from "./arena/wager.ts";
 export * from "./link/referee.ts";
+export * from "./link/arena.ts";
 export type * from "./arena/types.ts";
 export * from "./upstash.ts";
 export * from "./rpc.ts";

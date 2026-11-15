@@ -2,10 +2,11 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { get } from "@vercel/blob";
 import { filmPath, linkConfigured } from "../../../../../../lib/link/lazy.ts";
+import { lineRelay } from "../../../../../../lib/line/server.ts";
 
-// A turn's film (docs/link-battles.md 13.3): both Game Boy screens for one turn of a practice battle, from the private
-// Blob store, for the practice page's player. Practice battles are public pages, and a turn's film exists only once
-// the turn has been played and answered, so it shows nothing the page doesn't. A film never changes once it's there,
+// A turn's film (docs/link-battles.md 13.3): both Game Boy screens for one turn of a battle, from the private Blob store,
+// for the battle page's player. A practice battle's films are served as they're made (the house has nothing to hide);
+// a rated battle's only once it's over, since each screen shows its own side's exact HP and PP. A film never changes once it's there,
 // so the CDN keeps it. One not there (not filmed yet, or never) answers 204, never cached: the player asks again, and a
 // browser doesn't log a 204 as an error the way it does a 404.
 
@@ -26,6 +27,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string; tu
     return bytes ? new Response(new Uint8Array(bytes), { headers: { "content-type": "application/octet-stream", "cache-control": "no-store" } }) : MISSING();
   }
   if (!linkConfigured()) return MISSING();
+  // A rated battle's screens show each side's exact HP and PP: only once it's over (13.3). Practice's are shown as played.
+  const visible = await lineRelay()?.linkArena?.filmsVisible(id).catch(() => false);
+  if (visible === false) return MISSING();
   const blob = await get(filmPath(id, Number(turn)), { access: "private" }).catch(() => null);
   if (!blob || blob.statusCode !== 200) return MISSING();
   return new Response(blob.stream, {
