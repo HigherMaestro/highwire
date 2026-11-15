@@ -332,15 +332,18 @@ export function spectatorView(o: { live: boolean; turn: number; facts0: SideFact
       for (const k of c.fieldOff) field[k] = false;
     }
     const seen = revealed(s, o.opening[s], o.turns.slice(0, i + end));
+    // The record keeps the max HP after the turn: a side that switched out had another. Only the start reads a turn's
+    // beginning, and before the first turn every Pokémon is at full HP.
+    const maxHp = end || c.species[0] === c.species[1] ? c.maxHp : c.hp[0];
     return {
       species: names.species(c.species[end]),
       level: levels[s],
-      hp_percent: hpBar(c.hp[end], c.maxHp),
+      hp_percent: hpBar(c.hp[end], maxHp),
       status: statusName(c.status[end], field),
       field: fieldList(field),
       seen: seen.species.map((x) => names.species(x)),
       fainted: seen.fainted.length,
-      ...(o.live ? {} : { hp: c.hp[end], max_hp: c.maxHp }),
+      ...(o.live ? {} : { hp: c.hp[end], max_hp: maxHp }),
     };
   };
   return {

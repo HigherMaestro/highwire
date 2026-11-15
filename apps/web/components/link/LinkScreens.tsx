@@ -17,7 +17,8 @@ type Load = { state: "loading" } | { state: "ready"; film: Film } | { state: "mi
 
 async function fetchFilm(match: string, turn: number): Promise<Film | null> {
   const res = await fetch(`/api/link/film/${match}/${turn}`);
-  if (!res.ok) return null;
+  // 204: not filmed (yet).
+  if (res.status !== 200) return null;
   return decodeFilm(new Uint8Array(await res.arrayBuffer()));
 }
 

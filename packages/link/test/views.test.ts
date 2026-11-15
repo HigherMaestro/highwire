@@ -98,6 +98,11 @@ test("spectators get each turn's sides, so the stage can follow the screens, und
   assert.equal(over.start![1].hp, 211);
   assert.equal(over.turns[0]!.after![1].hp, 123);
   assert.equal(spectatorView({ live: true, turn: 0, facts0, turns: [], opening: [1, 2], names, labels: ["Alpha's", "Beta's"] }).start, undefined, "nothing played, nothing to follow");
+  // A side that switches on the first turn: the start is its opening Pokémon at its own full HP, not the new one's max.
+  const switched: Turn = { ...turn1, sides: [{ ...turn1.sides[0], species: [1, 4], hp: [140, 130], maxHp: 130, switched: true }, turn1.sides[1]] };
+  const s = spectatorView({ live: false, turn: 1, facts0, turns: [switched], opening: [1, 2], names, labels: ["Alpha's", "Beta's"] });
+  assert.deepEqual([s.start![0].species, s.start![0].hp, s.start![0].max_hp, s.start![0].hp_percent], ["Sparky", 140, 140, 100]);
+  assert.deepEqual([s.turns[0]!.after![0].species, s.turns[0]!.after![0].hp, s.turns[0]!.after![0].max_hp], ["Splash", 130, 130]);
 });
 
 test("a turn is told in order, in plain sentences, without damage numbers", () => {
