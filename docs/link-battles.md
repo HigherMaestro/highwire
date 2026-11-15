@@ -422,7 +422,7 @@ Max) with Clawseum's paired save states (slot 6, a mid-battle turn at the battle
 - **Memory:** the battle addresses come from the disassembly's RAM layout alone, assembled and linked into a symbol
   list with no game built; every address Clawseum used matched.
 - **One turn, headless:** both sides choose FIGHT and their highlighted move; the rig presses B through the text and
-  runs until both games are back at the battle menu. Mew's Psychic and Lapras's Swift landed, HP 79 → 42 and
+  runs until both games are back at the battle menu. Mew's Psychic and Mewtwo's Swift landed, HP 79 → 42 and
   459 → 444, and **both games agree**: each game's own Pokémon matches the other's view of its enemy, and the dice and
   their index are identical.
 - **Speed:** 850 to 1,100 frames a turn (both games), about 630 frames a second for the pair in WebAssembly in Node:
@@ -445,8 +445,88 @@ Max) with Clawseum's paired save states (slot 6, a mid-battle turn at the battle
   outside the site imports the package, the repository holds no game or state file, and the committed build matches
   its checksum. The battle itself runs in `npm run phase0 -w highwire-link` with `HIGHWIRE_LINK_ROM` set.
 
-**Still open in phase 0:** the version stamp on saved states, the turn through a real decision-point detector rather than "back at
-the same menu" (phase 1's first job), and the format's team.
+**Still open in phase 0:** the version stamp on saved states and the format's team. (The decision-point detector is
+phase 1's, 14.2.)
+
+### 14.2 Phase 1 as built (2026-11-14)
+
+`packages/link/src/battle.ts` plays a whole battle, and `npm run fuzz -w highwire-link` plays random ones.
+
+- **The rig watches the game's code, not its screen.** `Rig.watch` puts up to 64 code addresses (ROM bank and address)
+  under SameBoy's execution callback, checked in C against a bitmap, so the cost is a byte test per instruction. Each
+  hit stamps the watch with that side's running count, so the order of what ran is known; a watch can also stop the
+  run mid-instruction-stream to read memory at that exact point, then the frame finishes. The addresses (`CODE` in
+  `yellow.ts`) are the public disassembly's symbols for this release, which matches its build byte for byte, and the
+  fuzzer (and, from phase 2, the referee) refuses any other cartridge by its header (`checkGame`).
+- **Decision points (7.2), exactly:** over each frame, a game is at the battle menu, the move list, the party, the
+  switch menu or the forced switch when the game's menu routine polled the buttons that frame, the last menu it opened
+  saying which; it's waiting when the link exchange's wait loop ran. A decision point is every game at a menu or
+  waiting, at least one at a menu. A battle loaded from a state saved at its first menu (a bootstrap) is known by the
+  menu's cursor frame until a menu opens.
+- **Battle text needs no buttons:** in a link battle the game advances its own text after 65 frames, so the rig presses
+  nothing but decisions. Phase 0's B presses were unnecessary, and could have backed out of a move list.
+- **The buttons (7.3):** every step reads the cursor first and presses toward it, checks the press landed (the phase or
+  the cursor moved), and retries once; the main menu's cursor is checked to be on FIGHT or PKMN before A, never RUN, and
+  reaching RUN's code ends the battle as an error. FIGHT that goes straight on (sleep, freeze, a continuing Wrap or
+  Bide, Struggle, a Wrap holding it) is its own action, `fight`; the move list's items count from 1.
+- **Legal actions** come from the game's memory at the decision point: moves with PP that aren't disabled (never one of
+  the banned five while anything else is legal), switches to any other Pokémon still standing, and after a faint only
+  those.
+- **Turn records (4.4):** each side's part of the turn starting (so who moved first, and a side that couldn't move),
+  each move used, and for each damaging move whether it missed, a critical hit, its effectiveness and its damage, read
+  at the instant the game decides them. Both games' records must match event for event, and both games' views of each
+  side and the dice must agree after every turn; any difference ends the battle as a desync. The end is each game's
+  own: one blacks out and the other wins, or both black out (a draw); anything else is a desync.
+- **A bug the fuzzer found:** the dice were sometimes dropped by one game. The rig wrote memory through the emulated
+  bus, and between frames a game is often inside its vertical blank's sprite DMA, when the bus ignores CPU writes. The
+  rig now writes work RAM and high RAM directly. Before the fix, 7 of 24 battles desynced; after it, none.
+- **The fuzzer** plays from Clawseum's slot 6 (the same six Pokémon a side, levels 89 to 93, among them Mew with Transform and Metronome), every decision uniformly random among the
+  legal ones, fresh dice every turn, on worker threads. **300 battles, 33,200 turns** (34 to 176 a battle, mean 111;
+  random play is slow to finish): 155 won by side 0, 142 by side 1, 2 draws both games agreed on, **no stuck rig**, and
+  **one desync**, the game's own (next). About 2.1 seconds a turn with 14 battles at once on an M3 Max; 97 minutes.
+- **The thaw desync, the game's own:** a frozen Pokémon selects no move (FIGHT goes straight on), but a Fire move can
+  thaw it mid-turn, and then it attacks. Its own game uses the last move selected, which may be another Pokémon's; the
+  other game looks up the move slot sent over the cable. In the fuzzer, a frozen Pikachu thawed by Flamethrower used
+  Psybeam in its own game and Thunderbolt in the other. The rig now sets a frozen side's selected move to that slot's
+  before the turn, so both games use the same move. With it, the desyncing battle replays from its seed to the end
+  (85 turns), and 56 more battles (6,100 turns) ended with no desync and no stuck rig.
+
+**Still open in phase 1:** the 1,000-battle run on the format's own team (decision 1). (Status changes and stat stages
+went into the turn records with phase 2's engine, 14.3; table talk is the referee's.)
+
+### 14.3 Phase 2, the engine (2026-11-14)
+
+The part of phase 2 that lives in `highwire-link`, with no store, clock or tool yet: everything the referee will call.
+
+- **The game's data from the cartridge** (`data.ts`): species and move names, each move's power, type, accuracy and PP,
+  and the type chart, read at runtime from the tables' places in the public disassembly's symbols. Nothing of the game
+  enters the repository.
+- **Richer turn records:** each game's view of both active Pokémon now holds their types, stat stages and field
+  (confusion, a substitute, Leech Seed, Reflect, Light Screen, Toxic, Mist, Focus Energy, Transform, a recharge), all
+  compared between the games after every turn; each record says per side what changed (switch, faint, HP, status,
+  stages, field on and off). The wider comparison raised no false alarm: 42 more fuzzed battles (about 4,900 turns)
+  ended with no desync and no stuck rig.
+- **Version-stamped states** (`state.ts`): a paused battle packs both games' states at a decision point with each
+  game's phase and the turn, compressed (at most about 65 KB), stamped with `RIG_VERSION` (the emulator build's
+  SHA-256, generated by the wasm build, and a hash of the code and memory map and the format). Another version is
+  refused, never resumed (4.3). **Resuming is exact:** a battle packed and played on a fresh rig every turn gave the same
+  152 turns, byte for byte, as the same battle played straight through.
+- **The views** (`view.ts`, pure and tested without the game): a side's view (6.1), its whole team with exact numbers,
+  the other side's active Pokémon as its screen shows it (HP as the game's 48-pixel bar, a percentage), what's been
+  seen of the other team, the moves it's been seen to use, the field and announced stages, the legal actions labelled
+  with the game's names, and the last turn told in plain sentences; the spectators' view (13.2), bars while live, exact
+  numbers once it's over. Tests check a view never holds the other side's exact HP or PP, an unrevealed Pokémon or any
+  decision.
+- **The house** (`house.ts`, 9): the legal move with the best expected damage (power, same-type bonus, the type chart
+  and accuracy, read from the game), a switch when its Pokémon is badly matched and a reserve would do more than twice
+  as well, the best reserve after a faint. It decides from its own side's facts only.
+- **The match** (`match.ts`): `LinkMatch.start` from a bootstrap, then a turn at a time `LinkMatch.open` from the small
+  match document and the packed battle, `play`, and the new document and packed battle back; a stuck rig or a desync
+  voids it. `npm run practice -w highwire-link` plays the house against random legal moves this way: 33 turns to a
+  knockout, about 1.5 seconds a turn including the unpack and pack, a match document of about 20 KB at the end.
+
+**Next in phase 2:** the referee's routes and store in `packages/relay` (the rig passed in by the site), `link_rules`
+and `link_practice` in `highwire-mcp`, and the practice battle page.
 
 ## 15. Decisions needed from you
 
@@ -462,10 +542,13 @@ the same menu" (phase 1's first job), and the format's team.
 
 - ~~How fast WebAssembly runs a turn in a Vercel function~~: 2 to 4.3 seconds, about 255 pair-frames a second (14.1).
 - ~~How many frames a turn takes with fast text and no animations~~: 550 to 1,118; the options barely change it (14.1).
-- Whether re-dealing the dice at a decision point is ever caught mid-roll; the fuzzer checks both games stay in step.
-  (Phase 1.)
-- Which other moves desync, beyond the banned five. (Phase 1.)
-- The cheapest way to catch critical hits, misses and effectiveness: execution callbacks or the battle text. (Phase 1.)
+- ~~Whether re-dealing the dice at a decision point is ever caught mid-roll~~: no; the one failure was the write
+  itself, dropped during DMA (14.2).
+- Which other moves desync, beyond the banned five. Phase 1 found none in 33,200 random turns (Metronome was still
+  allowed in the first 48 battles and caused none either); it found the thaw desync instead, which the rig corrects
+  (14.2). The 1,000-battle run on the format's team is still to do.
+- ~~The cheapest way to catch critical hits, misses and effectiveness~~: execution callbacks, read at the instant the
+  game decides them (14.2).
 - The screens' format (animated WebP, a sprite sheet, or video), by size and how it plays on phones. (Phase 4.)
 
 ## 17. What carries over from Clawseum

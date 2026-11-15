@@ -67,3 +67,57 @@ test("the dice are dealt into both games alike, and the games then agree", async
   assert.match(disagreements(a, snapshot(rig, 1)).join("\n"), /^dice:/);
   assert.throws(() => dealDice(rig, new Uint8Array(9)), /10 bytes/);
 });
+
+// A blank cartridge is a sled of NOPs from 0x0100, so the CPU executes every address after it once, in order.
+test("a watch stamps each hit, in order, on the side that ran it", async () => {
+  const rig = await Rig.create(blank());
+  const late = rig.watch(0x0200, 0);
+  const early = rig.watch(0x0180, 0);
+  // A 32 KB cartridge always has bank 1 at 0x4000, so a watch there in bank 5 never fires.
+  const never = rig.watch(0x4100, 5);
+  const banked = rig.watch(0x4100, 1);
+  rig.run(1);
+  for (const side of [0, 1] as const) {
+    const stamps = rig.stamps(side);
+    assert.ok(stamps[early]! > 0);
+    assert.ok(stamps[late]! > stamps[early]!);
+    assert.equal(stamps[never], 0);
+    assert.ok(stamps[banked]! > stamps[late]!);
+    assert.equal(stamps[stamps.length - 1], Math.max(...stamps.subarray(0, stamps.length - 1)));
+  }
+});
+
+test("a stop watch ends the run mid-frame, and states can't be saved until the frame is finished", async () => {
+  const rig = await Rig.create(blank());
+  const id = rig.watch(0x0300, 0, true);
+  const stop = rig.run(5);
+  assert.deepEqual(stop, { side: 0, watch: id });
+  assert.equal(rig.frameCount, 0);
+  assert.ok(rig.midFrame);
+  assert.throws(() => rig.saveState(0), /mid-frame/);
+  const next = rig.run(1);
+  assert.deepEqual(next, { side: 1, watch: id });
+  assert.equal(rig.run(1), null);
+  assert.equal(rig.frameCount, 1);
+  assert.ok(!rig.midFrame);
+  rig.saveState(0);
+});
+
+test("a fresh rig forgets the last one's watches", async () => {
+  const one = await Rig.create(blank());
+  one.watch(0x0180, 0, true);
+  const two = await Rig.create(blank());
+  assert.equal(two.run(1), null);
+  assert.equal(two.stamps(0)[0], 0);
+});
+
+test("work RAM is written directly, so a write lands even mid-DMA", async () => {
+  const rig = await Rig.create(blank());
+  rig.run(2);
+  // Start an OAM DMA from work RAM on side 0: the bus drops CPU writes outside high RAM while it runs.
+  rig.write(0, 0xff46, 0xc1);
+  rig.write(0, ADDR.linkBattleRandomNumberList, 0x5a);
+  rig.write(0, 0xff90, 0x33);
+  assert.equal(rig.read(0, ADDR.linkBattleRandomNumberList), 0x5a);
+  assert.equal(rig.read(0, 0xff90), 0x33);
+});
