@@ -1,6 +1,6 @@
 import { del, get, list, put } from "@vercel/blob";
-import { BattleError, type FilmJob, filmTurn, FORMAT, linkRules, type MatchState, practiceMove, practiceStart, RIG_VERSION, type PracticeStep, trainerName } from "highwire-link";
-import { RelayError, type LinkEngine, type LinkStep } from "highwire-relay";
+import { BattleError, type FilmJob, filmTurn, FORMAT, linkRules, type MatchState, practiceMove, practiceStart, ratedResolve, ratedStart, type RatedStep, RIG_VERSION, type PracticeStep, trainerName, type Action } from "highwire-link";
+import { RelayError, type LinkEngine, type LinkMatchStep, type LinkStep } from "highwire-relay";
 import { FILMS, filmPath } from "./lazy.ts";
 
 // Link battles' engine for the referee (docs/link-battles.md 8.3): highwire-link's practice steps over the game and the
@@ -88,9 +88,16 @@ async function sweepBlobFilms() {
 
 const toStep = (s: PracticeStep): LinkStep => ({ state: s.state, packed: s.packed, view: s.view, spectator: s.spectator, turn: s.turn, ended: s.ended, format: FORMAT, version: RIG_VERSION, film: s.film });
 
+const toMatchStep = (s: RatedStep): LinkMatchStep => ({ ...s, format: FORMAT, version: RIG_VERSION });
+
 async function guarded(step: () => Promise<PracticeStep>): Promise<LinkStep> {
+  return guard(async () => toStep(await exclusive(step)));
+}
+
+/** Runs a step, turning the engine's errors into the referee's: an illegal action, a battle from another rig, a failure. */
+async function guard<T>(run: () => Promise<T>): Promise<T> {
   try {
-    return toStep(await exclusive(step));
+    return await run();
   } catch (err) {
     if (err instanceof BattleError && err.kind === "illegal") throw new RelayError("bad_request", err.message);
     if (err instanceof Error && /another version of the rig/.test(err.message)) throw new RelayError("expired", "Highwire's rig was updated since this battle started; start another.");
@@ -116,9 +123,15 @@ export function createLinkEngine(files: () => Promise<LinkFiles>, films: FilmSto
     rules: async () => linkRules(),
     start: async (agent, labels, trainers) => {
       const f = await get();
-      // What the game can show of each name (a ticker is creator content): letters, digits and spaces, seven at most.
-      const names = trainers ? ([trainerName(trainers[0], "AGENT"), trainerName(trainers[1], "AGENT")] as [string, string]) : undefined;
-      return guarded(() => practiceStart(f.rom, f.bootstrap, agent, labels, names));
+      return guarded(() => practiceStart(f.rom, f.bootstrap, agent, labels, trainers && names(trainers)));
+    },
+    startMatch: async (sides, labels, trainers) => {
+      const f = await get();
+      return guard(async () => toMatchStep(await exclusive(() => ratedStart(f.rom, f.bootstrap, sides, labels, names(trainers)))));
+    },
+    resolveMatch: async (state, packed, decisions, sides, labels) => {
+      const f = await get();
+      return guard(async () => toMatchStep(await exclusive(() => ratedResolve(f.rom, state as MatchState, packed, decisions as [Action | null, Action | null], sides, labels))));
     },
     move: async (state, packed, agent, action, labels) => {
       const f = await get();
@@ -139,6 +152,9 @@ export function createLinkEngine(files: () => Promise<LinkFiles>, films: FilmSto
   };
 }
 
+
+/** What the game can show of each name (a ticker is creator content): letters, digits and spaces, seven at most. */
+const names = (t: readonly [string, string]): [string, string] => [trainerName(t[0], "AGENT"), trainerName(t[1], "AGENT")];
 
 export const linkEngine = createLinkEngine(load);
 

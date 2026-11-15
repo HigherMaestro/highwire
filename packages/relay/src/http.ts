@@ -4,6 +4,7 @@ import { RelayError } from "./errors.ts";
 import { Referee, type CoinDirectory, type RefereeConfig } from "./arena/referee.ts";
 import { Registration, type RegistrationRpc } from "./registration.ts";
 import { LinkReferee, type LinkConfig } from "./link/referee.ts";
+import { LinkArena, type RatedEngine } from "./link/arena.ts";
 import type { Store } from "./store.ts";
 
 // The relay's routes, as one fetch handler (Request in, Response out), so any host can mount it: the relay's own
@@ -31,6 +32,13 @@ import type { Store } from "./store.ts";
 //   POST /api/link/practice/move   { match, action, line? }  (arena token) plays the turn; the next view comes back
 //   POST /api/link/practice/leave  (arena token)
 //   GET  /api/link/practice/<id>   the spectators' view of a practice battle, cached 2 seconds
+//   POST /api/link/join            { fallback, opponent?, wait? }  (arena token) rated link battles: queues, waits up to 40s
+//   GET  /api/link/state?match=&after=&wait=1                      (arena token) this side's view; long-polls
+//   POST /api/link/move            { match, turn, action, line? }  (arena token) this turn's decision, held until it resolves
+//   POST /api/link/leave           (arena token) a forfeit
+//   GET  /api/link/match/<id>      a battle's spectators' view, cached 2 seconds
+//   GET  /api/link/matches         battles live and recent, for the lobby, cached 5 seconds
+//   GET  /api/link/leaderboard     link battles' ladder, cached 30 seconds
 //   GET  /api/arena/admin/flags (cheating signals), POST /api/arena/admin/hide { match, round, side } (legal takedowns)
 //   GET  /api/arena/admin/metrics?weeks=12 (free play's weekly numbers), POST /api/arena/admin/metrics/backfill
 //                                  (LINE_ADMIN_TOKEN; off without it)
@@ -56,6 +64,8 @@ export interface Relay {
   referee: Referee;
   registration: Registration;
   link: LinkReferee | null;
+  /** Rated link battles, when switched on and the engine plays them. */
+  linkArena: LinkArena | null;
 }
 
 const json = (body: unknown, status = 200, cache = "no-store") =>
@@ -65,6 +75,8 @@ export function createRelay(o: RelayOptions): Relay {
   const referee = new Referee(o.store, o.clock, o.coins, o.referee);
   const registration = new Registration(o.store, o.rpc, () => o.clock.now());
   const link = o.link ? new LinkReferee(o.store, o.clock, o.link, (f, units) => referee.spend(f, units)) : null;
+  const rated = o.link?.rated && o.link.engine.startMatch && o.link.engine.resolveMatch ? o.link : null;
+  const linkArena = rated ? new LinkArena(o.store, o.clock, rated.engine as typeof rated.engine & RatedEngine, (f, units) => referee.spend(f, units), rated.defer, rated.arena) : null;
 
   const body = async (req: Request): Promise<Record<string, unknown>> => {
     try {
@@ -130,7 +142,8 @@ export function createRelay(o: RelayOptions): Relay {
         return json({ skipped: "a sweep ran in the last 30 seconds" });
       }
       const swept = await referee.sweep();
-      return json(referee.wager ? { ...swept, wagers: await referee.wager.sweep() } : swept);
+      const more = { ...(referee.wager ? { wagers: await referee.wager.sweep() } : {}), ...(linkArena ? { link: await linkArena.sweep() } : {}) };
+      return json({ ...swept, ...more });
     }
     if (path === "/api/link" || path.startsWith("/api/link/")) {
       if (!link) throw new RelayError("not_found", "Link battles aren't open yet.");
@@ -141,6 +154,20 @@ export function createRelay(o: RelayOptions): Relay {
       if (m === "POST" && path === "/api/link/practice/leave") return json(await link.practiceLeave(await fighter(req)));
       const watch = /^\/api\/link\/practice\/([a-z2-9]{10})$/.exec(path);
       if (m === "GET" && watch) return json(await link.watchPractice(watch[1]!), 200, "public, s-maxage=2");
+      if (linkArena) {
+        if (m === "POST" && path === "/api/link/join") return json(await linkArena.join(await fighter(req), await body(req)));
+        if (m === "GET" && path === "/api/link/state") {
+          const after = url.searchParams.get("after");
+          return json(await linkArena.state(await fighter(req), { match: url.searchParams.get("match") ?? undefined, after: after === null ? undefined : Number(after), wait: url.searchParams.get("wait") === "1" }));
+        }
+        if (m === "POST" && path === "/api/link/move") return json(await linkArena.move(await fighter(req), await body(req)));
+        if (m === "POST" && path === "/api/link/leave") return json(await linkArena.leave(await fighter(req)));
+        if (m === "GET" && path === "/api/link/queue") return json({ waiting: await linkArena.queueSize() }, 200, "public, s-maxage=5");
+        if (m === "GET" && path === "/api/link/matches") return json(await linkArena.matches(), 200, "public, s-maxage=5");
+        if (m === "GET" && path === "/api/link/leaderboard") return json(await linkArena.leaderboard(), 200, "public, s-maxage=30");
+        const one = /^\/api\/link\/match\/([a-z2-9]{10})$/.exec(path);
+        if (m === "GET" && one) return json(await linkArena.spectate(one[1]!), 200, "public, s-maxage=2");
+      }
       throw new RelayError("not_found", "No such route.");
     }
     if (path.startsWith("/api/arena/admin/")) {
@@ -162,6 +189,7 @@ export function createRelay(o: RelayOptions): Relay {
     referee,
     registration,
     link,
+    linkArena,
     async fetch(req) {
       try {
         return await route(req);
