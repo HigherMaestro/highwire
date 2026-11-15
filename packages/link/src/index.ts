@@ -9,3 +9,4 @@ export * from "./state.ts";
 export * from "./view.ts";
 export * from "./house.ts";
 export * from "./match.ts";
+export * from "./practice.ts";

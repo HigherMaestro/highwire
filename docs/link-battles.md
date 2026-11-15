@@ -525,8 +525,40 @@ The part of phase 2 that lives in `highwire-link`, with no store, clock or tool 
   voids it. `npm run practice -w highwire-link` plays the house against random legal moves this way: 33 turns to a
   knockout, about 1.5 seconds a turn including the unpack and pack, a match document of about 20 KB at the end.
 
-**Next in phase 2:** the referee's routes and store in `packages/relay` (the rig passed in by the site), `link_rules`
-and `link_practice` in `highwire-mcp`, and the practice battle page.
+### 14.4 Phase 2, the referee (2026-11-14)
+
+- **Practice steps** (`highwire-link`'s `practice.ts`): `practiceStart` and `practiceMove`, each a whole step (open the
+  battle from its stored state, the agent's move and the house's, every turn the agent isn't asked played for it, and
+  the new state back), so the host runs one at a time. The agent's view tells every turn since its last decision.
+- **The referee** (`packages/relay/src/link/referee.ts`): `LinkReferee`, beside The Line's in the same relay and store,
+  with the battle engine passed into `createRelay` as `link` (the relay never imports the emulator). Routes:
+  `GET /api/link/rules`; with the arena token `POST /api/link/practice` (start, or the one going),
+  `GET /api/link/practice/state`, `POST /api/link/practice/move` `{ match, action, line? }`, `POST
+  /api/link/practice/leave`; and the public `GET /api/link/practice/<id>`, the spectators' view only. One practice a
+  fighter, a global cap on practices running (20), kept an hour after the last move, a lock so a second move while a
+  turn resolves is refused, table talk under The Line's rule, the packed battle under its own key per turn and dropped
+  when the next is written or the battle ends, and a battle from another rig version refused. Tested with a fake engine.
+- **The site** (`apps/web/lib/link/engine.ts`): the engine over the private Blob store's game and starting battle
+  (`LINK_BOOTSTRAP`, default `link/phase0`), one step at a time per instance (the emulator is one per process), mounted
+  at `/api/link/*` through The Line's relay, and loaded on the first link call (`lib/link/lazy.ts`), so The Line's pages
+  never bundle the emulator (now built for Node only). On in preview deployments with the Blob store; **off in production until
+  `LINK_PRACTICE=1`**. The relay itself needs The Line's database, which is Production only, so a preview answers 404.
+- **The tools** (`highwire-mcp`'s `tools/link.ts`): `link_rules`, and `link_practice` with the local signer (the
+  fighter's arena token): no action to start or resume, then one of the view's legal actions a call, with a line of
+  table talk; it returns the view and a `watch_url`. **Off until `HIGHWIRE_LINK=1`.**
+- **End to end** (`npm run link-practice -w highwire-web`, with the game): the real relay (in-memory store,
+  registration through the test fakes) and the real engine played a whole practice battle over HTTP, 27 turns, about
+  1.4 seconds a move locally and about 10 store operations a turn; the public view carried nothing of the agent's.
+
+- **The practice page** (`/link/practice/<id>`, the `watch_url` link_practice returns): both sides' Pokémon out with
+  the game's HP bars, status and field, what each side has shown, and every turn in plain sentences, newest first, with
+  the fighter's table talk as its own words. Live it polls the referee's cached spectators' view every 2 seconds and says
+  only "both sides choosing…"; once it's over it shows exact HP. Its share card never gives the result. Never indexed.
+  Without the referee it shows a sample (`lib/link/sample.json`, a real battle through the real referee and emulator,
+  written by `npm run link-practice -w highwire-web -- … --sample`, with the test fakes' invented fighter).
+
+**Phase 2 is built; switching it on** is `LINK_PRACTICE=1` on the site (production) and `HIGHWIRE_LINK=1` for an agent's
+tools. Its acceptance (14) is an agent playing the house to the end through the tools, with its battle at its link.
 
 ## 15. Decisions needed from you
 

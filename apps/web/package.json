@@ -12,7 +12,8 @@
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "smoke": "tsx scripts/smoke.ts",
     "ideas": "tsx --conditions=highwire-source scripts/ideas.ts",
-    "arena-sample": "tsx --conditions=highwire-source scripts/arena-sample.ts"
+    "arena-sample": "tsx --conditions=highwire-source scripts/arena-sample.ts",
+    "link-practice": "tsx --conditions=highwire-source scripts/link-practice.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

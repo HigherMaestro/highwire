@@ -1,0 +1,109 @@
+import { randomBytes } from "node:crypto";
+import { type Action, BattleError, type Outcome } from "./battle.ts";
+import { LinkMatch, type MatchState, watch } from "./match.ts";
+import type { Side } from "./rig.ts";
+import { BANNED_MOVES, DICE_LENGTH } from "./yellow.ts";
+import { narrate, type PlayerView, type SpectatorView } from "./view.ts";
+import { FORMAT } from "./state.ts";
+
+// Practice against the house (docs/link-battles.md 6, 9), as whole steps: start a battle, or play the agent's move and
+// the house's through to the agent's next decision. Each step opens the battle from its stored state and returns the new
+// one, so the referee keeps nothing in memory, and a step is the unit the host runs one at a time (the emulator is one
+// per process). Turns where the agent isn't asked (its Pokémon recharging, say) are played for it, with the house's
+// decision only, until it is asked or the battle ends.
+
+export interface PracticeStep {
+  state: MatchState;
+  /** The packed battle at the agent's next decision; null once it's over. */
+  packed: Uint8Array | null;
+  view: PlayerView;
+  spectator: SpectatorView | null;
+  turn: number;
+  ended: null | { reason: "knockout" | "draw" | "void"; winner: "you" | "house" | null; message?: string };
+}
+
+/** A side's labels for narration: the house's and the fighter's names. */
+export type Labels = [string, string];
+
+const dice = () => new Uint8Array(randomBytes(DICE_LENGTH));
+const CAP = 200;
+
+function ended(state: MatchState, agent: Side): PracticeStep["ended"] {
+  if (state.void) return { reason: "void", winner: null, message: state.void.message };
+  const o: Outcome | null = state.outcome;
+  if (!o) return null;
+  if (o.winner === null) return { reason: "draw", winner: null };
+  return { reason: "knockout", winner: o.winner === agent ? "you" : "house" };
+}
+
+/** Plays house-only turns until the agent is asked, then builds the step. */
+async function settle(rom: Uint8Array, match: LinkMatch, state: MatchState, packed: Uint8Array | null, agent: Side, labels: Labels, since: number): Promise<PracticeStep> {
+  const house = (1 - agent) as Side;
+  while (packed && !match.asked(agent) && state.turn < CAP) {
+    const decisions: [Action | null, Action | null] = [null, null];
+    decisions[house] = match.house(house);
+    const r = match.play(decisions, dice());
+    state = r.state;
+    packed = r.packed;
+    if (packed) match = await LinkMatch.open(rom, state, packed);
+  }
+  const over = ended(state, agent);
+  if (!over && state.turn >= CAP) {
+    // The turn cap (4.2): a draw.
+    state = { ...state, outcome: { winner: null, reason: "draw" } };
+    packed = null;
+  }
+  const live = packed ? match : undefined;
+  const view: PlayerView = live
+    ? live.view(agent)
+    : { ...(match.view(agent) as PlayerView), phase: "ended", legal: [] };
+  // Every turn since the agent's last decision, not only the last: a house-only turn (a replacement after a faint, say)
+  // would otherwise hide what the agent's own move did.
+  const told = state.turns.filter((t) => t.turn > since);
+  view.last_turn = told.flatMap((t) => [...(told.length > 1 ? [`Turn ${t.turn}:`] : []), ...narrate(t, match.data, (s) => (s === agent ? "Your" : "Their"))]);
+  return { state, packed, view, spectator: watch(state, match.data, labels, live), turn: state.turn, ended: ended(state, agent) };
+}
+
+export async function practiceStart(rom: Uint8Array, bootstrap: [Uint8Array, Uint8Array], agent: Side, labels: Labels): Promise<PracticeStep> {
+  const { match, packed } = await LinkMatch.start(rom, bootstrap);
+  return settle(rom, match, match.state, packed, agent, labels, 0);
+}
+
+/** The agent's move, the house's, and on to the agent's next decision. An illegal move throws BattleError "illegal". */
+export async function practiceMove(rom: Uint8Array, state: MatchState, packed: Uint8Array, agent: Side, action: Action, labels: Labels): Promise<PracticeStep> {
+  const match = await LinkMatch.open(rom, state, packed);
+  if (!match.asked(agent)) throw new BattleError("illegal", "It isn't your turn to choose.");
+  const legal = match.legal(agent);
+  const ok =
+    legal &&
+    (action.kind === "switch"
+      ? legal.switches.includes(action.to)
+      : legal.kind === "turn" && (action.kind === "fight" ? legal.fight : legal.moves.includes(action.slot)));
+  if (!ok) throw new BattleError("illegal", "That action isn't one of the legal actions in your view.");
+  const house = (1 - agent) as Side;
+  const decisions: [Action | null, Action | null] = [null, null];
+  decisions[agent] = action;
+  decisions[house] = match.asked(house) ? match.house(house) : null;
+  const r = match.play(decisions, dice());
+  const next = r.packed ? await LinkMatch.open(rom, r.state, r.packed) : match;
+  return settle(rom, next, r.state, r.packed, agent, labels, state.turn);
+}
+
+/** The rules, for link_rules (6): the format, the actions, what's banned and how practice works. */
+export function linkRules() {
+  return {
+    format: FORMAT,
+    game: "A real Game Boy link battle, run by Highwire's referee on two emulated Game Boys joined by an emulated link cable.",
+    actions: {
+      move: "{ kind: \"move\", slot } uses the move in that slot (0 to 3) of your Pokémon that's out.",
+      fight: "{ kind: \"fight\" } when FIGHT goes straight on and the game picks the move: Struggle, or a Pokémon asleep, frozen, or locked into a move.",
+      switch: "{ kind: \"switch\", to } sends out that party place (0 to 5) instead. After a faint it's the only action.",
+    },
+    legal: "Every view lists the legal actions, read from the game itself. Anything else is refused.",
+    banned_moves: [...BANNED_MOVES.values()],
+    banned_why: "They desync link battles in the original game, so they're never legal while anything else is.",
+    hidden: "You see what your own screen shows: your team in full, the other side's Pokémon out with its HP as a bar, what it has shown, and the moves it has used.",
+    dice: "Fresh random dice are dealt into both games every turn, so nothing you see predicts the next roll.",
+    practice: "link_practice plays Highwire's house fighter: it picks the move with the best expected damage and switches out of bad matches. Unrated, one at a time, kept for an hour.",
+  };
+}
