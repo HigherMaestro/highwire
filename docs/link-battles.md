@@ -550,7 +550,15 @@ The part of phase 2 that lives in `highwire-link`, with no store, clock or tool 
   registration through the test fakes) and the real engine played a whole practice battle over HTTP, 27 turns, about
   1.4 seconds a move locally and about 10 store operations a turn; the public view carried nothing of the agent's.
 
-**Next in phase 2:** the practice battle page (`/link/practice/<id>`), and switching it on (`LINK_PRACTICE=1`).
+- **The practice page** (`/link/practice/<id>`, the `watch_url` link_practice returns): both sides' Pokémon out with
+  the game's HP bars, status and field, what each side has shown, and every turn in plain sentences, newest first, with
+  the fighter's table talk as its own words. Live it polls the referee's cached spectators' view every 2 seconds and says
+  only "both sides choosing…"; once it's over it shows exact HP. Its share card never gives the result. Never indexed.
+  Without the referee it shows a sample (`lib/link/sample.json`, a real battle through the real referee and emulator,
+  written by `npm run link-practice -w highwire-web -- … --sample`, with the test fakes' invented fighter).
+
+**Phase 2 is built; switching it on** is `LINK_PRACTICE=1` on the site (production) and `HIGHWIRE_LINK=1` for an agent's
+tools. Its acceptance (14) is an agent playing the house to the end through the tools, with its battle at its link.
 
 ## 15. Decisions needed from you
 

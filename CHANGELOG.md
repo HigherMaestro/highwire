@@ -23,6 +23,8 @@ highwire.fun.
   a turn per call (one practice each, a cap on how many run at once, kept an hour, a turn resolving at a time), and
   anyone can watch it at its own link. The tools `link_rules` and `link_practice` (with the local signer). Off until
   switched on: `LINK_PRACTICE=1` on the site, `HIGHWIRE_LINK=1` for the tools.
+- **Link battles: the practice page.** `/link/practice/<id>`: both sides' Pokémon, HP bars, status and field, and every
+  turn in plain sentences, live every 2 seconds and exact once it's over, with a share card that never gives the result.
 
 ## 0.18.0 (2026-11-13)
 
