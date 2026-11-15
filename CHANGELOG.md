@@ -61,6 +61,10 @@ highwire.fun.
 - **Link battles: outages stop the clocks, and fighters' pages show their link record.** A link battle's clocks, and the
   two minutes of silence that forfeit it, skip any time the referee's store was down, as The Line's do; a fighter's
   page lists its link battles record, rating and latest battles.
+- **Link battles: the review's fixes.** A turn played while a fighter polled was thrown away (the battle stalled), and a
+  pairing race could put a fighter in two battles; both are fixed, as are battles stuck resolving, results applied
+  half-way, ghost queue places, a decision's arrival given away by an error message, `link_state` not waiting, rated
+  battles' screens deleted after three hours, live screens skipping turns, and a page that never said who won.
 
 ## 0.18.0 (2026-11-13)
 

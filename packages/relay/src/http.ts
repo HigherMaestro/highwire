@@ -4,7 +4,7 @@ import { RelayError } from "./errors.ts";
 import { Referee, type CoinDirectory, type RefereeConfig } from "./arena/referee.ts";
 import { Registration, type RegistrationRpc } from "./registration.ts";
 import { LinkReferee, type LinkConfig } from "./link/referee.ts";
-import { LinkArena, type RatedEngine } from "./link/arena.ts";
+import { LinkArena, linkFilmsVisible, type RatedEngine } from "./link/arena.ts";
 import type { Store } from "./store.ts";
 
 // The relay's routes, as one fetch handler (Request in, Response out), so any host can mount it: the relay's own
@@ -66,6 +66,11 @@ export interface Relay {
   link: LinkReferee | null;
   /** Rated link battles, when switched on and the engine plays them. */
   linkArena: LinkArena | null;
+  /**
+   * Whether a battle's screens may be shown, read from the store whether or not rated play is on: true once a rated
+   * battle is over, false while it's on, null when no rated battle has that id (a practice's, shown as filmed).
+   */
+  linkFilmsVisible(id: string): Promise<boolean | null>;
 }
 
 const json = (body: unknown, status = 200, cache = "no-store") =>
@@ -190,6 +195,7 @@ export function createRelay(o: RelayOptions): Relay {
     registration,
     link,
     linkArena,
+    linkFilmsVisible: (id) => linkFilmsVisible(o.store, id),
     async fetch(req) {
       try {
         return await route(req);

@@ -16,6 +16,8 @@ export interface FilmJob {
   dice: number[];
   /** The turn's events as the referee recorded them (JSON), to check the replay against. */
   events: string;
+  /** And what changed on each side (JSON): a replay with the same events but a different end isn't the same turn. */
+  sides?: string;
   /** The opening's: the trainers' names the match started with (later turns have them in their packed battle). */
   trainers?: readonly [string, string];
 }
@@ -52,6 +54,7 @@ export async function filmTurn(rom: Uint8Array, bootstrap: [Uint8Array, Uint8Arr
   if (job.before) {
     const { record } = battle.play(job.decisions, Uint8Array.from(job.dice));
     if (JSON.stringify(record.events) !== job.events) return null;
+    if (job.sides !== undefined && JSON.stringify(record.sides) !== job.sides) return null;
   } else {
     battle.runToDecision();
   }

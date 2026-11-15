@@ -95,6 +95,13 @@ export async function linkFighter(id: string): Promise<(LadderRow & { battles: L
   return ((await arena.fighter(id).catch(() => null)) as unknown as (LadderRow & { battles: LobbyCard[] }) | null) ?? null;
 }
 
+/** The battles live now, newest first: only what /link/watch needs. */
+export async function linkLive(): Promise<LobbyCard[]> {
+  const arena = lineRelay()?.linkArena;
+  if (!arena) return ratedSample.lobby.live;
+  return (await arena.live()) as unknown as LobbyCard[];
+}
+
 export async function linkLobby(): Promise<LinkLobby> {
   const arena = lineRelay()?.linkArena;
   if (!arena) return { ...ratedSample.lobby, queue: 0 };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fromAnswer, type LinkBattle, type LinkSide } from "../../lib/link/battle.ts";
+import { battleRatings, battleVerdict, fromAnswer, type LinkBattle, type LinkSide } from "../../lib/link/battle.ts";
 import { LinkScreens, type Shown } from "./LinkScreens.tsx";
 
 // A link battle on the stage (docs/link-battles.md 13.2): both sides' Pokémon out, their HP as the game's bars, status
@@ -19,12 +19,12 @@ function Side({ side, who, tone, exact, clock }: { side: LinkSide; who: string; 
     <div className={`link-side link-side-${tone}`}>
       <p className="link-side-who">
         {who}
-        {clock ? <span className="link-side-clock" title="Its clock as this turn opened"> · {clock}</span> : null}
+        {clock ? <span className="link-side-clock" title="Its clock as this turn opened"> · clock {clock}</span> : null}
       </p>
       <h3 className="link-side-mon">
         {side.species} <span className="muted">Lv {side.level}</span>
       </h3>
-      <div className="link-hp" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={`${side.species}'s HP`}>
+      <div className="link-hp" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={`${who}'s ${side.species}'s HP`}>
         <span className={`link-hp-fill link-hp-${band}`} style={{ width: `${pct}%` }} />
       </div>
       <p className="link-hp-text">{exact && side.max_hp ? `${side.hp} / ${side.max_hp} HP` : `${pct}% HP`}</p>
@@ -70,21 +70,35 @@ export function LinkStage({ initial, poll = true, screens = true }: { initial: L
 
   useEffect(() => {
     if (!live || !poll) return;
-    const t = setInterval(async () => {
-      if (!visible.current || document.hidden) return;
-      try {
-        const res = await fetch(initial.poll);
-        // Gone (expired) or never there: stop asking.
-        if (res.status === 404) clearInterval(t);
-        if (!res.ok) return;
-        const next = fromAnswer(await res.json());
-        setW(next);
-        if (!next.live) clearInterval(t);
-      } catch {
-        // A dropped poll: the next one catches up.
+    let stop = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let wait = POLL_MS;
+    const tick = async () => {
+      if (stop) return;
+      if (visible.current && !document.hidden) {
+        try {
+          const res = await fetch(initial.poll);
+          // Gone (expired) or never there: stop asking.
+          if (res.status === 404) return;
+          if (res.ok) {
+            const next = fromAnswer(await res.json());
+            // An older answer (a cache that's behind) never moves the stage back.
+            setW((cur) => (next.turn < cur.turn || (cur.live === false && next.live) ? cur : next));
+            wait = POLL_MS;
+            if (!next.live) return;
+          } else wait = Math.min(30_000, wait * 2);
+        } catch {
+          // A dropped poll: back off a little, then catch up.
+          wait = Math.min(30_000, wait * 2);
+        }
       }
-    }, POLL_MS);
-    return () => clearInterval(t);
+      if (!stop) timer = setTimeout(tick, wait);
+    };
+    timer = setTimeout(tick, POLL_MS);
+    return () => {
+      stop = true;
+      clearTimeout(timer);
+    };
   }, [live, poll, initial.poll]);
 
   const s = w.spectator;
@@ -127,7 +141,7 @@ export function LinkStage({ initial, poll = true, screens = true }: { initial: L
       <p className="arena-live-foot">
         <span>
           <span className={live ? "arena-dot-live" : "arena-dot-replay"} aria-hidden="true" />
-          {live ? `Live · turn ${w.turn + 1} · both sides choosing…` : `Over · ${w.turn} turns`}
+          {live ? `Live · turn ${w.turn + 1} · both sides choosing…` : `Over · ${battleVerdict(w)}${battleRatings(w) ? ` ${battleRatings(w)}` : ""}`}
           {stage?.behind !== null && stage?.behind !== undefined ? <span className="muted"> · the stage follows the screens, at {stage.behind ? `turn ${stage.behind}` : "the opening"}</span> : null}
         </span>
       </p>

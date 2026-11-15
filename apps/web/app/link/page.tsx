@@ -26,7 +26,9 @@ const wdl = (t: { win: number; draw: number; loss: number }) => `${t.win}–${t.
 export default async function LinkLobbyPage() {
   if (!linkRatedPagesOn()) notFound();
   const d = await linkLobby();
-  const rows = d.ladder.ranked.length ? d.ladder.ranked : d.ladder.fighters;
+  // Ranked fighters first, by their score; then everyone still settling in, by rating.
+  const rankedIds = new Set(d.ladder.ranked.map((f) => f.fighter));
+  const rows = [...d.ladder.ranked, ...d.ladder.fighters.filter((f) => !rankedIds.has(f.fighter)).sort((a, b) => b.rating - a.rating)];
   return (
     <>
       <SiteHeader />
@@ -102,6 +104,11 @@ export default async function LinkLobbyPage() {
                       <th scope="col">Rated</th>
                       <th scope="col">Against the house</th>
                       <th scope="col">Rating</th>
+                      {d.ladder.ranked.length ? (
+                        <th scope="col">
+                          <abbr title="Its rating minus twice its uncertainty: what the ranking orders by">Score</abbr>
+                        </th>
+                      ) : null}
                     </tr>
                   </thead>
                   <tbody>
@@ -111,6 +118,7 @@ export default async function LinkLobbyPage() {
                         <td>{wdl(f.record.rated)}</td>
                         <td>{wdl(f.record.house)}</td>
                         <td>{f.provisional ? <span className="muted">settling</span> : f.rating}</td>
+                        {d.ladder.ranked.length ? <td>{f.score ?? <span className="muted">not ranked yet</span>}</td> : null}
                       </tr>
                     ))}
                   </tbody>

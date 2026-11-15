@@ -36,7 +36,7 @@ const STEP_MS = 20_000;
 
 /** A turn just played, as a film job: from the battle before it, with its decisions and dice. */
 function job(before: Uint8Array, decisions: [Action | null, Action | null], dice: Uint8Array, r: ReturnType<LinkMatch["play"]>): FilmJob[] {
-  return r.turn ? [{ turn: r.turn.turn, before, decisions, dice: [...dice], events: JSON.stringify(r.turn.events) }] : [];
+  return r.turn ? [{ turn: r.turn.turn, before, decisions, dice: [...dice], events: JSON.stringify(r.turn.events), sides: JSON.stringify(r.turn.sides) }] : [];
 }
 
 const chosenTurns = (state: MatchState) => state.turns.filter((t) => t.decisions.some((d) => d !== null)).length;
@@ -56,7 +56,8 @@ function ended(state: MatchState, agent: Side): PracticeStep["ended"] {
 async function settle(rom: Uint8Array, match: LinkMatch, state: MatchState, packed: Uint8Array | null, agent: Side, labels: Labels, since: number, film: FilmJob[]): Promise<PracticeStep> {
   const house = (1 - agent) as Side;
   const until = performance.now() + STEP_MS;
-  while (packed && !match.asked(agent) && performance.now() < until) {
+  // The cap is checked before each turn, so turns nobody chose can't carry a battle past it.
+  while (packed && !match.asked(agent) && performance.now() < until && chosenTurns(state) < TURN_CAP) {
     const decisions: [Action | null, Action | null] = [null, null];
     decisions[house] = match.asked(house) ? match.house(house) : null;
     const d = dice();

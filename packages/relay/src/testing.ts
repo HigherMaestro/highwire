@@ -108,6 +108,11 @@ export class FakeLinkEngine implements LinkEngine {
   resolves = 0;
   /** When set, the next resolve throws it once (a function that died). */
   failOnce: Error | null = null;
+  /** When set, every resolve throws it (a turn the rig can't play). */
+  failAlways: Error | null = null;
+  /** When set, starts and resolutions wait for it: to hold one open while other calls arrive. */
+  gateStart: Promise<void> | null = null;
+  gateResolve: Promise<void> | null = null;
   films: string[] = [];
   async rules() {
     return { format: "colosseum-1" };
@@ -150,10 +155,13 @@ export class FakeLinkEngine implements LinkEngine {
   }
   async startMatch(sides: RatedSidesSpec) {
     this.starts++;
+    if (this.gateStart) await this.gateStart;
     return this.step({ hp: [3, 3], turn: 0 }, sides);
   }
   async resolveMatch(state: unknown, packed: Uint8Array, decisions: [LinkAction | null, LinkAction | null], sides: RatedSidesSpec) {
     this.resolves++;
+    if (this.gateResolve) await this.gateResolve;
+    if (this.failAlways) throw this.failAlways;
     if (this.failOnce) {
       const e = this.failOnce;
       this.failOnce = null;

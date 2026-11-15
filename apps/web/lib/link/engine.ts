@@ -50,7 +50,9 @@ function pump() {
 function exclusive<T>(task: () => Promise<T>, kind: "step" | "film" = "step"): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     waiting[kind].push(() => {
-      task()
+      // Through a promise, so a task that throws before its first await still frees the queue.
+      Promise.resolve()
+        .then(task)
         .then(resolve, reject)
         .finally(() => {
           busy = false;
@@ -61,8 +63,11 @@ function exclusive<T>(task: () => Promise<T>, kind: "step" | "film" = "step"): P
   });
 }
 
-/** Films are kept a while past their battle's page (an hour after its last move), then swept. */
-const FILM_KEEP_MS = 3 * 3_600_000;
+/**
+ * Films are kept a while past their battle's page, then swept: a practice's three hours (its page lasts an hour after
+ * its last move), a rated battle's 31 days (its page lasts 30).
+ */
+const KEEP_MS = { practice: 3 * 3_600_000, rated: 31 * 86_400_000 } as const;
 let swept = 0;
 
 /** Where films are kept: the private Blob store on the site, a folder in scripts/link-practice.ts. */
@@ -72,18 +77,20 @@ export interface FilmStore {
   sweep(): Promise<void>;
 }
 
-/** Deletes films older than FILM_KEEP_MS; run at most hourly per instance. */
+/** Deletes films past their keeping, each kind under its own prefix; run at most hourly per instance, after a success. */
 async function sweepBlobFilms() {
   if (Date.now() - swept < 3_600_000) return;
+  for (const kind of ["practice", "rated"] as const) {
+    const old: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await list({ prefix: FILMS[kind], cursor, limit: 1000 });
+      for (const b of page.blobs) if (Date.now() - b.uploadedAt.getTime() > KEEP_MS[kind]) old.push(b.url);
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor && old.length < 5000);
+    for (let i = 0; i < old.length; i += 500) await del(old.slice(i, i + 500));
+  }
   swept = Date.now();
-  const old: string[] = [];
-  let cursor: string | undefined;
-  do {
-    const page = await list({ prefix: FILMS, cursor, limit: 1000 });
-    for (const b of page.blobs) if (Date.now() - b.uploadedAt.getTime() > FILM_KEEP_MS) old.push(b.url);
-    cursor = page.hasMore ? page.cursor : undefined;
-  } while (cursor && old.length < 5000);
-  for (let i = 0; i < old.length; i += 500) await del(old.slice(i, i + 500));
 }
 
 const toStep = (s: PracticeStep): LinkStep => ({ state: s.state, packed: s.packed, view: s.view, spectator: s.spectator, turn: s.turn, ended: s.ended, format: FORMAT, version: RIG_VERSION, film: s.film });
@@ -137,17 +144,22 @@ export function createLinkEngine(files: () => Promise<LinkFiles>, films: FilmSto
       const f = await get();
       return guarded(() => practiceMove(f.rom, state as MatchState, packed, agent, action, labels));
     },
-    film: async (match, film) => {
+    film: async (match, film, kind = "practice") => {
       const f = await get();
+      // Each turn on its own: one that fails (a replay that came out differently, an upload) leaves the rest.
       for (const job of film as FilmJob[]) {
-        const bytes = await exclusive(() => filmTurn(f.rom, f.bootstrap, job), "film");
-        if (!bytes) {
-          console.error(`link: ${match} turn ${job.turn} came out differently when filmed; no film`);
-          continue;
+        try {
+          const bytes = await exclusive(() => filmTurn(f.rom, f.bootstrap, job), "film");
+          if (!bytes) {
+            console.error(`link: ${match} turn ${job.turn} came out differently when filmed; no film`);
+            continue;
+          }
+          await films.put(filmPath(match, job.turn, kind), bytes);
+        } catch (err) {
+          console.error(`link: filming ${match} turn ${job.turn} failed`, err);
         }
-        await films.put(filmPath(match, job.turn), bytes);
       }
-      if ((film as FilmJob[]).some((j) => j.turn === 0)) await films.sweep();
+      if ((film as FilmJob[]).some((j) => j.turn === 0)) await films.sweep().catch((err: unknown) => console.error("link: the film sweep failed", err));
     },
   };
 }

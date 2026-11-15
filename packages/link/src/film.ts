@@ -18,9 +18,30 @@ const TILES = TILES_X * TILES_Y;
 const BITMAP = TILES / 8;
 const PIXELS = SCREEN_W * SCREEN_H;
 
-async function deflate(chunks: Uint8Array[], format: "deflate-raw", way: "compress" | "decompress"): Promise<Uint8Array> {
+async function deflate(chunks: Uint8Array[], format: "deflate-raw", way: "compress" | "decompress", max = Infinity): Promise<Uint8Array> {
   const stream = new Blob(chunks as never).stream().pipeThrough(way === "compress" ? new CompressionStream(format) : new DecompressionStream(format));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  if (max === Infinity) return new Uint8Array(await new Response(stream).arrayBuffer());
+  // Inflating, never past what the header says the film can hold: a hostile film can't make a browser allocate more.
+  const reader = stream.getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > max) {
+      await reader.cancel();
+      throw new Error("The film is bigger than its frames can be.");
+    }
+    parts.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
 }
 
 /** Builds a film a frame at a time, from both screens as RGBA (what `Rig.screen` returns). */
@@ -133,11 +154,12 @@ export async function decodeFilm(bytes: Uint8Array): Promise<Film> {
   const fps = bytes[8]!;
   const frames = view.getUint32(9);
   const turn = view.getUint16(13);
-  const n = bytes[15]! || 256;
+  // 0 colours is a film with no frames; otherwise 0 stands for 256.
+  const n = frames === 0 ? 0 : bytes[15]! || 256;
   if (bytes.length < 16 + n * 3) throw new Error("A film's palette is cut short.");
   const palette = new Uint32Array(n);
   for (let i = 0, at = 16; i < n; i++, at += 3) palette[i] = (0xff << 24) | (bytes[at + 2]! << 16) | (bytes[at + 1]! << 8) | bytes[at]!;
-  const body = await deflate([bytes.subarray(16 + n * 3)], "deflate-raw", "decompress");
+  const body = await deflate([bytes.subarray(16 + n * 3)], "deflate-raw", "decompress", frames * 2 * (BITMAP + TILES * 64));
   return { turn, fps, frames, palette, body };
 }
 

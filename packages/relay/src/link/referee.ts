@@ -4,6 +4,10 @@ import { fail, RelayError } from "../errors.ts";
 import { update, type Store } from "../store.ts";
 import type { Fighter } from "../arena/types.ts";
 import type { LinkArenaConfig, RatedEngine } from "./arena.ts";
+import { ratedGoing } from "./arena.ts";
+import { linkMatchId, parseAction, type LinkAction } from "./common.ts";
+
+export { linkMatchId, parseAction, type LinkAction } from "./common.ts";
 
 // Link battles' referee, practice first (docs/link-battles.md 6, 8.3): a fighter's battle against the house, a whole
 // step a request. The battle itself runs in an engine the site passes in (`LinkEngine`): the relay never imports the
@@ -14,7 +18,6 @@ import type { LinkArenaConfig, RatedEngine } from "./arena.ts";
 // document pointing at nothing), `link:practice-of:<fighter>` for the one practice a fighter may have, and the list of
 // practices running, for the global cap.
 
-export type LinkAction = { kind: "move"; slot: number } | { kind: "fight" } | { kind: "switch"; to: number };
 
 /** One step of a practice battle, as the engine returns it: the views are already built, the relay only stores them. */
 export interface LinkStep {
@@ -49,7 +52,7 @@ export interface LinkEngine {
    * Films a kept step's turns (docs/link-battles.md 13.3): both screens, stored where the site serves them. Called only
    * after the step is saved, through the config's `defer`, so it never holds up the answer.
    */
-  film?(match: string, film: unknown): Promise<void>;
+  film?(match: string, film: unknown, kind?: "practice" | "rated"): Promise<void>;
   /** Rated battles (link/arena.ts): starts one; without these, rated play doesn't exist. */
   startMatch?: RatedEngine["startMatch"];
   /** Resolves a rated battle's turn. */
@@ -105,26 +108,8 @@ const PRACTICE_OF = (fighter: string) => `link:practice-of:${fighter}`;
 const RUNNING = "link:practices";
 const LOCK = (id: string) => `link:lock:${id}`;
 const HOUSE = "The house's";
-const BASE32 = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/o, 1/l/i: a match id reads cleanly when posted
-
-/** A short, URL-safe match id (13.1): 10 characters. */
-export function linkMatchId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(10));
-  return Array.from(bytes, (b) => BASE32[b % BASE32.length]).join("");
-}
-
 const toBase64 = (b: Uint8Array) => Buffer.from(b).toString("base64");
 const fromBase64 = (s: string) => new Uint8Array(Buffer.from(s, "base64"));
-
-function parseAction(a: unknown): LinkAction | null {
-  if (a === null || a === undefined) return null;
-  const o = (a ?? {}) as Record<string, unknown>;
-  const int = (v: unknown, max: number) => (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= max ? v : null);
-  if (o.kind === "move" && int(o.slot, 3) !== null) return { kind: "move", slot: o.slot as number };
-  if (o.kind === "switch" && int(o.to, 5) !== null) return { kind: "switch", to: o.to as number };
-  if (o.kind === "fight") return { kind: "fight" };
-  return fail("bad_request", 'action is { kind: "move", slot: 0-3 }, { kind: "switch", to: 0-5 } or { kind: "fight" }: one of the legal actions in your view.');
-}
 
 export class LinkReferee {
   private engine: LinkEngine;
@@ -204,6 +189,8 @@ export class LinkReferee {
     await this.spend(f, 2);
     const going = await this.current(f);
     if (going) return this.out(going);
+    // One battle at a time: practice waits for a rated battle to end (and link_join for a practice).
+    if (await ratedGoing(this.store, f.id, this.clock.now())) fail("conflict", "You have a rated link battle going: finish it (link_state, link_move) or leave it (link_leave) first.");
     if ((await this.store.cas(STARTING(f.id), 0, 1, 90)) === null) fail("conflict", "Your practice battle is already being set up; read it with link_practice in a moment.");
     try {
       // Checked again under the lock: another start may have just finished.

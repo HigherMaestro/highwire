@@ -713,7 +713,45 @@ defects, all fixed:
 - **Outages and the fighter page:** link clocks and the two-minute rule count only time outside the store's outages,
   read from The Line's record of them (`Referee.outages`), so nobody forfeits time it couldn't play; a fighter's page
   (`/line/fighter/<mint>`) shows its link battles record, rating and latest battles once it has played one.
-- **Still to do:** the turn and embed URLs (13.1) and `?from=start`.
+### 14.8 The adversarial review of phases 3 and 4, and its fixes (2026-11-15)
+
+Three reviewers (Fable) read the rated referee and its tools, the engine and the films, and the pages and link.md, with
+reproductions on the fake engine. None found hidden information served while a battle is live, or injected content.
+Everything they found is fixed:
+
+- **The referee:** a poll that noted a fighter as present while its turn was being played made the turn's commit lose,
+  and the battle stalled until the sweep (reproduced: three minutes at turn 0): polls no longer write while a turn
+  resolves, and a commit that loses to a write that left the turn alone re-applies over it. A pairing race could put
+  one fighter in two battles (reproduced): fighters are now claimed by compare-and-set before a battle is made, and a
+  fighter whose battle is being made is told so (`pairing`) rather than queued again. A turn the rig kept failing on
+  left a battle resolving forever: four attempts, then a void. `finish` marked a battle settled before applying its
+  results: results now go first, idempotently, and the house's tally at most once. Leaving now leaves the queue too, a
+  queue place lasts 45 seconds, and a fighter that went silent waits 5 minutes to join again. An early forfeit counted
+  as rated on the record and toward the weekly cap: it's unrated now. Re-sending a decision answered differently
+  depending on whether the other side had decided: one answer now. Actions are compared by what they say, not their
+  keys' order. `link_join` counts as being there. `link_state` waits for the next turn by default (it answered at once,
+  so an agent following link.md would have hit the rate limit). House battles are capped (20 at once), practice and
+  rated battles are one at a time, packed battles expire after a day, and a settled battle records each side's rating
+  change. Public reads (the pages, the lobby, `/link/watch`) never write and never start the emulator: only agents'
+  calls and the sweep move a battle on, and the sweep's route gets five minutes.
+- **Films:** a rated battle's films lived three hours while its page lives 30 days: rated films now have their own
+  prefix (`link/rated-films/`) and are kept 31 days. The film route fails closed: it reads the battle from the store
+  whether or not rated play is on. One failed film no longer drops the rest, a film is checked against the turn's sides
+  as well as its events, the cap is checked before each turn (turns nobody chose could carry a battle past it), the
+  decoder refuses a body bigger than its frames can be and reads a film with none, and the queue can't be left busy by
+  a task that throws at once.
+- **The pages:** live screens could skip turns while the next film loaded (the follower now waits for the turn's own
+  film), a finished battle's missing films were asked for forever (a few tries, then "no longer kept"), a damaged film
+  held the stage back, a battle that ended while watched never said who won (the stage now does, with the rating
+  changes), an older poll answer could move the stage back, the house was recognised by its name, and labels for
+  screen readers were ambiguous. `/link/watch` reads only the live battles and is cached for five seconds; the lobby's
+  ladder lists everyone, ranked first, with the score it ranks by.
+- **link.md** says rated play opens with highwire-mcp 0.19.0 and what `line_not_found` means until then, and corrects
+  the rest: the queue's 45 seconds, leaving the queue, the cooldown, `confirm_leave`, table talk refusing a decision,
+  "a result" (not "a win") against a settling fighter counting a quarter, and a rig change ending a rated battle with no
+  result.
+- **Still to do:** the turn and embed URLs (13.1) and `?from=start`; films still wait behind every step, so under steady
+  play they're made in the quiet moments.
 
 ## 15. Decisions needed from you
 
