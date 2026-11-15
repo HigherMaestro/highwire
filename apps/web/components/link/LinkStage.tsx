@@ -52,10 +52,21 @@ function Side({ side, who, tone, exact, clock }: { side: LinkSide; who: string; 
   );
 }
 
-/** The stage, with both Game Boys' screens above it when they may be shown (never on the sample, which has no films). */
-export function LinkStage({ initial, poll = true, screens = true }: { initial: LinkBattle; poll?: boolean; screens?: boolean }) {
+/** Without screens to follow, a battle watched from the start moves on a turn at a time: this long a turn, half while behind live. */
+const REPLAY_MS = 2500;
+
+/**
+ * The stage, with both Game Boys' screens above it when they may be shown (never on the sample, which has no films).
+ * `at` pins it after that turn, the screens opened there (a turn's link, 13.1); `fromStart` plays it from the opening
+ * with the result held back until it's reached (`?from=start`), catching up at double speed to a battle still on.
+ */
+export function LinkStage({ initial, poll = true, screens = true, at, fromStart = false }: { initial: LinkBattle; poll?: boolean; screens?: boolean; at?: number; fromStart?: boolean }) {
   const [w, setW] = useState(initial);
-  const [shown, setShown] = useState<Shown>(null);
+  // Pinned (a turn's link, from the start): the stage stays where the page put it until the screens move it.
+  const pinned = at !== undefined || fromStart;
+  const [shown, setShown] = useState<Shown>(at !== undefined ? { turn: at, done: true } : fromStart ? { turn: 0, done: false } : null);
+  const follow = (s: Shown) => (s ? setShown(s) : pinned ? undefined : setShown(null));
+  const drivenByScreens = screens && w.screens;
   const visible = useRef(true);
   const ref = useRef<HTMLDivElement>(null);
   const live = w.live;
@@ -101,6 +112,18 @@ export function LinkStage({ initial, poll = true, screens = true }: { initial: L
     };
   }, [live, poll, initial.poll]);
 
+  // From the start without screens to follow (a live rated battle, or the sample): a turn at a time, faster while behind.
+  useEffect(() => {
+    if (!fromStart || drivenByScreens) return;
+    const newest = w.spectator?.turns.at(-1)?.turn ?? 0;
+    if (!shown || shown.turn >= newest) {
+      if (shown && w.live) setShown(null);
+      return;
+    }
+    const t = setTimeout(() => setShown({ turn: shown.turn + 1, done: true }), w.live ? REPLAY_MS / 2 : REPLAY_MS);
+    return () => clearTimeout(t);
+  }, [fromStart, drivenByScreens, shown, w]);
+
   const s = w.spectator;
   const left = w.left;
   const right = (1 - left) as 0 | 1;
@@ -122,8 +145,8 @@ export function LinkStage({ initial, poll = true, screens = true }: { initial: L
   };
   return (
     <div ref={ref}>
-      {screens && w.screens ? (
-        <LinkScreens match={w.match} turns={w.turn} live={live} left={left} names={names} onShow={setShown} />
+      {drivenByScreens ? (
+        <LinkScreens match={w.match} turns={w.turn} live={live} left={left} names={names} onShow={follow} startTurn={at ?? (fromStart ? 0 : undefined)} autoplay={fromStart} />
       ) : screens && !w.screens ? (
         <p className="link-screens-later muted">
           Both Game Boys&apos; screens appear here when the battle ends: each shows its own side&apos;s exact HP and PP, which the other side mustn&apos;t see while it&apos;s on.
@@ -141,8 +164,12 @@ export function LinkStage({ initial, poll = true, screens = true }: { initial: L
       <p className="arena-live-foot">
         <span>
           <span className={live ? "arena-dot-live" : "arena-dot-replay"} aria-hidden="true" />
-          {live ? `Live · turn ${w.turn + 1} · both sides choosing…` : `Over · ${battleVerdict(w)}${battleRatings(w) ? ` ${battleRatings(w)}` : ""}`}
-          {stage?.behind !== null && stage?.behind !== undefined ? <span className="muted"> · the stage follows the screens, at {stage.behind ? `turn ${stage.behind}` : "the opening"}</span> : null}
+          {live
+            ? `Live · turn ${w.turn + 1} · both sides choosing…`
+            : stage?.behind !== null && stage?.behind !== undefined && (fromStart || at !== undefined)
+              ? `Over · the result shows once it's played`
+              : `Over · ${battleVerdict(w)}${battleRatings(w) ? ` ${battleRatings(w)}` : ""}`}
+          {stage?.behind !== null && stage?.behind !== undefined ? <span className="muted"> · {drivenByScreens ? "the stage follows the screens, at" : "showing"} {stage.behind ? `turn ${stage.behind}` : "the opening"}</span> : null}
         </span>
       </p>
       <ol className="link-turns" reversed aria-label="Every turn, newest first" aria-live="polite" aria-relevant="additions">

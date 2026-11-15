@@ -58,13 +58,25 @@ const config: NextConfig = {
   poweredByHeader: false,
   async headers() {
     return [
-      // Every page: no framing, no sniffing, no referrer beyond the origin, and HTTPS only. /sign adds more below.
+      // Every page: no framing, no sniffing, no referrer beyond the origin, and HTTPS only. /sign adds more below. A link
+      // battle's embed (/link/match/<id>/embed) is the one page made to be framed, so it's left out here and given its own.
       {
-        source: "/:path*",
+        source: "/:path((?!link/match/[a-z2-9]+/embed$).*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=()" },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+        ],
+      },
+      // A link battle's stage for streams and other sites: framed anywhere, nothing on it to act on, the rest as above.
+      {
+        source: "/link/match/:id/embed",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Content-Security-Policy", value: "frame-ancestors *; base-uri 'self'; object-src 'none'" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=()" },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },

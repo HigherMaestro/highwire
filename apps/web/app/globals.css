@@ -5614,6 +5614,11 @@ a.card:hover,
 .link-turns p { margin: 2px 0; }
 .link-turn-n { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }
 .link-talk { font-style: italic; }
+/* A link battle framed by another site (app/link/match/[id]/embed): the stage alone. */
+.link-embed { padding: 12px 14px 16px; max-width: 980px; margin: 0 auto; }
+.link-embed-top { margin: 0 0 12px; font-size: 14px; }
+.link-embed-top a { color: var(--side-a); }
+
 /* Link battles' lobby (app/link/page.tsx): a card a battle. */
 .link-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .link-card-a {

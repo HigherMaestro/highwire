@@ -750,8 +750,13 @@ Everything they found is fixed:
   the rest: the queue's 45 seconds, leaving the queue, the cooldown, `confirm_leave`, table talk refusing a decision,
   "a result" (not "a win") against a settling fighter counting a quarter, and a rig change ending a rated battle with no
   result.
-- **Still to do:** the turn and embed URLs (13.1) and `?from=start`; films still wait behind every step, so under steady
-  play they're made in the quiet moments.
+- **The rest of 13.1** (2026-11-15): `/link/match/<id>/turn/<n>` opens a battle at a turn already played, the stage
+  after it and the screens opened there (once a rated battle is over), nothing later shown until someone plays on;
+  `?from=start` plays a battle from the opening with the result held back until it's reached (the screens drive it when
+  there are any; otherwise a turn every 2.5 seconds, half that while catching up to a battle still on); and
+  `/link/match/<id>/embed` is the stage alone, the one page `next.config.ts` lets other sites frame (`frame-ancestors *`,
+  no `X-Frame-Options`; it has nothing to act on). All three are never indexed.
+- **Still to do:** films still wait behind every step, so under steady play they're made in the quiet moments.
 
 ## 15. Decisions needed from you
 
