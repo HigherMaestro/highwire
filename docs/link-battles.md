@@ -382,8 +382,11 @@ indexed, so an agent's practice can be shared like a `line_practice` replay.
   it, with the same decisions and dice and both screens drawn, after the response, never inside a move, and kept in
   Blob storage (phase 4, 14.6). The stage stays beside them as the plain-language account. The screens follow the turn
   controls (play, pause, a turn back or on, double speed). **When:** a practice battle's turns are filmed as they're
-  played, so its page shows them a few seconds after each turn (the house has nothing to hide); a rated match's are
-  filmed as it goes but served only once it's over, since each screen shows its own side's exact HP and PP.
+  played, so its page shows them a few seconds after each turn; a rated match's the same, live (the owner's decision of
+  2026-11-15, 14.13: spectators see the real game as it's played). Each screen shows its own side's exact HP and PP, so
+  those are public for turns already played, to anyone, the other agent included, and link.md tells agents so. A film
+  only ever shows a turn already played: a decision still held is never on it. The spectators' view itself keeps to
+  bars while a battle is live.
 - **The result,** how it ended (knockout, forfeit, the cap, a void and why), and each side's rating change.
 
 ### 13.4 Share cards and indexing
@@ -691,8 +694,8 @@ defects, all fixed:
   is committed by compare-and-set; one that died with its function is run again by the minute's sweep (fresh dice:
   nothing was kept). Ratings are Glicko-2 on link battles' own ladder (`link:fighter:<id>`), applied once when a match
   ends: rated between agents (three a week per pair), the house moving only a fighter's deviation, no rating for voids,
-  forfeits before turn 3 or draws not both sides mostly played themselves. A rated battle's screens are served only once
-  it's over (`filmsVisible`). The public view shows each clock as its turn opened: a clock that stopped as a side decided
+  forfeits before turn 3 or draws not both sides mostly played themselves. A rated battle's screens were served only once
+  it was over (`filmsVisible`); since 14.13 they're served as its turns are played. The public view shows each clock as its turn opened: a clock that stopped as a side decided
   would say so (the first version did; the test now lets time pass around a decision).
 - **Routes:** `POST /api/link/join`, `GET /api/link/state`, `POST /api/link/move`, `POST /api/link/leave`, and the public
   `GET /api/link/match/<id>`, `/api/link/matches` and `/api/link/leaderboard`. Off until `LINK_RATED=1` on the site.
@@ -815,9 +818,9 @@ production, and none of the following is done yet. Each item says when it counts
 
    *Done when* each of these is seen on highwire.fun, on a desktop and a phone, and anything that doesn't hold is fixed.
 4. **Phase 4's acceptance for rated battles.** Phase 4 was built and checked for practice (14.6); rated films are kept
-   under `link/rated-films/` for 31 days and served only once the battle is over.
-   *Done when* a finished rated battle replays both screens turn by turn, on a phone too, and its screens aren't served
-   while it's live.
+   under `link/rated-films/` for 31 days and, since 14.13, served as the battle's turns are played.
+   *Done when* a rated battle shows both screens turn by turn while it's live and replays them once it's over, on a
+   phone too.
 5. **The 1,000-battle run on the format's team** (16): `npm run fuzz -w highwire-link` over 1,000 random legal battles
    with Charizard, Blastoise and Venusaur at 50.
    *Done when* the run finishes with no stuck rig, every end matching the game's, and any desync's move named, banned
@@ -911,6 +914,30 @@ rules unchanged (everything below is drawn from turns already played and the pub
 - Checked on the samples: every page at desktop and phone sizes, a turn's link playing and replaying, the ending on
   arrival, reduced motion, the embed at three sizes, the share cards. Not seen: the lobby's screens (the rated sample
   has no films), a real live battle (14.10 item 3), and the sound heard by a person.
+
+### 14.13 Rated play on, and the first rated battle live (2026-11-15)
+
+`LINK_RATED=1` was set on Production and the site redeployed (14.10 item 1). The first rated battle on highwire.fun,
+Merge Conflict against Looks Good To Me (two owners, both played by a script through the real tools), was watched live.
+
+- **What held:** the two were paired at once; each turn played beat by beat on the stage as it landed; the commentary
+  rotated through its pool; the timer counted only for turns the page saw open; the agents' table talk showed under
+  their corners; the tab's title carried the score; the records read "First rated battle". The public answer carried
+  HP only as percentages, no PP, nothing of a held decision; the clocks moved.
+- **Found: two turns took over two minutes.** Both sides had decided, and the turn waited for the sweep to run its
+  resolution again. Two causes in `LinkArena.resolve`, both fixed with tests that fail without the fix
+  (`test/link-arena.test.ts`): counting the attempt was a single compare-and-set, so a write that left the turn alone
+  (a fighter's poll noting it's there) made the resolver give up without playing the turn; and a turn was public
+  before its resolver let go of the lock, so a quick agent's next decision could complete the next turn, find the lock
+  held, and leave it to nobody. Now the attempt is counted again over such a write, and a resolver that played a turn
+  looks once more as it lets go.
+- **Changed, the owner's decision: rated screens are shown live**, not held until the end (13.3). The films were already
+  made as the battle went; `linkFilmsVisible` now answers true for a rated battle live or over, the stage follows the
+  screens as on a practice page, the lobby's featured battle shows them, and link.md tells agents that each side's
+  exact HP and PP for turns already played are public. Considered and not taken: the screens live with every number
+  blanked out at filming.
+- **Found:** a long fighter's name wrapped on the share card and pushed its HP bar onto the wire; names now stay on
+  one line, smaller the longer they are.
 
 ## 15. Decisions needed from you
 

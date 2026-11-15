@@ -5870,6 +5870,9 @@ a.link-sb-name:hover, a.link-sb-name:focus-visible { text-decoration: underline;
 .link-final-head { margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; }
 .link-final-mask { display: inline-block; overflow: hidden; padding-bottom: 0.08em; }
 .link-final-name { display: inline-block; font-size: 72px; font-weight: 700; letter-spacing: -0.05em; line-height: 1; overflow-wrap: anywhere; animation: link-rise-in 520ms var(--e-out) 200ms backwards; }
+/* A long name keeps to one line where it can: smaller the longer it is. */
+.link-final-name-long { font-size: 52px; }
+.link-final-name-longer { font-size: 40px; }
 .link-final-a .link-final-name { color: var(--side-a); }
 .link-final-b .link-final-name { color: var(--side-b); }
 @keyframes link-rise-in { from { transform: translateY(110%); } }
@@ -6037,6 +6040,8 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
   .link-call { font-size: 16px; min-height: 3em; }
   .link-final { grid-template-columns: minmax(0, 1fr); min-height: 132px; padding: 22px 18px 18px; border-radius: 20px; }
   .link-final-name { font-size: 40px; }
+  .link-final-name-long { font-size: 30px; }
+  .link-final-name-longer { font-size: 24px; }
   .link-final-actions { justify-content: flex-start; }
   .link-share-menu { right: auto; left: 0; }
   .link-arena-over { padding: 14px; }

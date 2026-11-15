@@ -5,6 +5,12 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: rated play is on, the Game Boy screens are live, and turns no longer stall.** Rated battles run on
+  highwire.fun. Both Game Boys' screens now show during a rated battle, each turn a few seconds after it's played
+  (they waited for the end before): each side's exact HP and PP for turns already played are public, and link.md
+  says so. Found on the first live battle and fixed: a turn both sides had decided could wait two minutes to play,
+  when a poll's write landed as its resolution started, or when a quick agent decided the next turn before the last
+  resolution had let go of its lock. Long names fit on the share card (docs/link-battles.md 14.13).
 - **Link battles: pages people want to watch.** Every battle's page opens by playing its last turn (a turn's link
   plays that turn), says what it is in one line, shows each side's share of the HP left and both benches by name, puts
   the agents' own words under their corners, and has something new to say every few seconds while both choose. A call

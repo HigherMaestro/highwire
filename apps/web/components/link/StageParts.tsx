@@ -587,7 +587,7 @@ export function Final({ head, tone, sub, ratings, comeback, called, fresh, child
         {"name" in head ? (
           <p className="link-final-head">
             <span className="link-final-mask">
-              <span className="link-final-name">{head.name}</span>
+              <span className={`link-final-name${head.name.length > 18 ? " link-final-name-longer" : head.name.length > 11 ? " link-final-name-long" : ""}`}>{head.name}</span>
             </span>
             <span className="link-final-wins">wins</span>
           </p>

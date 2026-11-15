@@ -10,7 +10,7 @@ export const linkConfigured = () =>
 /**
  * Where a turn's film is kept in the private Blob store (engine.ts writes it, app/api/link/film serves it): practice's
  * and rated battles' under prefixes of their own, since they're kept for different times and a rated battle's are
- * served only once it's over.
+ * served as its turns are played.
  */
 export const FILMS = { practice: "link/films/", rated: "link/rated-films/" } as const;
 export const filmPath = (match: string, turn: number, kind: keyof typeof FILMS = "practice") => `${FILMS[kind]}${match}/${turn}.film`;

@@ -755,16 +755,23 @@ export class LinkArena {
    */
   async resolve(id: string): Promise<void> {
     if ((await this.store.cas(RESOLVING(id), 0, 1, Math.ceil(STALE_RESOLVE_MS / 1000))) === null) return;
+    // Once this call has played a turn, it looks again as it lets go of the lock (see the end).
+    let played = false;
     try {
-      const start = await this.load(id);
-      if (start.m.status !== "resolving") return;
-      const attempts = (start.m.attempts ?? 0) + 1;
-      if (attempts > MAX_RESOLVES) {
-        await this.voidMatch(id, "The battle couldn't be resolved (Highwire's rig kept failing on this turn).");
-        return;
+      // Counting the attempt is a write like any other: one that loses to a write that left the turn alone (a fighter
+      // noted as present, a poll) is made again, or the turn would wait two minutes for the sweep.
+      let m: LinkMatchDoc | null = null;
+      for (let tries = 0; tries < 6 && !m; tries++) {
+        const start = await this.load(id);
+        if (start.m.status !== "resolving") return;
+        const attempts = (start.m.attempts ?? 0) + 1;
+        if (attempts > MAX_RESOLVES) {
+          await this.voidMatch(id, "The battle couldn't be resolved (Highwire's rig kept failing on this turn).");
+          return;
+        }
+        if ((await this.store.cas(MATCH(id), start.version, { ...start.m, attempts }, MATCH_TTL)) !== null) m = { ...start.m, attempts };
       }
-      if ((await this.store.cas(MATCH(id), start.version, { ...start.m, attempts }, MATCH_TTL)) === null) return;
-      const m = { ...start.m, attempts };
+      if (!m) return;
       const packed = m.stateKey ? (await this.store.get<string>(m.stateKey))?.value : null;
       let step: LinkMatchStep;
       try {
@@ -790,6 +797,7 @@ export class LinkArena {
         if (key) await this.store.del(key);
         return;
       }
+      played = true;
       if (m.stateKey && m.stateKey !== key) await this.store.del(m.stateKey);
       this.filmLater(id, step);
       if (committed.status === "over") await this.finish(id);
@@ -799,6 +807,12 @@ export class LinkArena {
       }
     } finally {
       await this.store.del(RESOLVING(id)).catch(() => undefined);
+      // The turn it played was public before the lock was let go: a quick agent's next decision may have completed the
+      // next turn meanwhile, found the lock held, and left. So it looks once more, now that the lock is free.
+      if (played) {
+        const now = await this.load(id).catch(() => null);
+        if (now?.m.status === "resolving") this.resolveLater(id);
+      }
     }
   }
 
@@ -970,7 +984,7 @@ export class LinkArena {
     return v ? { match: v.match, rated: v.rated, house: v.house, sides: v.sides, turn: v.turn, live: v.live, ended: v.ended, started_at: v.started_at, spectator: v.spectator } : null;
   }
 
-  /** Whether a battle's screens may be shown (13.3): a rated battle's only once it's over; null when it isn't one. */
+  /** Whether a battle's screens may be shown (13.3): a rated battle's are, as its turns are played; null when it isn't one. */
   async filmsVisible(id: string): Promise<boolean | null> {
     return linkFilmsVisible(this.store, id);
   }
@@ -1023,12 +1037,14 @@ export class LinkArena {
 
 /**
  * Whether a battle's screens may be shown (13.3), read straight from the store so it holds whether or not rated play
- * is switched on: true once a rated battle is over, false while it's on, null when no rated battle has that id.
+ * is switched on: true for a rated battle, live or over (its screens are public as each turn is played, the owner's
+ * decision of 2026-11-15: both sides' exact HP and PP are there for anyone, the other agent included); null when no
+ * rated battle has that id. A film only ever shows a turn already played, never a decision still held.
  */
 export async function linkFilmsVisible(store: Store, id: string): Promise<boolean | null> {
   const d = await store.get<LinkMatchDoc>(MATCH(id));
   if (!d) return null;
-  return d.value.status === "over";
+  return true;
 }
 
 /** 1, 0.5 or 0 for a side, or null when the battle has no result (a void). */

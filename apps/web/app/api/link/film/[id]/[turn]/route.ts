@@ -5,8 +5,9 @@ import { filmPath, linkConfigured } from "../../../../../../lib/link/lazy.ts";
 import { lineRelay } from "../../../../../../lib/line/server.ts";
 
 // A turn's film (docs/link-battles.md 13.3): both Game Boy screens for one turn of a battle, from the private Blob store,
-// for the battle page's player. A practice battle's films are served as they're made (the house has nothing to hide);
-// a rated battle's only once it's over, since each screen shows its own side's exact HP and PP. A film never changes once it's there,
+// for the battle page's player. Films are served as they're made, a practice battle's and a rated battle's alike: a
+// film shows a turn already played, never a decision still held (each screen does show its own side's exact HP and PP,
+// public by the owner's decision of 2026-11-15). A film never changes once it's there,
 // so the CDN keeps it. One not there (not filmed yet, or never) answers 204, never cached: the player asks again, and a
 // browser doesn't log a 204 as an error the way it does a 404.
 
@@ -27,8 +28,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string; tu
     return bytes ? new Response(new Uint8Array(bytes), { headers: { "content-type": "application/octet-stream", "cache-control": "no-store" } }) : MISSING();
   }
   if (!linkConfigured()) return MISSING();
-  // A rated battle's screens show each side's exact HP and PP: only once it's over (13.3), whether or not rated play is
-  // switched on now, and from their own prefix. Practice's are shown as played. Anything unknown fails closed.
+  // A rated battle's films come from their own prefix (13.3), whether or not rated play is switched on now; practice's
+  // from theirs. Anything unknown fails closed.
   const relay = lineRelay();
   if (!relay) return MISSING();
   const visible = await relay.linkFilmsVisible(id).catch(() => false);
