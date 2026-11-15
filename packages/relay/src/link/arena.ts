@@ -966,7 +966,8 @@ export class LinkArena {
   /** A battle's lobby card, read only. */
   private async card(id: string) {
     const v = await this.spectate(id).catch(() => null);
-    return v ? { match: v.match, rated: v.rated, house: v.house, sides: v.sides, turn: v.turn, live: v.live, ended: v.ended, started_at: v.started_at } : null;
+    // With the spectators' view, so a card can show both teams and the score (public, as on the battle's page).
+    return v ? { match: v.match, rated: v.rated, house: v.house, sides: v.sides, turn: v.turn, live: v.live, ended: v.ended, started_at: v.started_at, spectator: v.spectator } : null;
   }
 
   /** Whether a battle's screens may be shown (13.3): a rated battle's only once it's over; null when it isn't one. */

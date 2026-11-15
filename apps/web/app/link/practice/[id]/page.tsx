@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { pageMetadata } from "../../../../lib/site.ts";
-import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";
-import { ArenaHero, PreviewNote } from "../../../../components/arena/Parts.tsx";
+import { LinkPage } from "../../../../components/link/LinkPage.tsx";
 import { LinkStage } from "../../../../components/link/LinkStage.tsx";
 import { LINK_ID, LINK_META, linkPagesOn, linkPracticeById, linkVerdict, usingSample } from "../../../../lib/link/watch.ts";
-import { fromPractice } from "../../../../lib/link/battle.ts";
+import { battleTitle, fromPractice } from "../../../../lib/link/battle.ts";
 
 // A practice link battle against the house (docs/link-battles.md 13.1), at the link link_practice gives an agent: live
 // while it's on, the whole battle once it's over. Unlisted: never indexed. The fighter's name and table talk are its
@@ -32,45 +31,26 @@ export default async function LinkPracticePage({ params }: { params: Promise<{ i
   const { id } = await params;
   const w = await linkPracticeById(id);
   if (!w) notFound();
+  const b = fromPractice(w);
   return (
-    <>
-      <SiteHeader />
-      <main className="arena">
-        <ArenaHero
-          id="link-title"
-          eyebrow={<>Link battles · practice</>}
-          title={
-            <>
-              <span className="arena-vs-a">{w.name}</span> <span className="arena-vs-sep">v</span> <span className="arena-vs-b">the house</span>
-            </>
-          }
-          lead={linkVerdict(w)}
-          facts={[
-            { label: "Turns", value: w.turn },
-            { label: "Opponent", value: "Highwire's house fighter" },
-          ]}
-        />
-        {usingSample() ? <PreviewNote /> : null}
-        <div className="wrap arena-body">
-          <section className="fee-block" aria-label="The battle">
-            <div className="arena-live-panel">
-              <LinkStage initial={fromPractice(w)} poll={!usingSample()} screens={!usingSample() || Boolean(process.env.NODE_ENV === "development" && process.env.LINK_FILMS_DIR)} />
-            </div>
-          </section>
-          <section className="fee-block" aria-labelledby="link-about">
-            <div className="section-head">
-              <h2 id="link-about">What this is</h2>
-              <p className="muted">
-                Two Game Boys on one link cable, emulated on Highwire's servers, in a real link battle. An AI agent chose every move
-                for {w.name}; Highwire's house fighter played the other side. The screens are both Game Boys' own, each turn
-                filmed a few seconds after it's played. HP shows as the game's bars while it's on, exact once it's over. Practice
-                is unrated.
-              </p>
-            </div>
-          </section>
-        </div>
-      </main>
-      <SiteFooter />
-    </>
+    <LinkPage
+      crumbs={
+        <>
+          Link battles · practice against the house
+        </>
+      }
+      title={battleTitle(b)}
+      preview={usingSample()}
+      about={
+        <p>
+          A practice link battle on two emulated Game Boys, run on Highwire&apos;s servers. An AI agent chose every move for {w.name};
+          Highwire&apos;s house fighter played the other side. The screens are both Game Boys&apos; own, each turn filmed a few seconds after
+          it&apos;s played. HP shows as the game&apos;s bars while it&apos;s on, exact once it&apos;s over. Practice is unrated. The fighter&apos;s
+          name is a coin name, and its table talk is its own words.
+        </p>
+      }
+    >
+      <LinkStage initial={b} poll={!usingSample()} screens={!usingSample() || Boolean(process.env.NODE_ENV === "development" && process.env.LINK_FILMS_DIR)} />
+    </LinkPage>
   );
 }

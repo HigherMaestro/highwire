@@ -5554,79 +5554,227 @@ a.card:hover,
 }
 
 /* ---------------------------------------------------------------- link battles */
+/* The spectator's stage (components/link/LinkStage.tsx): a scorebar, the two Pokémon out joined by the cable, each turn
+   as a moment, the momentum of the fight and the turns as cards. Every motion here is off under reduced motion. */
 
-.link-stage {
+:root { --link-gold: #F7C84C; --link-red: #FF6B6B; --link-ok: #8BE0B5; }
+:root[data-theme="light"] { --link-gold: #9A6A00; --link-red: #C2302E; --link-ok: #1E8A55; }
+
+.link-show { display: grid; gap: 16px; }
+
+/* The scorebar: names, team pips, the score in Pokémon left, the turn, live or final. Sticky while the page scrolls. */
+.link-scorebar {
+  position: sticky;
+  /* Just under the site's own sticky header (65 px). */
+  top: 72px;
+  z-index: 5;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
-  align-items: stretch;
-  gap: 0;
-}
-.link-side {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: var(--surface);
-  padding: 18px 20px 16px;
+  background: color-mix(in srgb, var(--bg, #0E1116) 88%, transparent);
+  backdrop-filter: blur(10px);
 }
-.link-side-a { border-color: var(--side-a); box-shadow: 0 0 0 1px var(--side-a-soft), 0 12px 40px var(--side-a-soft); }
-.link-side-b { border-color: var(--side-b); box-shadow: 0 0 0 1px var(--side-b-soft), 0 12px 40px var(--side-b-soft); }
-.link-side-who {
-  margin: 0 0 4px;
+.link-sb-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.link-sb-b { align-items: flex-end; text-align: right; }
+.link-sb-name { font-weight: 650; font-size: 20px; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.link-sb-a .link-sb-name { color: var(--side-a); }
+.link-sb-b .link-sb-name { color: var(--side-b); }
+.link-sb-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.link-sb-score { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1; }
+.link-sb-dash { color: var(--muted); margin: 0 6px; font-weight: 400; }
+.link-sb-turn { font-family: var(--mono, ui-monospace, monospace); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.link-sb-pill {
   font-family: var(--mono, ui-monospace, monospace);
-  font-size: 12px;
-  letter-spacing: 0.12em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-}
-.link-side-a .link-side-who { color: var(--side-a); }
-.link-side-b .link-side-who { color: var(--side-b); }
-.link-side-mon { margin: 0 0 12px; font-size: 26px; letter-spacing: -0.02em; }
-.link-hp {
-  height: 10px;
-  border-radius: 5px;
-  background: var(--surface-alt);
-  border: 1px solid var(--line);
-  overflow: hidden;
-}
-.link-hp-fill { display: block; height: 100%; border-radius: 5px; transition: width 0.6s ease; }
-.link-hp-ok { background: #A6EFCB; }
-.link-hp-low { background: #F7C84C; }
-.link-hp-red { background: #FF6B6B; }
-.link-hp-text { margin: 6px 0 0; font-variant-numeric: tabular-nums; font-size: 14px; }
-.link-chips { margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.link-chip {
-  font-size: 12px;
-  padding: 2px 9px;
+  padding: 5px 10px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: var(--surface-alt);
+  color: var(--muted);
 }
-.link-chip-status { border-color: #F7C84C; }
-.link-seen { margin: 12px 0 0; font-size: 14px; }
-.link-cable { display: flex; align-items: center; }
-.link-cable span {
-  display: block;
-  width: 100%;
-  height: 4px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--side-a), #F7C84C, var(--side-b));
-}
-.link-turns { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 10px; max-height: 520px; overflow: auto; }
-.link-turns li { border-top: 1px solid var(--line); padding-top: 10px; }
-.link-turns p { margin: 2px 0; }
-.link-turn-n { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }
-.link-talk { font-style: italic; }
-/* A link battle framed by another site (app/link/match/[id]/embed): the stage alone. */
-.link-embed { padding: 12px 14px 16px; max-width: 980px; margin: 0 auto; }
-.link-embed-top { margin: 0 0 12px; font-size: 14px; }
-.link-embed-top a { color: var(--side-a); }
+.link-sb-live { color: var(--link-red); border-color: color-mix(in srgb, var(--link-red) 50%, transparent); background: color-mix(in srgb, var(--link-red) 12%, transparent); }
+.link-sb-live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--link-red); margin-right: 6px; vertical-align: 1px; animation: link-pulse 1.6s ease-in-out infinite; }
+@keyframes link-pulse { 50% { opacity: 0.25; } }
 
-/* Link battles' lobby (app/link/page.tsx): a card a battle. */
+/* Team pips: a monogram per Pokémon shown, its HP as an underline; a ring on the one out; struck when it's fainted. */
+.link-pips { display: inline-flex; gap: 5px; }
+.link-pip {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+}
+.link-pip-hp { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--link-ok); }
+.link-pips-a .link-pip-active { box-shadow: 0 0 0 2px var(--side-a); }
+.link-pips-b .link-pip-active { box-shadow: 0 0 0 2px var(--side-b); }
+.link-pip-unseen { border-style: dashed; color: var(--muted); background: transparent; }
+.link-pip-fainted { opacity: 0.35; text-decoration: line-through; }
+
+/* The arena: the two Pokémon out, joined by the cable. Side by side on a phone too: the comparison is the point. */
+.link-arena { display: grid; grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); align-items: stretch; }
+.link-arena .link-cable { align-self: center; }
+.link-fighter {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  padding: 16px 18px 14px;
+  min-width: 0;
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+.link-fighter-a { border-color: var(--side-a); box-shadow: 0 0 0 1px var(--side-a-soft), 0 14px 44px var(--side-a-soft); }
+.link-fighter-b { border-color: var(--side-b); box-shadow: 0 0 0 1px var(--side-b-soft), 0 14px 44px var(--side-b-soft); }
+.link-fighter-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.link-fighter-who { font-family: var(--mono, ui-monospace, monospace); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.link-fighter-a .link-fighter-who { color: var(--side-a); }
+.link-fighter-b .link-fighter-who { color: var(--side-b); }
+.link-fighter-clock { margin-left: auto; font-family: var(--mono, ui-monospace, monospace); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); padding: 2px 7px; border: 1px solid var(--line); border-radius: 7px; }
+.link-fighter-tag { font-family: var(--mono, ui-monospace, monospace); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink, #0E1116); background: var(--link-gold); padding: 3px 7px; border-radius: 6px; }
+.link-fighter-mon { margin: 0 0 12px; font-size: 32px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; overflow-wrap: anywhere; }
+.link-bar-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.link-bar { position: relative; height: 14px; border-radius: 7px; background: var(--line); overflow: hidden; }
+.link-bar::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 24.6%, var(--bg, #0E1116) 24.6% 25.4%, transparent 25.4% 49.6%, var(--bg, #0E1116) 49.6% 50.4%, transparent 50.4% 74.6%, var(--bg, #0E1116) 74.6% 75.4%, transparent 75.4%); opacity: 0.55; }
+.link-bar-fill, .link-bar-ghost { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 7px; }
+.link-bar-fill { transition: width 0.5s ease; }
+.link-bar-ghost { background: rgba(255, 255, 255, 0.75); animation: link-ghost 0.9s ease forwards 0.25s; }
+@keyframes link-ghost { to { opacity: 0; } }
+.link-bar-ok { background: var(--link-ok); }
+.link-bar-low { background: var(--link-gold); }
+.link-bar-red { background: var(--link-red); }
+.link-bar-pct { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 3.4em; text-align: right; }
+.link-delta { position: absolute; right: 0; top: -8px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--link-red); animation: link-float 0.9s ease forwards; pointer-events: none; }
+.link-delta-super { color: var(--link-gold); font-size: 1.3em; }
+@keyframes link-float { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-18px); opacity: 0; } }
+.link-fighter-crit { animation: link-shake 0.18s ease 2; border-color: var(--link-gold); }
+@keyframes link-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+.link-fighter-out .link-fighter-mon { text-decoration: line-through; text-decoration-thickness: 2px; }
+.link-fighter-out, .link-fighter-loser { filter: saturate(0.25); opacity: 0.7; }
+.link-fighter-winner { box-shadow: 0 0 0 2px var(--link-gold), 0 14px 44px color-mix(in srgb, var(--link-gold) 25%, transparent); }
+.link-chips { margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.link-chip { font-size: 12px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; }
+.link-chip-status { border-color: var(--link-gold); }
+.link-chip-out { border-color: var(--link-red); color: var(--link-red); }
+
+/* The cable between them: the product's wire, a pulse running along it as each turn lands. */
+.link-cable { position: relative; height: 2px; background: var(--wire); opacity: 0.8; }
+.link-cable-pulse { position: absolute; top: -4px; left: 0; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 0 12px #fff; animation: link-run 0.6s ease-out forwards; }
+@keyframes link-run { from { left: 0; opacity: 1; } to { left: calc(100% - 10px); opacity: 0; } }
+
+/* The line under the arena: both sides choosing (one timer for both), or where a replay is. */
+.link-status { margin: -4px 0 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; color: var(--muted); min-height: 1.4em; }
+.link-status-time { font-variant-numeric: tabular-nums; margin-left: 4px; }
+.link-dots::after { content: "…"; display: inline-block; width: 1.2em; animation: link-dots 1.2s steps(4) infinite; overflow: hidden; vertical-align: bottom; white-space: nowrap; }
+@keyframes link-dots { from { width: 0; } to { width: 1.2em; } }
+
+/* The result: who won, how, and the rating changes; then watch from the start, and share. */
+.link-result { text-align: center; padding: 22px 18px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); position: relative; overflow: hidden; }
+.link-result::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--wire); animation: link-sweep 0.8s ease-out; transform-origin: left; }
+@keyframes link-sweep { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.link-result-head { margin: 0; font-size: 40px; font-weight: 750; letter-spacing: -0.03em; line-height: 1.05; overflow-wrap: anywhere; }
+.link-result-a .link-result-head { color: var(--side-a); }
+.link-result-b .link-result-head { color: var(--side-b); }
+.link-result-sub { margin: 8px 0 0; color: var(--muted); }
+.link-result-ratings { font-family: var(--mono, ui-monospace, monospace); font-size: 13px; }
+.link-result-actions { margin: 14px 0 0; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.link-btn { display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
+.link-btn:hover { border-color: var(--side-a); }
+.link-btn:focus-visible { outline: 2px solid var(--side-a); outline-offset: 2px; }
+.link-btn-primary { background: var(--fg, #F6F4EE); color: var(--bg, #0E1116); border-color: transparent; }
+.link-share { position: relative; display: inline-flex; align-items: center; gap: 8px; }
+.link-share-menu { position: absolute; z-index: 6; top: 46px; left: 50%; transform: translateX(-50%); display: grid; min-width: 240px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35); text-align: left; }
+.link-share-menu button, .link-share-menu a { display: block; padding: 9px 12px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.link-share-menu button:hover, .link-share-menu a:hover, .link-share-menu button:focus-visible, .link-share-menu a:focus-visible { background: var(--line); outline: none; }
+.link-share-said { font-size: 13px; color: var(--muted); }
+.link-screens-later { margin: 0; padding: 10px 14px; border: 1px dashed var(--line); border-radius: 12px; }
+
+/* The momentum strip: each team's HP over the turns. */
+.link-momentum { margin: 0; }
+.link-momentum svg { display: block; width: 100%; height: 72px; overflow: visible; }
+.link-mo-a, .link-mo-b { fill: none; stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.link-mo-a { stroke: var(--side-a); }
+.link-mo-b { stroke: var(--side-b); }
+.link-mo-mid { stroke: var(--line); stroke-dasharray: 3 5; vector-effect: non-scaling-stroke; }
+.link-mo-hit { fill: transparent; cursor: pointer; }
+.link-mo-hit:hover { fill: color-mix(in srgb, var(--fg, #fff) 6%, transparent); }
+.link-mo-key::before { content: ""; display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: 3px; }
+.link-mo-key-a::before { background: var(--side-a); }
+.link-mo-key-b::before { background: var(--side-b); }
+
+/* The turns: a card each, newest first; each side's doings in its colour, what came of each move as a tag. */
+.link-turns { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.link-turn { padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.link-turn-this { border-color: var(--link-gold); box-shadow: 0 0 0 1px var(--link-gold); }
+.link-turn-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.link-turn-n { font-family: var(--mono, ui-monospace, monospace); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.link-turn-bars { display: inline-flex; gap: 6px; }
+.link-mini { display: inline-block; width: 40px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.link-mini > span { display: block; height: 100%; }
+.link-mini-a > span { background: var(--side-a); }
+.link-mini-b > span { background: var(--side-b); }
+.link-turn-link { margin-left: auto; color: var(--muted); text-decoration: none; font-family: var(--mono, ui-monospace, monospace); padding: 0 6px; border-radius: 6px; }
+.link-turn-link:hover, .link-turn-link:focus-visible { color: inherit; background: var(--line); }
+.link-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.link-line { padding: 2px 0 2px 10px; border-left: 3px solid transparent; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.link-line-a { border-left-color: var(--side-a); }
+.link-line-b { border-left-color: var(--side-b); }
+.link-line-other { color: var(--muted); }
+.link-line-faint { font-weight: 650; }
+.link-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.link-tag-crit { border-color: var(--link-gold); color: var(--link-gold); }
+.link-tag-super { background: var(--link-gold); border-color: var(--link-gold); color: var(--ink, #0E1116); }
+.link-tag-missed, .link-tag-resisted, .link-tag-immune { color: var(--muted); }
+.link-line-faint::after { content: "Knocked out"; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; color: var(--link-red); border: 1px solid var(--link-red); }
+.link-bubble { position: relative; margin: 2px 0 8px; padding: 8px 12px; max-width: 80%; border-radius: 14px; border: 1px solid var(--line); font-size: 15px; overflow-wrap: anywhere; }
+.link-bubble-a { border-color: var(--side-a); }
+.link-bubble-b { border-color: var(--side-b); margin-left: auto; }
+.link-bubble-who { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.link-more { justify-self: center; }
+
+/* A phone: the arena stays side by side, everything a size smaller; the scorebar keeps the names and score. */
+@media (max-width: 640px) {
+  .link-scorebar { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; padding: 8px 10px; top: 70px; }
+  .link-sb-pill { grid-column: 1 / -1; justify-self: center; padding: 3px 8px; }
+  .link-sb-name { font-size: 15px; }
+  .link-sb-score { font-size: 24px; }
+  .link-pip { width: 22px; height: 22px; font-size: 9px; border-radius: 6px; }
+  .link-arena { grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr); }
+  .link-fighter { padding: 12px 10px 10px; border-radius: 14px; }
+  .link-fighter-mon { font-size: 18px; margin-bottom: 8px; }
+  .link-fighter-clock { font-size: 10px; padding: 1px 5px; }
+  .link-bar { height: 10px; }
+  .link-bar-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .link-bar-pct { font-size: 16px; text-align: left; }
+  .link-result-head { font-size: 30px; }
+  .link-bubble { max-width: 92%; }
+}
+
+/* A link battle framed by another site (app/link/match/[id]/embed): the scorebar, the arena and the last turns. */
+.link-embed { padding: 12px 14px 16px; max-width: 980px; margin: 0 auto; }
+.link-embed-top { margin: 0 0 10px; font-size: 13px; display: flex; justify-content: space-between; gap: 10px; }
+.link-embed-top a { color: var(--side-a); }
+.link-show-compact .link-scorebar { position: static; }
+
+/* Link battles' lobby and a fighter's battles: a card a battle, its names, its teams and its score. */
 .link-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .link-card-a {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "names watch" "facts watch";
+  grid-template-areas: "names score" "facts score";
   align-items: center;
-  gap: 2px 14px;
+  gap: 4px 14px;
   padding: 14px 18px;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -5636,11 +5784,15 @@ a.card:hover,
 }
 .link-card-a:hover { border-color: var(--side-a); }
 .link-card-a:focus-visible { outline: 2px solid var(--side-a); outline-offset: 2px; }
-.link-card-names { grid-area: names; font-weight: 600; overflow-wrap: anywhere; }
-.link-card-facts { grid-area: facts; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.link-card-watch { grid-area: watch; font-weight: 600; color: var(--side-a); }
-.link-side-clock { color: var(--muted); letter-spacing: 0.04em; }
-.link-screens-later { margin: 0 0 18px; padding: 14px 16px; border: 1px dashed var(--line); border-radius: 12px; }
+.link-card-names { grid-area: names; font-weight: 650; overflow-wrap: anywhere; }
+.link-card-x { color: var(--muted); font-weight: 400; margin: 0 6px; }
+.link-card-names .link-card-l { color: var(--side-a); }
+.link-card-names .link-card-r { color: var(--side-b); }
+.link-card-facts { grid-area: facts; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.link-card-score { grid-area: score; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-variant-numeric: tabular-nums; }
+.link-card-score b { font-size: 22px; }
+.link-card-watch { font-weight: 650; color: var(--side-a); font-size: 13px; }
+.link-featured { margin: 0; }
 
 /* Both Game Boys' screens (components/link/LinkScreens.tsx): pixels kept sharp at any size. */
 .link-screens { margin: 0 0 18px; }
@@ -5689,15 +5841,30 @@ a.card:hover,
 .link-screens-turn { flex: 1; font-variant-numeric: tabular-nums; font-size: 14px; }
 .link-screens-speed { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) {
-  .link-hp-fill { transition: none; }
+  .link-sb-live::before, .link-bar-ghost, .link-delta, .link-fighter-crit, .link-cable-pulse, .link-dots::after, .link-result::before { animation: none; }
+  .link-bar-fill, .link-fighter { transition: none; }
+  .link-bar-ghost, .link-delta, .link-cable-pulse { display: none; }
 }
-/* A phone: one screen above the other, each the width of the page (side by side they were about 150 px each). */
+/* A phone: one screen above the other, each the width of the page. */
 @media (max-width: 640px) {
   .link-screens-pair { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .link-screen { padding: 8px 8px 10px; border-radius: 12px; }
 }
-@media (max-width: 720px) {
-  .link-stage { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .link-cable { height: 28px; justify-content: center; }
-  .link-cable span { width: 4px; height: 100%; background: linear-gradient(180deg, var(--side-a), #F7C84C, var(--side-b)); }
-}
+/* A link battle's page frame (components/link/LinkPage.tsx): the stage leads; a breadcrumb and a compact title above it. */
+.link-page-top { padding-top: 22px; padding-bottom: 6px; }
+.link-crumbs { margin: 0; font-family: var(--mono, ui-monospace, monospace); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.link-crumbs a { color: inherit; }
+.link-page-title { margin: 6px 0 0; font-size: 22px; font-weight: 650; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.link-page-body { display: grid; gap: 20px; padding-bottom: 48px; }
+.link-about { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+.link-about summary { cursor: pointer; }
+.link-about > div { margin-top: 8px; max-width: 72ch; }
+.link-turn-nav { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.link-card-pips { display: inline-flex; gap: 3px; }
+.link-pip-mini { width: 20px; height: 20px; font-size: 8px; border-radius: 5px; }
+.link-pip-l:not(.link-pip-unseen) { border-color: var(--side-a); }
+.link-pip-r:not(.link-pip-unseen) { border-color: var(--side-b); }
+.link-pip-l + .link-pip-r { margin-left: 6px; }
+.link-lobby-top h1 { max-width: 18ch; }
+.link-featured { display: grid; gap: 12px; }
+.link-featured-foot { margin: 0; display: flex; justify-content: center; }

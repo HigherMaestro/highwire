@@ -51,6 +51,8 @@ export interface LinkLobby {
 type Tally = { win: number; draw: number; loss: number };
 export interface LobbyCard {
   match: string;
+  /** The spectators' view, for the card's teams and score (absent on cards from before it was carried). */
+  spectator?: MatchWatch["spectator"];
   rated: boolean;
   house: boolean;
   sides: MatchWatch["sides"];
@@ -104,7 +106,11 @@ export async function linkLive(): Promise<LobbyCard[]> {
 
 export async function linkLobby(): Promise<LinkLobby> {
   const arena = lineRelay()?.linkArena;
-  if (!arena) return { ...ratedSample.lobby, queue: 0 };
+  if (!arena) {
+    // The sample's cards, with each battle's view from the sample itself.
+    const withView = (c: LobbyCard) => ({ ...c, spectator: ratedSample.matches.find((m) => m.match === c.match)?.spectator ?? null });
+    return { ...ratedSample.lobby, live: ratedSample.lobby.live.map(withView), recent: ratedSample.lobby.recent.map(withView), queue: 0 };
+  }
   const [m, ladder, queue] = await Promise.all([arena.matches(), arena.leaderboard(), arena.queueSize()]);
   return { live: m.live as unknown as LobbyCard[], recent: m.recent as unknown as LobbyCard[], ladder: ladder as unknown as LinkLobby["ladder"], queue };
 }

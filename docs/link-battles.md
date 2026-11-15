@@ -758,6 +758,39 @@ Everything they found is fixed:
   no `X-Frame-Options`; it has nothing to act on). All three are never indexed.
 - **Still to do:** films still wait behind every step, so under steady play they're made in the quiet moments.
 
+### 14.9 The spectator pages, redesigned after a UX review (2026-11-15)
+
+A designer's adversarial review (Fable) of every page at desktop and phone sizes found them functional but flat: the
+fight below the fold under a hero, live that didn't feel live, a wall of same-weight sentences, no score, no moment at
+the end, nothing to share. The redesign, with the hidden-information rules unchanged (bars only while live, one timer
+for both sides, no rated screens before the end):
+
+- **The stage is the page** (`components/link/LinkPage.tsx`): a breadcrumb and a compact title, then the stage; what
+  this is moves into one line with the rest behind a click.
+- **A scorebar** sticks under the site's header: both names in their sides' colours, each team as three pips (a
+  monogram per Pokémon shown, its last-seen HP as an underline, a ring on the one out, struck when it's fainted, a
+  dashed "?" for one not seen yet), the score in Pokémon left, the turn, and LIVE or FINAL. `lib/link/story.ts` derives
+  the teams, the score and the momentum from the spectators' per-turn sides (14.6), and picks each turn's lines apart.
+- **The arena:** the two Pokémon out, side by side on a phone too, with big HP bars and percentages, each side's clock
+  as a chip, a fainted Pokémon struck and dimmed, the winner ringed in gold. Each turn lands as a moment: the HP drains
+  behind a fading ghost with the damage floating up (gold when super effective), a critical hit shakes the card, and a
+  pulse runs along the cable. Under reduced motion each is a plain change of state.
+- **One "choosing" timer** for both sides, counted from when the page saw the turn open, never per side.
+- **The momentum strip:** both teams' HP turn by turn; once a battle's over (with its screens), a click opens that turn.
+- **The turns as cards:** newest first, each side's doings marked in its colour, what came of each move as a tag
+  (critical hit, super effective, not very effective, missed, knocked out), the table talk as speech bubbles, both HP
+  bars after the turn, and a link to the turn; eight turns, then "Show earlier turns", with no inner scroller.
+- **The end:** a banner with the winner, how it ended and the rating changes, then Watch from the start and Share
+  (copy the link, the link without the result, post on X, the embed's code). A finished battle's screens open on their
+  final frame, so they agree with the stage.
+- **The lobby** opens with the newest live battle as a featured stage (or, with none on, the latest replayed from the
+  start, its result held); its cards show both names in colour, both teams' pips, the score and when.
+- **Share cards** (`lib/link/card.tsx`): both names in their colours either side of the wire, the teams' pips and live
+  HP bars; a finished battle's card stays spoiler-free; a turn's card shows that turn's moment ("Turn 5 · A critical
+  hit") and its bars.
+- **The embed:** the scorebar, the arena and the last two turns.
+- Not taken: a phone showing one screen with a toggle (the screens stack on a phone, as asked on 2026-11-15).
+
 ## 15. Decisions needed from you
 
 1. **The format:** decided (2026-11-15): three-a-side fixed mirror, Charizard, Blastoise and Venusaur at level 50 (4.1).
