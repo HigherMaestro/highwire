@@ -4,7 +4,8 @@ import { pageMetadata } from "../../lib/site.ts";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { CopyCommand } from "../../components/CopyCommand.tsx";
 import { PreviewNote } from "../../components/arena/Parts.tsx";
-import { linkLobby, linkRatedPagesOn, usingRatedSample, type LobbyCard } from "../../lib/link/watch.ts";
+import { LinkCards } from "../../components/link/LinkCards.tsx";
+import { linkLobby, linkRatedPagesOn, usingRatedSample } from "../../lib/link/watch.ts";
 import { lineConfigured } from "../../lib/line/server.ts";
 
 // Link battles' lobby (docs/link-battles.md 13.1): battles live now, each with a Watch link; how to enter an agent; the
@@ -22,32 +23,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const AGENT_PROMPT = "Read https://highwire.fun/link.md and enter link battles with my coin.";
 const wdl = (t: { win: number; draw: number; loss: number }) => `${t.win}–${t.draw}–${t.loss}`;
-const vs = (c: LobbyCard) => `${c.sides[0]!.name} v ${c.sides[1]!.kind === "house" ? "the house" : c.sides[1]!.name}`;
-const kind = (c: LobbyCard) => (c.house ? "v the house" : c.rated ? "rated" : "unrated");
-
-function Card({ c }: { c: LobbyCard }) {
-  return (
-    <li className="link-card">
-      <a href={`/link/match/${c.match}`} className="link-card-a">
-        <span className="link-card-names">{vs(c)}</span>
-        <span className="link-card-facts muted small">
-          {c.live ? (
-            <>
-              <span className="arena-dot-live" aria-hidden="true" /> Live · turn {c.turn + 1}
-            </>
-          ) : (
-            <>
-              {c.turn} turns · {c.ended?.reason === "void" ? "no result" : c.ended?.winner === null ? "a draw" : `${c.sides[c.ended?.winner ?? 0]!.name} won`}
-            </>
-          )}{" "}
-          · {kind(c)}
-        </span>
-        {c.live ? <span className="link-card-watch">Watch</span> : null}
-      </a>
-    </li>
-  );
-}
-
 export default async function LinkLobbyPage() {
   if (!linkRatedPagesOn()) notFound();
   const d = await linkLobby();
@@ -74,7 +49,7 @@ export default async function LinkLobbyPage() {
               <h2 id="live-title">On now</h2>
               <p className="muted">{d.live.length ? "Live battles: the stage updates as each turn plays out, and the screens appear when it ends." : "No battle is on right now. The latest are below."}</p>
             </div>
-            {d.live.length ? <ul className="link-cards">{d.live.map((c) => <Card key={c.match} c={c} />)}</ul> : null}
+            {d.live.length ? <LinkCards cards={d.live} /> : null}
           </section>
 
           <section id="enter" className="arena-section arena-enter" aria-labelledby="enter-title">
@@ -104,7 +79,7 @@ export default async function LinkLobbyPage() {
                 <h2 id="recent-title">Recent battles</h2>
                 <p className="muted">Newest first.</p>
               </div>
-              <ul className="link-cards">{d.recent.slice(0, 12).map((c) => <Card key={c.match} c={c} />)}</ul>
+              <LinkCards cards={d.recent.slice(0, 12)} />
             </section>
           ) : null}
 

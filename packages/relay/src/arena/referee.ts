@@ -141,7 +141,7 @@ export class Referee {
    * Notes that the store answered now. A long gap since the last note, while the sweep should have been touching it
    * every minute, was an outage: it's recorded so no clock counts it.
    */
-  private async outages(): Promise<Outage[]> {
+  async outages(): Promise<Outage[]> {
     const now = this.clock.now();
     const ok = await this.store.get<{ at: number }>(OK);
     let list = (await this.store.get<Outage[]>(OUTAGES))?.value ?? [];

@@ -102,6 +102,10 @@ test("a battle played out is rated once, both fighters freed, and its screens sh
   const lobby = (await s.r.call("GET", "/api/link/matches")).body;
   assert.equal(lobby.recent[0].match, match);
   assert.equal(lobby.live.length, 0);
+  // Each fighter's page: its record there and the battle.
+  const page = await s.r.relay.linkArena!.fighter(winner === s.a ? MINT : MINT2);
+  assert.deepEqual([page!.record.rated.win, page!.battles[0]!.match], [1, match]);
+  assert.equal(await s.r.relay.linkArena!.fighter("never-played"), null);
   // Free again: a new join queues.
   assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a)).body.waiting, true);
 });
@@ -194,4 +198,20 @@ test("a resolution that died is run again by the sweep", async () => {
   await s.r.call("POST", "/api/link/move", { match, turn: 1, action: HIT }, s.b);
   await s.flush();
   assert.equal((await s.r.call("GET", `/api/link/match/${match}`)).body.ended.reason, "void");
+});
+
+test("an outage of the store stops the clocks: nobody forfeits time it couldn't play", async () => {
+  const s = await setup();
+  const match = await pair(s);
+  await s.r.call("POST", "/api/link/move", { match, turn: 0, action: HIT }, s.a);
+  await s.r.advance(60_000);
+  // The store goes down for three minutes: B, asked and silent, can't be reached either.
+  s.r.store.down = true;
+  s.r.clock.advance(180_000);
+  s.r.store.down = false;
+  const back = (await s.r.call("GET", `/api/link/match/${match}`)).body;
+  assert.equal(back.live, true, "a minute of silence outside the outage is not two");
+  await s.r.advance(70_000);
+  const end = (await s.r.call("GET", `/api/link/match/${match}`)).body;
+  assert.equal(end.ended?.reason, "forfeit", "once two minutes of it are outside the outage, it is");
 });

@@ -3,7 +3,8 @@ import type { Clock } from "../clock.ts";
 import { fail, RelayError } from "../errors.ts";
 import { randomHex } from "../registration.ts";
 import { update, type Store } from "../store.ts";
-import type { Fighter, Tally } from "../arena/types.ts";
+import type { Fighter, Outage, Tally } from "../arena/types.ts";
+import { activeMs } from "../arena/match.ts";
 import { linkMatchId, type LinkAction, type LinkEngine } from "./referee.ts";
 
 // Rated link battles (docs/link-battles.md 4.2, 6, 8.2, 9): agent against agent, or against the house when nobody's
@@ -18,6 +19,7 @@ import { linkMatchId, type LinkAction, type LinkEngine } from "./referee.ts";
 //
 // Clocks (4.2): each side has a bank, charged only while it's asked and hasn't decided. An empty bank takes the fallback
 // at once. A side asked and silent for two minutes forfeits (both: void). The cap and draws are the engine's and 4.2's.
+// Neither clock counts an outage of the store (The Line's record of them): nobody loses time it couldn't play.
 
 export type FallbackKind = "first" | "strongest" | "random";
 const FALLBACKS: FallbackKind[] = ["first", "strongest", "random"];
@@ -190,6 +192,7 @@ export class LinkArena {
     private spend: (f: Fighter, units: number) => Promise<void>,
     private defer: ((task: () => Promise<unknown>) => void) | undefined,
     config: LinkArenaConfig = {},
+    private outages: () => Promise<Outage[]> = async () => [],
   ) {
     this.bankMs = config.bankMs ?? 8 * 60_000;
     this.goneMs = config.goneMs ?? 2 * 60_000;
@@ -230,19 +233,19 @@ export class LinkArena {
    * Plays the clocks forward to now (fallbacks for empty banks, forfeits for sides gone silent) and, when every asked
    * side has decided, marks the turn resolving. Mutates `m`; true if anything changed.
    */
-  private settle(m: LinkMatchDoc, now: number): boolean {
+  private settle(m: LinkMatchDoc, now: number, outages: Outage[] = []): boolean {
     if (m.status !== "deciding") return false;
     let changed = false;
     const gone: Side[] = [];
     for (const s of SIDES) {
       const side = m.sides[s];
       if (!m.asked[s] || m.decided[s] || side.kind === "house") continue;
-      const used = now - m.openedAt;
+      const used = activeMs(m.openedAt, now, outages);
       if (used >= side.bank && m.fallbacks[s]) {
         m.decided[s] = m.fallbacks[s];
         side.bank = 0;
         changed = true;
-      } else if (now - Math.max(side.seen, m.openedAt) >= this.goneMs) {
+      } else if (activeMs(Math.max(side.seen, m.openedAt), now, outages) >= this.goneMs) {
         gone.push(s);
       }
     }
@@ -262,12 +265,13 @@ export class LinkArena {
 
   /** The match with its clocks played forward, written back if that changed anything; resolving or finishing as needed. */
   private async current(id: string): Promise<LinkMatchDoc> {
+    const outages = await this.outages();
     const now = this.clock.now();
     let became: LinkMatchDoc["status"] | null = null;
     const m = await update<LinkMatchDoc>(this.store, MATCH(id), (cur) => {
       if (!cur) return fail("not_found", "No such link battle.");
       const before = cur.status;
-      if (!this.settle(cur, now)) return undefined;
+      if (!this.settle(cur, now, outages)) return undefined;
       cur.updatedAt = now;
       if (cur.status !== before) became = cur.status;
       return cur;
@@ -560,12 +564,13 @@ export class LinkArena {
     }
     const id = input.match as string;
     await this.current(id);
+    const outages = await this.outages();
     const now = this.clock.now();
     let became = false;
     const m = await update<LinkMatchDoc>(this.store, MATCH(id), (cur) => {
       if (!cur) return fail("not_found", "No such link battle.");
       const side = this.sideOf(cur, f);
-      this.settle(cur, now);
+      this.settle(cur, now, outages);
       if (cur.status === "over") return fail("conflict", "That battle is over.");
       if (input.turn !== cur.turn) return fail("conflict", `That's turn ${input.turn}'s decision, and the battle is past it (${cur.turn} turns played): read your view again and answer it.`);
       if (cur.status !== "deciding" || !cur.asked[side]) return fail("conflict", "You aren't asked to decide this turn; wait for the next with link_state.");
@@ -574,13 +579,13 @@ export class LinkArena {
       const action = input.action;
       if (!legal.some((a) => sameAction(a, action))) return fail("bad_request", "That action isn't one of the legal actions in your view.");
       const s = cur.sides[side];
-      s.bank = Math.max(0, s.bank - (now - cur.openedAt));
+      s.bank = Math.max(0, s.bank - activeMs(cur.openedAt, now, outages));
       s.own++;
       s.seen = now;
       cur.decided[side] = action as LinkAction;
       if (line) cur.lines.push({ turn: cur.turn + 1, side, line });
       const before = cur.status;
-      this.settle(cur, now);
+      this.settle(cur, now, outages);
       became = before === "deciding" && (cur.status as string) === "resolving";
       cur.updatedAt = now;
       return cur;
@@ -820,6 +825,19 @@ export class LinkArena {
     const open = (await this.store.get<string[]>(OPEN))?.value ?? [];
     const recent = (await this.store.get<string[]>(RECENT))?.value ?? [];
     return { live: (await views(open.slice(-8).reverse())).filter((v) => v.live), recent: await views(recent.slice(0, n)) };
+  }
+
+  /** One fighter's link battles: its row on the ladder and its latest battles, newest first (null if it never played). */
+  async fighter(id: string, n = 12) {
+    const f = (await this.store.get<LinkFighter>(FIGHTER(id)))?.value;
+    if (!f) return null;
+    const ids = (await this.store.get<string[]>(FIGHTER_MATCHES(id)))?.value ?? [];
+    const battles = [];
+    for (const mid of ids.slice(0, n)) {
+      const v = await this.spectate(mid).catch(() => null);
+      if (v) battles.push({ match: v.match, rated: v.rated, house: v.house, sides: v.sides, turn: v.turn, live: v.live, ended: v.ended, started_at: v.started_at });
+    }
+    return { fighter: f.id, name: f.name, ticker: f.ticker, rating: Math.round(f.rating.r), provisional: f.rating.rd >= PROVISIONAL_RD, record: f.record, battles };
   }
 
   /** Link battles' ladder: ranked fighters (off provisional, not an operator's) by r − 2·RD, every record, the house. */
