@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { beatsOf, deepestDeficit, headline, highlights, leadSeries, momentum, scoreOf, stepsOf, storyOf, teamsAt, turnMoment, TEAM_SIZE } from "../lib/link/story.ts";
+import { beatsOf, colour, deepestDeficit, edgeOf, situation, tally, teamHp, turnCall, headline, highlights, leadSeries, momentum, scoreOf, stepsOf, storyOf, teamsAt, turnMoment, TEAM_SIZE } from "../lib/link/story.ts";
 import type { MatchWatch } from "../lib/link/battle.ts";
 
 // The story the spectator pages tell (lib/link/story.ts), on the rated sample: a real battle between the test fakes'
@@ -123,4 +123,54 @@ test("the lead and the highlights: knockouts and changes of lead, each for the s
   assert.equal(kos.length, s.turns.flatMap((t) => storyOf(t.lines, L)).filter((l) => l.kind === "faint").length);
   for (const x of h) assert.ok(x.turn >= 1 && x.turn <= over.turn);
   assert.ok(deepestDeficit(s, over.ended!.winner!) >= 0);
+});
+
+test("the edge and the commentary: from the stage alone, the same whoever has decided", () => {
+  const side = (species: string, hp: number) => ({ species, level: 50, hp_percent: hp, status: null, field: [], seen: [species], fainted: 0 });
+  const pip = (species: string | null, hp: number, fainted = false, active = false) => ({ species, hp, fainted, active });
+  // Two shown (one fainted), one unseen; the one out at 40.
+  assert.equal(teamHp([pip("Charizard", 0, true), pip("Blastoise", 60, false, true), pip(null, 100)], side("Blastoise", 40)), 140);
+  // One that came in this turn, before the pips have it: it's one of the unseen.
+  assert.equal(teamHp([pip("Charizard", 30, false, true), pip(null, 100), pip(null, 100)], side("Venusaur", 100)), 230);
+  assert.equal(edgeOf(150, 50), 75);
+  assert.equal(edgeOf(0, 0), 50);
+  const says = situation(["Wire Cat", "Second"], [2, 3], [side("Blastoise", 71), side("Blastoise", 15)], [171, 215]);
+  assert.deepEqual(says, ["Second leads 3–2 in Pokémon left.", "Second's Blastoise is hanging on at 15%.", "Second is ahead by 44 points of team HP."]);
+  // The score one way, the HP the other: one sentence says both, and the HP isn't said again.
+  assert.deepEqual(situation(["Wire Cat", "Second"], [2, 3], [side("Blastoise", 71), side("Blastoise", 60)], [171, 130]), ["Second has 3 Pokémon left to Wire Cat's 2, but Wire Cat has more HP overall."]);
+  assert.deepEqual(situation(["A", "B"], [3, 3], [side("X", 100), side("Y", 100)], [300, 300]), ["Level at 3 Pokémon each.", "Nothing between them on HP."]);
+});
+
+test("more to say while they choose: from the turns played, each line about what's public", () => {
+  const s = live.spectator!;
+  const lines = colour(s, [live.sides[0]!.name, live.sides[1]!.name], labels(live), teamsAt(s, null), [480, 95]);
+  assert.ok(lines.length >= 3, "a pool worth rotating");
+  assert.ok(lines.some((l) => /needs \d more knockouts?\./.test(l)));
+  assert.ok(lines.some((l) => l.includes("1:35 left on its clock")), "a clock under two minutes is said");
+  assert.equal(lines.at(-1), "Neither agent can see the other's choice until both are in.");
+  assert.equal(new Set(lines).size, lines.length, "no line twice");
+  assert.deepEqual(colour(null, ["A", "B"], ["A's", "B's"], [[], []], null), []);
+});
+
+test("a turn in one sentence, and a finished battle in numbers that name no winner", () => {
+  const L: [string, string] = ["A's", "B's"];
+  assert.equal(turnCall(storyOf(["A's Charizard used Slash.", "B's Venusaur used Razor Leaf.", "A's Charizard fainted!"], L)), "A's Charizard fainted!");
+  assert.equal(turnCall(storyOf(["A's Charizard used Slash.", "B's Venusaur used Razor Leaf."], L)), "B's Venusaur used Razor Leaf.");
+  const t = tally(over.spectator, labels(over), over.turn);
+  assert.match(t, /^\d knockouts · (\d lead changes? · )?22 turns$/);
+  assert.ok(!t.includes(over.sides[0]!.name) && !t.includes(over.sides[1]!.name));
+});
+
+test("a fighter's sigil: the same mint the same mark, mirrored, and a shape", async () => {
+  const { sigilCells } = await import("../lib/link/sigil.ts");
+  const a = sigilCells("So11111111111111111111111111111111111111112"), b = sigilCells("So11111111111111111111111111111111111111112");
+  assert.deepEqual(a, b);
+  for (const id of ["a", "b", "mint-one", "mint-two", "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"]) {
+    const cells = sigilCells(id);
+    assert.ok(cells.length >= 5 && cells.length <= 25);
+    const has = new Set(cells.map(([x, y]) => `${x},${y}`));
+    for (const [x, y] of cells) assert.ok(has.has(`${4 - x},${y}`), "mirrored left to right");
+  }
+  assert.notDeepEqual(sigilCells("mint-one"), sigilCells("mint-two"));
+  assert.equal(sigilCells(null).length, 13, "the house's H");
 });

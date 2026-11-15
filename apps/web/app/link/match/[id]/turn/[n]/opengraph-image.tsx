@@ -1,7 +1,7 @@
 import { CARD_SIZE, render, wireCard } from "../../../../../../lib/idea-card.tsx";
 import { fit } from "../../../../../../lib/fee-card.tsx";
 import { linkCard } from "../../../../../../lib/link/card.tsx";
-import { headline, storyOf, teamsAt } from "../../../../../../lib/link/story.ts";
+import { headline, storyOf, teamsAt, turnCall } from "../../../../../../lib/link/story.ts";
 import { linkMatchById, linkRatedPagesOn } from "../../../../../../lib/link/watch.ts";
 import { fromMatch } from "../../../../../../lib/link/battle.ts";
 
@@ -29,11 +29,14 @@ export default async function Image({ params }: { params: Promise<{ id: string; 
   const l = b.left, r = (1 - b.left) as 0 | 1;
   const name = (x: 0 | 1) => fit(b.sides[x].house ? "The house" : b.sides[x].name, 22);
   const teams = teamsAt(m.spectator, turn);
-  const moment = headline(storyOf(t.lines, [`${b.sides[0].name}'s`, `${b.sides[1].name}'s`]));
+  const story = storyOf(t.lines, [`${b.sides[0].name}'s`, `${b.sides[1].name}'s`]);
+  const moment = headline(story);
+  // What happened, in the turn's own sentence: its knockout, its biggest hit, its last move.
+  const what = turnCall(story);
   return render(
     linkCard({
       label: "LINK BATTLES",
-      moment: { text: MOMENT[moment] ?? moment, tone: moment === "A knockout" ? "ko" : moment === "A critical hit" || moment === "Super effective" ? "gold" : "plain" },
+      moment: { text: MOMENT[moment] ?? moment, tone: moment === "A knockout" ? "ko" : moment === "A critical hit" || moment === "Super effective" ? "gold" : "plain", sub: what ? fit(what, 60) : undefined },
       node: String(turn),
       names: [name(l), name(r)],
       pips: [teams[l], teams[r]],

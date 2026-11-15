@@ -32,7 +32,7 @@ async function fetchFilm(match: string, turn: number): Promise<Film | null> {
  * `onShow` hears which turn is on screen while the screens are being followed (a live battle playing, or once someone
  * has pressed play or stepped), and null otherwise, when the stage shows the battle as it stands.
  */
-export function LinkScreens({ match, turns, live, left, names, onShow, startTurn, autoplay = false, seek, fresh = false }: { match: string; turns: number; live: boolean; left: 0 | 1; names: [string, string]; onShow?: (s: Shown) => void; startTurn?: number; autoplay?: boolean; seek?: number; fresh?: boolean }) {
+export function LinkScreens({ match, turns, live, left, names, onShow, startTurn, autoplay = false, seek, fresh = false, call = "", quiet = false }: { match: string; turns: number; live: boolean; left: 0 | 1; names: [string, string]; onShow?: (s: Shown) => void; startTurn?: number; autoplay?: boolean; seek?: number; fresh?: boolean; /** What the stage is saying, shown between the screens on a phone, where the stage itself is below them. */ call?: string; /** Say nothing when the screens aren't kept (the lobby). */ quiet?: boolean }) {
   // The turn on screen: 0 is the opening (the first menu), 1..turns the turns played. A live battle opens on its newest
   // turn; a finished one on its last turn's final frame, so the screens agree with the stage and the result; a page can
   // ask for a turn (a turn link, from the start), and `seek` (the momentum strip) moves it.
@@ -66,8 +66,11 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
     const fit = () => {
       const stacked = window.matchMedia("(max-width: 640px)").matches;
       const w = el.clientWidth;
-      const each = stacked ? w - 30 : (w - 56) / 2 - 30;
-      el.style.setProperty("--px", String(Math.max(stacked ? 1 : 2, Math.min(4, Math.floor(each / SCREEN_W)))));
+      // The room for one screen inside its bezel (a phone's is thinner, and the pair runs wider than the text).
+      const each = stacked ? w - 14 : (w - 56) / 2 - 30;
+      // A phone too narrow for 2× gets the widest it can take, between whole multiples, rather than a tiny 1×.
+      const px = each >= SCREEN_W * 2 ? Math.min(4, Math.floor(each / SCREEN_W)) : stacked ? Math.max(1, each / SCREEN_W) : 2;
+      el.style.setProperty("--px", String(px));
     };
     fit();
     const ro = new ResizeObserver(fit);
@@ -271,6 +274,7 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
 
   const label = turn === 0 ? "The opening" : `Turn ${turn} of ${turns}`;
   if (noScreens) {
+    if (quiet) return null;
     return <p className="link-screens-later">This battle&apos;s screens are no longer kept. Every turn is still told below.</p>;
   }
   // Watch it back: from the first turn.
@@ -299,6 +303,11 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
         <span className="link-screens-cable" aria-hidden="true">
           <span key={turn} className="link-screens-cable-pulse" />
         </span>
+        {call ? (
+          <span key={call} className="link-screens-call" aria-hidden="true">
+            {call}
+          </span>
+        ) : null}
         {!started && !playing ? (
           <button type="button" className="link-screens-poster" onClick={watch} disabled={load.state !== "ready"}>
             <span className="link-screens-poster-btn">

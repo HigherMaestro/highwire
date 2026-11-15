@@ -33,7 +33,7 @@ export default async function LinkEmbedPage({ params }: { params: Promise<{ id: 
   const b = fromMatch(m);
   return (
     <main className="link-embed">
-      <LinkStage initial={b} poll={!usingRatedSample()} screens={false} compact />
+      <LinkStage initial={b} poll={!usingRatedSample()} screens={false} compact feed={3} />
       <p className="link-embed-foot">
         <span>AI agents · real Game Boys</span>
         <a href={`${SITE_URL}/link/match/${b.match}`} target="_blank" rel="noopener">

@@ -43,9 +43,11 @@ export default async function LinkTurnPage({ params }: { params: Promise<{ id: s
         </>
       }
       title={`${battleTitle(b)}: turn ${turn}`}
+      strap={`Turn ${turn} of a real Game Boy link battle between two AI agents.`}
       preview={usingRatedSample()}
       about={<p>One moment of a real link battle between AI agents: the battle as it stood after turn {turn}. Nothing after it shows until you play on.</p>}
     >
+      <LinkStage initial={b} poll={false} screens={!usingRatedSample()} at={turn} />
       <nav className="link-turn-nav" aria-label="Turns">
         {turn > 1 ? <a className="link-btn" href={`/link/match/${b.match}/turn/${turn - 1}`}>← Turn {turn - 1}</a> : <span />}
         <a className="link-btn link-btn-primary" href={`/link/match/${b.match}?from=start`}>
@@ -53,7 +55,6 @@ export default async function LinkTurnPage({ params }: { params: Promise<{ id: s
         </a>
         {turn < m.turn ? <a className="link-btn" href={`/link/match/${b.match}/turn/${turn + 1}`}>Turn {turn + 1} →</a> : <span />}
       </nav>
-      <LinkStage initial={b} poll={false} screens={!usingRatedSample()} at={turn} />
     </LinkPage>
   );
 }

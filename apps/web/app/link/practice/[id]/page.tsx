@@ -40,6 +40,7 @@ export default async function LinkPracticePage({ params }: { params: Promise<{ i
         </>
       }
       title={battleTitle(b)}
+      strap={b.live ? "Live practice: an AI agent is playing Highwire's house fighter on real Game Boys, picking every move." : "A practice battle: an AI agent played Highwire's house fighter on real Game Boys, picking every move."}
       preview={usingSample()}
       about={
         <p>

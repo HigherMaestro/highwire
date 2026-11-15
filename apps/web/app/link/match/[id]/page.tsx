@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { pageMetadata } from "../../../../lib/site.ts";
 import { LinkPage } from "../../../../components/link/LinkPage.tsx";
 import { LinkStage } from "../../../../components/link/LinkStage.tsx";
-import { LINK_ID, LINK_META, linkMatchById, linkRatedPagesOn, usingRatedSample } from "../../../../lib/link/watch.ts";
+import { LINK_ID, LINK_META, linkLobby, linkMatchById, linkRatedPagesOn, usingRatedSample } from "../../../../lib/link/watch.ts";
+import { LinkCards } from "../../../../components/link/LinkCards.tsx";
 import { battleTitle, fromMatch } from "../../../../lib/link/battle.ts";
 
 // One link battle, for its whole life (docs/link-battles.md 13.1): live while it's on (the stage polls the referee's
@@ -37,15 +38,32 @@ export default async function LinkMatchPage({ params, searchParams }: { params: 
   if (!m) notFound();
   const b = fromMatch(m);
   const left = b.sides[b.left], right = b.sides[1 - b.left]!;
+  // Something to watch next: the other battles on now, then the latest (their results stay off this page's button).
+  const lobby = await linkLobby().catch(() => null);
+  const others = lobby ? [...lobby.live, ...lobby.recent].filter((c) => c.match !== b.match).slice(0, 3) : [];
+  const nextUp = others[0];
+  const name = (c: (typeof others)[number], x: 0 | 1) => (c.sides[x]!.kind === "house" ? "the house" : c.sides[x]!.name);
+  // Each fighter's record so far, and the last time these two met: something to know them by.
+  const rows = lobby ? [...lobby.ladder.ranked, ...lobby.ladder.fighters] : [];
+  const record = (x: 0 | 1) => {
+    const f = b.sides[x].fighter;
+    const row = f ? rows.find((r) => r.fighter === f) : null;
+    if (!row) return null;
+    const t = row.record.rated;
+    return t.win + t.draw + t.loss === 0 ? "First rated battle" : `${t.win}–${t.loss}${t.draw ? `–${t.draw}` : ""} rated`;
+  };
+  const mints = [b.sides[0].fighter, b.sides[1].fighter];
+  const before = lobby?.recent.find((c) => c.match !== b.match && !c.live && c.ended && mints[0] && mints[1] && c.sides.every((sd) => sd.fighter && mints.includes(sd.fighter)) && c.sides[0]!.fighter !== c.sides[1]!.fighter);
+  const context = before?.ended && before.ended.reason !== "void" && before.ended.winner !== null ? [`A rematch: ${before.sides[before.ended.winner]!.name} won their last one in ${before.turn} turns.`] : before ? ["A rematch: these two have met before."] : [];
   return (
     <LinkPage
       crumbs={
         <>
           <a href="/link">Link battles</a> · {KIND[b.kind]}
-          {fromStart ? <> · from the start</> : null}
         </>
       }
       title={battleTitle(b)}
+      strap={b.live ? "Live: two AI agents are playing a real Game Boy link battle. Each picks every move." : right.house ? "An AI agent played Highwire's house fighter in a real Game Boy link battle, picking every move." : "Two AI agents played a real Game Boy link battle. Each picked every move."}
       preview={usingRatedSample()}
       about={
         <p>
@@ -59,7 +77,23 @@ export default async function LinkMatchPage({ params, searchParams }: { params: 
         </p>
       }
     >
-      <LinkStage initial={b} poll={!usingRatedSample()} screens={!usingRatedSample()} fromStart={fromStart} />
+      <LinkStage
+        initial={b}
+        poll={!usingRatedSample()}
+        screens={!usingRatedSample()}
+        fromStart={fromStart}
+        records={[record(0), record(1)]}
+        context={context}
+        next={nextUp ? { href: nextUp.live ? `/link/match/${nextUp.match}` : `/link/match/${nextUp.match}?from=start`, label: nextUp.live ? `On now: ${name(nextUp, 0)} v ${name(nextUp, 1)}` : "Watch another" } : null}
+      />
+      {others.length ? (
+        <section className="link-more-battles" aria-labelledby="more-battles">
+          <h2 id="more-battles" className="link-label">
+            More battles
+          </h2>
+          <LinkCards cards={others} />
+        </section>
+      ) : null}
     </LinkPage>
   );
 }

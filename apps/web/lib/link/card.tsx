@@ -14,10 +14,10 @@ const B = "#93E2FB";
 const GOLD = "#F7C84C";
 const RED = "#FF6B6B";
 
-export function linkCard(o: { label: string; names: [string, string]; pips: [Pip[], Pip[]] | null; bars: [number, number] | null; status: string; live: boolean; node?: string; moment?: { text: string; tone: "ko" | "gold" | "plain" } }) {
-  const cap = o.moment ? 60 : 84;
+export function linkCard(o: { label: string; names: [string, string]; pips: [Pip[], Pip[]] | null; bars: [number, number] | null; status: string; live: boolean; node?: string; moment?: { text: string; tone: "ko" | "gold" | "plain"; sub?: string }; /** A line under the wire in place of the teams: a finished battle in numbers that name no winner. */ line?: string }) {
+  const cap = o.moment ? (o.moment.sub ? 52 : 60) : 84;
   // The cable runs under the names; lower on a turn's card, under its headline, names and bars.
-  const y = o.moment ? 430 : 330;
+  const y = o.moment ? (o.moment.sub ? 452 : 430) : 330;
   const wire = `M0 ${y} C 300 ${y} 420 ${y + 30} 600 ${y + 30} C 780 ${y + 30} 900 ${y} 1200 ${y}`;
   const size = (n: string) => Math.min(cap, n.length > 16 ? 54 : n.length > 11 ? 68 : 84);
   const pipRow = (pips: Pip[] | null, color: string, align: "flex-start" | "flex-end") => (
@@ -101,7 +101,10 @@ export function linkCard(o: { label: string; names: [string, string]; pips: [Pip
       <div style={{ position: "absolute", left: 570, top: y, width: 60, height: 60, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Grotesk", fontWeight: 700, fontSize: o.node && o.node.length > 2 ? 18 : 24, color: PAPER }}>{o.node ?? "v"}</div>
       <div style={{ fontFamily: "Mono", fontSize: 20, letterSpacing: 2, color: MUTED, marginTop: 18 }}>{o.label}</div>
       {o.moment ? (
-        <div style={{ fontFamily: "Grotesk", fontWeight: 700, fontSize: 72, letterSpacing: -2.5, lineHeight: 1, marginTop: 10, color: o.moment.tone === "ko" ? RED : o.moment.tone === "gold" ? GOLD : PAPER }}>{o.moment.text}</div>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ fontFamily: "Grotesk", fontWeight: 700, fontSize: o.moment.sub ? 60 : 72, letterSpacing: -2.5, lineHeight: 1, marginTop: 10, color: o.moment.tone === "ko" ? RED : o.moment.tone === "gold" ? GOLD : PAPER }}>{o.moment.text}</div>
+          {o.moment.sub ? <div style={{ fontFamily: "Grotesk", fontWeight: 500, fontSize: 28, color: PAPER, marginTop: 8 }}>{o.moment.sub}</div> : null}
+        </div>
       ) : null}
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: o.moment ? 18 : 30 }}>
         <div style={{ display: "flex", flexDirection: "column", width: 500 }}>
@@ -113,10 +116,14 @@ export function linkCard(o: { label: string; names: [string, string]; pips: [Pip
           {o.bars ? bar(o.bars[1], "flex-end", B) : null}
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "auto" }}>
-        {pipRow(o.pips?.[0] ?? null, A, "flex-start")}
-        {pipRow(o.pips?.[1] ?? null, B, "flex-end")}
-      </div>
+      {o.line ? (
+        <div style={{ display: "flex", marginTop: "auto", fontFamily: "Grotesk", fontWeight: 700, fontSize: 44, letterSpacing: -1.4, color: PAPER }}>{o.line}</div>
+      ) : (
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "auto" }}>
+          {pipRow(o.pips?.[0] ?? null, A, "flex-start")}
+          {pipRow(o.pips?.[1] ?? null, B, "flex-end")}
+        </div>
+      )}
     </div>
   );
 }
