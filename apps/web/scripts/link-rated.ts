@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createRelay, FakeClock, MemoryStore } from "highwire-relay";
 import { FakeCoins, FakeRpc, launchTx, memoTx, MINT, MINT2, OTHER, WALLET } from "highwire-relay/testing";
 import { createHash, randomBytes } from "node:crypto";
@@ -8,9 +8,14 @@ import { createLinkEngine } from "../lib/link/engine.ts";
 // store, registration through the test fakes) with the real engine (the emulator, the game and the starting battle read
 // from disk), two fighters paired by the queue, each deciding every turn over HTTP as link_move does, and each turn
 // resolved after the answer that completes it, as the site's after() would. Needs the game, never in CI:
-//   HIGHWIRE_LINK_ROM=<the game> npm run link-rated -w highwire-web -- <side 0 state> <side 1 state>
+//   HIGHWIRE_LINK_ROM=<the game> npm run link-rated -w highwire-web -- <side 0 state> <side 1 state> [--sample]
+// With --sample it also writes lib/link/sample-rated.json, what the rated pages show without the referee: this battle
+// once it's over, as it stood mid-battle (live), and the lobby and ladder they make. The fighters are the test fakes'
+// invented coins, their mints replaced so the sample names no real address.
 
-const [p0, p1] = process.argv.slice(2);
+const [p0, p1] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const writeSample = process.argv.includes("--sample");
+let midway: Record<string, any> | null = null;
 const rom = process.env.HIGHWIRE_LINK_ROM;
 if (!rom || !p0 || !p1) {
   console.error("HIGHWIRE_LINK_ROM=<the game> npm run link-rated -w highwire-web -- <side 0 state> <side 1 state>");
@@ -71,6 +76,7 @@ for (let round = 0; round < 200; round++) {
   }
   await flush();
   const after = await call("GET", `/api/link/match/${match}`);
+  if (!midway && after.turn >= 10 && after.live) midway = after;
   const told = (after.spectator?.turns ?? []).filter((t: { turn: number }) => t.turn > before.turn).flatMap((t: { lines: string[] }) => t.lines);
   console.log(`turn ${after.turn}: ${told.join(" ")}`);
 }
@@ -79,4 +85,14 @@ const ladder = await call("GET", "/api/link/leaderboard");
 console.log(`\nended: ${JSON.stringify(end.ended)} after ${end.turn} turns, ${decisions} decisions; resolving took ${(resolveMs / Math.max(1, end.turn)).toFixed(0)} ms a turn`);
 console.log(`ratings: ${ladder.fighters.map((f: { name: string; rating: number; record: { rated: unknown } }) => `${f.name} ${f.rating} ${JSON.stringify(f.record.rated)}`).join("; ")}`);
 console.log(`lines on the page: ${JSON.stringify(end.lines)}`);
+if (writeSample) {
+  // The sample names no real address: the fakes' mints become placeholders.
+  const scrub = (o: unknown, id: string) => JSON.parse(JSON.stringify(o).replaceAll(MINT, "sample-fighter-a").replaceAll(MINT2, "sample-fighter-b").replaceAll(match, id));
+  const over = scrub(end, "samplerat2");
+  const live = scrub(midway, "sampleliv3");
+  const card = (m: Record<string, any>) => ({ match: m.match, rated: m.rated, house: m.house, sides: m.sides, turn: m.turn, live: m.live, ended: m.ended, started_at: m.started_at });
+  const lobby = { live: [card(live)], recent: [card(over)], ladder: scrub(ladder, "samplerat2") };
+  writeFileSync(new URL("../lib/link/sample-rated.json", import.meta.url), JSON.stringify({ matches: [over, live], lobby }, null, 1) + "\n");
+  console.log("wrote lib/link/sample-rated.json: /link/match/samplerat2 (over), /link/match/sampleliv3 (live), and /link's lobby");
+}
 console.log(`store keys left: ${Object.keys(store.dump()).filter((k) => k.startsWith("link:mstate")).length} packed battles; ${store.ops} store operations`);

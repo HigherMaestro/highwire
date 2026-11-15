@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { LinkSide, LinkWatch } from "../../lib/link/watch.ts";
+import { fromAnswer, type LinkBattle, type LinkSide } from "../../lib/link/battle.ts";
 import { LinkScreens, type Shown } from "./LinkScreens.tsx";
 
 // A link battle on the stage (docs/link-battles.md 13.2): both sides' Pokémon out, their HP as the game's bars, status
@@ -12,12 +12,15 @@ import { LinkScreens, type Shown } from "./LinkScreens.tsx";
 
 const POLL_MS = 2000;
 
-function Side({ side, who, tone, exact }: { side: LinkSide; who: string; tone: "a" | "b"; exact: boolean }) {
+function Side({ side, who, tone, exact, clock }: { side: LinkSide; who: string; tone: "a" | "b"; exact: boolean; clock: string | null }) {
   const pct = Math.max(0, Math.min(100, side.hp_percent));
   const band = pct > 50 ? "ok" : pct > 20 ? "low" : "red";
   return (
     <div className={`link-side link-side-${tone}`}>
-      <p className="link-side-who">{who}</p>
+      <p className="link-side-who">
+        {who}
+        {clock ? <span className="link-side-clock" title="Its clock as this turn opened"> · {clock}</span> : null}
+      </p>
       <h3 className="link-side-mon">
         {side.species} <span className="muted">Lv {side.level}</span>
       </h3>
@@ -49,13 +52,13 @@ function Side({ side, who, tone, exact }: { side: LinkSide; who: string; tone: "
   );
 }
 
-/** The stage, with both Game Boys' screens above it when `screens` (never on the sample, which has no films). */
-export function LinkStage({ initial, poll = true, screens = true }: { initial: LinkWatch; poll?: boolean; screens?: boolean }) {
+/** The stage, with both Game Boys' screens above it when they may be shown (never on the sample, which has no films). */
+export function LinkStage({ initial, poll = true, screens = true }: { initial: LinkBattle; poll?: boolean; screens?: boolean }) {
   const [w, setW] = useState(initial);
   const [shown, setShown] = useState<Shown>(null);
   const visible = useRef(true);
   const ref = useRef<HTMLDivElement>(null);
-  const live = !w.ended;
+  const live = w.live;
 
   useEffect(() => {
     const el = ref.current;
@@ -70,23 +73,25 @@ export function LinkStage({ initial, poll = true, screens = true }: { initial: L
     const t = setInterval(async () => {
       if (!visible.current || document.hidden) return;
       try {
-        const res = await fetch(`/api/link/practice/${initial.match}`);
+        const res = await fetch(initial.poll);
         // Gone (expired) or never there: stop asking.
         if (res.status === 404) clearInterval(t);
         if (!res.ok) return;
-        const next = (await res.json()) as LinkWatch;
+        const next = fromAnswer(await res.json());
         setW(next);
-        if (next.ended) clearInterval(t);
+        if (!next.live) clearInterval(t);
       } catch {
         // A dropped poll: the next one catches up.
       }
     }, POLL_MS);
     return () => clearInterval(t);
-  }, [live, poll, initial.match]);
+  }, [live, poll, initial.poll]);
 
   const s = w.spectator;
-  const agent = (1 - w.house_side) as 0 | 1;
-  const talk = new Map(w.lines.map((l) => [l.turn, l.line]));
+  const left = w.left;
+  const right = (1 - left) as 0 | 1;
+  const names: [string, string] = [w.sides[0].name, w.sides[1].name];
+  const talk = new Map<string, string>(w.lines.map((l) => [`${l.turn}:${l.side}`, l.line]));
   // The battle as the screens have shown it: up to the turn on screen (that turn too once it has played to its end).
   const stage = useMemo(() => {
     if (!s) return null;
@@ -97,16 +102,26 @@ export function LinkStage({ initial, poll = true, screens = true }: { initial: L
     if (!sides) return { sides: s.sides, turns: s.turns, behind: null };
     return { sides, turns: s.turns.filter((t) => t.turn <= upTo), behind: upTo < newest ? Math.max(0, upTo) : null };
   }, [s, shown]);
+  const clock = (side: 0 | 1) => {
+    const c = w.clocks?.[side];
+    return c === null || c === undefined ? null : `${Math.floor(c / 60)}:${String(c % 60).padStart(2, "0")}`;
+  };
   return (
     <div ref={ref}>
-      {screens ? <LinkScreens match={w.match} turns={w.turn} live={live} agent={agent} name={w.name} onShow={setShown} /> : null}
+      {screens && w.screens ? (
+        <LinkScreens match={w.match} turns={w.turn} live={live} left={left} names={names} onShow={setShown} />
+      ) : screens && !w.screens ? (
+        <p className="link-screens-later muted">
+          Both Game Boys&apos; screens appear here when the battle ends: each shows its own side&apos;s exact HP and PP, which the other side mustn&apos;t see while it&apos;s on.
+        </p>
+      ) : null}
       {s && stage ? (
         <div className="link-stage">
-          <Side side={stage.sides[agent]} who={w.name} tone="a" exact={!s.live} />
+          <Side side={stage.sides[left]} who={names[left]} tone="a" exact={!s.live} clock={clock(left)} />
           <div className="link-cable" aria-hidden="true">
             <span />
           </div>
-          <Side side={stage.sides[w.house_side]} who="The house" tone="b" exact={!s.live} />
+          <Side side={stage.sides[right]} who={names[right]} tone="b" exact={!s.live} clock={clock(right)} />
         </div>
       ) : null}
       <p className="arena-live-foot">
@@ -120,11 +135,13 @@ export function LinkStage({ initial, poll = true, screens = true }: { initial: L
         {[...(stage?.turns ?? [])].reverse().map((t) => (
           <li key={t.turn}>
             <p className="link-turn-n">Turn {t.turn}</p>
-            {talk.get(t.turn) ? (
-              <p className="link-talk">
-                <span className="muted small">{w.name} said:</span> “{talk.get(t.turn)}”
-              </p>
-            ) : null}
+            {([left, right] as const).map((side) =>
+              talk.get(`${t.turn}:${side}`) ? (
+                <p key={side} className="link-talk">
+                  <span className="muted small">{names[side]} said:</span> “{talk.get(`${t.turn}:${side}`)}”
+                </p>
+              ) : null,
+            )}
             {t.lines.length ? t.lines.map((l, i) => <p key={i}>{l}</p>) : <p className="muted">Nothing happened.</p>}
           </li>
         ))}

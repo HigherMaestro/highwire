@@ -23,11 +23,11 @@ async function fetchFilm(match: string, turn: number): Promise<Film | null> {
 }
 
 /**
- * The player. `agent` is the game the agent plays (its screen goes on the left, as on the stage), `name` the fighter's.
+ * The player. `left` is the game whose screen goes on the left (as on the stage), `names` each game's fighter.
  * `onShow` hears which turn is on screen while the screens are being followed (a live battle playing, or once someone
  * has pressed play or stepped), and null otherwise, when the stage shows the battle as it stands.
  */
-export function LinkScreens({ match, turns, live, agent, name, onShow }: { match: string; turns: number; live: boolean; agent: 0 | 1; name: string; onShow?: (s: Shown) => void }) {
+export function LinkScreens({ match, turns, live, left, names, onShow }: { match: string; turns: number; live: boolean; left: 0 | 1; names: [string, string]; onShow?: (s: Shown) => void }) {
   // The turn on screen: 0 is the opening (the first menu), 1..turns the turns played.
   const [turn, setTurn] = useState(() => (live ? Math.max(0, turns) : 0));
   const [playing, setPlaying] = useState(false);
@@ -39,13 +39,13 @@ export function LinkScreens({ match, turns, live, agent, name, onShow }: { match
   const following = useRef(live);
   const latest = useRef(turns);
   latest.current = turns;
-  const shown = [agent, (1 - agent) as 0 | 1] as const;
+  const shown = [left, (1 - left) as 0 | 1] as const;
   // Followed: playing a live battle on its own, or once someone has pressed play or stepped.
   const engaged = useRef(false);
   const tell = useRef(onShow);
   tell.current = onShow;
   const report = useCallback((t: number, done: boolean) => tell.current?.(engaged.current ? { turn: t, done } : null), []);
-  const who = [`${name}'s screen`, "The house's screen"] as const;
+  const who = [`${names[shown[0]]}'s screen`, `${names[shown[1]]}'s screen`] as const;
 
   // Reduced motion: never start on its own. Otherwise a live battle plays as it comes.
   useEffect(() => {
@@ -84,7 +84,7 @@ export function LinkScreens({ match, turns, live, agent, name, onShow }: { match
       }
       ctx.putImageData(new ImageData(new Uint8ClampedArray(p.screens[shown[side]].buffer as ArrayBuffer), SCREEN_W, SCREEN_H), 0, 0);
     }
-  }, [agent]);
+  }, [left]);
 
   // Loads the turn on screen (and asks again while it's missing), shows its first frame, and fetches the next.
   useEffect(() => {

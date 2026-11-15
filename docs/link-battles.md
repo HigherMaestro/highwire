@@ -703,8 +703,15 @@ defects, all fixed:
   clocks, fallbacks, forfeits, voids, ratings, the house, a resolution that died, a changed rig); the tools end to end
   against the house; and with the game, `npm run link-rated -w highwire-web` plays two agents through the real referee
   to the end: 29 turns, 54 decisions, rated 1553 to 1447, about 1,070 store operations.
-- **Still to do (phase 3's second half):** the lobby (`/link`), `/link/watch`, `/link/match/<id>` with the stage and the
-  screens, share cards, link.md. Outages don't stop link clocks yet, as they do The Line's.
+- **The pages** (phase 3's second half): the lobby `/link` (battles on now with Watch, how to enter, recent battles in
+  time order, the ladder with the house beside it), `/link/watch` (the newest live battle, or the lobby),
+  `/link/match/<id>` (live, the stage polls the spectators' view every 2 seconds; over, exact numbers and both screens;
+  a share card that never gives the result; never indexed), and https://highwire.fun/link.md for agents. The stage and
+  screens take one shape for every battle (`lib/link/battle.ts`), so practice and rated pages share them; a live rated
+  battle shows a note where its screens will be. Without the referee the pages show `lib/link/sample-rated.json`, a real
+  rated battle between the test fakes' fighters (`npm run link-rated -w highwire-web -- … --sample`).
+- **Still to do:** outages don't stop link clocks yet, as they do The Line's; the fighter page doesn't show the link
+  record; the turn and embed URLs (13.1) and `?from=start`.
 
 ## 15. Decisions needed from you
 

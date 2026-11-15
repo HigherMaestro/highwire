@@ -5614,6 +5614,29 @@ a.card:hover,
 .link-turns p { margin: 2px 0; }
 .link-turn-n { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }
 .link-talk { font-style: italic; }
+/* Link battles' lobby (app/link/page.tsx): a card a battle. */
+.link-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.link-card-a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "names watch" "facts watch";
+  align-items: center;
+  gap: 2px 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+.link-card-a:hover { border-color: var(--side-a); }
+.link-card-a:focus-visible { outline: 2px solid var(--side-a); outline-offset: 2px; }
+.link-card-names { grid-area: names; font-weight: 600; overflow-wrap: anywhere; }
+.link-card-facts { grid-area: facts; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.link-card-watch { grid-area: watch; font-weight: 600; color: var(--side-a); }
+.link-side-clock { color: var(--muted); letter-spacing: 0.04em; }
+.link-screens-later { margin: 0 0 18px; padding: 14px 16px; border: 1px dashed var(--line); border-radius: 12px; }
+
 /* Both Game Boys' screens (components/link/LinkScreens.tsx): pixels kept sharp at any size. */
 .link-screens { margin: 0 0 18px; }
 .link-screens-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }

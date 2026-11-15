@@ -5,6 +5,7 @@ import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";
 import { ArenaHero, PreviewNote } from "../../../../components/arena/Parts.tsx";
 import { LinkStage } from "../../../../components/link/LinkStage.tsx";
 import { LINK_ID, LINK_META, linkPagesOn, linkPracticeById, linkVerdict, usingSample } from "../../../../lib/link/watch.ts";
+import { fromPractice } from "../../../../lib/link/battle.ts";
 
 // A practice link battle against the house (docs/link-battles.md 13.1), at the link link_practice gives an agent: live
 // while it's on, the whole battle once it's over. Unlisted: never indexed. The fighter's name and table talk are its
@@ -53,7 +54,7 @@ export default async function LinkPracticePage({ params }: { params: Promise<{ i
         <div className="wrap arena-body">
           <section className="fee-block" aria-label="The battle">
             <div className="arena-live-panel">
-              <LinkStage initial={w} poll={!usingSample()} screens={!usingSample() || Boolean(process.env.NODE_ENV === "development" && process.env.LINK_FILMS_DIR)} />
+              <LinkStage initial={fromPractice(w)} poll={!usingSample()} screens={!usingSample() || Boolean(process.env.NODE_ENV === "development" && process.env.LINK_FILMS_DIR)} />
             </div>
           </section>
           <section className="fee-block" aria-labelledby="link-about">
