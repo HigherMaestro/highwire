@@ -1,7 +1,8 @@
 # PRD: Link battles
 
-Status: **phases 0 to 2 built and merged (14.1 to 14.5), off in production until switched on; first proposed 2026-11-14,
-revised after an adversarial review the same day (18), and the code reviewed and fixed on 2026-11-15 (14.5).** A second game
+Status: **phases 0 to 2 built and merged (14.1 to 14.5), practice live on highwire.fun since 2026-11-15, and phase 4's
+screens built for practice (14.6); first proposed 2026-11-14, revised after an adversarial review the same day (18), and
+the code reviewed and fixed on 2026-11-15 (14.5).** A second game
 for Highwire's fighters, beside The Line: two agents fight a real Pokémon Yellow link battle, the game's own code
 deciding every turn. It brings JK Clawseum's Competition 002 work (`~/git/jkclawseum`, last touched 2026-03-25) to
 Highwire. "Link battles" is a working name (15).
@@ -377,11 +378,12 @@ indexed, so an agent's practice can be shared like a `line_practice` replay.
 ### 13.3 After the battle
 
 - **The replay** at the same URL: every turn, now with exact numbers (HP, PP, damage) and the full log.
-- **Both screens side by side,** the real Game Boy screens, rendered once from the saved states and decisions when the
-  match ends, after the response, never inside a move, and kept in Blob storage (phase 4). The stage stays beside them
-  as the plain-language account. A match is about 12 to 25 seconds of footage a turn per screen; phase 4 picks a format
-  that plays on phones at that length, and the screens follow the replay's turn controls (play, pause, step a turn,
-  jump to a turn).
+- **Both screens side by side,** the real Game Boy screens: each turn played again from the battle as it stood before
+  it, with the same decisions and dice and both screens drawn, after the response, never inside a move, and kept in
+  Blob storage (phase 4, 14.6). The stage stays beside them as the plain-language account. The screens follow the turn
+  controls (play, pause, a turn back or on, double speed). **When:** a practice battle's turns are filmed as they're
+  played, so its page shows them a few seconds after each turn (the house has nothing to hide); a rated match's are
+  filmed as it goes but served only once it's over, since each screen shows its own side's exact HP and PP.
 - **The result,** how it ended (knockout, forfeit, the cap, a void and why), and each side's rating change.
 
 ### 13.4 Share cards and indexing
@@ -409,7 +411,7 @@ the URLs above so an agent can tell its owner where to watch (`link_join` and `l
 | 1. The whole battle | Decision points (7.2), the button sequences, the end, turn records with the mid-turn flags, desync checks, the banned moves | A fuzzer plays 1,000 random-legal battles: no stuck rig, desyncs counted and their moves known, every end matching the game's | 2 to 3 weeks |
 | 2. Practice | `highwire-link`, the referee's resolution path (8.2), practice matches, `link_rules`, `link_practice`, the house, the views and their leak tests, the practice battle page (`/link/practice/<id>`) | An agent plays the house to the end through the tools, with turns resolving after the response, and its battle replays at its link | 1 to 1.5 weeks |
 | 3. Rated play and spectator mode | The queue, decisions, clocks, the sweep, ratings, draws, the cap, `link_join` / `state` / `move`, link.md; spectator mode (13.1, 13.2, 13.4): the lobby, `/link/watch`, the match, turn and embed URLs, the live stage, share cards | Two registered fighters from different owners finish a rated match on highwire.fun, watched live from a clean URL on a phone, with no hidden information in any spectator response | 1 to 2 weeks |
-| 4. The screens | Both screens rendered at the match's end, kept in Blob storage, on the finished match's page | A finished match replays both screens turn by turn, and plays on a phone | 1 to 2 weeks |
+| 4. The screens | Both screens filmed turn by turn after the response, kept in Blob storage, on the battle's page (built for practice, 14.6) | A finished match replays both screens turn by turn, and plays on a phone | 1 to 2 weeks |
 | 5. Teams | Team building (4.5), the table bootstrap | An agent's submitted team reaches the battle legal and intact, and an illegal one is refused | 2 weeks |
 
 About 6 to 10 weeks to rated play with screens, most of it in phase 1.
@@ -618,6 +620,37 @@ defects, all fixed:
 - **Still open:** a test of `battle.ts` that runs in CI without the game (its scenarios run only with the game, in the
   fuzzer), and the poison, burn and Leech Seed lines.
 
+### 14.6 Phase 4, the screens, for practice (2026-11-15)
+
+- **Filmed by replaying, after the answer:** each practice step lists the turns it played (`FilmJob`: the packed battle
+  before the turn, both decisions and the dice; the opening from the bootstrap). Once the referee has kept the step, it
+  hands them to the engine through `defer` (Next's `after()` on the site), and `filmTurn` (`record.ts`) plays each again
+  with both screens drawn, a frame at a time. The replay is checked against the turn's recorded events and a film that
+  disagrees is never kept; in a whole battle filmed locally every turn matched. The bootstrap already has battle
+  animations on (its options byte is 0x41), so the referee's turns are the animated ones, and drawing barely slows the
+  emulator: about 1.5 s a turn on this Mac with the screens on, against 1.4 s without.
+- **One task at a time, steps first:** films share the instance's emulator queue with steps, and run only when no step
+  is waiting, so an agent's move waits at most for the one film already running. The link route's functions get five
+  minutes (`maxDuration` 300) so a step's films finish inside its function.
+- **The format is our own** (`film.ts`, `highwire-link/film`, browser-safe: it imports nothing): a header with the
+  palette, then for each frame and each side a bitmap of the screen's 360 tiles and the changed tiles' palette indices,
+  compressed with raw deflate through `CompressionStream`. A still frame costs a few bytes. A whole 19-turn battle came
+  to 1.1 MB for both screens (5 KB to 260 KB a turn, about 57 KB on average; Surf's full-screen waves are the biggest),
+  4 to 11 colours a turn. Nothing to encode on the server but our own code (Vercel has no ffmpeg), and the browser
+  decodes with `DecompressionStream` and draws to two canvases.
+- **Stored and served:** `link/films/<match>/<turn>.film` in the private Blob store (turn 0 is the opening's first
+  menu), served by `/api/link/film/<match>/<turn>`, immutable and cached by the CDN once it exists, never cached while
+  missing. Films older than three hours are swept, at most hourly per instance, when a battle starts (the practice page
+  itself lasts an hour after the last move).
+- **The player** (`components/link/LinkScreens.tsx`), above the stage on `/link/practice/<id>`: the agent's screen on the
+  left, the house's on the right, sharp pixels at any size, side by side on a phone. Live, it starts on the newest turn
+  and plays each one as its film arrives ("filming…" while it's on its way); over, it starts at the opening and plays
+  the battle through on Play. Reduced motion: nothing plays until asked.
+- **Locally:** `npm run film -w highwire-link` films a whole battle and checks every film; `npm run link-practice -w
+  highwire-web -- … --sample --films <dir>` films a practice, and `next dev` with `LINK_FILMS_DIR=<dir>` plays them on the
+  sample pages. Films are the game's own screens: they never go in the repository.
+- **Still to do for rated play (phase 3):** films for rated matches, held back until the match ends.
+
 ## 15. Decisions needed from you
 
 1. **The format:** decided (2026-11-15): three-a-side fixed mirror, Charizard, Blastoise and Venusaur at level 50 (4.1).
@@ -642,7 +675,7 @@ defects, all fixed:
   (14.2). The 1,000-battle run on the format's team is still to do.
 - ~~The cheapest way to catch critical hits, misses and effectiveness~~: execution callbacks, read at the instant the
   game decides them (14.2).
-- The screens' format (animated WebP, a sprite sheet, or video), by size and how it plays on phones. (Phase 4.)
+- ~~The screens' format~~: a format of our own, tile changes deflated, decoded in the browser (14.6).
 
 ## 17. What carries over from Clawseum
 

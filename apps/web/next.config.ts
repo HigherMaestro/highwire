@@ -38,6 +38,8 @@ const config: NextConfig = {
       // The wager pages read series from the chain. Only this entry: the package's tools and daemon never reach the site.
       "highwire-wager/chain": "../../packages/wager/src/chain.ts",
       // Link battles' rig (docs/link-battles.md): its engine, loaded on the first link call (lib/link/lazy.ts).
+      // The films' decoder, for the practice page's player in the browser: no emulator, no Node.
+      "highwire-link/film": "../../packages/link/src/film.ts",
       "highwire-link": "../../packages/link/src/index.ts",
       "highwire-mcp/ideas": "../../packages/mcp/src/ideas.ts",
       "highwire-mcp": "../../packages/mcp/src/index.ts",

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { LinkSide, LinkWatch } from "../../lib/link/watch.ts";
+import { LinkScreens } from "./LinkScreens.tsx";
 
 // A link battle on the stage (docs/link-battles.md 13.2): both sides' Pokémon out, their HP as the game's bars, status
 // and field, what each side has shown, and every turn told in plain sentences. Live, it asks the referee every 2 seconds
@@ -46,7 +47,8 @@ function Side({ side, who, tone, exact }: { side: LinkSide; who: string; tone: "
   );
 }
 
-export function LinkStage({ initial, poll = true }: { initial: LinkWatch; poll?: boolean }) {
+/** The stage, with both Game Boys' screens above it when `screens` (never on the sample, which has no films). */
+export function LinkStage({ initial, poll = true, screens = true }: { initial: LinkWatch; poll?: boolean; screens?: boolean }) {
   const [w, setW] = useState(initial);
   const visible = useRef(true);
   const ref = useRef<HTMLDivElement>(null);
@@ -84,6 +86,7 @@ export function LinkStage({ initial, poll = true }: { initial: LinkWatch; poll?:
   const talk = new Map(w.lines.map((l) => [l.turn, l.line]));
   return (
     <div ref={ref}>
+      {screens ? <LinkScreens match={w.match} turns={w.turn} live={live} agent={agent} name={w.name} /> : null}
       {s ? (
         <div className="link-stage">
           <Side side={s.sides[agent]} who={w.name} tone="a" exact={!s.live} />

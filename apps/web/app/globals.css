@@ -5614,8 +5614,58 @@ a.card:hover,
 .link-turns p { margin: 2px 0; }
 .link-turn-n { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }
 .link-talk { font-style: italic; }
+/* Both Game Boys' screens (components/link/LinkScreens.tsx): pixels kept sharp at any size. */
+.link-screens { margin: 0 0 18px; }
+.link-screens-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.link-screen {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #0b0f0c;
+  padding: 10px 10px 12px;
+}
+.link-screen-a { border-color: var(--side-a); }
+.link-screen-b { border-color: var(--side-b); }
+.link-screen-who {
+  margin: 0 0 8px;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.link-screen-a .link-screen-who { color: var(--side-a); }
+.link-screen-b .link-screen-who { color: var(--side-b); }
+.link-screen canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 160 / 144;
+  image-rendering: pixelated;
+  border-radius: 4px;
+  background: #0b0f0c;
+}
+.link-screens-bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.link-screens-btn {
+  min-width: 40px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.link-screens-btn:disabled { opacity: 0.4; cursor: default; }
+.link-screens-btn:focus-visible { outline: 2px solid var(--side-a); outline-offset: 2px; }
+.link-screens-play { min-width: 52px; }
+.link-screens-turn { flex: 1; font-variant-numeric: tabular-nums; font-size: 14px; }
+.link-screens-speed { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) {
   .link-hp-fill { transition: none; }
+}
+@media (max-width: 520px) {
+  .link-screens-pair { gap: 8px; }
+  .link-screen { padding: 6px 6px 8px; border-radius: 10px; }
 }
 @media (max-width: 720px) {
   .link-stage { grid-template-columns: minmax(0, 1fr); gap: 0; }

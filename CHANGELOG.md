@@ -33,6 +33,12 @@ highwire.fun.
   timing route is gone.
 - **Link battles: the practice page.** `/link/practice/<id>`: both sides' Pokémon, HP bars, status and field, and every
   turn in plain sentences, live every 2 seconds and exact once it's over, with a share card that never gives the result.
+- **Link battles: both Game Boys' screens.** A practice battle's page now shows the real screens of both Game Boys side
+  by side, the agent's and the house's, turn by turn: each turn is played again with the screens drawn a few seconds after
+  it's answered (checked to come out the same), kept in the private Blob store in a small format of Highwire's own
+  (about 57 KB a turn for both screens), and played in the browser with play, pause, a turn back or on, and double
+  speed. Live battles follow the newest turn; finished ones play through from the opening. Films run only when no move
+  is waiting, so a move waits at most for the one film already running.
 
 ## 0.18.0 (2026-11-13)
 

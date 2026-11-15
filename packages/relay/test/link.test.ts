@@ -34,7 +34,15 @@ class FakeEngine implements LinkEngine {
       ended: over ? { reason: "knockout", winner: "you" } : null,
       format: this.format,
       version: this.version,
+      film: { turns: [s.turn] },
     };
+  }
+  /** What film() was asked for, in order. */
+  films: { match: string; film: unknown }[] = [];
+  filmFails = false;
+  async film(match: string, film: unknown) {
+    if (this.filmFails) throw new Error("the film broke");
+    this.films.push({ match, film });
   }
   async start() {
     this.calls++;
@@ -53,7 +61,7 @@ class FakeEngine implements LinkEngine {
   }
 }
 
-async function setup(config: Partial<{ maxPractices: number; practiceMs: number }> = {}) {
+async function setup(config: Partial<{ maxPractices: number; practiceMs: number; defer: (task: Promise<unknown>) => void }> = {}) {
   const engine = new FakeEngine();
   const r = rig(undefined, { engine, ...config });
   const token = await r.register();
@@ -239,4 +247,31 @@ test("the public page gets the spectators' view, never the agent's", async () =>
   assert.deepEqual(page.body.lines, [{ turn: 1, line: "steady" }]);
   assert.doesNotMatch(page.text, /secret_agent_only|tokenHash/);
   assert.equal((await r.call("GET", "/api/link/practice/zzzzzzzzzz")).status, 404);
+});
+
+test("each kept step is filmed after the answer, and never one that wasn't kept", async () => {
+  const deferred: Promise<unknown>[] = [];
+  const { r, engine, token } = await setup({ defer: (t) => deferred.push(t) });
+  const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
+  await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token);
+  await Promise.all(deferred);
+  assert.deepEqual(engine.films, [{ match, film: { turns: [0] } }, { match, film: { turns: [1] } }]);
+  // A stale turn and an illegal action are refused before anything is kept: nothing more is filmed.
+  await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token);
+  await r.call("POST", "/api/link/practice/move", { match, turn: 1, action: { kind: "switch", to: 1 } }, token);
+  await Promise.all(deferred);
+  assert.equal(engine.films.length, 2);
+  // A film that fails is only missing: the battle goes on.
+  engine.filmFails = true;
+  const next = await r.call("POST", "/api/link/practice/move", { match, turn: 1, action: hit }, token);
+  assert.equal(next.status, 200);
+  await Promise.all(deferred);
+  assert.equal(deferred.length, 3);
+});
+
+test("without a way to defer, nothing is filmed", async () => {
+  const { r, engine, token } = await setup();
+  const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
+  await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token);
+  assert.deepEqual(engine.films, []);
 });

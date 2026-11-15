@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { createRelay, FakeClock, MemoryStore } from "highwire-relay";
 import { FakeCoins, FakeRpc, launchTx, memoTx, MINT, WALLET } from "highwire-relay/testing";
 import { createHash, randomBytes } from "node:crypto";
@@ -9,20 +10,34 @@ import { createLinkEngine } from "../lib/link/engine.ts";
 // of the Blob store), a whole battle over HTTP, as link_practice plays it. Needs the game, never in CI:
 //   HIGHWIRE_LINK_ROM=<the game> npm run link-practice -w highwire-web -- <side 0 state> <side 1 state> [--sample]
 // With --sample it also writes lib/link/sample.json, what the pages show without the referee: this battle once it's
-// over, and as it stood mid-battle (live). The fighter is the test fakes' invented coin.
+// over, and as it stood mid-battle (live). The fighter is the test fakes' invented coin. With --films <dir> every turn is
+// filmed after its answer, as on the site, into <dir>/<match>/<turn>.film (with --sample, under the sample's ids too):
+// `next dev` with LINK_FILMS_DIR=<dir> plays them on the sample pages. Films are the game's screens: never commit them.
 
-const [p0, p1] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
-const writeSample = process.argv.includes("--sample");
+const args = process.argv.slice(2);
+const filmsAt = args.indexOf("--films");
+const filmsDir = filmsAt >= 0 ? args[filmsAt + 1] : undefined;
+const [p0, p1] = args.filter((a, i) => !a.startsWith("--") && i !== filmsAt + 1);
+const writeSample = args.includes("--sample");
 const rom = process.env.HIGHWIRE_LINK_ROM;
 if (!rom || !p0 || !p1) {
   console.error("HIGHWIRE_LINK_ROM=<the game> npm run link-practice -w highwire-web -- <side 0 state> <side 1 state>");
   process.exit(2);
 }
-const engine = createLinkEngine(async () => ({ rom: new Uint8Array(readFileSync(rom)), bootstrap: [new Uint8Array(readFileSync(p0)), new Uint8Array(readFileSync(p1))] }));
+const films = {
+  put: async (pathname: string, bytes: Uint8Array) => {
+    const to = join(filmsDir!, pathname.replace(/^link\/films\//, ""));
+    mkdirSync(dirname(to), { recursive: true });
+    writeFileSync(to, bytes);
+  },
+  sweep: async () => {},
+};
+const engine = createLinkEngine(async () => ({ rom: new Uint8Array(readFileSync(rom)), bootstrap: [new Uint8Array(readFileSync(p0)), new Uint8Array(readFileSync(p1))] }), films);
+const filming: Promise<unknown>[] = [];
 const clock = new FakeClock(Date.now());
 const store = new MemoryStore(clock);
 const rpc = new FakeRpc();
-const relay = createRelay({ store, clock, rpc, coins: new FakeCoins(clock.now()), link: { engine, agentSide: 1 } });
+const relay = createRelay({ store, clock, rpc, coins: new FakeCoins(clock.now()), link: { engine, agentSide: 1, defer: filmsDir ? (t) => filming.push(t) : undefined } });
 const call = async (method: string, path: string, body?: unknown, token?: string) => {
   const res = await relay.fetch(new Request(`https://relay.test${path}`, { method, headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }));
   const text = await res.text();
@@ -67,3 +82,12 @@ if (writeSample) {
   console.log("wrote lib/link/sample.json: /link/practice/samplebat2 (over) and /link/practice/sampleliv2 (live)");
 }
 console.log(`store keys left: ${Object.keys(store.dump()).filter((k) => k.startsWith("link:state")).length} packed battles; ${store.ops} store operations`);
+if (filmsDir) {
+  const t2 = performance.now();
+  await Promise.all(filming);
+  console.log(`filmed ${filming.length} steps into ${filmsDir}/${v.match} (${((performance.now() - t2) / 1000).toFixed(1)} s after the last answer)`);
+  if (writeSample) {
+    // The sample pages' ids play the same films.
+    for (const id of ["samplebat2", "sampleliv2"]) cpSync(join(filmsDir, v.match), join(filmsDir, id), { recursive: true });
+  }
+}

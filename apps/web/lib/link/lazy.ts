@@ -7,10 +7,15 @@ import type { LinkEngine } from "highwire-relay";
 export const linkConfigured = () =>
   Boolean(process.env.BLOB_READ_WRITE_TOKEN) && (process.env.VERCEL_ENV !== "production" || process.env.LINK_PRACTICE === "1");
 
+/** Where a turn's film is kept in the private Blob store (engine.ts writes it, app/api/link/film serves it). */
+export const FILMS = "link/films/";
+export const filmPath = (match: string, turn: number) => `${FILMS}${match}/${turn}.film`;
+
 const engine = () => import("./engine.ts").then((m) => m.linkEngine);
 
 export const lazyLinkEngine: LinkEngine = {
   rules: async () => (await engine()).rules(),
   start: async (...args) => (await engine()).start(...args),
   move: async (...args) => (await engine()).move(...args),
+  film: async (...args) => (await engine()).film!(...args),
 };

@@ -5,28 +5,27 @@
   "fighter": "sample-fighter",
   "name": "Wire Cat",
   "house_side": 0,
-  "turn": 17,
+  "turn": 13,
   "ended": {
    "reason": "knockout",
    "winner": "house"
   },
   "spectator": {
    "live": false,
-   "turn": 17,
+   "turn": 13,
    "sides": [
     {
      "species": "Venusaur",
      "level": 50,
-     "hp_percent": 100,
+     "hp_percent": 85,
      "status": null,
      "field": [],
      "seen": [
       "Charizard",
-      "Blastoise",
       "Venusaur"
      ],
-     "fainted": 2,
-     "hp": 187,
+     "fainted": 1,
+     "hp": 160,
      "max_hp": 187
     },
     {
@@ -49,19 +48,19 @@
     {
      "turn": 1,
      "lines": [
-      "Wire Cat's Charizard used Flamethrower.",
-      "It's not very effective…",
       "The house's Charizard used Flamethrower.",
+      "A critical hit!",
+      "It's not very effective…",
+      "Wire Cat's Charizard used Flamethrower.",
       "It's not very effective…"
      ]
     },
     {
      "turn": 2,
      "lines": [
-      "The house's Charizard used Flamethrower.",
-      "It's not very effective…",
       "Wire Cat's Charizard used Flamethrower.",
-      "A critical hit!",
+      "It's not very effective…",
+      "The house's Charizard used Flamethrower.",
       "It's not very effective…"
      ]
     },
@@ -71,6 +70,7 @@
       "Wire Cat's Charizard used Flamethrower.",
       "It's not very effective…",
       "The house's Charizard used Flamethrower.",
+      "A critical hit!",
       "It's not very effective…"
      ]
     },
@@ -78,6 +78,7 @@
      "turn": 4,
      "lines": [
       "Wire Cat's Charizard used Flamethrower.",
+      "A critical hit!",
       "It's not very effective…",
       "The house's Charizard used Flamethrower.",
       "It's not very effective…"
@@ -108,81 +109,45 @@
     {
      "turn": 8,
      "lines": [
-      "The house's Charizard used Flamethrower.",
-      "A critical hit!",
-      "It's not very effective…",
       "Wire Cat's Charizard used Flamethrower.",
-      "A critical hit!",
       "It's not very effective…",
-      "The house's Charizard fainted!"
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "Wire Cat's Charizard fainted!"
      ]
     },
     {
      "turn": 9,
      "lines": [
-      "The house's side sent out Blastoise."
+      "Wire Cat's side sent out Blastoise."
      ]
     },
     {
      "turn": 10,
      "lines": [
-      "Wire Cat's Charizard used Flamethrower.",
-      "A critical hit!",
-      "It's not very effective…",
-      "The house's Blastoise used Surf.",
-      "It's super effective!",
-      "Wire Cat's Charizard fainted!"
+      "The house's Charizard used Earthquake.",
+      "Wire Cat's Blastoise used Seismic Toss.",
+      "The house's Charizard fainted!"
      ]
     },
     {
      "turn": 11,
      "lines": [
-      "Wire Cat's side sent out Blastoise."
+      "The house's side sent out Venusaur."
      ]
     },
     {
      "turn": 12,
      "lines": [
-      "Wire Cat's Blastoise used Surf.",
-      "It's not very effective…",
-      "The house's Blastoise used Body Slam."
-     ]
-    },
-    {
-     "turn": 13,
-     "lines": [
-      "The house's Blastoise used Body Slam.",
-      "Wire Cat's Blastoise used Surf.",
+      "The house's Venusaur used Razor Leaf.",
       "A critical hit!",
+      "It's super effective!",
+      "Wire Cat's Blastoise used Surf.",
       "It's not very effective…"
      ]
     },
     {
-     "turn": 14,
-     "lines": [
-      "Wire Cat's Blastoise used Surf.",
-      "It's not very effective…",
-      "The house's Blastoise used Body Slam.",
-      "A critical hit!"
-     ]
-    },
-    {
-     "turn": 15,
-     "lines": [
-      "The house's Blastoise used Body Slam.",
-      "Wire Cat's Blastoise used Surf.",
-      "It's not very effective…",
-      "The house's Blastoise fainted!"
-     ]
-    },
-    {
-     "turn": 16,
-     "lines": [
-      "The house's side sent out Venusaur."
-     ]
-    },
-    {
-     "turn": 17,
+     "turn": 13,
      "lines": [
       "The house's Venusaur used Razor Leaf.",
       "A critical hit!",
@@ -205,54 +170,53 @@
   "fighter": "sample-fighter",
   "name": "Wire Cat",
   "house_side": 0,
-  "turn": 9,
+  "turn": 8,
   "ended": null,
   "spectator": {
    "live": true,
-   "turn": 9,
+   "turn": 8,
    "sides": [
     {
-     "species": "Blastoise",
+     "species": "Charizard",
      "level": 50,
-     "hp_percent": 100,
+     "hp_percent": 6,
      "status": null,
      "field": [],
      "seen": [
-      "Charizard",
-      "Blastoise"
+      "Charizard"
      ],
-     "fainted": 1
+     "fainted": 0
     },
     {
      "species": "Charizard",
      "level": 50,
-     "hp_percent": 8,
+     "hp_percent": 0,
      "status": null,
      "field": [],
      "seen": [
       "Charizard",
       "Venusaur"
      ],
-     "fainted": 1
+     "fainted": 2
     }
    ],
    "turns": [
     {
      "turn": 1,
      "lines": [
-      "Wire Cat's Charizard used Flamethrower.",
-      "It's not very effective…",
       "The house's Charizard used Flamethrower.",
+      "A critical hit!",
+      "It's not very effective…",
+      "Wire Cat's Charizard used Flamethrower.",
       "It's not very effective…"
      ]
     },
     {
      "turn": 2,
      "lines": [
-      "The house's Charizard used Flamethrower.",
-      "It's not very effective…",
       "Wire Cat's Charizard used Flamethrower.",
-      "A critical hit!",
+      "It's not very effective…",
+      "The house's Charizard used Flamethrower.",
       "It's not very effective…"
      ]
     },
@@ -262,6 +226,7 @@
       "Wire Cat's Charizard used Flamethrower.",
       "It's not very effective…",
       "The house's Charizard used Flamethrower.",
+      "A critical hit!",
       "It's not very effective…"
      ]
     },
@@ -269,6 +234,7 @@
      "turn": 4,
      "lines": [
       "Wire Cat's Charizard used Flamethrower.",
+      "A critical hit!",
       "It's not very effective…",
       "The house's Charizard used Flamethrower.",
       "It's not very effective…"
@@ -299,19 +265,11 @@
     {
      "turn": 8,
      "lines": [
-      "The house's Charizard used Flamethrower.",
-      "A critical hit!",
-      "It's not very effective…",
       "Wire Cat's Charizard used Flamethrower.",
-      "A critical hit!",
       "It's not very effective…",
-      "The house's Charizard fainted!"
-     ]
-    },
-    {
-     "turn": 9,
-     "lines": [
-      "The house's side sent out Blastoise."
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "Wire Cat's Charizard fainted!"
      ]
     }
    ]
