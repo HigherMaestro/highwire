@@ -445,8 +445,46 @@ Max) with Clawseum's paired save states (slot 6, a mid-battle turn at the battle
   outside the site imports the package, the repository holds no game or state file, and the committed build matches
   its checksum. The battle itself runs in `npm run phase0 -w highwire-link` with `HIGHWIRE_LINK_ROM` set.
 
-**Still open in phase 0:** the version stamp on saved states, the turn through a real decision-point detector rather than "back at
-the same menu" (phase 1's first job), and the format's team.
+**Still open in phase 0:** the version stamp on saved states and the format's team. (The decision-point detector is
+phase 1's, 14.2.)
+
+### 14.2 Phase 1 as built (2026-11-14)
+
+`packages/link/src/battle.ts` plays a whole battle, and `npm run fuzz -w highwire-link` plays random ones.
+
+- **The rig watches the game's code, not its screen.** `Rig.watch` puts up to 64 code addresses (ROM bank and address)
+  under SameBoy's execution callback, checked in C against a bitmap, so the cost is a byte test per instruction. Each
+  hit stamps the watch with that side's running count, so the order of what ran is known; a watch can also stop the
+  run mid-instruction-stream to read memory at that exact point, then the frame finishes. The addresses (`CODE` in
+  `yellow.ts`) are the public disassembly's symbols for this release, which matches its build byte for byte, and the
+  fuzzer (and, from phase 2, the referee) refuses any other cartridge by its header (`checkGame`).
+- **Decision points (7.2), exactly:** over each frame, a game is at the battle menu, the move list, the party, the
+  switch menu or the forced switch when the game's menu routine polled the buttons that frame, the last menu it opened
+  saying which; it's waiting when the link exchange's wait loop ran. A decision point is every game at a menu or
+  waiting, at least one at a menu. A battle loaded from a state saved at its first menu (a bootstrap) is known by the
+  menu's cursor frame until a menu opens.
+- **Battle text needs no buttons:** in a link battle the game advances its own text after 65 frames, so the rig presses
+  nothing but decisions. Phase 0's B presses were unnecessary, and could have backed out of a move list.
+- **The buttons (7.3):** every step reads the cursor first and presses toward it, checks the press landed (the phase or
+  the cursor moved), and retries once; the main menu's cursor is checked to be on FIGHT or PKMN before A, never RUN, and
+  reaching RUN's code ends the battle as an error. FIGHT that goes straight on (sleep, freeze, a continuing Wrap or
+  Bide, Struggle, a Wrap holding it) is its own action, `fight`; the move list's items count from 1.
+- **Legal actions** come from the game's memory at the decision point: moves with PP that aren't disabled (never one of
+  the banned five while anything else is legal), switches to any other Pokémon still standing, and after a faint only
+  those.
+- **Turn records (4.4):** each side's part of the turn starting (so who moved first, and a side that couldn't move),
+  each move used, and for each damaging move whether it missed, a critical hit, its effectiveness and its damage, read
+  at the instant the game decides them. Both games' records must match event for event, and both games' views of each
+  side and the dice must agree after every turn; any difference ends the battle as a desync. The end is each game's
+  own: one blacks out and the other wins, or both black out (a draw); anything else is a desync.
+- **A bug the fuzzer found:** the dice were sometimes dropped by one game. The rig wrote memory through the emulated
+  bus, and between frames a game is often inside its vertical blank's sprite DMA, when the bus ignores CPU writes. The
+  rig now writes work RAM and high RAM directly. Before the fix, 7 of 24 battles desynced; after it, none.
+- **The fuzzer** plays from Clawseum's slot 6 (the same six Pokémon a side, levels 89 to 93, among them Mew with Transform and Metronome), every decision uniformly random among the
+  legal ones, fresh dice every turn, on worker threads. FUZZ_SUMMARY
+
+**Still open in phase 1:** the 1,000-battle run on the format's own team (decision 1), status changes and stat stages in
+the turn records, and table talk's place in them (phase 2 builds the referee around this).
 
 ## 15. Decisions needed from you
 
@@ -462,10 +500,11 @@ the same menu" (phase 1's first job), and the format's team.
 
 - ~~How fast WebAssembly runs a turn in a Vercel function~~: 2 to 4.3 seconds, about 255 pair-frames a second (14.1).
 - ~~How many frames a turn takes with fast text and no animations~~: 550 to 1,118; the options barely change it (14.1).
-- Whether re-dealing the dice at a decision point is ever caught mid-roll; the fuzzer checks both games stay in step.
-  (Phase 1.)
+- ~~Whether re-dealing the dice at a decision point is ever caught mid-roll~~: no; the one failure was the write
+  itself, dropped during DMA (14.2).
 - Which other moves desync, beyond the banned five. (Phase 1.)
-- The cheapest way to catch critical hits, misses and effectiveness: execution callbacks or the battle text. (Phase 1.)
+- ~~The cheapest way to catch critical hits, misses and effectiveness~~: execution callbacks, read at the instant the
+  game decides them (14.2).
 - The screens' format (animated WebP, a sprite sheet, or video), by size and how it plays on phones. (Phase 4.)
 
 ## 17. What carries over from Clawseum

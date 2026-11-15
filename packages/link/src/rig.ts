@@ -14,6 +14,12 @@ export const MODEL = { DMG_B: 0x002, CGB_E: 0x205, AGB_A: 0x207 } as const;
 export const KEY = { RIGHT: 0, LEFT: 1, UP: 2, DOWN: 3, A: 4, B: 5, SELECT: 6, START: 7 } as const;
 export type Key = keyof typeof KEY;
 
+/** The most code addresses a rig can watch (native/rig.c). */
+export const MAX_WATCHES = 64;
+
+/** A watch that ended a run early: the side whose CPU reached it, and the watch's index. */
+export type Stop = { side: Side; watch: number };
+
 /** SameBoy's GB_direct_access_t, the ones the rig reads. */
 export const MEMORY = { ROM: 0, RAM: 1, CART_RAM: 2, VRAM: 3, HRAM: 4, IO: 5 } as const;
 
@@ -51,6 +57,7 @@ export class Rig {
   }
 
   saveState(side: Side): Uint8Array {
+    if (this.midFrame) throw new Error("The rig is mid-frame; finish the frame before saving.");
     const size = this.m._rig_state_size(side);
     const ptr = this.m._malloc(size);
     try {
@@ -61,9 +68,15 @@ export class Rig {
     }
   }
 
-  run(frames = 1): void {
-    this.m._rig_run_frames(frames);
-    this.frames += frames;
+  /**
+   * Runs both Game Boys `frames` frames, or until a stop watch fires (then mid-frame: the next run finishes that frame).
+   * Returns the watch that stopped it, or null.
+   */
+  run(frames = 1): Stop | null {
+    const done = this.m._rig_run_frames(frames);
+    this.frames += done;
+    const stopped = this.m._rig_stopped();
+    return stopped ? { side: ((stopped >> 8) - 1) as Side, watch: stopped & 0xff } : null;
   }
 
   /** Runs until `done` is true (checked after every frame) or `budget` frames pass; returns the frames run, or null at the budget. */
@@ -73,6 +86,35 @@ export class Rig {
       if (done()) return i;
     }
     return null;
+  }
+
+  /** True between a stop watch and the end of the frame it fired in. States may be saved only between frames. */
+  get midFrame(): boolean {
+    return this.m._rig_mid_frame() !== 0;
+  }
+
+  /**
+   * Watches a code address: from now on the rig notes each time either CPU executes it (`stamps`), and with `stop`
+   * ends the run there. `bank` is the ROM bank for addresses from 0x4000; bank 0's are watched whatever is mapped.
+   */
+  watch(addr: number, bank: number, stop = false): number {
+    const id = this.m._rig_watch(addr, bank, stop ? 1 : 0);
+    if (id < 0) throw new Error(`Can't watch ${bank.toString(16)}:${addr.toString(16)} (at most ${MAX_WATCHES}, in ROM).`);
+    return id;
+  }
+
+  /**
+   * Each watch's stamp on one side: the side's running count of watch hits when that watch was last hit (0: never),
+   * and, last, the count itself. Comparing stamps says which routines ran, and in what order.
+   */
+  stamps(side: Side): Uint32Array {
+    const base = this.m._rig_seq() / 4 + side * (MAX_WATCHES + 1);
+    return this.m.HEAPU32.slice(base, base + MAX_WATCHES + 1);
+  }
+
+  /** The CPU's program counter, for debugging. */
+  pc(side: Side): number {
+    return this.m._rig_pc(side);
   }
 
   key(side: Side, key: Key, pressed: boolean): void {

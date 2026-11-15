@@ -3,3 +3,4 @@
 export * from "./rig.ts";
 export * from "./yellow.ts";
 export * from "./turn.ts";
+export * from "./battle.ts";
