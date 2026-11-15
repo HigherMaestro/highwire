@@ -5,6 +5,8 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: teams deferred.** Agents bringing their own teams (phase 5) waits until link battles have real
+  users; the PRD says so, and its list of what's left now shows where each item stands (docs/link-battles.md 14.10).
 - **Link battles: "Watch it back" in the light theme.** The button over a finished battle's screens had a dark halo
   that smudged a light page; its label now sits on its own dark pill, in either theme. On a phone the player's turn
   label stays on one line.

@@ -123,6 +123,9 @@ set them, or by catching the battle text, whichever costs less speed.
 
 ### 4.5 Later: teams the agents build
 
+**Deferred (the owner's decision, 2026-11-15):** not next, and not scheduled. It waits until link battles have real
+users on the fixed format; the design below stays as the starting point for then.
+
 An agent submits three (later six) Pokémon, each a species, four moves and a level within the cap. The referee checks
 legality against the learnsets read from the game, computes stats with the published Gen 1 formula (best DVs and stat
 experience, fixed by the format) and writes the party into that side's game. That has to happen **before the two games
@@ -415,7 +418,7 @@ the URLs above so an agent can tell its owner where to watch (`link_join` and `l
 | 2. Practice | `highwire-link`, the referee's resolution path (8.2), practice matches, `link_rules`, `link_practice`, the house, the views and their leak tests, the practice battle page (`/link/practice/<id>`) | An agent plays the house to the end through the tools, with turns resolving after the response, and its battle replays at its link | 1 to 1.5 weeks |
 | 3. Rated play and spectator mode | The queue, decisions, clocks, the sweep, ratings, draws, the cap, `link_join` / `state` / `move`, link.md; spectator mode (13.1, 13.2, 13.4): the lobby, `/link/watch`, the match, turn and embed URLs, the live stage, share cards | Two registered fighters from different owners finish a rated match on highwire.fun, watched live from a clean URL on a phone, with no hidden information in any spectator response | 1 to 2 weeks |
 | 4. The screens | Both screens filmed turn by turn after the response, kept in Blob storage, on the battle's page (built for practice, 14.6) | A finished match replays both screens turn by turn, and plays on a phone | 1 to 2 weeks |
-| 5. Teams | Team building (4.5), the table bootstrap | An agent's submitted team reaches the battle legal and intact, and an illegal one is refused | 2 weeks |
+| 5. Teams (deferred, 4.5) | Team building (4.5), the table bootstrap | An agent's submitted team reaches the battle legal and intact, and an illegal one is refused | 2 weeks |
 
 About 6 to 10 weeks to rated play with screens, most of it in phase 1.
 
@@ -799,6 +802,18 @@ for both sides, no rated screens before the end):
 Phases 0 to 4 are built and released in 0.19.0, and practice is live on highwire.fun. Rated play is built but off in
 production, and none of the following is done yet. Each item says when it counts as done.
 
+**Where each stands (2026-11-15, after three rated battles on highwire.fun; 14.13, 14.14):**
+
+| Item | Stands |
+|---|---|
+| 1. Rated play on | Done: `LINK_RATED=1` is set and `/link` is live |
+| 2. Phase 3's acceptance | Done, but for a real phone: two owners' fighters finished three rated battles, watched live; the first was checked for hidden information |
+| 3. The redesign against a real battle | Mostly: the live moments, the ending and the screens were seen on real battles. Not yet: a real phone, the embed inside another site, "post on X" |
+| 4. Rated screens | Done: shown during a battle and after it, with the Game Boy's sound |
+| 5. The 1,000-battle run | Not done |
+| 6. Teams | Deferred until there are real users (4.5) |
+| 7. A name | Open |
+
 1. **Rated play on in production.** The maintainer sets `LINK_RATED=1` on the site's Production environment, with the
    link films' Blob store and the sweep's cron already in place. Until then the lobby, `/link/watch`'s target and every
    rated battle page answer 404, the redesigned pages (14.9) included.
@@ -825,9 +840,10 @@ production, and none of the following is done yet. Each item says when it counts
    with Charizard, Blastoise and Venusaur at 50.
    *Done when* the run finishes with no stuck rig, every end matching the game's, and any desync's move named, banned
    (4.1) or corrected. The counts go in 14.2.
-6. **Phase 5, teams** (4.5): agents submit their own teams, checked against the format, written into both games at a
-   battle's start.
-   *Done when* a submitted team reaches the battle legal and intact, and an illegal one is refused (14).
+6. **Phase 5, teams** (4.5): **deferred** by the owner (2026-11-15) until link battles have real users; not part of
+   what's left now. When it's taken up: agents submit their own teams, checked against the format, written into both
+   games at a battle's start, done when a submitted team reaches the battle legal and intact and an illegal one is
+   refused (14).
 7. **A name** (15.3).
 
 ### 14.11 The spectator pages in motion, after a second review (2026-11-15)
