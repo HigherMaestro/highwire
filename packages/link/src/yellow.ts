@@ -62,6 +62,12 @@ export const ADDR = {
   partyCount: 0xd162,
   partySpecies: 0xd163,
   partyMons: 0xd16a,
+  partyMonOT: 0xd272,
+  partyMonNicks: 0xd2b4,
+  playerName: 0xd157,
+  playerID: 0xd358,
+  curMap: 0xd35d,
+  playerFacing: 0xc109,
   options: 0xd354,
   enemyPartyCount: 0xd89b,
   enemyPartySpecies: 0xd89c,
@@ -103,6 +109,8 @@ export const CODE = {
   switchMenu: [0x0f, 0x521c],
   /** ChooseNextMon: the party after a faint, the forced switch. */
   forcedSwitch: [0x0f, 0x483c],
+  /** MainInBattleLoop: a turn begins (before any menu, or none when both sides are locked in). */
+  mainLoop: [0x0f, 0x4249],
   /** LinkBattleExchangeData: the choice goes over the cable. */
   exchange: [0x0f, 0x5777],
   /** LinkBattleExchangeData.syncLoop1: waiting for the other game's choice. */
@@ -142,7 +150,7 @@ export const STATUS = { SLEEP: 0b111, POISON: 1 << 3, BURN: 1 << 4, FREEZE: 1 <<
 
 /** wPlayerBattleStatus1 / 2 bits the legal actions depend on. */
 export const BATTLE_STATUS1 = { STORING_ENERGY: 1 << 0, THRASHING: 1 << 1, CHARGING_UP: 1 << 4, TRAPPING: 1 << 5 } as const;
-export const BATTLE_STATUS2 = { USING_RAGE: 1 << 0, NEEDS_TO_RECHARGE: 1 << 5 } as const;
+export const BATTLE_STATUS2 = { USING_RAGE: 1 << 6, NEEDS_TO_RECHARGE: 1 << 5 } as const;
 
 /** One of this game's own party, as the party record holds it. */
 export interface PartyMon {
@@ -194,6 +202,11 @@ export interface Mon {
 }
 
 export interface Field {
+  /** Locked in, so the game picks its move: Thrash or Petal Dance, a trapping move, a charging turn, Rage. */
+  thrashing: boolean;
+  trapping: boolean;
+  charging: boolean;
+  rage: boolean;
   confused: boolean;
   substitute: boolean;
   seeded: boolean;
@@ -208,6 +221,10 @@ export interface Field {
 
 function field(s1: number, s2: number, s3: number): Field {
   return {
+    thrashing: (s1 & 0x02) !== 0,
+    charging: (s1 & 0x10) !== 0,
+    trapping: (s1 & 0x20) !== 0,
+    rage: (s2 & 0x40) !== 0,
     confused: (s1 & 0x80) !== 0,
     mist: (s2 & 0x02) !== 0,
     focusEnergy: (s2 & 0x04) !== 0,

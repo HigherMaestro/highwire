@@ -2,300 +2,192 @@
  {
   "match": "samplebat2",
   "practice": true,
-  "fighter": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+  "fighter": "sample-fighter",
   "name": "Wire Cat",
   "house_side": 0,
-  "turn": 31,
+  "turn": 17,
   "ended": {
    "reason": "knockout",
    "winner": "house"
   },
   "spectator": {
    "live": false,
-   "turn": 31,
+   "turn": 17,
    "sides": [
     {
-     "species": "Mewtwo",
-     "level": 90,
-     "hp_percent": 75,
-     "status": "paralyzed",
+     "species": "Venusaur",
+     "level": 50,
+     "hp_percent": 100,
+     "status": null,
      "field": [],
      "seen": [
-      "Mew",
-      "Moltres",
-      "Articuno",
-      "Pikachu",
-      "Mewtwo"
+      "Charizard",
+      "Blastoise",
+      "Venusaur"
      ],
-     "fainted": 4,
-     "hp": 348,
-     "max_hp": 459
+     "fainted": 2,
+     "hp": 187,
+     "max_hp": 187
     },
     {
-     "species": "Zapdos",
-     "level": 91,
+     "species": "Blastoise",
+     "level": 50,
      "hp_percent": 0,
      "status": null,
      "field": [],
      "seen": [
-      "Mewtwo",
-      "Moltres",
-      "Articuno",
-      "Pikachu",
-      "Zapdos"
+      "Charizard",
+      "Venusaur",
+      "Blastoise"
      ],
-     "fainted": 5,
+     "fainted": 3,
      "hp": 0,
-     "max_hp": 456
+     "max_hp": 186
     }
    ],
    "turns": [
     {
      "turn": 1,
      "lines": [
-      "Wire Cat's Mewtwo used Swift.",
-      "A critical hit!",
-      "The house's Mew used Mega Punch.",
-      "A critical hit!"
+      "Wire Cat's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…"
      ]
     },
     {
      "turn": 2,
      "lines": [
-      "The house's Mew used Mega Punch.",
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "Wire Cat's Charizard used Flamethrower.",
       "A critical hit!",
-      "Wire Cat's Mewtwo used Swift.",
-      "The house's Mew fainted!"
+      "It's not very effective…"
      ]
     },
     {
      "turn": 3,
      "lines": [
-      "The house's side sent out Moltres."
+      "Wire Cat's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…"
      ]
     },
     {
      "turn": 4,
      "lines": [
-      "Wire Cat's Mewtwo used Swift.",
-      "A critical hit!",
-      "The house's Moltres used Fire Blast.",
-      "Wire Cat's Mewtwo is burned."
+      "Wire Cat's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…"
      ]
     },
     {
      "turn": 5,
      "lines": [
-      "Wire Cat's Mewtwo used Swift.",
-      "The house's Moltres used Fire Blast.",
-      "A critical hit!",
-      "Wire Cat's Mewtwo fainted!"
+      "Wire Cat's side sent out Venusaur.",
+      "The house's Charizard used Flamethrower.",
+      "It's super effective!"
      ]
     },
     {
      "turn": 6,
      "lines": [
-      "Wire Cat's side sent out Moltres."
+      "The house's Charizard used Flamethrower.",
+      "It's super effective!",
+      "Wire Cat's Venusaur fainted!"
      ]
     },
     {
      "turn": 7,
      "lines": [
-      "The house's Moltres used Fire Blast.",
-      "The house's Moltres's attack missed.",
-      "Wire Cat's Moltres used Flamethrower.",
-      "It's not very effective…"
+      "Wire Cat's side sent out Charizard."
      ]
     },
     {
      "turn": 8,
      "lines": [
-      "The house's Moltres used Fire Blast.",
+      "The house's Charizard used Flamethrower.",
+      "A critical hit!",
       "It's not very effective…",
-      "Wire Cat's Moltres used Flamethrower.",
-      "It's not very effective…"
+      "Wire Cat's Charizard used Flamethrower.",
+      "A critical hit!",
+      "It's not very effective…",
+      "The house's Charizard fainted!"
      ]
     },
     {
      "turn": 9,
      "lines": [
-      "Wire Cat's Moltres used Flamethrower.",
-      "It's not very effective…",
-      "The house's Moltres used Fire Blast.",
-      "The house's Moltres's attack missed."
+      "The house's side sent out Blastoise."
      ]
     },
     {
      "turn": 10,
      "lines": [
-      "Wire Cat's Moltres used Flamethrower.",
+      "Wire Cat's Charizard used Flamethrower.",
+      "A critical hit!",
       "It's not very effective…",
-      "The house's Moltres used Take Down."
+      "The house's Blastoise used Surf.",
+      "It's super effective!",
+      "Wire Cat's Charizard fainted!"
      ]
     },
     {
      "turn": 11,
      "lines": [
-      "Wire Cat's side sent out Articuno.",
-      "The house's Moltres used Take Down."
+      "Wire Cat's side sent out Blastoise."
      ]
     },
     {
      "turn": 12,
      "lines": [
-      "The house's Moltres used Flamethrower.",
-      "A critical hit!",
-      "It's super effective!",
-      "Wire Cat's Articuno fainted!"
+      "Wire Cat's Blastoise used Surf.",
+      "It's not very effective…",
+      "The house's Blastoise used Body Slam."
      ]
     },
     {
      "turn": 13,
      "lines": [
-      "Wire Cat's side sent out Pikachu."
+      "The house's Blastoise used Body Slam.",
+      "Wire Cat's Blastoise used Surf.",
+      "A critical hit!",
+      "It's not very effective…"
      ]
     },
     {
      "turn": 14,
      "lines": [
-      "The house's Moltres used Take Down.",
-      "Wire Cat's Pikachu used Thunderbolt.",
-      "It's super effective!",
-      "The house's Moltres fainted!"
+      "Wire Cat's Blastoise used Surf.",
+      "It's not very effective…",
+      "The house's Blastoise used Body Slam.",
+      "A critical hit!"
      ]
     },
     {
      "turn": 15,
      "lines": [
-      "The house's side sent out Articuno."
+      "The house's Blastoise used Body Slam.",
+      "Wire Cat's Blastoise used Surf.",
+      "It's not very effective…",
+      "The house's Blastoise fainted!"
      ]
     },
     {
      "turn": 16,
      "lines": [
-      "Wire Cat's Pikachu used Thunderbolt.",
-      "A critical hit!",
-      "It's super effective!",
-      "The house's Articuno used Ice Beam.",
-      "It's super effective!",
-      "The house's Articuno is paralyzed.",
-      "Wire Cat's Pikachu is frozen."
+      "The house's side sent out Venusaur."
      ]
     },
     {
      "turn": 17,
      "lines": [
-      "Wire Cat's side sent out Moltres.",
-      "The house's Articuno used Ice Beam.",
-      "It's super effective!"
-     ]
-    },
-    {
-     "turn": 18,
-     "lines": [
-      "Wire Cat's Moltres used Flamethrower.",
-      "It's super effective!",
-      "The house's Articuno fainted!"
-     ]
-    },
-    {
-     "turn": 19,
-     "lines": [
-      "The house's side sent out Pikachu."
-     ]
-    },
-    {
-     "turn": 20,
-     "lines": [
-      "The house's Pikachu used Thunderbolt.",
-      "It's super effective!",
-      "Wire Cat's Moltres fainted!"
-     ]
-    },
-    {
-     "turn": 21,
-     "lines": [
-      "Wire Cat's side sent out Pikachu."
-     ]
-    },
-    {
-     "turn": 22,
-     "lines": [
-      "The house's Pikachu used Thunderbolt.",
+      "The house's Venusaur used Razor Leaf.",
       "A critical hit!",
       "It's super effective!",
-      "Wire Cat's Pikachu fainted!"
-     ]
-    },
-    {
-     "turn": 23,
-     "lines": [
-      "Wire Cat's side sent out Zapdos."
-     ]
-    },
-    {
-     "turn": 24,
-     "lines": [
-      "Wire Cat's Zapdos used Thundershock.",
-      "It's super effective!",
-      "The house's Pikachu used Thunderbolt.",
-      "It's super effective!"
-     ]
-    },
-    {
-     "turn": 25,
-     "lines": [
-      "Wire Cat's Zapdos used Thundershock.",
-      "It's super effective!",
-      "The house's Pikachu used Thunderbolt.",
-      "The house's Pikachu's attack missed."
-     ]
-    },
-    {
-     "turn": 26,
-     "lines": [
-      "Wire Cat's Zapdos used Thundershock.",
-      "It's super effective!",
-      "The house's Pikachu used Thunderbolt.",
-      "A critical hit!",
-      "It's super effective!"
-     ]
-    },
-    {
-     "turn": 27,
-     "lines": [
-      "Wire Cat's Zapdos used Thundershock.",
-      "It's super effective!",
-      "The house's Pikachu fainted!"
-     ]
-    },
-    {
-     "turn": 28,
-     "lines": [
-      "The house's side sent out Mewtwo."
-     ]
-    },
-    {
-     "turn": 29,
-     "lines": [
-      "Wire Cat's Zapdos used Hyper Beam.",
-      "The house's Mewtwo used Psychic."
-     ]
-    },
-    {
-     "turn": 30,
-     "lines": [
-      "The house's Mewtwo used Psychic.",
-      "Wire Cat's Zapdos didn't attack."
-     ]
-    },
-    {
-     "turn": 31,
-     "lines": [
-      "Wire Cat's Zapdos used Thundershock.",
-      "The house's Mewtwo used Psychic.",
-      "The house's Mewtwo is paralyzed.",
-      "Wire Cat's Zapdos fainted!"
+      "Wire Cat's Blastoise fainted!"
      ]
     }
    ]
@@ -310,7 +202,7 @@
  {
   "match": "sampleliv2",
   "practice": true,
-  "fighter": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+  "fighter": "sample-fighter",
   "name": "Wire Cat",
   "house_side": 0,
   "turn": 9,
@@ -320,26 +212,26 @@
    "turn": 9,
    "sides": [
     {
-     "species": "Moltres",
-     "level": 93,
-     "hp_percent": 38,
+     "species": "Blastoise",
+     "level": 50,
+     "hp_percent": 100,
      "status": null,
      "field": [],
      "seen": [
-      "Mew",
-      "Moltres"
+      "Charizard",
+      "Blastoise"
      ],
      "fainted": 1
     },
     {
-     "species": "Moltres",
-     "level": 93,
-     "hp_percent": 83,
+     "species": "Charizard",
+     "level": 50,
+     "hp_percent": 8,
      "status": null,
      "field": [],
      "seen": [
-      "Mewtwo",
-      "Moltres"
+      "Charizard",
+      "Venusaur"
      ],
      "fainted": 1
     }
@@ -348,76 +240,78 @@
     {
      "turn": 1,
      "lines": [
-      "Wire Cat's Mewtwo used Swift.",
-      "A critical hit!",
-      "The house's Mew used Mega Punch.",
-      "A critical hit!"
+      "Wire Cat's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…"
      ]
     },
     {
      "turn": 2,
      "lines": [
-      "The house's Mew used Mega Punch.",
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "Wire Cat's Charizard used Flamethrower.",
       "A critical hit!",
-      "Wire Cat's Mewtwo used Swift.",
-      "The house's Mew fainted!"
+      "It's not very effective…"
      ]
     },
     {
      "turn": 3,
      "lines": [
-      "The house's side sent out Moltres."
+      "Wire Cat's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…"
      ]
     },
     {
      "turn": 4,
      "lines": [
-      "Wire Cat's Mewtwo used Swift.",
-      "A critical hit!",
-      "The house's Moltres used Fire Blast.",
-      "Wire Cat's Mewtwo is burned."
+      "Wire Cat's Charizard used Flamethrower.",
+      "It's not very effective…",
+      "The house's Charizard used Flamethrower.",
+      "It's not very effective…"
      ]
     },
     {
      "turn": 5,
      "lines": [
-      "Wire Cat's Mewtwo used Swift.",
-      "The house's Moltres used Fire Blast.",
-      "A critical hit!",
-      "Wire Cat's Mewtwo fainted!"
+      "Wire Cat's side sent out Venusaur.",
+      "The house's Charizard used Flamethrower.",
+      "It's super effective!"
      ]
     },
     {
      "turn": 6,
      "lines": [
-      "Wire Cat's side sent out Moltres."
+      "The house's Charizard used Flamethrower.",
+      "It's super effective!",
+      "Wire Cat's Venusaur fainted!"
      ]
     },
     {
      "turn": 7,
      "lines": [
-      "The house's Moltres used Fire Blast.",
-      "The house's Moltres's attack missed.",
-      "Wire Cat's Moltres used Flamethrower.",
-      "It's not very effective…"
+      "Wire Cat's side sent out Charizard."
      ]
     },
     {
      "turn": 8,
      "lines": [
-      "The house's Moltres used Fire Blast.",
+      "The house's Charizard used Flamethrower.",
+      "A critical hit!",
       "It's not very effective…",
-      "Wire Cat's Moltres used Flamethrower.",
-      "It's not very effective…"
+      "Wire Cat's Charizard used Flamethrower.",
+      "A critical hit!",
+      "It's not very effective…",
+      "The house's Charizard fainted!"
      ]
     },
     {
      "turn": 9,
      "lines": [
-      "Wire Cat's Moltres used Flamethrower.",
-      "It's not very effective…",
-      "The house's Moltres used Fire Blast.",
-      "The house's Moltres's attack missed."
+      "The house's side sent out Blastoise."
      ]
     }
    ]

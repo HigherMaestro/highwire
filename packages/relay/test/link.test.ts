@@ -14,8 +14,12 @@ class FakeEngine implements LinkEngine {
   format = "colosseum-1";
   version = "v1";
   calls = 0;
-  /** When set, move() waits for it: to hold a turn open while another call arrives. */
+  /** When set, start() and move() wait for it: to hold a step open while another call arrives. */
   hold: Promise<void> | null = null;
+  /** When set, move() throws this, as the real engine does for a battle saved by another version of the rig. */
+  failWith: RelayError | null = null;
+  /** The phase the next views show ("waiting": the agent isn't asked, and continues with no action). */
+  phase = "choose";
   async rules() {
     return { format: this.format };
   }
@@ -24,7 +28,7 @@ class FakeEngine implements LinkEngine {
     return {
       state: s,
       packed: over ? null : new TextEncoder().encode(JSON.stringify(s)),
-      view: { phase: over ? "ended" : "choose", turn: s.turn, them: { hp_percent: Math.round((s.houseHp / 3) * 100) }, secret_agent_only: true },
+      view: { phase: over ? "ended" : this.phase, turn: s.turn, them: { hp_percent: Math.round((s.houseHp / 3) * 100) }, secret_agent_only: true },
       spectator: { turn: s.turn, house_hp_percent: Math.round((s.houseHp / 3) * 100) },
       turn: s.turn,
       ended: over ? { reason: "knockout", winner: "you" } : null,
@@ -34,16 +38,18 @@ class FakeEngine implements LinkEngine {
   }
   async start() {
     this.calls++;
+    if (this.hold) await this.hold;
     return this.step({ turn: 0, houseHp: 3 });
   }
-  async move(state: unknown, packed: Uint8Array, _agent: 0 | 1, action: LinkAction) {
+  async move(state: unknown, packed: Uint8Array, _agent: 0 | 1, action: LinkAction | null) {
     this.calls++;
     if (this.hold) await this.hold;
+    if (this.failWith) throw this.failWith;
     if (this.version !== "v1") throw new RelayError("expired", "another version of the rig");
     const s = JSON.parse(new TextDecoder().decode(packed)) as FakeState;
     assert.deepEqual(s, state, "the packed battle and the document agree");
-    if (action.kind === "switch") throw new RelayError("bad_request", "That action isn't one of the legal actions in your view.");
-    return this.step({ turn: s.turn + 1, houseHp: s.houseHp - 1 });
+    if (action?.kind === "switch") throw new RelayError("bad_request", "That action isn't one of the legal actions in your view.");
+    return this.step({ turn: s.turn + 1, houseHp: s.houseHp - (action ? 1 : 0) });
   }
 }
 
@@ -73,7 +79,7 @@ test("a fighter practises against the house to the end, and the store keeps no b
   assert.equal((await r.call("POST", "/api/link/practice", {}, token)).body.match, match, "one practice at a time: the same one comes back");
   let v = start.body;
   while (!v.ended) {
-    const res = await r.call("POST", "/api/link/practice/move", { match, action: hit, line: "here goes" }, token);
+    const res = await r.call("POST", "/api/link/practice/move", { match, turn: v.turn, action: hit, line: "here goes" }, token);
     assert.equal(res.status, 200, res.text);
     v = res.body;
   }
@@ -89,22 +95,22 @@ test("a fighter practises against the house to the end, and the store keeps no b
 test("an illegal action is refused and changes nothing; a malformed one never reaches the engine", async () => {
   const { r, engine, token } = await setup();
   const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
-  const bad = await r.call("POST", "/api/link/practice/move", { match, action: { kind: "switch", to: 2 } }, token);
+  const bad = await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: { kind: "switch", to: 2 } }, token);
   assert.equal(bad.status, 400);
   assert.equal((await r.call("GET", `/api/link/practice/state?match=${match}`, undefined, token)).body.turn, 0);
   const calls = engine.calls;
   for (const action of [{ kind: "move", slot: 4 }, { kind: "item" }, null, { kind: "switch", to: -1 }]) {
-    assert.equal((await r.call("POST", "/api/link/practice/move", { match, action }, token)).status, 400, JSON.stringify(action));
+    assert.equal((await r.call("POST", "/api/link/practice/move", { match, turn: 0, action }, token)).status, 400, JSON.stringify(action));
   }
   assert.equal(engine.calls, calls);
-  assert.equal((await r.call("POST", "/api/link/practice/move", { match, action: hit, line: "see https://example.com" }, token)).status, 400, "table talk keeps The Line's rules");
+  assert.equal((await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit, line: "see https://example.com" }, token)).status, 400, "table talk keeps The Line's rules");
 });
 
 test("another fighter can't play or read someone else's practice", async () => {
   const { r, token } = await setup();
   const other = await r.register(MINT2, OTHER);
   const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
-  assert.equal((await r.call("POST", "/api/link/practice/move", { match, action: hit }, other)).status, 404);
+  assert.equal((await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, other)).status, 404);
   assert.equal((await r.call("GET", `/api/link/practice/state?match=${match}`, undefined, other)).status, 404);
 });
 
@@ -113,9 +119,9 @@ test("a second move while a turn resolves is refused, not played twice", async (
   const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
   let release!: () => void;
   engine.hold = new Promise<void>((resolve) => (release = resolve));
-  const first = r.call("POST", "/api/link/practice/move", { match, action: hit }, token);
+  const first = r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token);
   await new Promise((resolve) => setTimeout(resolve, 5));
-  const second = await r.call("POST", "/api/link/practice/move", { match, action: hit }, token);
+  const second = await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token);
   assert.equal(second.status, 409);
   release();
   assert.equal((await first).body.turn, 1);
@@ -125,14 +131,93 @@ test("a practice expires an hour after its last move", async () => {
   const { r, token } = await setup();
   const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
   r.clock.advance(3_600_001);
-  assert.equal((await r.call("POST", "/api/link/practice/move", { match, action: hit }, token)).status, 410);
+  assert.equal((await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token)).status, 410);
 });
 
-test("a battle from another version of the rig can't continue", async () => {
-  const { r, engine, token } = await setup();
+test("a battle that can't go on (the rig was updated under it) ends, frees its place, and a new one can start", async () => {
+  const { r, engine, token } = await setup({ maxPractices: 1 });
   const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
   engine.version = "v2";
-  assert.equal((await r.call("POST", "/api/link/practice/move", { match, action: hit }, token)).status, 410);
+  assert.equal((await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token)).status, 410);
+  const page = await r.call("GET", `/api/link/practice/${match}`);
+  assert.equal(page.body.ended.reason, "void");
+  assert.equal(page.body.spectator.live, false);
+  engine.version = "v1";
+  const next = await r.call("POST", "/api/link/practice", {}, token);
+  assert.equal(next.status, 200, "its place in the cap was freed");
+  assert.notEqual(next.body.match, match);
+});
+
+test("a retried move for a turn already played is refused, never played twice", async () => {
+  const { r, token } = await setup();
+  const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
+  assert.equal((await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token)).body.turn, 1);
+  const again = await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token);
+  assert.equal(again.status, 409);
+  assert.equal((await r.call("GET", `/api/link/practice/state?match=${match}`, undefined, token)).body.turn, 1);
+  assert.equal((await r.call("POST", "/api/link/practice/move", { match, action: hit }, token)).status, 400, "a move must name its turn");
+});
+
+test("two starts at once make one battle, and take one place in the cap", async () => {
+  const { r, engine, token } = await setup({ maxPractices: 2 });
+  let release!: () => void;
+  engine.hold = new Promise<void>((resolve) => (release = resolve));
+  const starts = Array.from({ length: 5 }, () => r.call("POST", "/api/link/practice", {}, token));
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  release();
+  engine.hold = null;
+  const done = await Promise.all(starts);
+  const matches = new Set(done.filter((d) => d.status === 200).map((d) => d.body.match));
+  assert.equal(matches.size, 1, done.map((d) => d.status).join(","));
+  assert.equal(engine.calls, 1);
+  assert.equal((r.store.dump()["link:practices"] as unknown[]).length, 1);
+});
+
+test("someone else's match id never holds the lock against its owner", async () => {
+  const { r, engine, token } = await setup();
+  const other = await r.register(MINT2, OTHER);
+  const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
+  let release!: () => void;
+  engine.hold = new Promise<void>((resolve) => (release = resolve));
+  const theirs = r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, other);
+  const mine = r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  release();
+  assert.equal((await theirs).status, 404);
+  assert.equal((await mine).status, 200);
+});
+
+test("with no action, a battle where the agent isn't asked goes on; otherwise an action is required", async () => {
+  const { r, engine, token } = await setup();
+  const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
+  assert.equal((await r.call("POST", "/api/link/practice/move", { match, turn: 0 }, token)).status, 400);
+  engine.phase = "waiting";
+  const moved = await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token);
+  assert.equal(moved.body.view.phase, "waiting");
+  const went = await r.call("POST", "/api/link/practice/move", { match, turn: 1 }, token);
+  assert.equal(went.status, 200, went.text);
+  assert.equal(went.body.turn, 2);
+});
+
+test("leaving waits for no turn: one resolving now is refused", async () => {
+  const { r, engine, token } = await setup();
+  const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
+  let release!: () => void;
+  engine.hold = new Promise<void>((resolve) => (release = resolve));
+  const move = r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit }, token);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal((await r.call("POST", "/api/link/practice/leave", {}, token)).status, 409);
+  release();
+  assert.equal((await move).status, 200);
+  assert.deepEqual((await r.call("POST", "/api/link/practice/leave", {}, token)).body, { left: true });
+});
+
+test("a battle abandoned past its hour shows as over to anyone watching", async () => {
+  const { r, token } = await setup();
+  const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
+  r.clock.advance(3_600_001);
+  const page = await r.call("GET", `/api/link/practice/${match}`);
+  assert.deepEqual(page.body.ended, { reason: "void", winner: null, message: "Abandoned." });
 });
 
 test("practices running at once are capped across fighters, and leaving frees the place", async () => {
@@ -147,7 +232,7 @@ test("practices running at once are capped across fighters, and leaving frees th
 test("the public page gets the spectators' view, never the agent's", async () => {
   const { r, token } = await setup();
   const { match } = (await r.call("POST", "/api/link/practice", {}, token)).body;
-  await r.call("POST", "/api/link/practice/move", { match, action: hit, line: "steady" }, token);
+  await r.call("POST", "/api/link/practice/move", { match, turn: 0, action: hit, line: "steady" }, token);
   const page = await r.call("GET", `/api/link/practice/${match}`);
   assert.equal(page.status, 200);
   assert.equal(page.body.spectator.turn, 1);

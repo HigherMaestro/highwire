@@ -37,7 +37,7 @@ const config: NextConfig = {
       "highwire-agent": "../../packages/agent/src/index.ts",
       // The wager pages read series from the chain. Only this entry: the package's tools and daemon never reach the site.
       "highwire-wager/chain": "../../packages/wager/src/chain.ts",
-      // Link battles' rig (docs/link-battles.md): only the preview-only timing route uses it so far.
+      // Link battles' rig (docs/link-battles.md): its engine, loaded on the first link call (lib/link/lazy.ts).
       "highwire-link": "../../packages/link/src/index.ts",
       "highwire-mcp/ideas": "../../packages/mcp/src/ideas.ts",
       "highwire-mcp": "../../packages/mcp/src/index.ts",

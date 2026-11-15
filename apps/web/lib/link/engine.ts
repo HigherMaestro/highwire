@@ -10,7 +10,7 @@ import { RelayError, type LinkEngine, type LinkStep } from "highwire-relay";
 
 /** Where the files are in the store: the game, and the battle every practice starts from (both games' states). */
 const GAME = "link/game.gbc";
-const bootstrapPrefix = () => process.env.LINK_BOOTSTRAP?.trim() || "link/phase0";
+const bootstrapPrefix = () => process.env.LINK_BOOTSTRAP?.trim() || "link/colosseum-1";
 
 
 export type LinkFiles = { rom: Uint8Array; bootstrap: [Uint8Array, Uint8Array] };

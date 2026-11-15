@@ -11,7 +11,28 @@ const TABLES = {
   moves: offset(0x0e, 0x4000),
   typeNames: offset(0x09, 0x7d63),
   typeEffects: offset(0x0f, 0x65fa),
+  baseStats: offset(0x0e, 0x43de),
+  pokedexOrder: offset(0x10, 0x50b1),
 } as const;
+
+/** A species' base data, from the cartridge's BaseStats table (by Pokédex number). */
+export type BaseStats = { dex: number; hp: number; atk: number; def: number; spd: number; spc: number; types: [number, number]; catchRate: number; growth: number };
+
+/** Gen 1's growth rates: experience for level n is a/b n³ + c n² + d n − e (GrowthRateTable). */
+const GROWTH: [number, number, number, number, number][] = [
+  [1, 1, 0, 0, 0],
+  [3, 4, 10, 0, 30],
+  [3, 4, 20, 0, 70],
+  [6, 5, -15, 100, 140],
+  [4, 5, 0, 0, 0],
+  [5, 4, 0, 0, 0],
+];
+
+/** The experience a Pokémon of `growth` has at the start of `level`, as the game computes it. */
+export function experienceAt(growth: number, level: number): number {
+  const [a, b, c, d, e] = GROWTH[growth] ?? GROWTH[0]!;
+  return Math.max(0, Math.floor((a * level ** 3) / b) + c * level ** 2 + d * level - e);
+}
 
 const NUM_SPECIES = 190; // internal species numbers 1..190, gaps included
 const NUM_MOVES = 165;
@@ -43,6 +64,8 @@ export type MoveData = { name: string; power: number; type: number; accuracy: nu
 
 export interface GameData {
   species(id: number): string;
+  /** Base stats by internal species number (Mew's table isn't read: no format uses it). */
+  baseStats?(id: number): BaseStats | null;
   move(id: number): MoveData | null;
   typeName(id: number): string;
   /** The type chart's multiplier for a move of `attack` against a Pokémon of `defend`: 0, 0.5, 1 or 2. */
@@ -73,7 +96,16 @@ export function gameData(rom: Uint8Array): GameData {
   for (let p = TABLES.typeEffects; rom[p] !== 0xff && p < TABLES.typeEffects + 3 * 100; p += 3) {
     chart.set((rom[p]! << 8) | rom[p + 1]!, rom[p + 2]! / 10);
   }
+  const baseStats = (id: number): BaseStats | null => {
+    const dex = rom[TABLES.pokedexOrder + id - 1] ?? 0;
+    if (id < 1 || id > NUM_SPECIES || dex < 1 || dex > 150) return null;
+    const at = TABLES.baseStats + (dex - 1) * 28;
+    const b = (i: number) => rom[at + i] ?? 0;
+    if (b(0) !== dex) return null;
+    return { dex, hp: b(1), atk: b(2), def: b(3), spd: b(4), spc: b(5), types: [b(6), b(7)], catchRate: b(8), growth: b(19) };
+  };
   return {
+    baseStats,
     species: (id) => species[id] ?? `#${id}`,
     move: (id) => (id >= 1 && id <= NUM_MOVES ? moves[id]! : null),
     typeName: (id) => typeNames.get(id) ?? `type ${id}`,

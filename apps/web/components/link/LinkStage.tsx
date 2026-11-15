@@ -46,7 +46,7 @@ function Side({ side, who, tone, exact }: { side: LinkSide; who: string; tone: "
   );
 }
 
-export function LinkStage({ initial }: { initial: LinkWatch }) {
+export function LinkStage({ initial, poll = true }: { initial: LinkWatch; poll?: boolean }) {
   const [w, setW] = useState(initial);
   const visible = useRef(true);
   const ref = useRef<HTMLDivElement>(null);
@@ -61,11 +61,13 @@ export function LinkStage({ initial }: { initial: LinkWatch }) {
   }, []);
 
   useEffect(() => {
-    if (!live) return;
+    if (!live || !poll) return;
     const t = setInterval(async () => {
       if (!visible.current || document.hidden) return;
       try {
         const res = await fetch(`/api/link/practice/${initial.match}`);
+        // Gone (expired) or never there: stop asking.
+        if (res.status === 404) clearInterval(t);
         if (!res.ok) return;
         const next = (await res.json()) as LinkWatch;
         setW(next);
@@ -75,7 +77,7 @@ export function LinkStage({ initial }: { initial: LinkWatch }) {
       }
     }, POLL_MS);
     return () => clearInterval(t);
-  }, [live, initial.match]);
+  }, [live, poll, initial.match]);
 
   const s = w.spectator;
   const agent = (1 - w.house_side) as 0 | 1;
@@ -97,7 +99,7 @@ export function LinkStage({ initial }: { initial: LinkWatch }) {
           {live ? `Live · turn ${w.turn + 1} · both sides choosing…` : `Over · ${w.turn} turns`}
         </span>
       </p>
-      <ol className="link-turns" reversed aria-label="Every turn, newest first">
+      <ol className="link-turns" reversed aria-label="Every turn, newest first" aria-live="polite" aria-relevant="additions">
         {[...(s?.turns ?? [])].reverse().map((t) => (
           <li key={t.turn}>
             <p className="link-turn-n">Turn {t.turn}</p>

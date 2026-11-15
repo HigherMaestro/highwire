@@ -21,8 +21,9 @@ export interface SideFacts {
   mine: Mon;
   /** The other side's active Pokémon, as this game holds it: exact numbers this side must not be shown. */
   theirs: Mon;
-  /** The active Pokémon's moves by slot, from battle memory (a transformed Pokémon's are the ones it copied). */
+  /** The active Pokémon's moves by slot, and their PP, from battle memory (a transformed Pokémon's are the copied ones). */
   mineMoves: number[];
+  mineMovePP: number[];
 }
 
 /** One turn, as the match keeps it. */
@@ -114,10 +115,10 @@ export function narrate(t: Turn, names: Names, label: (side: 0 | 1) => string): 
   }
   t.events.forEach((e, i) => {
     if (e.kind === "acts") {
-      // A side whose part of the turn started and used no move, without switching, didn't attack: asleep, frozen, fully
-      // paralysed, hurt in its confusion, flinched, charging or recharging (the game's own text says which).
+      // A side whose part of the turn started with no move used, without switching: what it was locked into says why.
       const next = t.events.slice(i + 1).find((x) => x.side === e.side && x.kind !== "resolved");
-      if (!t.sides[e.side].switched && (!next || next.kind !== "used")) out.push(`${name(e.side)} didn't attack.`);
+      const c = t.sides[e.side];
+      if (!c.switched && (!next || next.kind !== "used")) out.push(`${name(e.side)} ${idle(c)}`);
     }
     if (e.kind === "used") out.push(`${name(e.side)} used ${names.move(e.move)?.name ?? "a move"}.`);
     if (e.kind === "resolved") {
@@ -132,15 +133,57 @@ export function narrate(t: Turn, names: Names, label: (side: 0 | 1) => string): 
   });
   for (const side of [0, 1] as const) {
     const c = t.sides[side];
+    if (c.switched) {
+      if (c.fainted) out.push(`${name(side)} fainted!`);
+      continue;
+    }
     const [was, is] = c.status;
-    if (is !== was && is !== 0 && !c.switched) out.push(`${name(side)} is ${statusName(is) ?? "affected"}.`);
-    c.stages.forEach((d, i) => {
-      if (d) out.push(`${name(side)}'s ${STAGES[i]} ${d > 0 ? "rose" : "fell"}${Math.abs(d) > 1 ? " sharply" : ""}.`);
-    });
+    const before = statusName(was), now = statusName(is);
+    // Only a change of condition, not every tick of a sleep counter.
+    if (now && now !== before) out.push(`${name(side)} is ${now}.`);
+    if (!now && before && !c.fainted) out.push(`${name(side)} ${before === "asleep" ? "woke up" : before === "frozen" ? "thawed out" : `is no longer ${before}`}.`);
+    for (const f of c.fieldOn) if (FIELD_ON[f]) out.push(`${name(side)} ${FIELD_ON[f]}`);
+    for (const f of c.fieldOff) if (FIELD_OFF[f] && !c.fainted) out.push(`${name(side)} ${FIELD_OFF[f]}`);
+    // Transform copies the target's stages: those aren't rises and falls.
+    if (!c.fieldOn.includes("transformed")) {
+      c.stages.forEach((d, i) => {
+        if (d) out.push(`${name(side)}'s ${STAGES[i]} ${d > 0 ? "rose" : "fell"}${Math.abs(d) > 1 ? " sharply" : ""}.`);
+      });
+    }
     if (c.fainted) out.push(`${name(side)} fainted!`);
   }
   return out;
 }
+
+/** Why a side's part of the turn used no move, from what it was locked into or its condition when the turn began. */
+function idle(c: SideChange): string {
+  if (c.was.recharging) return "must recharge.";
+  if (c.was.thrashing) return "is thrashing about.";
+  if (c.was.trapping) return "keeps its hold on the other side.";
+  if (c.was.rage) return "is in a rage.";
+  if (!c.was.charging && c.fieldOn.includes("charging")) return "is charging up.";
+  const status = statusName(c.status[0]);
+  if (status === "asleep") return "is fast asleep.";
+  if (status === "frozen") return "is frozen solid.";
+  return "couldn't move.";
+}
+
+const FIELD_ON: Partial<Record<keyof Field, string>> = {
+  confused: "became confused.",
+  substitute: "made a substitute.",
+  seeded: "was seeded.",
+  reflect: "is protected by Reflect.",
+  lightScreen: "is protected by Light Screen.",
+  mist: "is shrouded in mist.",
+  focusEnergy: "is getting pumped.",
+  transformed: "transformed.",
+};
+const FIELD_OFF: Partial<Record<keyof Field, string>> = {
+  confused: "snapped out of confusion.",
+  substitute: "lost its substitute.",
+  reflect: "is no longer protected by Reflect.",
+  lightScreen: "is no longer protected by Light Screen.",
+};
 
 export interface PlayerView {
   phase: ViewPhase;
@@ -210,9 +253,11 @@ export function playerView(o: {
           max_hp: m.maxHp,
           status: statusName(active ? facts.mine.status : m.status, active ? facts.mine.field : undefined),
           out: active,
-          moves: m.moves.flatMap((id, slot) => {
+          // The one out: its moves and PP in battle (a transformed Pokémon's are the copied ones, 5 PP each).
+          moves: (active ? facts.mineMoves : m.moves).flatMap((id, slot) => {
             const move = names.move(id);
-            return id && move ? [{ name: move.name, pp: m.pp[slot] ?? 0, max_pp: move.pp }] : [];
+            const pp = (active ? facts.mineMovePP : m.pp)[slot] ?? 0;
+            return id && move ? [{ name: move.name, pp, max_pp: active && facts.mine.field.transformed ? 5 : move.pp }] : [];
           }),
         };
       }),

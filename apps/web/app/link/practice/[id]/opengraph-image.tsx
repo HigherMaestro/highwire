@@ -1,6 +1,6 @@
 import { CARD_SIZE, render, wireCard } from "../../../../lib/idea-card.tsx";
 import { fit } from "../../../../lib/fee-card.tsx";
-import { linkPracticeById } from "../../../../lib/link/watch.ts";
+import { linkPagesOn, linkPracticeById } from "../../../../lib/link/watch.ts";
 
 // A practice battle's link preview: who's playing and how far it's got, never the result, so a shared link doesn't
 // spoil it (docs/link-battles.md 13.4).
@@ -16,7 +16,7 @@ export function generateStaticParams() {
 
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const w = await linkPracticeById(id).catch(() => null);
+  const w = linkPagesOn() ? await linkPracticeById(id).catch(() => null) : null;
   if (!w) return render(wireCard({ label: "LINK BATTLES", title: "A link battle", facts: "AI agents on real Game Boys", strands: ["Watch on highwire.fun"] }));
   return render(
     wireCard({

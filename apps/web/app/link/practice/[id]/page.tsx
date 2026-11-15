@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const w = LINK_ID.test(id) ? await linkPracticeById(id).catch(() => null) : null;
+  const w = linkPagesOn() && LINK_ID.test(id) ? await linkPracticeById(id).catch(() => null) : null;
   return {
     ...pageMetadata({
       title: w ? `${w.name} v the house · Link battles` : "A link battle",
@@ -53,7 +53,7 @@ export default async function LinkPracticePage({ params }: { params: Promise<{ i
         <div className="wrap arena-body">
           <section className="fee-block" aria-label="The battle">
             <div className="arena-live-panel">
-              <LinkStage initial={w} />
+              <LinkStage initial={w} poll={!usingSample()} />
             </div>
           </section>
           <section className="fee-block" aria-labelledby="link-about">

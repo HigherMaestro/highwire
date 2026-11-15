@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
-import { type Action, Battle, BattleError, checkGame, DICE_LENGTH, type Legal, pack, Rig, type Side, unpack } from "highwire-link";
+import { type Action, ADDR, BANNED_MOVES, Battle, BattleError, checkGame, DICE_LENGTH, gameData, type Legal, pack, PARTY_MON, Rig, type Side, unpack } from "highwire-link";
 
 // Phase 1's fuzzer (docs/link-battles.md 14): plays whole link battles from a paired battle state, every decision a
 // uniformly random legal one and fresh dice every turn, and counts how they end: a knockout or draw both games agree
@@ -47,12 +47,52 @@ function choose(legal: Legal, pick: (n: number) => number): Action {
 
 /** With RESUME set, every turn is packed, and played on a fresh rig from the unpacked states, as the referee does. */
 const RESUME = Boolean(process.env.RESUME);
+/**
+ * With WILD set, every Pokémon gets four random moves (any not banned, seeded), written into both games alike before
+ * the first turn: its own game's party and battle records, and the other game's records of its enemy. That reaches what
+ * a fixed team never does (Rage, Explosion, Wrap, Thrash, Fly against Dig...).
+ */
+const WILD = Boolean(process.env.WILD);
+
+function wildMoves(rig: Rig, rom: Uint8Array, pick: (n: number) => number) {
+  const data = gameData(rom);
+  const pool = Array.from({ length: 164 }, (_, i) => i + 1).filter((m) => !BANNED_MOVES.has(m));
+  const sides = [0, 1] as Side[];
+  const counts = sides.map((s) => rig.read(s, ADDR.partyCount));
+  const sets = sides.map((s) => Array.from({ length: counts[s]! }, () => {
+    const set = new Set<number>();
+    while (set.size < 4) set.add(pool[pick(pool.length)]!);
+    return [...set];
+  }));
+  for (const s of sides) {
+    const other = (1 - s) as Side;
+    const out = rig.read(s, ADDR.playerMonNumber);
+    sets[s]!.forEach((moves, k) => {
+      moves.forEach((m, j) => {
+        const pp = data.move(m)?.pp ?? 5;
+        rig.write(s, ADDR.partyMons + k * PARTY_MON.length + PARTY_MON.moves + j, m);
+        rig.write(s, ADDR.partyMons + k * PARTY_MON.length + PARTY_MON.pp + j, pp);
+        rig.write(other, ADDR.enemyMons + k * PARTY_MON.length + PARTY_MON.moves + j, m);
+        rig.write(other, ADDR.enemyMons + k * PARTY_MON.length + PARTY_MON.pp + j, pp);
+        if (k === out) {
+          rig.write(s, ADDR.battleMonMoves + j, m);
+          rig.write(s, ADDR.battleMonPP + j, pp);
+          rig.write(other, ADDR.enemyMonMoves + j, m);
+          rig.write(other, ADDR.enemyMonPP + j, pp);
+        }
+      });
+    });
+  }
+  return sets;
+}
 
 async function battle(rom: Uint8Array, states: [Uint8Array, Uint8Array], seed: number, verbose: boolean): Promise<Result> {
   let rig = await Rig.create(rom);
   rig.loadState(0, states[0]);
   rig.loadState(1, states[1]);
   const pick = rng(seed);
+  const sets = WILD ? wildMoves(rig, rom, pick) : null;
+  if (sets && verbose) console.log(`movesets: ${JSON.stringify(sets)}`);
   let game = new Battle(rig);
   const t0 = performance.now();
   const moves = new Set<number>();
@@ -93,7 +133,7 @@ async function battle(rom: Uint8Array, states: [Uint8Array, Uint8Array], seed: n
     const kind = error instanceof BattleError ? error.kind : "crash";
     const message = error instanceof Error ? error.message : String(error);
     if (verbose) console.log(`ERROR ${kind}: ${message}`);
-    return { seed, outcome: kind, turns: game.turn, frames: rig.frameCount, ms: performance.now() - t0, error: { kind, message, moves: [...moves] } };
+    return { seed, outcome: kind, turns: game.turn, frames: rig.frameCount, ms: performance.now() - t0, error: { kind, message, moves: sets ? sets.flat(2) : [...moves] } };
   }
 }
 

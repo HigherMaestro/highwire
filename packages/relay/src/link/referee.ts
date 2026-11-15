@@ -1,6 +1,6 @@
 import { checkTableTalk } from "highwire-core/arena";
 import type { Clock } from "../clock.ts";
-import { fail } from "../errors.ts";
+import { fail, RelayError } from "../errors.ts";
 import { update, type Store } from "../store.ts";
 import type { Fighter } from "../arena/types.ts";
 
@@ -39,7 +39,8 @@ export interface LinkStep {
 export interface LinkEngine {
   rules(): Promise<Record<string, unknown>>;
   start(agent: 0 | 1, labels: [string, string]): Promise<LinkStep>;
-  move(state: unknown, packed: Uint8Array, agent: 0 | 1, action: LinkAction, labels: [string, string]): Promise<LinkStep>;
+  /** The agent's action and on to its next decision; a null action continues a battle where the agent isn't asked. */
+  move(state: unknown, packed: Uint8Array, agent: 0 | 1, action: LinkAction | null, labels: [string, string]): Promise<LinkStep>;
 }
 
 export interface LinkConfig {
@@ -73,7 +74,10 @@ interface Practice {
 }
 
 const PRACTICE = (id: string) => `link:practice:${id}`;
-const STATE = (id: string, turn: number) => `link:state:${id}:${turn}`;
+/** A packed battle's key: per turn and per write, so a write left behind by a step that died can never be mistaken for another's. */
+const STATE = (id: string, turn: number) => `link:state:${id}:${turn}:${linkMatchId()}`;
+/** Held while a fighter's practice is being started, so two starts at once make one battle. */
+const STARTING = (fighter: string) => `link:starting:${fighter}`;
 const PRACTICE_OF = (fighter: string) => `link:practice-of:${fighter}`;
 const RUNNING = "link:practices";
 const LOCK = (id: string) => `link:lock:${id}`;
@@ -89,7 +93,8 @@ export function linkMatchId(): string {
 const toBase64 = (b: Uint8Array) => Buffer.from(b).toString("base64");
 const fromBase64 = (s: string) => new Uint8Array(Buffer.from(s, "base64"));
 
-function parseAction(a: unknown): LinkAction {
+function parseAction(a: unknown): LinkAction | null {
+  if (a === null || a === undefined) return null;
   const o = (a ?? {}) as Record<string, unknown>;
   const int = (v: unknown, max: number) => (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= max ? v : null);
   if (o.kind === "move" && int(o.slot, 3) !== null) return { kind: "move", slot: o.slot as number };
@@ -130,7 +135,14 @@ export class LinkReferee {
     return Math.ceil(this.ttlMs / 1000) + 600;
   }
 
-  /** What the agent gets back: its view, with the match, the turn and how it ended; never the spectators' document. */
+  private abandoned(p: Practice) {
+    return !p.ended && this.clock.now() - p.updatedAt > this.ttlMs;
+  }
+
+  /**
+   * What the agent gets back: its view, with the match and the turn to send with its next action (`turn`, the turns
+   * played so far), and how it ended; never the spectators' document.
+   */
   private out(p: Practice) {
     return { match: p.id, turn: p.turn, ended: p.ended, view: p.view, watch_path: `/link/practice/${p.id}` };
   }
@@ -139,39 +151,46 @@ export class LinkReferee {
     const id = (await this.store.get<string>(PRACTICE_OF(f.id)))?.value;
     if (!id) return null;
     const p = (await this.store.get<Practice>(PRACTICE(id)))?.value;
-    if (!p || p.ended || this.clock.now() - p.updatedAt > this.ttlMs) return null;
+    if (!p || p.ended || this.abandoned(p)) return null;
     return p;
   }
 
-  /** Starts a practice against the house, or returns the one the fighter has going. */
+  /** Starts a practice against the house, or returns the one the fighter has going. One start at a time per fighter. */
   async practice(f: Fighter): Promise<ReturnType<LinkReferee["out"]>> {
     await this.spend(f, 2);
     const going = await this.current(f);
     if (going) return this.out(going);
-    const now = this.clock.now();
-    const id = linkMatchId();
-    // The global cap: practices running now, pruned of the old ones, with this one added if there's room.
-    let full = false;
-    await update<{ id: string; at: number }[]>(this.store, RUNNING, (cur) => {
-      const live = (cur ?? []).filter((r) => now - r.at < this.ttlMs);
-      if (live.length >= this.max) {
-        full = true;
-        return live;
-      }
-      return [...live, { id, at: now }];
-    });
-    if (full) fail("rate_limited", "Practice is full right now (each battle runs on Highwire's servers); try again in a few minutes.");
-    const name = f.name;
-    let step: LinkStep;
+    if ((await this.store.cas(STARTING(f.id), 0, 1, 90)) === null) fail("conflict", "Your practice battle is already being set up; read it with link_practice in a moment.");
     try {
-      step = await this.engine.start(this.agent, this.labels(name));
-    } catch (err) {
-      await this.release(id);
-      throw err;
+      // Checked again under the lock: another start may have just finished.
+      const again = await this.current(f);
+      if (again) return this.out(again);
+      const now = this.clock.now();
+      const id = linkMatchId();
+      // The global cap: practices running now, pruned of the stale ones, with this one added if there's room.
+      let full = false;
+      await update<{ id: string; at: number }[]>(this.store, RUNNING, (cur) => {
+        const live = (cur ?? []).filter((r) => now - r.at < this.ttlMs);
+        if (live.length >= this.max) {
+          full = true;
+          return live;
+        }
+        return [...live, { id, at: now }];
+      });
+      if (full) fail("rate_limited", "Practice is full right now (each battle runs on Highwire's servers); try again in a few minutes.");
+      let step: LinkStep;
+      try {
+        step = await this.engine.start(this.agent, this.labels(f.name));
+      } catch (err) {
+        await this.release(id);
+        throw err;
+      }
+      const p = await this.save({ id, fighter: f.id, name: f.name, agent: this.agent, format: step.format, version: step.version, startedAt: now, updatedAt: now, turn: 0, state: null, stateKey: null, view: null, spectator: null, ended: null, lines: [] }, step, 0);
+      await update<string>(this.store, PRACTICE_OF(f.id), () => id, this.ttl());
+      return this.out(p);
+    } finally {
+      await this.store.del(STARTING(f.id)).catch(() => undefined);
     }
-    const p = await this.save({ id, fighter: f.id, name, agent: this.agent, format: step.format, version: step.version, startedAt: now, updatedAt: now, turn: 0, state: null, stateKey: null, view: null, spectator: null, ended: null, lines: [] }, step, 0);
-    await this.store.cas(PRACTICE_OF(f.id), (await this.store.get(PRACTICE_OF(f.id)))?.version ?? 0, id, this.ttl());
-    return this.out(p);
   }
 
   /** The fighter's practice as it stands. */
@@ -182,10 +201,15 @@ export class LinkReferee {
     return this.out(p);
   }
 
-  /** The agent's action (and a line of table talk): the turn plays out, and the agent's next view comes back. */
-  async practiceMove(f: Fighter, input: { match?: unknown; action?: unknown; line?: unknown }): Promise<ReturnType<LinkReferee["out"]>> {
+  /**
+   * The agent's action (and a line of table talk) for the turn it names: the turn plays out, and the agent's next view
+   * comes back. A turn already played is refused, so a retried call never plays twice. With no action, a battle where
+   * the agent isn't asked goes on.
+   */
+  async practiceMove(f: Fighter, input: { match?: unknown; turn?: unknown; action?: unknown; line?: unknown }): Promise<ReturnType<LinkReferee["out"]>> {
     await this.spend(f, 3);
     if (typeof input.match !== "string" || !/^[a-z2-9]{10}$/.test(input.match)) fail("bad_request", "match is the practice battle's id.");
+    if (typeof input.turn !== "number" || !Number.isInteger(input.turn) || input.turn < 0) fail("bad_request", "turn is the `turn` of the view you're answering.");
     const action = parseAction(input.action);
     let line = "";
     try {
@@ -194,47 +218,86 @@ export class LinkReferee {
       fail("bad_request", (err as Error).message);
     }
     const id = input.match as string;
+    // Whose it is, before anything is held: someone else's id (it's public, in the watch link) never takes the lock.
+    const mine = (await this.store.get<Practice>(PRACTICE(id)))?.value;
+    if (!mine || mine.fighter !== f.id) return fail("not_found", "No such practice battle of yours.");
     // One step at a time per battle: a second move while one is resolving is refused, not queued.
     if ((await this.store.cas(LOCK(id), 0, 1, 90)) === null) fail("conflict", "That battle is already resolving a turn.");
     try {
       const doc = await this.store.get<Practice>(PRACTICE(id));
-      const p = doc?.value;
-      if (!p || p.fighter !== f.id) return fail("not_found", "No such practice battle of yours.");
+      const p = doc!.value;
       if (p.ended) return fail("conflict", "That battle is over; start another with link_practice.");
-      if (this.clock.now() - p.updatedAt > this.ttlMs) return fail("expired", "That practice battle expired after an hour without a move; start another.");
+      if (this.abandoned(p)) return fail("expired", "That practice battle expired after an hour without a move; start another.");
+      if (input.turn !== p.turn) return fail("conflict", `That's turn ${input.turn}'s action, and the battle is past it (${p.turn} turns played): read the view again and answer it.`);
+      if (action === null && (p.view as { phase?: string } | null)?.phase !== "waiting") fail("bad_request", "Choose one of the legal actions in your view.");
       const packed = p.stateKey ? (await this.store.get<string>(p.stateKey))?.value : null;
-      if (!packed) return fail("expired", "That battle's saved state is gone; start another.");
-      const step = await this.engine.move(p.state, fromBase64(packed), p.agent, action, this.labels(p.name));
+      if (!packed) return this.dead(p, doc!.version, "That battle's saved state is gone, so it can't go on; start another.");
+      let step: LinkStep;
+      try {
+        step = await this.engine.move(p.state, fromBase64(packed), p.agent, action, this.labels(p.name));
+      } catch (err) {
+        // A battle that can't go on (the rig was updated under it) ends now, so the fighter can start another.
+        if (err instanceof RelayError && err.code === "expired") return this.dead(p, doc!.version, err.message);
+        throw err;
+      }
       const lines = line ? [...p.lines, { turn: p.turn + 1, line }] : p.lines;
       const next = await this.save({ ...p, lines }, step, doc!.version);
+      await this.touch(id);
       return this.out(next);
     } finally {
       await this.store.del(LOCK(id)).catch(() => undefined);
     }
   }
 
-  /** Ends the fighter's practice early. */
+  /** Ends a battle that can't go on, frees its place, and says so. */
+  private async dead(p: Practice, version: number, why: string): Promise<never> {
+    const spectator = p.spectator && typeof p.spectator === "object" ? { ...(p.spectator as object), live: false } : p.spectator;
+    await this.store.cas(PRACTICE(p.id), version, { ...p, ended: { reason: "void", winner: null, message: why }, stateKey: null, spectator, updatedAt: this.clock.now() }, this.ttl());
+    if (p.stateKey) await this.store.del(p.stateKey);
+    await this.release(p.id);
+    return fail("expired", why);
+  }
+
+  /** Ends the fighter's practice early. Waits for no turn: one resolving now is refused. */
   async practiceLeave(f: Fighter): Promise<{ left: boolean }> {
     await this.spend(f, 1);
     const p = await this.current(f);
     if (!p) return { left: false };
-    await update<Practice>(this.store, PRACTICE(p.id), (cur) => (cur ? { ...cur, ended: { reason: "void", winner: null, message: "Left early." }, stateKey: null } : undefined), this.ttl());
-    if (p.stateKey) await this.store.del(p.stateKey);
-    await this.release(p.id);
-    return { left: true };
+    if ((await this.store.cas(LOCK(p.id), 0, 1, 90)) === null) fail("conflict", "A turn is resolving; leave once it has.");
+    try {
+      const doc = await this.store.get<Practice>(PRACTICE(p.id));
+      if (!doc || doc.value.ended) return { left: false };
+      const cur = doc.value;
+      const spectator = cur.spectator && typeof cur.spectator === "object" ? { ...(cur.spectator as object), live: false } : cur.spectator;
+      if ((await this.store.cas(PRACTICE(p.id), doc.version, { ...cur, ended: { reason: "void", winner: null, message: "Left early." }, stateKey: null, spectator, updatedAt: this.clock.now() }, this.ttl())) === null) {
+        fail("conflict", "That battle changed just now; try again.");
+      }
+      if (cur.stateKey) await this.store.del(cur.stateKey);
+      await this.release(p.id);
+      return { left: true };
+    } finally {
+      await this.store.del(LOCK(p.id)).catch(() => undefined);
+    }
   }
 
   /** A practice battle for the public page (13.1, unlisted): the spectators' view, never the agent's. */
   async watchPractice(id: string): Promise<unknown> {
     const p = (await this.store.get<Practice>(PRACTICE(id)))?.value;
     if (!p) return fail("not_found", "No such practice battle (they're kept for an hour).");
-    return { match: p.id, practice: true, fighter: p.fighter, name: p.name, house_side: 1 - p.agent, turn: p.turn, ended: p.ended, spectator: p.spectator, lines: p.lines };
+    // Abandoned without leaving: over, not live, as far as anyone watching is concerned.
+    const gone = this.abandoned(p);
+    const ended = gone ? { reason: "void" as const, winner: null, message: "Abandoned." } : p.ended;
+    const spectator = gone && p.spectator && typeof p.spectator === "object" ? { ...(p.spectator as object), live: false } : p.spectator;
+    return { match: p.id, practice: true, fighter: p.fighter, name: p.name, house_side: 1 - p.agent, turn: p.turn, ended, spectator, lines: p.lines };
   }
 
-  /** Writes the step's packed battle under its own key, then the document pointing at it; drops the old battle. */
+  /**
+   * Writes the step's packed battle under a key of its own, then the document pointing at it, then drops the old one.
+   * A step that dies between the two leaves only an unreferenced key, which expires; a lost race deletes only its own.
+   */
   private async save(p: Practice, step: LinkStep, version: number): Promise<Practice> {
     const key = step.packed ? STATE(p.id, step.turn) : null;
-    if (key && step.packed) await this.store.cas(key, 0, toBase64(step.packed), this.ttl());
+    if (key && step.packed && (await this.store.cas(key, 0, toBase64(step.packed), this.ttl())) === null) fail("conflict", "The battle's state couldn't be written; try again.");
     const next: Practice = { ...p, format: step.format, version: step.version, turn: step.turn, state: step.state, stateKey: key, view: step.view, spectator: step.spectator, ended: step.ended, updatedAt: this.clock.now() };
     if ((await this.store.cas(PRACTICE(p.id), version, next, this.ttl())) === null) {
       if (key) await this.store.del(key);
@@ -245,8 +308,13 @@ export class LinkReferee {
     return next;
   }
 
+  /** Keeps a battle's place in the cap while it's being played. */
+  private async touch(id: string) {
+    const now = this.clock.now();
+    await update<{ id: string; at: number }[]>(this.store, RUNNING, (cur) => (cur ?? []).map((r) => (r.id === id ? { id, at: now } : r)));
+  }
+
   private async release(id: string) {
     await update<{ id: string; at: number }[]>(this.store, RUNNING, (cur) => (cur ?? []).filter((r) => r.id !== id));
   }
 }
-

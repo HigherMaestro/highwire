@@ -44,11 +44,16 @@ let moves = 0;
 let midway: unknown = null;
 const t1 = performance.now();
 while (!v.ended) {
+  if (v.view.phase === "waiting") {
+    // Turns the agent isn't asked about took longer than one call: it goes on with no action.
+    v = await call("POST", "/api/link/practice/move", { match: v.match, turn: v.turn, action: null }, token);
+    continue;
+  }
   const legal = v.view.legal as { action: unknown; label: string }[];
   // Mostly the first legal action (a move), now and then another, so the battle has switches in it.
   const pick = legal[moves % 5 === 4 ? legal.length - 1 : 0]!;
   if (moves === 8) midway = await call("GET", `/api/link/practice/${v.match}`);
-  v = await call("POST", "/api/link/practice/move", { match: v.match, action: pick.action, line: moves === 0 ? "good luck" : "" }, token);
+  v = await call("POST", "/api/link/practice/move", { match: v.match, turn: v.turn, action: pick.action, line: moves === 0 ? "good luck" : "" }, token);
   moves++;
   console.log(`turn ${v.turn}: ${pick.label} -> ${v.view.last_turn.join(" ")}`);
 }
@@ -56,8 +61,9 @@ console.log(`\nended: ${JSON.stringify(v.ended)} after ${v.turn} turns, ${moves}
 const page = await call("GET", `/api/link/practice/${v.match}`);
 console.log(`watch page: turn ${page.turn}, ${page.spectator.turns.length} turns told, sides ${page.spectator.sides.map((s: { species: string; hp?: number }) => `${s.species} ${s.hp}`).join(" v ")}; agent-only fields: ${/"legal"|"you"/.test(JSON.stringify(page)) ? "LEAKED" : "none"}`);
 if (writeSample) {
-  const live = { ...(midway as Record<string, unknown>), match: "sampleliv2" };
-  writeFileSync(new URL("../lib/link/sample.json", import.meta.url), JSON.stringify([{ ...page, match: "samplebat2" }, live], null, 1) + "\n");
+  // The fighter is the test fakes' coin: its mint is replaced, so the sample names no real address.
+  const live = { ...(midway as Record<string, unknown>), match: "sampleliv2", fighter: "sample-fighter" };
+  writeFileSync(new URL("../lib/link/sample.json", import.meta.url), JSON.stringify([{ ...page, match: "samplebat2", fighter: "sample-fighter" }, live], null, 1) + "\n");
   console.log("wrote lib/link/sample.json: /link/practice/samplebat2 (over) and /link/practice/sampleliv2 (live)");
 }
 console.log(`store keys left: ${Object.keys(store.dump()).filter((k) => k.startsWith("link:state")).length} packed battles; ${store.ops} store operations`);
