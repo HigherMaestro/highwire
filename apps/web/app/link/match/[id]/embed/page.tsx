@@ -34,11 +34,12 @@ export default async function LinkEmbedPage({ params }: { params: Promise<{ id: 
   return (
     <main className="link-embed">
       <p className="link-embed-top">
+        <span className="link-crumbs">highwire · link battles</span>
         <a href={`${SITE_URL}/link/match/${b.match}`} target="_blank" rel="noopener">
-          {battleTitle(b)} · watch on highwire.fun ↗
+          Watch on highwire.fun ↗
         </a>
       </p>
-      <LinkStage initial={b} poll={!usingRatedSample()} screens={!usingRatedSample()} />
+      <LinkStage initial={b} poll={!usingRatedSample()} screens={false} compact />
     </main>
   );
 }

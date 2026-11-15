@@ -29,10 +29,12 @@ async function fetchFilm(match: string, turn: number): Promise<Film | null> {
  * `onShow` hears which turn is on screen while the screens are being followed (a live battle playing, or once someone
  * has pressed play or stepped), and null otherwise, when the stage shows the battle as it stands.
  */
-export function LinkScreens({ match, turns, live, left, names, onShow, startTurn, autoplay = false }: { match: string; turns: number; live: boolean; left: 0 | 1; names: [string, string]; onShow?: (s: Shown) => void; startTurn?: number; autoplay?: boolean }) {
+export function LinkScreens({ match, turns, live, left, names, onShow, startTurn, autoplay = false, seek }: { match: string; turns: number; live: boolean; left: 0 | 1; names: [string, string]; onShow?: (s: Shown) => void; startTurn?: number; autoplay?: boolean; seek?: number }) {
   // The turn on screen: 0 is the opening (the first menu), 1..turns the turns played. A live battle opens on its newest
-  // turn, a finished one at the opening, unless the page asks for a turn (a turn link, or from the start).
-  const [turn, setTurn] = useState(() => (startTurn !== undefined ? Math.max(0, Math.min(turns, startTurn)) : live ? Math.max(0, turns) : 0));
+  // turn; a finished one on its last turn's final frame, so the screens agree with the stage and the result; a page can
+  // ask for a turn (a turn link, from the start), and `seek` (the momentum strip) moves it.
+  const [turn, setTurn] = useState(() => (startTurn !== undefined ? Math.max(0, Math.min(turns, startTurn)) : Math.max(0, turns)));
+  const toEnd = useRef(!live && startTurn === undefined);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [load, setLoad] = useState<Load>({ state: "loading" });
@@ -140,6 +142,15 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
         if (playingRef.current && turn < latest.current) setTurn(turn + 1);
         return;
       }
+      // A finished battle opens on its last frame: the end, as the stage below shows it.
+      if (toEnd.current) {
+        toEnd.current = false;
+        try {
+          while (p.next());
+        } catch {
+          // A damaged film: it shows as far as it goes.
+        }
+      }
       player.current = p;
       draw();
       setLoad({ state: "ready", film });
@@ -200,6 +211,15 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
     const p = player.current;
     if (live && following.current && playing && load.state === "ready" && p && p.film.turn === turn && p.frame >= p.film.frames - 1 && turn < turns) setTurn(turn + 1);
   }, [turns, live, playing, turn, load]);
+
+  // The momentum strip asked for a turn: open it and play it, the stage following.
+  useEffect(() => {
+    if (seek === undefined) return;
+    engaged.current = true;
+    following.current = false;
+    setTurn(Math.max(0, Math.min(latest.current, seek)));
+    setPlaying(true);
+  }, [seek]);
 
   const go = (t: number) => {
     following.current = t >= turns;

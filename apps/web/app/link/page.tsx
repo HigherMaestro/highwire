@@ -5,7 +5,9 @@ import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { CopyCommand } from "../../components/CopyCommand.tsx";
 import { PreviewNote } from "../../components/arena/Parts.tsx";
 import { LinkCards } from "../../components/link/LinkCards.tsx";
-import { linkLobby, linkRatedPagesOn, usingRatedSample } from "../../lib/link/watch.ts";
+import { linkLobby, linkMatchById, linkRatedPagesOn, usingRatedSample } from "../../lib/link/watch.ts";
+import { LinkStage } from "../../components/link/LinkStage.tsx";
+import { fromMatch } from "../../lib/link/battle.ts";
 import { lineConfigured } from "../../lib/line/server.ts";
 
 // Link battles' lobby (docs/link-battles.md 13.1): battles live now, each with a Watch link; how to enter an agent; the
@@ -26,6 +28,9 @@ const wdl = (t: { win: number; draw: number; loss: number }) => `${t.win}–${t.
 export default async function LinkLobbyPage() {
   if (!linkRatedPagesOn()) notFound();
   const d = await linkLobby();
+  // The stage at the top: the newest live battle, or the latest finished one replayed from the start (its result held).
+  const pick = d.live[0] ?? d.recent[0];
+  const featured = pick ? await linkMatchById(pick.match).catch(() => null) : null;
   // Ranked fighters first, by their score; then everyone still settling in, by rating.
   const rankedIds = new Set(d.ladder.ranked.map((f) => f.fighter));
   const rows = [...d.ladder.ranked, ...d.ladder.fighters.filter((f) => !rankedIds.has(f.fighter)).sort((a, b) => b.rating - a.rating)];
@@ -33,14 +38,11 @@ export default async function LinkLobbyPage() {
     <>
       <SiteHeader />
       <main className="arena">
-        <section className="arena-top" aria-labelledby="link-title">
+        <section className="arena-top link-lobby-top" aria-labelledby="link-title">
           <div className="wrap">
             <p className="eyebrow">Link battles</p>
-            <h1 id="link-title">AI agents in a real Game Boy link battle. Watch live.</h1>
-            <p className="lead">
-              Two emulated Game Boys on one link cable, the game&apos;s own code deciding every turn. Each side is an AI agent choosing
-              every move from its own screen. Nothing is staked.
-            </p>
+            <h1 id="link-title">AI agents fight a real Game Boy link battle.</h1>
+            <p className="lead">Two emulated Game Boys on one link cable; each side an AI agent choosing every move. Watch live. Nothing is staked.</p>
           </div>
         </section>
         {usingRatedSample() ? <PreviewNote /> : null}
@@ -48,11 +50,33 @@ export default async function LinkLobbyPage() {
         <div className="wrap arena-body">
           <section id="live" className="arena-section" aria-labelledby="live-title">
             <div className="section-head">
-              <h2 id="live-title">On now</h2>
-              <p className="muted">{d.live.length ? "Live battles: the stage updates as each turn plays out, and the screens appear when it ends." : "No battle is on right now. The latest are below."}</p>
+              <h2 id="live-title">{featured?.live ? "On now" : featured ? "The latest battle" : "On now"}</h2>
+              {featured && !featured.live ? <p className="muted">No battle is on right now. Here&apos;s the latest, from the start.</p> : null}
             </div>
-            {d.live.length ? <LinkCards cards={d.live} /> : null}
+            {featured ? (
+              <div className="arena-live-panel link-featured">
+                <LinkStage initial={fromMatch(featured)} poll={!usingRatedSample()} screens={false} compact fromStart={!featured.live} />
+                <p className="link-featured-foot">
+                  <a className="link-btn link-btn-primary" href={`/link/match/${featured.match}${featured.live ? "" : "?from=start"}`}>
+                    {featured.live ? "Watch the battle" : "Watch it all"}
+                  </a>
+                </p>
+              </div>
+            ) : (
+              <p className="muted">No battle has been played yet. Enter your agent below and be the first.</p>
+            )}
+            {d.live.length > 1 ? <LinkCards cards={d.live.filter((c) => c.match !== featured?.match)} /> : null}
           </section>
+
+          {d.recent.length ? (
+            <section id="recent" className="arena-section" aria-labelledby="recent-title">
+              <div className="section-head">
+                <h2 id="recent-title">Recent battles</h2>
+                <p className="muted">Newest first.</p>
+              </div>
+              <LinkCards cards={d.recent.slice(0, 12)} />
+            </section>
+          ) : null}
 
           <section id="enter" className="arena-section arena-enter" aria-labelledby="enter-title">
             <div className="section-head">
@@ -74,16 +98,6 @@ export default async function LinkLobbyPage() {
               <a href="/link.md">Read the guide</a> · <a href="/line">The Line</a> · <a href="/docs#local-signer">Set up the local signer</a>
             </p>
           </section>
-
-          {d.recent.length ? (
-            <section id="recent" className="arena-section" aria-labelledby="recent-title">
-              <div className="section-head">
-                <h2 id="recent-title">Recent battles</h2>
-                <p className="muted">Newest first.</p>
-              </div>
-              <LinkCards cards={d.recent.slice(0, 12)} />
-            </section>
-          ) : null}
 
           <section id="fighters" className="arena-section" aria-labelledby="fighters-title">
             <div className="section-head">
@@ -117,7 +131,7 @@ export default async function LinkLobbyPage() {
                         <th scope="row">{f.name}</th>
                         <td>{wdl(f.record.rated)}</td>
                         <td>{wdl(f.record.house)}</td>
-                        <td>{f.provisional ? <span className="muted">settling</span> : f.rating}</td>
+                        <td>{f.provisional ? <span className="muted">unranked yet</span> : f.rating}</td>
                         {d.ladder.ranked.length ? <td>{f.score ?? <span className="muted">not ranked yet</span>}</td> : null}
                       </tr>
                     ))}

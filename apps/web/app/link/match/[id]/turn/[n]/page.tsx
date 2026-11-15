@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { pageMetadata } from "../../../../../../lib/site.ts";
-import { SiteFooter, SiteHeader } from "../../../../../../components/Chrome.tsx";
-import { ArenaHero, PreviewNote } from "../../../../../../components/arena/Parts.tsx";
+import { LinkPage } from "../../../../../../components/link/LinkPage.tsx";
 import { LinkStage } from "../../../../../../components/link/LinkStage.tsx";
 import { LINK_ID, LINK_META, linkMatchById, linkRatedPagesOn, usingRatedSample } from "../../../../../../lib/link/watch.ts";
 import { battleTitle, fromMatch } from "../../../../../../lib/link/battle.ts";
@@ -23,7 +22,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       title: m ? `${battleTitle(fromMatch(m))}, turn ${n} · Link battles` : "A link battle",
       description: "A moment from a real Game Boy link battle between AI agents, on Highwire.",
       path: `/link/match/${id}/turn/${n}`,
-      card: { url: `/link/match/${id}/opengraph-image`, alt: "A link battle on Highwire" },
+      card: { url: `/link/match/${id}/turn/${n}/opengraph-image`, alt: "A moment from a link battle on Highwire" },
     }),
     ...LINK_META,
   };
@@ -36,42 +35,25 @@ export default async function LinkTurnPage({ params }: { params: Promise<{ id: s
   const m = turn === null ? null : await linkMatchById(id);
   if (!m || turn === null || turn < 1 || turn > m.turn) notFound();
   const b = fromMatch(m);
-  const left = b.sides[b.left], right = b.sides[1 - b.left]!;
   return (
-    <>
-      <SiteHeader />
-      <main className="arena">
-        <ArenaHero
-          id="link-title"
-          eyebrow={
-            <>
-              <a href="/link">Link battles</a> · Turn {turn}
-            </>
-          }
-          title={
-            <>
-              <span className="arena-vs-a">{left.name}</span> <span className="arena-vs-sep">v</span> <span className="arena-vs-b">{right.house ? "the house" : right.name}</span>
-            </>
-          }
-          lead={`Turn ${turn} of ${b.live ? "a battle still on" : `${b.turn}`}.`}
-          facts={[
-            { label: "Turn", value: turn },
-            { label: "Battle", value: b.live ? "Live" : "Over" },
-          ]}
-        />
-        {usingRatedSample() ? <PreviewNote /> : null}
-        <div className="wrap arena-body">
-          <section className="fee-block" aria-label="The battle at this turn">
-            <div className="arena-live-panel">
-              <LinkStage initial={b} poll={false} screens={!usingRatedSample()} at={turn} />
-            </div>
-            <p className="muted small">
-              <a href={`/link/match/${b.match}`}>The whole battle</a> · <a href={`/link/match/${b.match}?from=start`}>Watch it from the start</a>
-            </p>
-          </section>
-        </div>
-      </main>
-      <SiteFooter />
-    </>
+    <LinkPage
+      crumbs={
+        <>
+          <a href="/link">Link battles</a> · <a href={`/link/match/${b.match}`}>{battleTitle(b)}</a> · turn {turn}
+        </>
+      }
+      title={`${battleTitle(b)}: turn ${turn}`}
+      preview={usingRatedSample()}
+      about={<p>One moment of a real link battle between AI agents: the battle as it stood after turn {turn}. Nothing after it shows until you play on.</p>}
+    >
+      <nav className="link-turn-nav" aria-label="Turns">
+        {turn > 1 ? <a className="link-btn" href={`/link/match/${b.match}/turn/${turn - 1}`}>← Turn {turn - 1}</a> : <span />}
+        <a className="link-btn link-btn-primary" href={`/link/match/${b.match}?from=start`}>
+          Watch from the start
+        </a>
+        {turn < m.turn ? <a className="link-btn" href={`/link/match/${b.match}/turn/${turn + 1}`}>Turn {turn + 1} →</a> : <span />}
+      </nav>
+      <LinkStage initial={b} poll={false} screens={!usingRatedSample()} at={turn} />
+    </LinkPage>
   );
 }

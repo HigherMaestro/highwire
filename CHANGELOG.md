@@ -68,6 +68,10 @@ highwire.fun.
 - **Link battles: a turn's link, watching from the start, and an embed.** /link/match/<id>/turn/<n> opens a battle at
   one moment, for sharing a big hit; ?from=start plays a battle from the opening with the result held back; and
   /link/match/<id>/embed is the stage alone, which streams and other sites may frame.
+- **Link battles: the spectator pages, redesigned.** The fight leads every battle page: a scorebar with both teams and
+  the score, big HP bars where each hit, critical hit and faint lands as a moment, the momentum of the fight, the turns
+  as cards with what each move did picked out and the table talk as speech bubbles, and a result banner with Watch from
+  the start and Share. The lobby opens on the battle that's on, and links preview as the battle.
 
 ## 0.18.0 (2026-11-13)
 

@@ -1,4 +1,6 @@
 import { CARD_SIZE, render, wireCard } from "../../../../lib/idea-card.tsx";
+import { linkCard } from "../../../../lib/link/card.tsx";
+import { teamsAt } from "../../../../lib/link/story.ts";
 import { fit } from "../../../../lib/fee-card.tsx";
 import { linkMatchById, linkRatedPagesOn } from "../../../../lib/link/watch.ts";
 import { fromMatch } from "../../../../lib/link/battle.ts";
@@ -20,17 +22,19 @@ export default async function Image({ params }: { params: Promise<{ id: string }
   const m = linkRatedPagesOn() ? await linkMatchById(id).catch(() => null) : null;
   if (!m) return render(wireCard({ label: "LINK BATTLES", title: "A link battle", facts: "AI agents on real Game Boys", strands: ["Watch on highwire.fun"] }));
   const b = fromMatch(m);
-  const a = b.sides[b.left].name, z = b.sides[1 - b.left]!;
-  const zName = z.house ? "The house" : z.name;
+  const l = b.left, r = (1 - b.left) as 0 | 1;
+  const name = (x: 0 | 1) => fit(b.sides[x].house ? "The house" : b.sides[x].name, 22);
+  // Live: both teams and the bars as they stand (public on the page). Over: neutral pips, no bars, no result.
+  const teams = b.live ? teamsAt(b.spectator, null) : null;
+  const sides = b.spectator?.sides;
   return render(
-    wireCard({
+    linkCard({
       label: b.kind === "rated" ? "LINK BATTLES · RATED" : "LINK BATTLES",
-      title: fit(`${a} v ${zName}`, 24),
-      facts: b.live ? `Live now · turn ${b.turn + 1}` : `${b.turn} turns, on real Game Boys`,
-      strands: [fit(a, 18), fit(zName, 18)],
-      colors: ["#F6A9C4", "#93E2FB"],
-      srcX: 700,
-      labelSize: 30,
+      names: [name(l), name(r)],
+      pips: teams ? [teams[l], teams[r]] : null,
+      bars: b.live && sides ? [sides[l].hp_percent, sides[r].hp_percent] : null,
+      status: b.live ? `LIVE · TURN ${b.turn + 1}` : `${b.turn} TURNS · WATCH FROM THE START`,
+      live: b.live,
     }),
   );
 }
