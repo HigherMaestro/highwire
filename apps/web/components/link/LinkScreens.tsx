@@ -8,6 +8,11 @@ import { decodeFilm, type Film, FilmPlayer, SCREEN_H, SCREEN_W } from "highwire-
 // the player waits for it. Reduced motion: nothing plays until asked.
 
 const RETRY_MS = 2500;
+/** A live turn whose film hasn't come in this long is passed over (a later one has), or the stage stops waiting for it. */
+const GIVE_UP_MS = 30_000;
+
+/** What the screens show, for the stage to follow: the turn on screen, and whether it has played to its end. */
+export type Shown = { turn: number; done: boolean } | null;
 type Load = { state: "loading" } | { state: "ready"; film: Film } | { state: "missing" };
 
 async function fetchFilm(match: string, turn: number): Promise<Film | null> {
@@ -18,8 +23,10 @@ async function fetchFilm(match: string, turn: number): Promise<Film | null> {
 
 /**
  * The player. `agent` is the game the agent plays (its screen goes on the left, as on the stage), `name` the fighter's.
+ * `onShow` hears which turn is on screen while the screens are being followed (a live battle playing, or once someone
+ * has pressed play or stepped), and null otherwise, when the stage shows the battle as it stands.
  */
-export function LinkScreens({ match, turns, live, agent, name }: { match: string; turns: number; live: boolean; agent: 0 | 1; name: string }) {
+export function LinkScreens({ match, turns, live, agent, name, onShow }: { match: string; turns: number; live: boolean; agent: 0 | 1; name: string; onShow?: (s: Shown) => void }) {
   // The turn on screen: 0 is the opening (the first menu), 1..turns the turns played.
   const [turn, setTurn] = useState(() => (live ? Math.max(0, turns) : 0));
   const [playing, setPlaying] = useState(false);
@@ -32,12 +39,20 @@ export function LinkScreens({ match, turns, live, agent, name }: { match: string
   const latest = useRef(turns);
   latest.current = turns;
   const shown = [agent, (1 - agent) as 0 | 1] as const;
+  // Followed: playing a live battle on its own, or once someone has pressed play or stepped.
+  const engaged = useRef(false);
+  const tell = useRef(onShow);
+  tell.current = onShow;
+  const report = useCallback((t: number, done: boolean) => tell.current?.(engaged.current ? { turn: t, done } : null), []);
   const who = [`${name}'s screen`, "The house's screen"] as const;
 
   // Reduced motion: never start on its own. Otherwise a live battle plays as it comes.
   useEffect(() => {
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (live && !still) setPlaying(true);
+    if (live && !still) {
+      engaged.current = true;
+      setPlaying(true);
+    }
   }, [live]);
 
   const get = useCallback(
@@ -74,11 +89,18 @@ export function LinkScreens({ match, turns, live, agent, name }: { match: string
   useEffect(() => {
     let gone = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    const since = Date.now();
+    report(turn, false);
     const attempt = async () => {
       const film = await get(turn);
       if (gone) return;
       if (!film) {
         setLoad({ state: "missing" });
+        // A film that never came (its filming failed): go past it, or, at the newest turn, stop holding the stage back.
+        if (Date.now() - since > GIVE_UP_MS) {
+          if (turn < latest.current) return setTurn(turn + 1);
+          tell.current?.(null);
+        }
         retry = setTimeout(attempt, RETRY_MS);
         return;
       }
@@ -94,7 +116,7 @@ export function LinkScreens({ match, turns, live, agent, name }: { match: string
       gone = true;
       clearTimeout(retry);
     };
-  }, [turn, get, draw]);
+  }, [turn, get, draw, report]);
 
   // Playback: frames by the clock, then on to the next turn (a live battle waits there for its next turn).
   useEffect(() => {
@@ -121,6 +143,7 @@ export function LinkScreens({ match, turns, live, agent, name }: { match: string
           return;
         }
         if (!more) {
+          report(turn, true);
           if (turn < turns) setTurn(turn + 1);
           else if (!live) setPlaying(false);
           return draw();
@@ -132,7 +155,7 @@ export function LinkScreens({ match, turns, live, agent, name }: { match: string
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, load, speed, turn, turns, live, draw]);
+  }, [playing, load, speed, turn, turns, live, draw, report]);
 
   // Following a live battle: a new turn arrives while the last one has finished playing.
   useEffect(() => {
@@ -141,10 +164,15 @@ export function LinkScreens({ match, turns, live, agent, name }: { match: string
 
   const go = (t: number) => {
     following.current = t >= turns;
+    engaged.current = true;
     setTurn(Math.max(0, Math.min(turns, t)));
   };
   const toggle = () => {
     const p = player.current;
+    if (!engaged.current) {
+      engaged.current = true;
+      report(turn, false);
+    }
     // Play again from the start once the last turn has finished.
     if (!playing && p && p.frame >= p.film.frames - 1 && turn >= turns && !live) {
       setTurn(turns > 0 ? 1 : 0);

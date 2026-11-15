@@ -84,6 +84,22 @@ test("spectators see bars while it's live, exact numbers once it's over, and nev
   assert.equal(over.sides[0].max_hp, 140);
 });
 
+test("spectators get each turn's sides, so the stage can follow the screens, under the same rules", () => {
+  const live = spectatorView({ live: true, turn: 1, facts0, turns: [turn1], opening: [1, 2], names, labels: ["Alpha's", "Beta's"] });
+  assert.equal(live.start![1].hp_percent, 100, "before the first turn");
+  assert.deepEqual(live.start![1].field, [], "Reflect came on during the turn, not before");
+  const after = live.turns[0]!.after!;
+  assert.equal(after[1].hp_percent, hpBar(123, 211));
+  assert.deepEqual(after[1].field, ["Reflect"]);
+  assert.equal(after[0].hp_percent, hpBar(77, 140));
+  assert.equal(after[0].species, "Sparky");
+  assert.doesNotMatch(JSON.stringify(live), /"hp":|"max_hp":|\b90\b|\b211\b|\b123\b/, "no exact numbers while it's live, at any turn");
+  const over = spectatorView({ live: false, turn: 1, facts0, turns: [turn1], opening: [1, 2], names, labels: ["Alpha's", "Beta's"] });
+  assert.equal(over.start![1].hp, 211);
+  assert.equal(over.turns[0]!.after![1].hp, 123);
+  assert.equal(spectatorView({ live: true, turn: 0, facts0, turns: [], opening: [1, 2], names, labels: ["Alpha's", "Beta's"] }).start, undefined, "nothing played, nothing to follow");
+});
+
 test("a turn is told in order, in plain sentences, without damage numbers", () => {
   const lines = narrate(turn1, names, (s) => (s === 0 ? "Your" : "Their"));
   assert.deepEqual(lines, ["Their Pebble used Tackle.", "A critical hit!", "Your Sparky used Zap.", "It doesn't affect Their Pebble…", "Your Sparky's Attack rose.", "Their Pebble is protected by Reflect."]);
