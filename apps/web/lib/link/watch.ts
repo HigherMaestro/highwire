@@ -88,6 +88,13 @@ export async function linkMatchById(id: string): Promise<MatchWatch | null> {
   }
 }
 
+/** A fighter's link battles, for its page: its record and rating there, and its latest battles. Null when rated play is off or it never played. */
+export async function linkFighter(id: string): Promise<(LadderRow & { battles: LobbyCard[] }) | null> {
+  const arena = lineRelay()?.linkArena;
+  if (!arena) return null;
+  return ((await arena.fighter(id).catch(() => null)) as unknown as (LadderRow & { battles: LobbyCard[] }) | null) ?? null;
+}
+
 export async function linkLobby(): Promise<LinkLobby> {
   const arena = lineRelay()?.linkArena;
   if (!arena) return { ...ratedSample.lobby, queue: 0 };

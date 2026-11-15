@@ -76,7 +76,7 @@ export function createRelay(o: RelayOptions): Relay {
   const registration = new Registration(o.store, o.rpc, () => o.clock.now());
   const link = o.link ? new LinkReferee(o.store, o.clock, o.link, (f, units) => referee.spend(f, units)) : null;
   const rated = o.link?.rated && o.link.engine.startMatch && o.link.engine.resolveMatch ? o.link : null;
-  const linkArena = rated ? new LinkArena(o.store, o.clock, rated.engine as typeof rated.engine & RatedEngine, (f, units) => referee.spend(f, units), rated.defer, rated.arena) : null;
+  const linkArena = rated ? new LinkArena(o.store, o.clock, rated.engine as typeof rated.engine & RatedEngine, (f, units) => referee.spend(f, units), rated.defer, rated.arena, () => referee.outages()) : null;
 
   const body = async (req: Request): Promise<Record<string, unknown>> => {
     try {

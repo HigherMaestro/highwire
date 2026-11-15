@@ -710,8 +710,10 @@ defects, all fixed:
   screens take one shape for every battle (`lib/link/battle.ts`), so practice and rated pages share them; a live rated
   battle shows a note where its screens will be. Without the referee the pages show `lib/link/sample-rated.json`, a real
   rated battle between the test fakes' fighters (`npm run link-rated -w highwire-web -- … --sample`).
-- **Still to do:** outages don't stop link clocks yet, as they do The Line's; the fighter page doesn't show the link
-  record; the turn and embed URLs (13.1) and `?from=start`.
+- **Outages and the fighter page:** link clocks and the two-minute rule count only time outside the store's outages,
+  read from The Line's record of them (`Referee.outages`), so nobody forfeits time it couldn't play; a fighter's page
+  (`/line/fighter/<mint>`) shows its link battles record, rating and latest battles once it has played one.
+- **Still to do:** the turn and embed URLs (13.1) and `?from=start`.
 
 ## 15. Decisions needed from you
 

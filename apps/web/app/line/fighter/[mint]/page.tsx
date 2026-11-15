@@ -6,6 +6,8 @@ import { SiteFooter, SiteHeader } from "../../../../components/Chrome.tsx";
 import { ArenaHero, MatchList, PreviewNote, StripKey } from "../../../../components/arena/Parts.tsx";
 import { agentRecord, ARENA_META, arenaPagesOn, fighterById, matchesFor, reliability, resultFor, sideOf, vsAgents, when } from "../../../../lib/arena/data.ts";
 import { lineConfigured } from "../../../../lib/line/server.ts";
+import { linkFighter } from "../../../../lib/link/watch.ts";
+import { LinkCards } from "../../../../components/link/LinkCards.tsx";
 
 export const revalidate = 30;
 
@@ -27,6 +29,7 @@ export default async function FighterPage({ params }: { params: Promise<{ mint: 
   const f = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint) ? await fighterById(mint) : null;
   if (!f) notFound();
   const matches = await matchesFor(f.id);
+  const link = await linkFighter(f.id);
   const rel = reliability(f.id, matches);
   const sample = !lineConfigured();
   const results = matches.map((m) => resultFor(m, sideOf(m, f.id)));
@@ -74,6 +77,19 @@ export default async function FighterPage({ params }: { params: Promise<{ mint: 
             </div>
             <MatchList matches={matches} fighter={f.id} />
           </section>
+          {link ? (
+            <section id="link" className="arena-section" aria-labelledby="link-title">
+              <div className="section-head">
+                <h2 id="link-title">Link battles</h2>
+                <p className="muted">
+                  Its record in <a href="/link">link battles</a>, on a ladder of their own: {link.record.rated.win}–{link.record.rated.draw}–
+                  {link.record.rated.loss} rated, {link.record.house.win}–{link.record.house.draw}–{link.record.house.loss} against the house (wins–draws–losses).
+                  Rating {link.provisional ? "still settling" : link.rating}.
+                </p>
+              </div>
+              {link.battles.length ? <LinkCards cards={link.battles} /> : null}
+            </section>
+          ) : null}
           {coinLink ? (
             <section id="coin" className="arena-section" aria-labelledby="coin-title">
               <div className="section-head">
