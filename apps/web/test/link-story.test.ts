@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { headline, momentum, scoreOf, storyOf, teamsAt, turnMoment, TEAM_SIZE } from "../lib/link/story.ts";
+import { beatsOf, deepestDeficit, headline, highlights, leadSeries, momentum, scoreOf, stepsOf, storyOf, teamsAt, turnMoment, TEAM_SIZE } from "../lib/link/story.ts";
 import type { MatchWatch } from "../lib/link/battle.ts";
 
 // The story the spectator pages tell (lib/link/story.ts), on the rated sample: a real battle between the test fakes'
@@ -65,4 +65,62 @@ test("a turn's lines: moves with what came of them, each given to its side", () 
 
 test("every sample turn reads: each move and faint has a side", () => {
   for (const t of over.spectator!.turns) for (const l of storyOf(t.lines, labels(over))) if (l.kind !== "other") assert.notEqual(l.side, null, l.text);
+});
+
+test("beats: each move with its species, each switch and faint with theirs, in the game's order", () => {
+  const lines = ["Wire Cat's Charizard used Flamethrower.", "A critical hit!", "Second's Blastoise used Surf.", "It's super effective!", "Wire Cat's Charizard fainted!", "Wire Cat's side sent out Venusaur."];
+  const L: [string, string] = ["Wire Cat's", "Second's"];
+  const b = beatsOf(storyOf(lines, L), L);
+  assert.deepEqual(
+    b.map((x) => [x.kind, "side" in x ? x.side : null, "species" in x ? x.species : null, x.kind === "move" ? x.move : null]),
+    [
+      ["move", 0, "Charizard", "Flamethrower"],
+      ["move", 1, "Blastoise", "Surf"],
+      ["faint", 0, "Charizard", null],
+      ["switch", 0, "Venusaur", null],
+    ],
+  );
+});
+
+test("steps: every sample turn ends on its own sides, and no bar ever rises within a turn but by a switch", () => {
+  for (const m of [over, live]) {
+    const s = m.spectator!;
+    const L = labels(m);
+    let before = s.start!;
+    for (const t of s.turns) {
+      const steps = stepsOf(before, t.after!, beatsOf(storyOf(t.lines, L), L), teamsAt(s, t.turn - 1));
+      if (steps.length) assert.deepEqual(steps.at(-1)!.sides, t.after, `turn ${t.turn} settles on its sides`);
+      let cur = before;
+      for (const st of steps.slice(0, -1)) {
+        for (const side of [0, 1] as const) {
+          if (st.beat.kind === "switch" && st.beat.side === side) continue;
+          if (st.sides[side].species === cur[side].species) assert.ok(st.sides[side].hp_percent <= cur[side].hp_percent, `turn ${t.turn}: a bar only falls`);
+        }
+        if (st.hit) assert.ok(st.hit.amount > 0);
+        cur = st.sides;
+      }
+      before = t.after!;
+    }
+  }
+});
+
+test("steps: a side's loss lands on the last move that hit it, a faint empties the bar", () => {
+  const side = (species: string, hp: number) => ({ species, level: 50, hp_percent: hp, status: null, field: [], seen: [species], fainted: 0 });
+  const L: [string, string] = ["A's", "B's"];
+  const beats = beatsOf(storyOf(["A's Charizard used Slash.", "B's Venusaur used Razor Leaf.", "B's Venusaur fainted!"], L), L);
+  const steps = stepsOf([side("Charizard", 80), side("Venusaur", 40)], [side("Charizard", 70), side("Venusaur", 0)], beats, [[], []]);
+  assert.deepEqual(steps.map((x) => x.hit), [{ side: 1, amount: 40 }, { side: 0, amount: 10 }, null]);
+  assert.equal(steps[2]!.sides[1].hp_percent, 0);
+});
+
+test("the lead and the highlights: knockouts and changes of lead, each for the side it was good for", () => {
+  const s = over.spectator!;
+  const L = labels(over);
+  const lead = leadSeries(momentum(s), 0);
+  assert.equal(lead[0]!.lead, 0);
+  const h = highlights(s, L, 0);
+  const kos = h.filter((x) => x.kind === "ko");
+  assert.equal(kos.length, s.turns.flatMap((t) => storyOf(t.lines, L)).filter((l) => l.kind === "faint").length);
+  for (const x of h) assert.ok(x.turn >= 1 && x.turn <= over.turn);
+  assert.ok(deepestDeficit(s, over.ended!.winner!) >= 0);
 });

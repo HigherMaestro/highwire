@@ -157,3 +157,127 @@ export function headline(lines: StoryLine[]): string {
 
 /** "Ch" for Charizard: the pip's mark (Highwire draws no game art of its own; the screens are the only place it appears). */
 export const monogram = (species: string | null) => (species ? species.replace(/[^A-Za-z]/g, "").slice(0, 2) : "?");
+
+// ---------------------------------------------------------------- a turn as beats, for the stage to play
+
+/** One thing that happened in a turn, in the game's order: what the stage plays one after another. */
+export type Beat =
+  | { kind: "move"; side: 0 | 1; species: string | null; move: string; chips: Chip[]; text: string }
+  | { kind: "switch"; side: 0 | 1; species: string; text: string }
+  | { kind: "faint"; side: 0 | 1; species: string; text: string }
+  | { kind: "other"; side: 0 | 1 | null; text: string };
+
+/** "Wire Cat's Charizard used Flamethrower." without the fighter's label: "Charizard used Flamethrower." */
+const unlabel = (text: string, labels: [string, string], side: 0 | 1 | null) => (side !== null && text.startsWith(labels[side]) ? text.slice(labels[side].length).trim() : text);
+
+/** A turn's story lines as beats: each move with its species and what came of it, each switch and faint with its species. */
+export function beatsOf(lines: StoryLine[], labels: [string, string]): Beat[] {
+  return lines.map((l): Beat => {
+    const bare = unlabel(l.text, labels, l.side);
+    if (l.kind === "move" && l.side !== null) {
+      const m = /^(.+?) used (.+?)\.$/.exec(bare);
+      return { kind: "move", side: l.side, species: m ? m[1]! : null, move: l.move ?? m?.[2] ?? "", chips: l.chips, text: l.text };
+    }
+    if (l.kind === "switch" && l.side !== null) {
+      const m = / sent out (.+)\.$/.exec(l.text);
+      if (m) return { kind: "switch", side: l.side, species: m[1]!, text: l.text };
+    }
+    if (l.kind === "faint" && l.side !== null) {
+      const m = /^(.+) fainted!$/.exec(bare);
+      if (m) return { kind: "faint", side: l.side, species: m[1]!, text: l.text };
+    }
+    return { kind: "other", side: l.side, text: l.text };
+  });
+}
+
+/** What a beat did to the bars, for the stage: the sides as they stand once it has landed, and the hit it made. */
+export interface Step {
+  beat: Beat;
+  sides: [LinkSide, LinkSide];
+  /** The HP a move took, in points of the bar, from the side it hit: the turn's whole loss for that side, put on the last move that landed on it. */
+  hit: { side: 0 | 1; amount: number } | null;
+}
+
+const lands = (b: Beat) => b.kind === "move" && !b.chips.includes("missed") && !b.chips.includes("immune");
+
+/**
+ * A turn played as steps, from the sides before it to the sides after it. Only each turn's sides are known, never each
+ * move's damage, so a side's whole loss in the turn lands with the last move that hit it; a switch brings in its Pokémon
+ * at the HP it was last seen with; a faint empties the bar. The last step's sides are always the turn's own.
+ */
+export function stepsOf(before: [LinkSide, LinkSide], after: [LinkSide, LinkSide], beats: Beat[], lastSeen: [Pip[], Pip[]]): Step[] {
+  const cur: [LinkSide, LinkSide] = [{ ...before[0] }, { ...before[1] }];
+  // The last move that landed on each side this turn.
+  const lastHit: [number, number] = [-1, -1];
+  beats.forEach((b, i) => {
+    if (b.kind === "move" && lands(b)) lastHit[(1 - b.side) as 0 | 1] = i;
+  });
+  const steps: Step[] = beats.map((b, i) => {
+    let hit: Step["hit"] = null;
+    if (b.kind === "switch") {
+      const seen = lastSeen[b.side].find((p) => p.species === b.species);
+      const base = after[b.side].species === b.species ? after[b.side] : cur[b.side];
+      const pct = seen ? seen.hp : 100;
+      cur[b.side] = { ...base, species: b.species, hp_percent: pct, status: null, field: [] };
+      if (base.max_hp !== undefined) cur[b.side].hp = Math.round((base.max_hp * pct) / 100);
+    } else if (b.kind === "move") {
+      const target = (1 - b.side) as 0 | 1;
+      if (lastHit[target] === i && cur[target].species === after[target].species) {
+        const was = cur[target].hp_percent;
+        cur[target] = after[target].hp_percent < was ? { ...cur[target], hp_percent: after[target].hp_percent, ...(after[target].hp !== undefined ? { hp: after[target].hp } : {}) } : cur[target];
+        if (was > cur[target].hp_percent) hit = { side: target, amount: was - cur[target].hp_percent };
+      }
+    } else if (b.kind === "faint") {
+      const was = cur[b.side].hp_percent;
+      cur[b.side] = { ...cur[b.side], hp_percent: 0, ...(cur[b.side].hp !== undefined ? { hp: 0 } : {}) };
+      // A faint with no hit before it (poison, recoil, a move that hit for it all): the loss lands here.
+      if (was > 0 && !steps.some((s) => s.hit?.side === b.side)) hit = { side: b.side, amount: was };
+    }
+    return { beat: b, sides: [{ ...cur[0] }, { ...cur[1] }], hit };
+  });
+  if (steps.length) steps[steps.length - 1]!.sides = [after[0], after[1]];
+  return steps;
+}
+
+/** How long the stage gives a beat, in milliseconds: a move's hit, a switch, a knockout. */
+export function beatMs(b: Beat): number {
+  if (b.kind === "move") return b.chips.includes("missed") ? 900 : 1100;
+  if (b.kind === "switch") return 800;
+  if (b.kind === "faint") return 1600;
+  return 700;
+}
+
+/** The lead, turn by turn: the left side's whole-team HP minus the right side's (positive: the left is ahead). */
+export const leadSeries = (points: { turn: number; hp: [number, number] }[], left: 0 | 1) => points.map((p) => ({ turn: p.turn, lead: p.hp[left] - p.hp[(1 - left) as 0 | 1] }));
+
+export interface Highlight {
+  turn: number;
+  kind: "ko" | "double" | "lead";
+  /** The side it was good for: the one that scored the knockout, landed the hit or took the lead. */
+  side: 0 | 1;
+  text: string;
+}
+
+/** The turns worth a tile: knockouts, a critical hit that was super effective too, and a change of lead. */
+export function highlights(s: LinkSpectator | null, labels: [string, string], left: 0 | 1): Highlight[] {
+  if (!s) return [];
+  const out: Highlight[] = [];
+  for (const t of s.turns) {
+    for (const b of beatsOf(storyOf(t.lines, labels), labels)) {
+      if (b.kind === "faint") out.push({ turn: t.turn, kind: "ko", side: (1 - b.side) as 0 | 1, text: `${b.species} knocked out` });
+      if (b.kind === "move" && b.chips.includes("crit") && b.chips.includes("super")) out.push({ turn: t.turn, kind: "double", side: b.side, text: `${b.move}: critical and super effective` });
+    }
+  }
+  const lead = leadSeries(momentum(s), left);
+  for (let i = 1; i < lead.length; i++) {
+    const a = Math.sign(lead[i - 1]!.lead), b = Math.sign(lead[i]!.lead);
+    if (a && b && a !== b) out.push({ turn: lead[i]!.turn, kind: "lead", side: b > 0 ? left : ((1 - left) as 0 | 1), text: "Takes the lead" });
+  }
+  return out.sort((x, y) => x.turn - y.turn);
+}
+
+/** The deepest the eventual winner trailed by, in points of team HP (0 if it never did): a comeback worth saying. */
+export function deepestDeficit(s: LinkSpectator | null, winner: 0 | 1): number {
+  const lead = leadSeries(momentum(s), winner);
+  return Math.max(0, ...lead.map((p) => -p.lead));
+}

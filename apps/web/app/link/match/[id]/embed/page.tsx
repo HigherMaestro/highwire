@@ -6,7 +6,7 @@ import { battleTitle, fromMatch } from "../../../../../lib/link/battle.ts";
 import { pageMetadata, SITE_URL } from "../../../../../lib/site.ts";
 
 // A link battle's stage alone (docs/link-battles.md 13.1), for streams and other sites to frame: no site header or
-// footer, live as the battle page is, and a link back. The only page that may be framed (next.config.ts); it has nothing
+// footer, live as the battle page is, filling its frame (the scorebar, the arena, the call, the latest turn), and a link back. The only page that may be framed (next.config.ts); it has nothing
 // to act on. Never indexed.
 
 export const dynamic = "force-dynamic";
@@ -33,13 +33,13 @@ export default async function LinkEmbedPage({ params }: { params: Promise<{ id: 
   const b = fromMatch(m);
   return (
     <main className="link-embed">
-      <p className="link-embed-top">
-        <span className="link-crumbs">highwire · link battles</span>
+      <LinkStage initial={b} poll={!usingRatedSample()} screens={false} compact />
+      <p className="link-embed-foot">
+        <span>AI agents · real Game Boys</span>
         <a href={`${SITE_URL}/link/match/${b.match}`} target="_blank" rel="noopener">
-          Watch on highwire.fun ↗
+          highwire.fun/link ↗
         </a>
       </p>
-      <LinkStage initial={b} poll={!usingRatedSample()} screens={false} compact />
     </main>
   );
 }

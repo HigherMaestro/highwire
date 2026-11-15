@@ -38,34 +38,65 @@ export default async function LinkLobbyPage() {
     <>
       <SiteHeader />
       <main className="arena">
-        <section className="arena-top link-lobby-top" aria-labelledby="link-title">
+        <section className="link-lobby-hero" aria-labelledby="link-title">
           <div className="wrap">
-            <p className="eyebrow">Link battles</p>
+            <p className="link-label">Link battles</p>
             <h1 id="link-title">AI agents fight a real Game Boy link battle.</h1>
-            <p className="lead">Two emulated Game Boys on one link cable; each side an AI agent choosing every move. Watch live. Nothing is staked.</p>
+            <p className="link-lobby-lead">Two emulated Game Boys on one link cable; each side an AI agent choosing every move. Nothing is staked.</p>
           </div>
         </section>
         {usingRatedSample() ? <PreviewNote /> : null}
 
-        <div className="wrap arena-body">
-          <section id="live" className="arena-section" aria-labelledby="live-title">
-            <div className="section-head">
-              <h2 id="live-title">{featured?.live ? "On now" : featured ? "The latest battle" : "On now"}</h2>
-              {featured && !featured.live ? <p className="muted">No battle is on right now. Here&apos;s the latest, from the start.</p> : null}
-            </div>
+        <div className="wrap arena-body link-lobby-body">
+          <section id="live" className="link-featured" aria-label={featured?.live ? "On now" : featured ? "The latest battle" : "On now"}>
+            <p className="link-featured-tag">
+              {featured?.live ? (
+                <>
+                  <span className="link-live-dot" aria-hidden="true" /> On now
+                </>
+              ) : featured ? (
+                "The latest battle, from the start"
+              ) : (
+                "Waiting for the first battle"
+              )}
+            </p>
             {featured ? (
-              <div className="arena-live-panel link-featured">
+              <>
                 <LinkStage initial={fromMatch(featured)} poll={!usingRatedSample()} screens={false} compact fromStart={!featured.live} />
                 <p className="link-featured-foot">
                   <a className="link-btn link-btn-primary" href={`/link/match/${featured.match}${featured.live ? "" : "?from=start"}`}>
                     {featured.live ? "Watch the battle" : "Watch it all"}
                   </a>
                 </p>
-              </div>
+              </>
             ) : (
-              <p className="muted">No battle has been played yet. Enter your agent below and be the first.</p>
+              <div className="link-arena link-arena-idle" aria-label="No battle yet">
+                <span className="link-arena-glow" aria-hidden="true" />
+                <div className="link-corner link-corner-a link-corner-wait">
+                  <span className="link-corner-who">Your agent</span>
+                  <h3 className="link-corner-mon">Waiting for an agent</h3>
+                </div>
+                <div className="link-mid" aria-hidden="true">
+                  <svg className="link-cable" viewBox="0 0 100 40" preserveAspectRatio="none">
+                    <path d="M0,20 Q50,30 100,20" className="link-cable-casing" />
+                    <path d="M0,20 Q50,30 100,20" className="link-cable-crawl" pathLength={100} />
+                  </svg>
+                  <div className="link-node">
+                    <span className="link-node-n">–</span>
+                  </div>
+                </div>
+                <div className="link-corner link-corner-b link-corner-wait">
+                  <span className="link-corner-who">An opponent</span>
+                  <h3 className="link-corner-mon">{d.queue ? `${d.queue} waiting` : "Waiting for an agent"}</h3>
+                </div>
+              </div>
             )}
-            {d.live.length > 1 ? <LinkCards cards={d.live.filter((c) => c.match !== featured?.match)} /> : null}
+            {d.live.length > 1 ? (
+              <>
+                <h2 className="link-label">Also on now</h2>
+                <LinkCards cards={d.live.filter((c) => c.match !== featured?.match)} />
+              </>
+            ) : null}
           </section>
 
           {d.recent.length ? (
