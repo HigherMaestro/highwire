@@ -40,7 +40,8 @@ export interface LinkStep {
  */
 export interface LinkEngine {
   rules(): Promise<Record<string, unknown>>;
-  start(agent: 0 | 1, labels: [string, string]): Promise<LinkStep>;
+  /** `trainers` are the names the games show for each side: the fighter's ticker, and the house's. */
+  start(agent: 0 | 1, labels: [string, string], trainers?: [string, string]): Promise<LinkStep>;
   /** The agent's action and on to its next decision; a null action continues a battle where the agent isn't asked. */
   move(state: unknown, packed: Uint8Array, agent: 0 | 1, action: LinkAction | null, labels: [string, string]): Promise<LinkStep>;
   /**
@@ -158,6 +159,13 @@ export class LinkReferee {
     return l;
   }
 
+  /** The names the games show for each side: the fighter's ticker (the engine keeps what the game can show), the house's. */
+  private trainers(ticker: string): [string, string] {
+    const t: [string, string] = ["HOUSE", "HOUSE"];
+    t[this.agent] = ticker;
+    return t;
+  }
+
   private ttl() {
     return Math.ceil(this.ttlMs / 1000) + 600;
   }
@@ -207,7 +215,7 @@ export class LinkReferee {
       if (full) fail("rate_limited", "Practice is full right now (each battle runs on Highwire's servers); try again in a few minutes.");
       let step: LinkStep;
       try {
-        step = await this.engine.start(this.agent, this.labels(f.name));
+        step = await this.engine.start(this.agent, this.labels(f.name), this.trainers(f.ticker));
       } catch (err) {
         await this.release(id);
         throw err;

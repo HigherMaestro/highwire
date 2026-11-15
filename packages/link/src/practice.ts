@@ -77,9 +77,10 @@ async function settle(rom: Uint8Array, match: LinkMatch, state: MatchState, pack
   return { state, packed, view, spectator: watch(state, match.data, labels, live), turn: state.turn, ended: ended(state, agent), film };
 }
 
-export async function practiceStart(rom: Uint8Array, bootstrap: [Uint8Array, Uint8Array], agent: Side, labels: Labels): Promise<PracticeStep> {
-  const { match, packed } = await LinkMatch.start(rom, bootstrap);
-  const opening: FilmJob = { turn: 0, before: null, decisions: [null, null], dice: [], events: "" };
+/** Starts a practice. `trainers` are the names the games show for each side (the fighter's ticker, and the house). */
+export async function practiceStart(rom: Uint8Array, bootstrap: [Uint8Array, Uint8Array], agent: Side, labels: Labels, trainers?: readonly [string, string]): Promise<PracticeStep> {
+  const { match, packed } = await LinkMatch.start(rom, bootstrap, trainers);
+  const opening: FilmJob = { turn: 0, before: null, decisions: [null, null], dice: [], events: "", ...(trainers ? { trainers } : {}) };
   return settle(rom, match, match.state, packed, agent, labels, 0, [opening]);
 }
 

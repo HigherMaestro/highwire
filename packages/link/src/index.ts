@@ -13,3 +13,4 @@ export * from "./practice.ts";
 export * from "./format.ts";
 export * from "./record.ts";
 export * from "./film.ts";
+export * from "./trainers.ts";

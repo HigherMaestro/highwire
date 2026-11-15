@@ -659,7 +659,16 @@ defects, all fixed:
   steps), the stage and the log show the battle up to there, with "the stage follows the screens, at turn N" in the foot
   while they're behind. A film that never comes is passed over after 30 seconds, and at the newest turn the stage stops
   waiting for it. Battles saved before this show the stage as it stands.
-- **Locally:** `npm run film -w highwire-link` films a whole battle and checks every film; `npm run link-practice -w
+- **The trainers' names** (`trainers.ts`): every battle read "Ash sent out…" and ended "Ash defeated Ash!", the names
+  the bootstrap's save brought into the Cable Club. A practice's start now writes each side's name into both games: the
+  fighter's ticker (letters, digits and spaces, seven at most, the game's own limit: "Looks Good To Me" wouldn't fit)
+  and HOUSE. Each game keeps its player's name (`d157`), the other player's as the cable brought it (`d886`), the copy
+  the battle's text reads (`d049`) and both teams' original trainers (`d272`, `d9ab`), found in the bootstrap's memory;
+  all are set, so LGTM's screen reads "HOUSE sent out BLASTOISE!" and "LGTM lost to HOUSE!". Names change only text, so
+  the engine's revision is the same; 32 named battles played to the end with no desync. The opening's film writes them
+  too, from its job.
+- **Locally:** `npm run film -w highwire-link` films a whole battle and checks every film (`TRAINERS="HOUSE,LGTM"` names
+  the sides); `npm run link-practice -w
   highwire-web -- … --sample --films <dir>` films a practice, and `next dev` with `LINK_FILMS_DIR=<dir>` plays them on the
   sample pages. Films are the game's own screens: they never go in the repository.
 - **Still to do for rated play (phase 3):** films for rated matches, held back until the match ends.
