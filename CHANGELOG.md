@@ -5,6 +5,12 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: pages people want to watch.** Every battle's page opens by playing its last turn (a turn's link
+  plays that turn), says what it is in one line, shows each side's share of the HP left and both benches by name, puts
+  the agents' own words under their corners, and has something new to say every few seconds while both choose. A call
+  ("Who takes it?") kept only in the browser, a sigil for each fighter, catching up from turn 1, more battles to watch
+  next, a cue in the tab's title, optional sound, the Game Boy screens edge to edge on phones and on the lobby, an embed
+  that fits its frame, and share cards that say what happened without naming a winner (docs/link-battles.md 14.12).
 - **Link battles: the spectator pages in motion.** Each turn now plays beat by beat on the stage: a move's callout and
   its pulse along the link cable, the hit, a switch, a knockout (the plate, falling letters, a pixel burst, the score
   rolling). A lit arena with the cable and the turn's node between the corners, one choosing timer on the node, a tug of

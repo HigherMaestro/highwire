@@ -5571,7 +5571,7 @@ a.card:hover,
 }
 :root[data-theme="light"] { --link-gold: #9A6A00; --link-red: #C2302E; }
 
-.link-show { display: grid; gap: 18px; }
+.link-show { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .link-label { margin: 6px 0 0; font-family: var(--font-display); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 
 /* ---- the scorebar: a name and its team either side of a centre plate (live or final, the score, the turn) */
@@ -5594,7 +5594,16 @@ a.card:hover,
 }
 .link-sb-side { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .link-sb-b { align-items: flex-end; text-align: right; }
-.link-sb-name { font-weight: 700; font-size: 22px; letter-spacing: -0.03em; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.link-sb-who { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.link-sb-b .link-sb-who { flex-direction: row-reverse; }
+.link-sigil { flex: none; border-radius: 3px; }
+.link-sb-a .link-sigil { color: var(--side-a); }
+.link-sb-b .link-sigil { color: var(--side-b); }
+.link-sb-call { flex: none; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line-strong); color: var(--muted); }
+.link-sb-record { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.link-sb-name { min-width: 0; font-weight: 700; font-size: 22px; letter-spacing: -0.03em; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+a.link-sb-name { text-decoration: none; }
+a.link-sb-name:hover, a.link-sb-name:focus-visible { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
 .link-sb-a .link-sb-name { color: var(--side-a); }
 .link-sb-b .link-sb-name { color: var(--side-b); }
 .link-sb-row { display: flex; align-items: center; gap: 10px; }
@@ -5615,6 +5624,16 @@ a.card:hover,
 @keyframes link-blink { 50% { opacity: 0.3; } }
 @keyframes link-drop { from { transform: translateY(-12px); opacity: 0; } }
 
+/* The rope: all the HP left, each side's share from its own end with its number, the knot where they meet. A row of its own under the names. */
+.link-rope { grid-column: 1 / -1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: -4px; }
+.link-rope-n { font-family: var(--font-code); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 2.6em; }
+.link-rope-n:last-child { text-align: right; }
+.link-rope-track { position: relative; height: 4px; border-radius: 2px; background: var(--line); }
+.link-rope-a, .link-rope-b { position: absolute; inset: 0; border-radius: 2px; transition: transform 520ms cubic-bezier(.3, 0, .1, 1); }
+.link-rope-a { background: var(--side-a); transform-origin: left; }
+.link-rope-b { background: var(--side-b); transform-origin: right; }
+.link-rope-knot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--fg); box-shadow: 0 0 0 3px var(--surface-alt), 0 0 14px rgba(255, 255, 255, 0.5); transition: left 520ms cubic-bezier(.3, 0, .1, 1); }
+
 /* The score's digits roll in. */
 .link-roll { display: inline-block; overflow: hidden; height: 1em; line-height: 1; }
 .link-roll-in { display: inline-block; animation: link-roll 320ms var(--e-snap), link-goldfade 900ms ease; }
@@ -5630,8 +5649,7 @@ a.card:hover,
 .link-pips-a .link-pip-active { border-color: var(--side-a); box-shadow: 0 0 0 1px var(--side-a), 0 0 14px var(--side-a-soft); }
 .link-pips-b .link-pip-active { border-color: var(--side-b); box-shadow: 0 0 0 1px var(--side-b), 0 0 14px var(--side-b-soft); }
 .link-pip-unseen { border-style: dashed; color: var(--muted); background: transparent; }
-.link-pip-fainted { opacity: 0.3; animation: link-flip 300ms ease; }
-.link-pip-fainted .link-pip-m { text-decoration: line-through; text-decoration-thickness: 2px; }
+.link-pip-fainted { opacity: 0.28; animation: link-flip 300ms ease; }
 @keyframes link-flip { 50% { transform: rotateX(90deg); } }
 
 /* ---- the arena: one lit panel; two corners and the cable between them */
@@ -5667,7 +5685,7 @@ a.card:hover,
 @keyframes link-in-b { from { transform: translateX(40px); opacity: 0; } }
 .link-corner-top { display: flex; align-items: center; gap: 8px; min-height: 22px; }
 .link-corner-b .link-corner-top { flex-direction: row-reverse; }
-.link-corner-who { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.link-corner-who { font-size: 14px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .link-corner-a .link-corner-who { color: var(--side-a); }
 .link-corner-b .link-corner-who { color: var(--side-b); }
 .link-corner-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); background: var(--link-gold); padding: 3px 8px; border-radius: 6px; }
@@ -5717,6 +5735,13 @@ a.card:hover,
 .link-chip { font-size: 12px; padding: 3px 9px; border: 1px solid var(--line-strong); border-radius: 999px; }
 .link-chip-status { border-color: var(--link-gold); color: var(--link-gold); }
 
+/* The agent's own words for the turn on stage, under its corner: text only; it dims after a while. */
+.link-said { position: relative; margin: 14px 0 0; max-width: 100%; padding: 8px 12px; border-radius: 14px; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--surface) 70%, transparent); font-size: 14px; line-height: 1.35; text-align: left; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; animation: link-row-in 240ms var(--e-out) backwards, link-dim 600ms ease 8s forwards; }
+.link-corner-a .link-said { border-color: color-mix(in srgb, var(--side-a) 55%, transparent); border-top-left-radius: 4px; }
+.link-corner-b .link-said { border-color: color-mix(in srgb, var(--side-b) 55%, transparent); border-top-right-radius: 4px; }
+@keyframes link-dim { to { opacity: 0.6; } }
+.link-arena-over .link-said { display: none; }
+
 /* A hit: the damage pops above the bar, the corner flashes once. */
 .link-dmg { position: absolute; top: 36%; right: 18%; z-index: 6; font-size: 32px; font-weight: 700; letter-spacing: -0.04em; color: var(--fg); text-shadow: 0 4px 20px rgba(0, 0, 0, 0.6); pointer-events: none; animation: link-pop 260ms var(--e-spring) backwards, link-rise 300ms ease 760ms forwards; }
 .link-corner-b .link-dmg { right: auto; left: 18%; }
@@ -5726,8 +5751,9 @@ a.card:hover,
 .link-dmg small { font-size: 0.5em; margin-left: 1px; }
 @keyframes link-pop { from { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.15); } }
 @keyframes link-rise { to { transform: translateY(-16px); opacity: 0; } }
-.link-flash { position: absolute; inset: -14px; border-radius: 18px; background: #fff; opacity: 0; pointer-events: none; animation: link-flash 240ms ease; }
-@keyframes link-flash { 40% { opacity: 0.18; } }
+.link-flash { position: absolute; inset: -28px; background: radial-gradient(closest-side at 100% 50%, #fff, transparent); opacity: 0; pointer-events: none; animation: link-flash 240ms ease; }
+.link-corner-b .link-flash { background: radial-gradient(closest-side at 0% 50%, #fff, transparent); }
+@keyframes link-flash { 40% { opacity: 0.28; } }
 .link-arena-crit .link-cable-glow { opacity: 0.9; transition: opacity 120ms; }
 
 /* A knockout: the pixels fly, the plate slams in over the arena. */
@@ -5738,13 +5764,14 @@ a.card:hover,
 .link-burst > span.link-burst-w { color: #fff; }
 @keyframes link-burst { 0% { transform: translate(0, 0); opacity: 1; } 60% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
 .link-plate { position: absolute; inset: 0; z-index: 7; display: grid; place-items: center; pointer-events: none; }
+.link-plate { background: radial-gradient(closest-side, color-mix(in srgb, var(--surface-alt) 94%, transparent) 55%, transparent); }
 .link-plate span { font-size: 96px; font-weight: 700; text-transform: uppercase; letter-spacing: -0.04em; color: var(--link-red); text-shadow: 0 0 40px color-mix(in srgb, var(--link-red) 50%, transparent); animation: link-slam 220ms var(--e-snap) 120ms backwards, link-plate-out 220ms ease 1040ms forwards; }
 @keyframes link-slam { from { transform: scale(1.6); letter-spacing: 0.2em; opacity: 0; } }
 @keyframes link-plate-out { to { transform: translateY(-12px); opacity: 0; } }
 
 /* The winner's ring, drawn once round its corner. */
 .link-ring { position: absolute; inset: -14px; width: calc(100% + 28px); height: calc(100% + 28px); overflow: visible; pointer-events: none; }
-.link-ring rect { x: 1px; y: 1px; width: calc(100% - 2px); height: calc(100% - 2px); fill: none; stroke: var(--link-gold); stroke-width: 2; stroke-dasharray: 1; stroke-dashoffset: 0; animation: link-draw 700ms var(--e-inout) backwards; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--link-gold) 50%, transparent)); }
+.link-ring rect { x: 1px; y: 1px; width: calc(100% - 2px); height: calc(100% - 2px); fill: none; stroke: var(--link-gold); stroke-width: 2; stroke-dasharray: 1.05 1; stroke-dashoffset: 0; animation: link-draw 700ms var(--e-inout) backwards; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--link-gold) 50%, transparent)); }
 @keyframes link-draw { from { stroke-dashoffset: 1; } }
 
 /* ---- the cable and its node */
@@ -5791,10 +5818,46 @@ a.card:hover,
 .link-titlecard-v { color: var(--muted); font-size: 24px !important; }
 
 /* The call: one line under the arena saying what's happening. */
-.link-call { margin: -4px 0 0; min-height: 1.5em; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 20px; font-weight: 500; letter-spacing: -0.01em; text-align: center; color: var(--muted); }
+.link-call { margin: -4px 0 0; min-height: 1.5em; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 20px; font-weight: 500; letter-spacing: -0.01em; text-align: center; color: var(--fg); }
 .link-call-beat { color: var(--fg); }
 .link-call-text { animation: link-swap 180ms ease 120ms backwards; overflow-wrap: anywhere; }
 @keyframes link-swap { from { opacity: 0; } }
+
+/* Under the call: the viewer's call, catching up, sound. */
+.link-tools { display: flex; align-items: center; justify-content: center; gap: 10px 14px; flex-wrap: wrap; }
+.link-btn.link-btn-small { min-height: 36px; padding: 0 12px; border-radius: 10px; font-size: 13px; gap: 6px; }
+.link-btn-small svg { width: 16px; height: 16px; }
+.link-sound[aria-pressed="false"] { color: var(--muted); }
+.link-pick-made { font-size: 14px; color: var(--muted); }
+.link-pick-made b { font-weight: 700; }
+.link-pick-made-a b { color: var(--side-a); }
+.link-pick-made-b b { color: var(--side-b); }
+
+/* The bench: each side's three by name, with its HP as last seen. */
+.link-bench { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 28px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-alt); }
+.link-bench-side { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.link-bench-row { display: grid; grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 3em; align-items: center; gap: 10px; font-size: 13px; }
+.link-bench-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.link-bench-on .link-bench-name { font-weight: 700; }
+.link-bench-bar { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--fg) 10%, transparent); overflow: hidden; }
+.link-bench-bar > span { display: block; height: 100%; border-radius: 2px; transform-origin: left; transition: transform 520ms cubic-bezier(.3, 0, .1, 1); }
+.link-bench-a .link-bench-bar > span { background: var(--side-a); }
+.link-bench-b .link-bench-bar > span { background: var(--side-b); }
+.link-bench-pct { font-family: var(--font-code); font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.link-bench-out { opacity: 0.4; }
+.link-bench-unseen { grid-template-columns: minmax(0, 1fr); color: var(--muted); font-style: italic; }
+
+/* Calling it: a pick to follow the battle by, kept in this browser. */
+.link-pick { flex-basis: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.link-pick-q { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.link-pick-btn { min-height: 44px; padding: 0 18px; border-radius: 999px; border: 2px solid var(--line-strong); background: transparent; color: inherit; font: inherit; font-weight: 700; cursor: pointer; transition: transform 160ms var(--e-spring), background 160ms, border-color 160ms; }
+.link-pick-btn:hover { transform: translateY(-1px); }
+.link-pick-btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.link-pick-a { border-color: color-mix(in srgb, var(--side-a) 60%, transparent); color: var(--side-a); }
+.link-pick-b { border-color: color-mix(in srgb, var(--side-b) 60%, transparent); color: var(--side-b); }
+.link-pick-a:hover { background: var(--side-a); border-color: var(--side-a); color: var(--ink); }
+.link-pick-b:hover { background: var(--side-b); border-color: var(--side-b); color: var(--ink); }
+:root[data-theme="light"] .link-pick-btn:hover { color: #fff; }
 
 /* ---- the result: the winner's name rising, the wire beam from their side, then the actions */
 .link-final { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 18px; min-height: 168px; padding: 28px 32px 26px; border-radius: 24px; border: 1px solid var(--line); background: var(--surface-alt); overflow: hidden; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
@@ -5813,6 +5876,7 @@ a.card:hover,
 .link-final-wins { font-size: 14px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted); animation: link-swap 300ms ease 380ms backwards; }
 .link-final-sub { margin: 10px 0 0; font-size: 17px; color: var(--muted); }
 .link-final-comeback { color: var(--link-gold); }
+.link-final-called { margin: 10px 0 0; font-weight: 700; color: var(--link-gold); }
 .link-final-ratings { margin: 12px 0 0; display: flex; gap: 8px; flex-wrap: wrap; }
 .link-rating { font-family: var(--font-code); font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); }
 .link-final-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
@@ -5913,9 +5977,10 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
 .link-pbp-line { margin: 0; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
 .link-pbp-other { color: var(--muted); }
 .link-pbp-ko .link-pbp-faint { font-weight: 700; }
-.link-pbp-soft { color: var(--muted); font-size: 13px; }
+.link-pbp-soft { color: var(--muted); font-size: 13px; white-space: nowrap; margin-left: 6px; }
 .link-tag { display: inline-block; margin-left: 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line-strong); color: var(--muted); vertical-align: 1px; white-space: nowrap; }
-.link-tag-crit, .link-tag-super { color: var(--ink); background: var(--link-gold); border-color: var(--link-gold); }
+.link-tag-super, .link-pbp-double .link-tag-crit { color: var(--ink); background: var(--link-gold); border-color: var(--link-gold); }
+.link-tag-crit { color: var(--fg); }
 .link-tag-ko { color: var(--link-red); border-color: var(--link-red); }
 .link-bubble { position: relative; margin: 2px 0 6px; padding: 8px 12px; max-width: 100%; border-radius: 14px; border: 1px solid var(--line-strong); font-size: 15px; text-align: left; overflow-wrap: anywhere; }
 .link-bubble-a { border-color: color-mix(in srgb, var(--side-a) 60%, transparent); border-top-left-radius: 4px; }
@@ -5926,6 +5991,23 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
 @media (max-width: 640px) {
   .link-scorebar { top: 70px; min-height: 64px; padding: 8px 12px; gap: 8px; }
   .link-sb-name { font-size: 16px; }
+  .link-rope { gap: 6px; }
+  .link-rope-n { font-size: 10px; min-width: 2.4em; }
+  .link-sigil { width: 16px; height: 16px; }
+  .link-sb-who { gap: 6px; }
+  .link-sb-call, .link-sb-record { display: none; }
+  .link-said { font-size: 12px; padding: 6px 9px; margin-top: 8px; }
+  .link-dmg, .link-corner-b .link-dmg { top: -2px; right: 0; left: auto; }
+  .link-corner-b .link-dmg { right: auto; left: 0; }
+  .link-bench { gap: 0 14px; padding: 10px 12px; }
+  .link-bench-row { grid-template-columns: minmax(0, 1fr) 2.6em; gap: 6px; font-size: 12px; }
+  .link-bench-bar { grid-column: 1 / -1; grid-row: 2; }
+  .link-final-next { display: none; }
+  .link-final-actions .link-btn { min-height: 40px; padding: 0 14px; }
+  .link-page-body .link-turn-nav { display: grid; grid-template-columns: 1fr 1fr; }
+  .link-page-body .link-turn-nav .link-btn-primary { grid-column: 1 / -1; grid-row: 2; }
+  .link-pick-q { flex-basis: 100%; text-align: center; margin: 0; }
+  .link-corner-who { font-size: 11px; }
   .link-sb-score { font-size: 32px; }
   .link-sb-dash { margin: 0 4px; }
   .link-sb-pill { font-size: 9px; padding: 2px 7px; }
@@ -5935,7 +6017,6 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
   .link-pip { width: 24px; height: 24px; font-size: 10px; border-radius: 7px; }
   .link-pips { gap: 4px; }
   .link-arena { grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr); padding: 16px 14px; min-height: 200px; border-radius: 20px; }
-  .link-corner-who { font-size: 10px; letter-spacing: 0.1em; }
   .link-corner-mon { font-size: 22px; margin-bottom: 10px; }
   .link-callout-slot { height: 30px; }
   .link-callout-move { font-size: 14px; padding: 2px 8px; }
@@ -5971,7 +6052,7 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
 }
 
 /* ---- both Game Boys' screens: whole pixels, in bezels, the cable between them */
-.link-screens { margin: 0; display: grid; gap: 12px; }
+.link-screens { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .link-screens-pair { --px: 3; position: relative; display: grid; grid-template-columns: auto 56px auto; justify-content: center; align-items: center; }
 .link-screen { position: relative; padding: 14px; border-radius: 18px; background: #05070A; border: 1px solid var(--line-strong); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4); }
 .link-screen::after { content: ""; position: absolute; left: 18px; right: 18px; bottom: -1px; height: 2px; border-radius: 2px; }
@@ -5984,33 +6065,42 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
 .link-screens-cable { grid-column: 2; grid-row: 1; position: relative; height: 4px; margin: 0 -2px; border-radius: 2px; background: var(--wire); opacity: 0.85; }
 .link-screens-cable-pulse { position: absolute; top: -3px; left: 0; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 0 12px #fff; animation: link-run 600ms var(--e-in) forwards; }
 @keyframes link-run { to { transform: translateX(46px); opacity: 0; } }
-.link-screens-poster { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; justify-items: center; gap: 12px; border: 0; border-radius: 18px; background: radial-gradient(closest-side, rgba(5, 7, 10, 0.55), rgba(5, 7, 10, 0.2)); color: #F1F0EC; font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
+.link-screens-poster { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; justify-items: center; gap: 12px; border: 0; border-radius: 18px; background: radial-gradient(160px 110px at 50% 50%, rgba(5, 7, 10, 0.7), rgba(5, 7, 10, 0)); color: #F1F0EC; text-shadow: 0 1px 8px rgba(5, 7, 10, 0.9); font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
 .link-screens-poster-btn { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; background: #F1F0EC; color: #0E1116; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); transition: transform 160ms var(--e-spring); }
 .link-screens-poster-btn svg { width: 30px; height: 30px; }
 .link-screens-poster:hover .link-screens-poster-btn { transform: scale(1.06); }
 .link-screens-poster:focus-visible { outline: 2px solid var(--side-b); outline-offset: 2px; }
 .link-screens-bar { margin: 0; }
+.link-screens-call { display: none; }
 .link-screens-fresh .link-screen canvas { animation: link-power 420ms var(--e-out) backwards; }
 .link-screens-fresh .link-screen-b canvas { animation-delay: 120ms; }
 @keyframes link-power { from { transform: scaleY(0.02); opacity: 0; } }
 @media (max-width: 640px) {
-  .link-screens-pair { grid-template-columns: auto; justify-items: center; }
-  .link-screen { padding: 10px; border-radius: 14px; }
+  .link-screens-pair { grid-template-columns: auto; justify-items: center; margin-inline: -16px; }
+  .link-screen { padding: 6px; border-radius: 12px; }
+  .link-screen-who { margin: 2px 4px 6px; }
   .link-screen-a { grid-column: 1 !important; grid-row: 1; }
   .link-screens-cable { grid-column: 1; grid-row: 2; width: 4px; height: 28px; margin: -2px 0; }
   .link-screen-b { grid-column: 1 !important; grid-row: 3; }
   .link-screens-cable-pulse { left: -3px; animation-name: link-run-down; }
   @keyframes link-run-down { to { transform: translateY(20px); opacity: 0; } }
   .link-screens-bar { position: sticky; bottom: 12px; z-index: 4; }
+  .link-screens-poster { grid-column: 1; grid-row: 1; position: relative; inset: auto; align-self: stretch; justify-self: stretch; }
+  /* What the stage is saying, between the two screens: the stage itself is below them here. */
+  .link-screens-call { display: block; grid-column: 1; grid-row: 2; z-index: 1; margin: 6px 0; padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-strong); font-size: 14px; font-weight: 500; text-align: center; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: link-swap 180ms ease backwards; }
+  .link-screens-pair:has(.link-screens-call) .link-screens-cable { display: none; }
 }
 
 /* ---- a battle framed by another site (app/link/match/[id]/embed): fills its frame */
 .link-embed { box-sizing: border-box; height: 100dvh; display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 8px; padding: 10px 12px; max-width: 1080px; margin: 0 auto; }
-.link-embed .link-show { grid-template-rows: auto minmax(0, 1fr) auto auto; align-content: stretch; gap: 10px; min-height: 0; }
-.link-embed .link-arena { min-height: 0; }
+/* The stage's parts keep their own heights from the top; the turns take what's left and are cut off at the frame's edge. */
+.link-embed .link-show { display: flex; flex-direction: column; justify-content: flex-start; justify-content: safe center; gap: 10px; min-height: 0; overflow: hidden; }
+.link-embed .link-show > * { flex: none; }
+.link-embed .link-show > .link-pbp { flex: 0 1 auto; min-height: 0; overflow: hidden; }
+.link-embed .link-call { font-size: 16px; margin: 0; }
 .link-embed-foot { margin: 0; display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); }
 .link-embed-foot a { color: var(--fg); font-weight: 700; text-decoration: none; }
-.link-show-compact .link-scorebar { position: static; backdrop-filter: none; }
+.link-show-compact .link-scorebar { position: relative; top: auto; backdrop-filter: none; }
 .link-show-compact .link-arena-glow { animation: none; }
 
 /* ---- the lobby: a short head, the featured stage, tickets */
@@ -6018,9 +6108,12 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
 .link-lobby-hero h1 { margin: 8px 0 0; font-size: clamp(30px, 4.4vw, 44px); font-weight: 700; letter-spacing: -0.04em; line-height: 1.05; max-width: 24ch; }
 .link-lobby-lead { margin: 10px 0 0; font-size: 17px; color: var(--muted); max-width: 60ch; }
 .link-lobby-body { padding-top: 6px; }
-.link-featured { display: grid; gap: 14px; }
+.link-featured { display: grid; gap: 14px; margin-bottom: 44px; }
 .link-featured-tag { margin: 0; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 .link-featured-foot { margin: 0; display: flex; justify-content: center; }
+.link-featured-tag { flex-wrap: wrap; }
+.link-featured-go { margin-left: auto; padding: 6px 12px; border-radius: 999px; background: var(--fg); color: var(--bg); text-decoration: none; letter-spacing: 0.08em; }
+.link-featured-queue { flex-basis: 100%; letter-spacing: 0.04em; text-transform: none; font-weight: 500; font-size: 13px; }
 .link-arena-idle .link-corner { justify-content: center; }
 .link-corner-wait .link-corner-mon { color: var(--muted); font-size: 26px; margin: 8px 0 0; }
 .link-corner-wait { border: 2px dashed var(--line-strong); border-radius: 18px; padding: 22px; }
@@ -6045,13 +6138,17 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
 /* ---- a battle's page frame (components/link/LinkPage.tsx): the stage leads */
 .link-page-top { padding-top: 22px; padding-bottom: 8px; }
 .link-crumbs { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.link-strap { margin: 0; display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; }
+.link-strap-text { font-size: 15px; color: var(--fg); }
 .link-crumbs a { color: inherit; }
 .link-page-title { margin: 6px 0 0; font-size: 22px; font-weight: 700; letter-spacing: -0.03em; overflow-wrap: anywhere; }
-.link-page-body { display: grid; gap: 22px; padding-bottom: 48px; }
+.link-page-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; padding-bottom: 48px; }
 .link-about { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
 .link-about summary { cursor: pointer; }
 .link-about > div { margin-top: 8px; max-width: 72ch; }
-.link-turn-nav { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.link-turn-nav { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: -4px; }
+/* More battles under a battle: something to watch next. */
+.link-more-battles { display: grid; gap: 12px; }
 
 /* ---- the light theme: no additive glow; tints and solid rules instead */
 :root[data-theme="light"] .link-arena, :root[data-theme="light"] .link-final, :root[data-theme="light"] .link-tug, :root[data-theme="light"] .link-ticket-a, :root[data-theme="light"] .link-reel-tile { background-color: var(--surface); box-shadow: none; }

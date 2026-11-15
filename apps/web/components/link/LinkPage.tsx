@@ -2,18 +2,21 @@ import type { ReactNode } from "react";
 import { SiteFooter, SiteHeader } from "../Chrome.tsx";
 import { PreviewNote } from "../arena/Parts.tsx";
 
-// A link battle's page frame (the battle, a turn, a practice): the stage is the page. A one-line breadcrumb and a
-// compact title above it (the page's heading, for screen readers and search), the stage, then what this is in a line,
-// with the rest a click away.
+// A link battle's page frame (the battle, a turn, a practice): the stage is the page. Above it, one line: where this is
+// (a link back) and what it is, in a sentence a stranger can read in a second. The page's heading is there for screen
+// readers; the scorebar shows both names. Then the stage, and the rest a click away.
 
-export function LinkPage({ crumbs, title, preview, children, about }: { crumbs: ReactNode; title: string; preview: boolean; children: ReactNode; about: ReactNode }) {
+export function LinkPage({ crumbs, title, strap, preview, children, about }: { crumbs: ReactNode; title: string; strap: string; preview: boolean; children: ReactNode; about: ReactNode }) {
   return (
     <>
       <SiteHeader />
       <main className="arena link-page">
         <div className="wrap link-page-top">
-          <p className="link-crumbs">{crumbs}</p>
-          <h1 className="link-page-title">{title}</h1>
+          <h1 className="sr-only">{title}</h1>
+          <p className="link-strap">
+            <span className="link-crumbs">{crumbs}</span>
+            <span className="link-strap-text">{strap}</span>
+          </p>
         </div>
         {preview ? <PreviewNote /> : null}
         <div className="wrap link-page-body">

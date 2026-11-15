@@ -195,8 +195,11 @@ export interface Step {
   beat: Beat;
   sides: [LinkSide, LinkSide];
   /** The HP a move took, in points of the bar, from the side it hit: the turn's whole loss for that side, put on the last move that landed on it. */
-  hit: { side: 0 | 1; amount: number } | null;
+  hit: { side: 0 | 1; amount: number; hp?: number } | null;
 }
+
+/** The exact HP a hit took, once the battle's over and the numbers are known. */
+const lost = (was: number | undefined, now: number | undefined) => (was !== undefined && now !== undefined && was > now ? { hp: was - now } : {});
 
 const lands = (b: Beat) => b.kind === "move" && !b.chips.includes("missed") && !b.chips.includes("immune");
 
@@ -223,15 +226,15 @@ export function stepsOf(before: [LinkSide, LinkSide], after: [LinkSide, LinkSide
     } else if (b.kind === "move") {
       const target = (1 - b.side) as 0 | 1;
       if (lastHit[target] === i && cur[target].species === after[target].species) {
-        const was = cur[target].hp_percent;
+        const was = cur[target].hp_percent, wasHp = cur[target].hp;
         cur[target] = after[target].hp_percent < was ? { ...cur[target], hp_percent: after[target].hp_percent, ...(after[target].hp !== undefined ? { hp: after[target].hp } : {}) } : cur[target];
-        if (was > cur[target].hp_percent) hit = { side: target, amount: was - cur[target].hp_percent };
+        if (was > cur[target].hp_percent) hit = { side: target, amount: was - cur[target].hp_percent, ...lost(wasHp, cur[target].hp) };
       }
     } else if (b.kind === "faint") {
-      const was = cur[b.side].hp_percent;
+      const was = cur[b.side].hp_percent, wasHp = cur[b.side].hp;
       cur[b.side] = { ...cur[b.side], hp_percent: 0, ...(cur[b.side].hp !== undefined ? { hp: 0 } : {}) };
       // A faint with no hit before it (poison, recoil, a move that hit for it all): the loss lands here.
-      if (was > 0 && !steps.some((s) => s.hit?.side === b.side)) hit = { side: b.side, amount: was };
+      if (was > 0 && !steps.some((s) => s.hit?.side === b.side)) hit = { side: b.side, amount: was, ...lost(wasHp, 0) };
     }
     return { beat: b, sides: [{ ...cur[0] }, { ...cur[1] }], hit };
   });
@@ -241,7 +244,7 @@ export function stepsOf(before: [LinkSide, LinkSide], after: [LinkSide, LinkSide
 
 /** How long the stage gives a beat, in milliseconds: a move's hit, a switch, a knockout. */
 export function beatMs(b: Beat): number {
-  if (b.kind === "move") return b.chips.includes("missed") ? 900 : 1100;
+  if (b.kind === "move") return b.chips.includes("missed") ? 900 : b.chips.includes("resisted") && !b.chips.includes("crit") ? 800 : 1100;
   if (b.kind === "switch") return 800;
   if (b.kind === "faint") return 1600;
   return 700;
@@ -280,4 +283,114 @@ export function highlights(s: LinkSpectator | null, labels: [string, string], le
 export function deepestDeficit(s: LinkSpectator | null, winner: 0 | 1): number {
   const lead = leadSeries(momentum(s), winner);
   return Math.max(0, ...lead.map((p) => -p.lead));
+}
+
+// ---------------------------------------------------------------- the edge, and something to say while both choose
+
+/** A side's whole team's HP as it stands on the stage, in points (300 for three full Pokémon): its pips, with the one out as the stage shows it now. */
+export function teamHp(pips: Pip[], out: LinkSide): number {
+  let rest = pips.filter((p) => p.species !== out.species);
+  // One the pips haven't seen yet (it came in this turn): it's one of the unseen.
+  if (rest.length === pips.length) {
+    const i = rest.findIndex((p) => p.species === null);
+    if (i >= 0) rest = rest.filter((_, j) => j !== i);
+  }
+  return rest.reduce((a, p) => a + (p.fainted ? 0 : p.hp), 0) + Math.max(0, out.hp_percent);
+}
+
+/** The left side's share of all the HP left, 0 to 100 (50 when level, or when nothing is left): where the rope's knot sits. */
+export function edgeOf(left: number, right: number): number {
+  return left + right <= 0 ? 50 : Math.round((left / (left + right)) * 100);
+}
+
+/**
+ * What a commentator would say while both sides choose, from what's on the stage: the score, who's ahead, who's
+ * hanging on. The same for everyone and about both sides alike, never about a decision. `names`, `score`, `out` and
+ * `hp` are [left, right].
+ */
+export function situation(names: [string, string], score: [number, number], out: [LinkSide, LinkSide], hp: [number, number]): string[] {
+  const lines: string[] = [];
+  if (score[0] !== score[1]) {
+    const a = score[0] > score[1] ? 0 : 1;
+    // The score and the HP can point different ways: say both, so the rope and the score don't seem to disagree.
+    if (hp[1 - a]! > hp[a]!) lines.push(`${names[a]} has ${score[a]} Pokémon left to ${names[1 - a]}'s ${score[1 - a]}, but ${names[1 - a]} has more HP overall.`);
+    else lines.push(`${names[a]} leads ${score[a]}–${score[1 - a]} in Pokémon left.`);
+  } else lines.push(`Level at ${score[0]} Pokémon each.`);
+  const low = ([0, 1] as const).filter((x) => out[x].hp_percent > 0 && out[x].hp_percent <= 20);
+  if (low.length === 2) lines.push("Both on the brink: the next hit could decide it.");
+  else if (low.length === 1) lines.push(`${names[low[0]!]}'s ${out[low[0]!].species} is hanging on at ${out[low[0]!].hp_percent}%.`);
+  const gap = Math.abs(hp[0] - hp[1]);
+  if (gap >= 15 && !(score[0] !== score[1] && hp[0] > hp[1] !== score[0] > score[1])) lines.push(`${names[hp[0] > hp[1] ? 0 : 1]} is ahead by ${gap} points of team HP.`);
+  else if (gap < 15 && score[0] === score[1]) lines.push("Nothing between them on HP.");
+  return lines;
+}
+
+const TIMES = ["", "once", "twice", "three times", "four times", "five times"];
+const times = (n: number) => TIMES[n] ?? `${n} times`;
+
+/**
+ * More to say while both sides choose, from the turns already played: what each side needs, the run of play, what's on
+ * the bench, the clocks when they're short. All of it public (the turns' own lines and sides), the same for everyone,
+ * and nothing about a decision. `names` and `clocks` are by game side; `teams` as `teamsAt` gives them.
+ */
+export function colour(s: LinkSpectator | null, names: [string, string], labels: [string, string], teams: [Pip[], Pip[]], clocks: [number | null, number | null] | null): string[] {
+  if (!s || !s.turns.length) return [];
+  const out: string[] = [];
+  const left = scoreOf(teams);
+  // What each side still has to do.
+  if (left[0] > 0 && left[1] > 0) out.push(`${names[0]} needs ${left[1]} more ${left[1] === 1 ? "knockout" : "knockouts"}. ${names[1]} needs ${left[0]}.`);
+  const turns = s.turns.map((t) => ({ turn: t.turn, beats: beatsOf(storyOf(t.lines, labels), labels) }));
+  // The same move, turn after turn.
+  for (const side of [0, 1] as const) {
+    const moves = turns.flatMap((t) => t.beats.filter((b) => b.kind === "move" && b.side === side).map((b) => (b as Extract<Beat, { kind: "move" }>).move));
+    let run = 0;
+    for (let i = moves.length - 1; i >= 0 && moves[i] === moves.at(-1); i--) run++;
+    if (run >= 3) out.push(`${names[side]} has used ${moves.at(-1)} ${run} turns running.`);
+  }
+  // Critical hits, when one side has had more of them.
+  const crits = ([0, 1] as const).map((side) => turns.reduce((n, t) => n + t.beats.filter((b) => b.kind === "move" && b.side === side && b.chips.includes("crit") && !b.chips.includes("missed")).length, 0));
+  if (crits[0]! + crits[1]! >= 2 && crits[0] !== crits[1]) {
+    const a = crits[0]! > crits[1]! ? 0 : 1;
+    out.push(`${names[a]} has landed ${crits[a]} critical hits to ${names[1 - a]}'s ${crits[1 - a]}.`);
+  }
+  // How long since anything fell.
+  const lastKo = [...turns].reverse().find((t) => t.beats.some((b) => b.kind === "faint"))?.turn;
+  const now = s.turns.at(-1)!.turn;
+  if (lastKo === undefined && now >= 4) out.push(`No knockout yet after ${now} turns.`);
+  else if (lastKo !== undefined && now - lastKo >= 4) out.push(`${now - lastKo} turns since the last knockout.`);
+  // Switches, when they differ.
+  const switches = ([0, 1] as const).map((side) => turns.reduce((n, t) => n + t.beats.filter((b) => b.kind === "switch" && b.side === side).length, 0));
+  if (switches[0]! + switches[1]! >= 3 && switches[0] !== switches[1]) {
+    const a = switches[0]! > switches[1]! ? 0 : 1;
+    out.push(`${names[a]} has switched ${times(switches[a]!)}, ${names[1 - a]} ${switches[1 - a] ? times(switches[1 - a]!) : "not at all"}.`);
+  }
+  // The bench: one still unseen, one waiting there hurt.
+  for (const side of [0, 1] as const) {
+    const unseen = teams[side].filter((p) => p.species === null).length;
+    if (unseen === 1) out.push(`${names[side]} hasn't shown its third Pokémon.`);
+    const hurt = teams[side].find((p) => p.species && !p.active && !p.fainted && p.hp <= 25);
+    if (hurt) out.push(`${names[side]}'s ${hurt.species} is on the bench at ${hurt.hp}%.`);
+  }
+  // A clock running short.
+  for (const side of [0, 1] as const) {
+    const c = clocks?.[side];
+    if (c !== null && c !== undefined && c < 120) out.push(`${names[side]} has ${Math.floor(c / 60)}:${String(c % 60).padStart(2, "0")} left on its clock. Out of time, its fallback plays.`);
+  }
+  out.push("Neither agent can see the other's choice until both are in.");
+  return out;
+}
+
+/** A turn in one sentence, for the call once it has played: its knockout, else its biggest hit, else its last move. */
+export function turnCall(lines: StoryLine[]): string | null {
+  const move = (...chips: Chip[]) => lines.find((l) => l.kind === "move" && chips.every((c) => l.chips.includes(c)) && !l.chips.includes("missed"));
+  const pick = lines.find((l) => l.kind === "faint") ?? move("crit", "super") ?? move("crit") ?? move("super") ?? [...lines].reverse().find((l) => l.kind === "move") ?? lines.at(-1);
+  return pick?.text ?? null;
+}
+
+/** A finished battle in numbers that don't name a winner, for its share card: "5 knockouts · 3 lead changes · 22 turns". */
+export function tally(s: LinkSpectator | null, labels: [string, string], turns: number): string {
+  const h = highlights(s, labels, 0);
+  const ko = h.filter((x) => x.kind === "ko").length, lead = h.filter((x) => x.kind === "lead").length;
+  const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+  return [ko ? n(ko, "knockout", "knockouts") : null, lead ? n(lead, "lead change", "lead changes") : null, n(turns, "turn", "turns")].filter(Boolean).join(" · ");
 }

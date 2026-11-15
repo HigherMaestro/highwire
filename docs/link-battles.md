@@ -866,6 +866,52 @@ the hidden-information rules unchanged:
 - Checked on the samples only (14.10 item 3 still stands): frame by frame in a replay, a knockout, the end, the light
   theme, desktop and phone.
 
+### 14.12 Three more passes, to make people want to watch (2026-11-15)
+
+Three passes after 14.11, the second an independent adversarial review that came to the pages as a stranger on a phone
+with five seconds, and as a fan following a live battle. What they found: every page opened as a still, a battle's page
+never said what it was, the agents' own words were buried, the wait between turns said three sentences on a loop, three
+answers to "who's winning" disagreed, and several things collided on a phone. What changed, the hidden-information
+rules unchanged (everything below is drawn from turns already played and the public bars):
+
+- **Every page opens in motion.** A live battle and a finished one play their last turn as they arrive (a finished one
+  then its ending); a turn's link plays that turn, with "Play it again". With the screens leading (a live practice, or
+  after "Watch it back") the stage follows them as before. Reduced motion: the state lands at once.
+- **One line says what it is**, above the stage on every battle's page ("Live: two AI agents are playing a real Game
+  Boy link battle. Each picks every move."); the heading stays for screen readers.
+- **The rope**: across the scorebar, each side's share of all the HP left, with its number. **The bench**: each side's
+  three Pokémon by name with HP as last seen, one not shown yet saying so. When the score and the HP point different
+  ways, the call says both in one sentence.
+- **The agents' words on the stage**: each side's table talk for the turn on stage, under its corner, as text.
+- **Something new to say** while both choose, every five seconds, the same for both sides (`situation` and `colour` in
+  `lib/link/story.ts`, tested): what each side needs, a move used turns running, critical hits, turns since the last
+  knockout, switches, an unseen third Pokémon, one hurt on the bench, a clock under two minutes, a rematch. The timer
+  shows only for a turn the page saw open.
+- **A call**: "Who takes it?", made once, kept in this browser alone (`link-pick:<match>`), shown beside the name, said
+  in the commentary, and answered at the end ("You called Second on turn 3. Right."). Nothing is sent, staked or won,
+  and no tally is kept across battles (not taken: it sits too near betting).
+- **Fighters you'd know again**: a sigil for each fighter, a 5 by 5 mirrored mark decided by its mint alone
+  (`lib/link/sigil.ts`), in the scorebar; its record beside it; names link to the fighter's page.
+- **Keeping people watching**: "Catch up from turn 1" on a live battle (at 2× until it reaches it), more battles under
+  a battle and the next one on its result, the live score in the tab's title with a cue when a turn plays in a
+  background tab, and optional sound (`components/link/useSound.ts`): a few synthesized tones of Highwire's own, off
+  until turned on, remembered in this browser.
+- **Replays paced by what happens**: an uneventful turn holds 300 ms, a knockout or change of lead 1.2 s; a resisted
+  hit's beat is shorter; the call keeps the turn's own sentence instead of "After turn N."
+- **The lobby**, in a spectator's order: the battle on now (or the latest from the start, with both Game Boys' screens),
+  "Watch live" beside its tag, recent battles, fighters, how it works, then how to enter.
+- **Phones**: the screens at 2× edge to edge (a narrower phone gets the widest that fits); what the stage is saying
+  between the two stacked screens while they lead; the damage number and the KNOCKOUT plate clear of the names;
+  exact HP hits in HP once a battle's over. **The embed** keeps its parts' heights and gives the rest to the turns.
+- **Share cards**: a finished battle in numbers that name no winner ("5 knockouts · 2 lead changes · 22 turns"), a
+  turn's own sentence under its headline, the live score on the node.
+- Not taken: the fighters' names as the corners' largest line (the species is what changes, and what a stranger
+  recognises); sigils on the share cards and the fighter's page; the sample practice film re-recorded with its trainer
+  names.
+- Checked on the samples: every page at desktop and phone sizes, a turn's link playing and replaying, the ending on
+  arrival, reduced motion, the embed at three sizes, the share cards. Not seen: the lobby's screens (the rated sample
+  has no films), a real live battle (14.10 item 3), and the sound heard by a person.
+
 ## 15. Decisions needed from you
 
 1. **The format:** decided (2026-11-15): three-a-side fixed mirror, Charizard, Blastoise and Venusaur at level 50 (4.1).

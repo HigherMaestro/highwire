@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { LinkBattle, LinkSide } from "../../lib/link/battle.ts";
 import { leadSeries, monogram, type Chip, type Highlight, type Pip, type Step, type StoryLine } from "../../lib/link/story.ts";
+import { Sigil } from "./Sigil.tsx";
 
 // The stage's parts (docs/link-battles.md 14.11), drawn from what the director (useDirector.ts) says is on: the scorebar,
 // the two corners with the cable between them, the call, the tug of war, the highlights, the play-by-play and the
@@ -63,16 +64,27 @@ function Pips({ pips, tone }: { pips: Pip[]; tone: "a" | "b" }) {
   );
 }
 
-/** The bar across the top: both names and teams, the score in Pokémon left, the turn, live or final; docked, each side's HP too. */
-export function Scorebar({ w, names, teams, score, turnLabel, pill, clocks, hp, docked }: { w: LinkBattle; names: [string, string]; teams: [Pip[], Pip[]]; score: [number, number]; turnLabel: string; pill: "Live" | "Replay" | "Final"; clocks: [string | null, string | null]; hp: [number, number] | null; docked: boolean }) {
+/** The bar across the top: both fighters (their sigils, names, teams), the score in Pokémon left, live or final and the turn, and the rope: each side's share of all the HP left. */
+export function Scorebar({ w, names, teams, score, pill, pillText, clocks, records, hp, docked, edge, fighterLinks, pick }: { w: LinkBattle; names: [string, string]; teams: [Pip[], Pip[]]; score: [number, number]; pill: "live" | "replay" | "final"; pillText: string; clocks: [string | null, string | null]; records: [string | null, string | null] | null; hp: [number, number] | null; docked: boolean; edge: number | null; fighterLinks: boolean; pick: 0 | 1 | null }) {
   const l = w.left, r = (1 - w.left) as 0 | 1;
   const side = (x: 0 | 1, tone: "a" | "b") => (
     <div className={`link-sb-side link-sb-${tone}`}>
-      <span className="link-sb-name" title={w.sides[x].house ? "Highwire's house fighter" : "A coin's name, chosen by its creator"}>
-        {names[x]}
+      <span className="link-sb-who">
+        <Sigil id={w.sides[x].house ? null : w.sides[x].fighter} />
+        {fighterLinks && w.sides[x].fighter ? (
+          <a className="link-sb-name" href={`/line/fighter/${w.sides[x].fighter}`} title="A coin's name, chosen by its creator. Its record and battles.">
+            {names[x]}
+          </a>
+        ) : (
+          <span className="link-sb-name" title={w.sides[x].house ? "Highwire's house fighter" : "A coin's name, chosen by its creator"}>
+            {names[x]}
+          </span>
+        )}
+        {pick === x ? <span className="link-sb-call">Your call</span> : null}
       </span>
       <span className="link-sb-row">
         <Pips pips={teams[x]} tone={tone} />
+        {records?.[x] ? <span className="link-sb-record">{records[x]}</span> : null}
         {clocks[x] ? (
           <span className="link-sb-clock" title="Its clock for the whole battle, as this turn opened">
             {clocks[x]}
@@ -83,18 +95,55 @@ export function Scorebar({ w, names, teams, score, turnLabel, pill, clocks, hp, 
     </div>
   );
   return (
-    <div className="link-scorebar" data-docked={docked ? "" : undefined} role="group" aria-label={`${names[l]} ${score[l]}, ${names[r]} ${score[r]} Pokémon left, ${turnLabel}${w.live ? ", live" : ""}`}>
+    <div className="link-scorebar" data-docked={docked ? "" : undefined} role="group" aria-label={`${names[l]} ${score[l]}, ${names[r]} ${score[r]} Pokémon left, ${pillText}`}>
       {side(l, "a")}
       <div className="link-sb-mid" aria-hidden="true">
-        <span className={`link-sb-pill link-sb-${pill.toLowerCase()}`}>{pill}</span>
+        <span className={`link-sb-pill link-sb-${pill}`}>{pillText}</span>
         <span className="link-sb-score">
           <Roll value={score[l]} />
           <span className="link-sb-dash">–</span>
           <Roll value={score[r]} />
         </span>
-        <span className="link-sb-turn">{turnLabel}</span>
+        <span className="link-sb-turn">Pokémon left</span>
       </div>
       {side(r, "b")}
+      {edge !== null ? (
+        <div className="link-rope" role="img" aria-label={`All the HP left: ${names[l]} ${edge}%, ${names[r]} ${100 - edge}%`}>
+          <span className="link-rope-n">{edge}%</span>
+          <span className="link-rope-track">
+            <span className="link-rope-a" style={{ transform: `scaleX(${edge / 100})` }} />
+            <span className="link-rope-b" style={{ transform: `scaleX(${(100 - edge) / 100})` }} />
+            <span className="link-rope-knot" style={{ left: `${edge}%` }} />
+          </span>
+          <span className="link-rope-n">{100 - edge}%</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The bench: each side's three Pokémon by name, with its HP as last seen; one not shown yet says so. */
+export function Bench({ teams, left, names }: { teams: [Pip[], Pip[]]; left: 0 | 1; names: [string, string] }) {
+  const right = (1 - left) as 0 | 1;
+  return (
+    <div className="link-bench" role="group" aria-label="Both teams">
+      {([left, right] as const).map((x, i) => (
+        <ul key={x} className={`link-bench-side link-bench-${i ? "b" : "a"}`} aria-label={`${names[x]}'s team`}>
+          {teams[x].map((p, k) => (
+            <li key={k} className={`link-bench-row${p.fainted ? " link-bench-out" : ""}${p.active ? " link-bench-on" : ""}${p.species ? "" : " link-bench-unseen"}`}>
+              <span className="link-bench-name">{p.species ?? "Not shown yet"}</span>
+              {p.species ? (
+                <>
+                  <span className="link-bench-bar" aria-hidden="true">
+                    <span style={{ transform: `scaleX(${p.fainted ? 0 : p.hp / 100})` }} />
+                  </span>
+                  <span className="link-bench-pct">{p.fainted ? "out" : `${p.hp}%`}</span>
+                </>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ))}
     </div>
   );
 }
@@ -109,7 +158,7 @@ const BURST = Array.from({ length: 16 }, (_, i) => {
 });
 
 /** One side's Pokémon out: its name, its HP bar (draining behind a ghost), the callout of its move, a knockout's fall. */
-function Corner({ side, who, tone, exact, result, attack, hit, fainting, compact }: { side: LinkSide; who: string; tone: "a" | "b"; exact: boolean; result: "winner" | "loser" | null; attack: { key: string; move: string; chips: Chip[]; impact: boolean } | null; hit: { key: string; amount: number; chips: Chip[] } | null; fainting: string | null; compact: boolean }) {
+function Corner({ side, who, tone, exact, result, attack, hit, fainting, compact, said }: { side: LinkSide; who: string; tone: "a" | "b"; exact: boolean; result: "winner" | "loser" | null; attack: { key: string; move: string; chips: Chip[]; impact: boolean } | null; hit: { key: string; amount: number; hp?: number; chips: Chip[] } | null; fainting: string | null; compact: boolean; said: { key: string; text: string } | null }) {
   const pct = Math.max(0, Math.min(100, side.hp_percent));
   const count = useCount(pct);
   const low = pct > 0 && pct <= 20;
@@ -199,10 +248,16 @@ function Corner({ side, who, tone, exact, result, attack, hit, fainting, compact
           ))}
         </p>
       ) : null}
+      {said ? (
+        <p key={said.key} className="link-said">
+          <span className="sr-only">{who}&apos;s agent said: </span>
+          {said.text}
+        </p>
+      ) : null}
       {hit ? (
         <span key={hit.key} className={`link-dmg${hit.chips.includes("crit") ? " link-dmg-crit" : hit.chips.includes("super") ? " link-dmg-super" : hit.chips.includes("resisted") ? " link-dmg-soft" : ""}`} aria-hidden="true">
-          −{hit.amount}
-          <small>%</small>
+          −{exact && hit.hp !== undefined ? hit.hp : hit.amount}
+          {exact && hit.hp !== undefined ? null : <small>%</small>}
         </span>
       ) : null}
       {hit ? <span key={`f${hit.key}`} className="link-flash" aria-hidden="true" /> : null}
@@ -269,11 +324,13 @@ export interface ArenaProps {
   over: boolean;
   compact: boolean;
   title: [string, string] | null;
+  /** Each game side's table talk for the turn on stage: the agent's own words, shown as text. */
+  said: [{ key: string; text: string } | null, { key: string; text: string } | null];
   arenaRef?: React.Ref<HTMLDivElement>;
 }
 
 /** The arena: both corners, the cable and its node between them, and a knockout's plate over it all. */
-export function Arena({ sides, left, names, exact, result, now, choosing, node, over, compact, title, arenaRef }: ArenaProps) {
+export function Arena({ sides, left, names, exact, result, now, choosing, node, over, compact, title, said, arenaRef }: ArenaProps) {
   const right = (1 - left) as 0 | 1;
   const b = now?.step.beat;
   const impact = now?.phase === "impact";
@@ -281,7 +338,7 @@ export function Arena({ sides, left, names, exact, result, now, choosing, node, 
   const attack = (s: 0 | 1) => (b?.kind === "move" && b.side === s ? { key: now!.key, move: b.move, chips: b.chips, impact: Boolean(impact) } : null);
   const hit = (s: 0 | 1) => {
     if (!impact || !now) return null;
-    if (now.step.hit?.side === s) return { key: now.key, amount: now.step.hit.amount, chips: b?.kind === "move" ? b.chips : [] };
+    if (now.step.hit?.side === s) return { key: now.key, amount: now.step.hit.amount, hp: now.step.hit.hp, chips: b?.kind === "move" ? b.chips : [] };
     return null;
   };
   const fainting = (s: 0 | 1) => (impact && b?.kind === "faint" && b.side === s ? b.species : null);
@@ -293,7 +350,7 @@ export function Arena({ sides, left, names, exact, result, now, choosing, node, 
     <div ref={arenaRef} className={cls} data-choosing={choosing ? "" : undefined} data-brink={brink ? "" : undefined}>
       <span className="link-arena-glow" aria-hidden="true" />
       {([left, right] as const).map((s, i) => (
-        <Corner key={s} side={sides[s]} who={names[s]} tone={i ? "b" : "a"} exact={exact} result={result(s)} attack={attack(s)} hit={hit(s)} fainting={fainting(s)} compact={compact} />
+        <Corner key={s} side={sides[s]} who={names[s]} tone={i ? "b" : "a"} exact={exact} result={result(s)} attack={attack(s)} hit={hit(s)} fainting={fainting(s)} compact={compact} said={said[s]} />
       ))}
       <div className="link-mid">
         <Cable pulse={pulse} choosing={choosing} brink={brink} dim={[sides[left].hp_percent <= 0, sides[right].hp_percent <= 0]} />
@@ -443,7 +500,7 @@ function Lines({ lines, tone }: { lines: StoryLine[]; tone: (s: 0 | 1) => "a" | 
   return (
     <>
       {lines.map((l, i) => (
-        <p key={i} className={`link-pbp-line link-pbp-${l.kind}${l.side === null ? "" : ` link-pbp-${tone(l.side)}`}`}>
+        <p key={i} className={`link-pbp-line link-pbp-${l.kind}${l.side === null ? "" : ` link-pbp-${tone(l.side)}`}${l.chips.includes("crit") && l.chips.includes("super") ? " link-pbp-double" : ""}`}>
           {l.text}
           {l.chips
             .filter((c) => SHOWN_CHIPS.includes(c))
@@ -452,7 +509,7 @@ function Lines({ lines, tone }: { lines: StoryLine[]; tone: (s: 0 | 1) => "a" | 
                 {CHIP[c]}
               </span>
             ))}
-          {l.chips.includes("resisted") ? <span className="link-pbp-soft"> · resisted</span> : null}
+          {l.chips.includes("resisted") ? <span className="link-pbp-soft">· resisted</span> : null}
           {l.kind === "faint" ? <span className="link-tag link-tag-ko">Knocked out</span> : null}
         </p>
       ))}
@@ -515,7 +572,7 @@ export function PlayByPlay({ turns, stories, talk, names, left, link, highlight,
 const STREAKS = Array.from({ length: 24 }, (_, i) => ({ x: Math.round(((i * 41) % 97) + 1.5), c: i % 4, d: i * 30 }));
 
 /** The result: the winner's name rising, the wire beam drawn from their side, how it ended, the ratings, then the actions. */
-export function Final({ head, tone, sub, ratings, comeback, fresh, children }: { head: { name: string; won: boolean } | { text: string }; tone: "a" | "b" | null; sub: string; ratings: { name: string; change: number }[]; comeback: string | null; fresh: boolean; children?: ReactNode }) {
+export function Final({ head, tone, sub, ratings, comeback, called, fresh, children }: { head: { name: string; won: boolean } | { text: string }; tone: "a" | "b" | null; sub: string; ratings: { name: string; change: number }[]; comeback: string | null; called: string | null; fresh: boolean; children?: ReactNode }) {
   return (
     <section className={`link-final${tone ? ` link-final-${tone}` : " link-final-none"}${fresh ? " link-final-fresh" : ""}`} aria-label="How it ended">
       <span className="link-final-beam" aria-hidden="true" />
@@ -545,6 +602,7 @@ export function Final({ head, tone, sub, ratings, comeback, fresh, children }: {
           {sub}
           {comeback ? <span className="link-final-comeback"> {comeback}</span> : null}
         </p>
+        {called ? <p className="link-final-called">{called}</p> : null}
         {ratings.length ? (
           <p className="link-final-ratings">
             {ratings.map((r) => (
@@ -610,6 +668,62 @@ export function Share({ w, names }: { w: LinkBattle; names: [string, string] }) 
   );
 }
 
+// ---------------------------------------------------------------- calling it
+
+export interface Call {
+  side: 0 | 1;
+  /** The turn the battle was on when the call was made. */
+  turn: number;
+}
+
+/** This browser's call for a battle, kept only here (nothing is sent, staked or won). Made once: it can't be changed after. */
+export function usePick(match: string): [Call | null, (side: 0 | 1, turn: number) => void] {
+  const [pick, setPick] = useState<Call | null>(null);
+  useEffect(() => {
+    try {
+      const v = JSON.parse(window.localStorage.getItem(`link-pick:${match}`) ?? "null") as Partial<Call> | null;
+      if (v && (v.side === 0 || v.side === 1) && Number.isInteger(v.turn)) setPick({ side: v.side, turn: v.turn as number });
+    } catch {
+      // No storage (a private window), or something else there: no call yet.
+    }
+  }, [match]);
+  const choose = (side: 0 | 1, turn: number) => {
+    if (pick) return;
+    const call = { side, turn };
+    setPick(call);
+    try {
+      window.localStorage.setItem(`link-pick:${match}`, JSON.stringify(call));
+    } catch {
+      // The call lasts as long as the page.
+    }
+  };
+  return [pick, choose];
+}
+
+/** "Who takes it?": a call to follow the battle by, made once and kept in this browser alone. Nothing rides on it. */
+export function Pick({ names, left, pick, onPick, children }: { names: [string, string]; left: 0 | 1; pick: Call | null; onPick: (side: 0 | 1) => void; children?: ReactNode }) {
+  const right = (1 - left) as 0 | 1;
+  return (
+    <div className="link-pick" role="group" aria-label="Call it: who takes it? Just for fun, kept in this browser.">
+      {pick ? (
+        <span className={`link-pick-made link-pick-made-${pick.side === left ? "a" : "b"}`}>
+          Your call: <b>{names[pick.side]}</b>, made {pick.turn <= 0 ? "before the first turn" : `on turn ${pick.turn}`}.
+        </span>
+      ) : (
+        <>
+          <span className="link-pick-q">Call it. Who takes it?</span>
+          {([left, right] as const).map((x, i) => (
+            <button key={x} type="button" className={`link-pick-btn link-pick-${i ? "b" : "a"}`} onClick={() => onPick(x)}>
+              {names[x]}
+            </button>
+          ))}
+        </>
+      )}
+      {children}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- the transport
 
 const ICON = {
@@ -617,6 +731,8 @@ const ICON = {
   next: "M15 5h2v14h-2zM5 5v14l9-7z",
   play: "M7 4v16l13-8z",
   pause: "M6 4h4v16H6zM14 4h4v16h-4z",
+  sound: "M4 9v6h4l5 4V5L8 9zM16 8.5a4.5 4.5 0 0 1 0 7v-7zM16 4.6a8.5 8.5 0 0 1 0 14.8v-2.2a6.5 6.5 0 0 0 0-10.4z",
+  mute: "M4 9v6h4l5 4V5L8 9zM21 9.4 19.6 8 17.5 10.1 15.4 8 14 9.4l2.1 2.1L14 13.6l1.4 1.4 2.1-2.1 2.1 2.1 1.4-1.4-2.1-2.1z",
 } as const;
 
 export function Icon({ d }: { d: keyof typeof ICON }) {
