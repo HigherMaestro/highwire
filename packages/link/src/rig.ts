@@ -112,6 +112,20 @@ export class Rig {
     return this.m.HEAPU32.slice(base, base + MAX_WATCHES + 1);
   }
 
+  /** Forgets every watch (a battle sets its own up; a second one on the same rig mustn't inherit the first's). */
+  clearWatches(): void {
+    this.m._rig_watch_clear();
+  }
+
+  /** The link cable's bits in flight, which a saved battle must carry to resume exactly (rig.c). */
+  get cable(): number {
+    return this.m._rig_cable_get();
+  }
+
+  set cable(bits: number) {
+    this.m._rig_cable_set(bits & 3);
+  }
+
   /** The CPU's program counter, for debugging. */
   pc(side: Side): number {
     return this.m._rig_pc(side);

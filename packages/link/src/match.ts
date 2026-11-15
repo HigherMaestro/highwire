@@ -33,7 +33,7 @@ const dataFor = (rom: Uint8Array) => (cachedData?.rom === rom ? cachedData.data 
 /** Reads what one side's own game holds (view.ts builds its view from this and nothing else). */
 function factsOf(rig: Rig, side: Side): SideFacts {
   const s = snapshot(rig, side);
-  return { team: party(rig, side), out: rig.read(side, ADDR.playerMonNumber), mine: s.mine, theirs: s.theirs, mineMoves: s.myMoves };
+  return { team: party(rig, side), out: rig.read(side, ADDR.playerMonNumber), mine: s.mine, theirs: s.theirs, mineMoves: s.myMoves, mineMovePP: s.myPP };
 }
 
 export class LinkMatch {
@@ -85,9 +85,10 @@ export class LinkMatch {
     return legal ? houseChoice(legal, this.facts(side), this.data) : null;
   }
 
-  view(side: Side): PlayerView {
-    const s = this.state;
-    return playerView({ side, phase: viewPhase(this.battle.phase(side), false), turn: s.turn, facts: this.facts(side), legal: this.legal(side), turns: s.turns, opening: s.opening, names: this.data });
+  /** One side's view, of this match's state or of a later one (its battle's last turn, once it's over). */
+  view(side: Side, state: MatchState = this.state): PlayerView {
+    const over = Boolean(state.outcome || state.void);
+    return playerView({ side, phase: viewPhase(this.battle.phase(side), over), turn: state.turn, facts: this.facts(side), legal: over ? null : this.legal(side), turns: state.turns, opening: state.opening, names: this.data });
   }
 
   /**
@@ -106,7 +107,8 @@ export class LinkMatch {
       return { state, packed: pack(this.rig, this.battle), turn };
     } catch (error) {
       if (!(error instanceof BattleError) || error.kind === "illegal") throw error;
-      return { state: { ...s, void: { kind: error.kind, message: error.message } }, packed: null, turn: null };
+      // The battle as it stood, so its page keeps the stage and every turn.
+      return { state: { ...s, void: { kind: error.kind, message: error.message }, final: factsOf(this.rig, 0) }, packed: null, turn: null };
     }
   }
 }

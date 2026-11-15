@@ -15,6 +15,7 @@ const MOVES: Record<number, { name: string; pp: number; power: number; type: num
 const names = { species: (id: number) => SPECIES[id] ?? `#${id}`, move: (id: number) => MOVES[id] ?? null };
 
 const field = (on: Partial<Field> = {}): Field => ({
+  thrashing: false, trapping: false, charging: false, rage: false,
   confused: false, substitute: false, seeded: false, reflect: false, lightScreen: false, badlyPoisoned: false,
   transformed: false, recharging: false, mist: false, focusEnergy: false, ...on,
 });
@@ -32,6 +33,7 @@ const facts0: SideFacts = {
   mine: mon(1, 77, 140, { stages: [8, 7, 7, 7, 7, 7] }),
   theirs: mon(2, 123, 211, { types: [4, 5], field: field({ reflect: true }) }),
   mineMoves: [10, 11, 0, 0],
+  mineMovePP: [7, 30, 0, 0],
 };
 
 const turn1: Turn = {
@@ -46,8 +48,8 @@ const turn1: Turn = {
     { kind: "resolved", side: 0, move: 10, missed: true, critical: false, effectiveness: 0, damage: 0 },
   ],
   sides: [
-    { species: [1, 1], hp: [90, 77], maxHp: 140, status: [0, 0], stages: [1, 0, 0, 0, 0, 0], fieldOn: [], fieldOff: [], switched: false, fainted: false },
-    { species: [2, 2], hp: [211, 123], maxHp: 211, status: [0, 0], stages: [0, 0, 0, 0, 0, 0], fieldOn: ["reflect"], fieldOff: [], switched: false, fainted: false },
+    { species: [1, 1], hp: [90, 77], maxHp: 140, status: [0, 0], was: field(), stages: [1, 0, 0, 0, 0, 0], fieldOn: [], fieldOff: [], switched: false, fainted: false },
+    { species: [2, 2], hp: [211, 123], maxHp: 211, status: [0, 0], was: field(), stages: [0, 0, 0, 0, 0, 0], fieldOn: ["reflect"], fieldOff: [], switched: false, fainted: false },
   ],
 };
 
@@ -84,13 +86,44 @@ test("spectators see bars while it's live, exact numbers once it's over, and nev
 
 test("a turn is told in order, in plain sentences, without damage numbers", () => {
   const lines = narrate(turn1, names, (s) => (s === 0 ? "Your" : "Their"));
-  assert.deepEqual(lines, ["Their Pebble used Tackle.", "A critical hit!", "Your Sparky used Zap.", "It doesn't affect Their Pebble…", "Your Sparky's Attack rose."]);
+  assert.deepEqual(lines, ["Their Pebble used Tackle.", "A critical hit!", "Your Sparky used Zap.", "It doesn't affect Their Pebble…", "Your Sparky's Attack rose.", "Their Pebble is protected by Reflect."]);
   assert.doesNotMatch(lines.join(" "), /\b13\b/);
+});
+
+test("a turn a side didn't choose says why: recharging, thrashing, a hold, asleep, or just couldn't move", () => {
+  const idle = (was: Partial<Field>, status = 0, fieldOn: (keyof Field)[] = []) => {
+    const t: Turn = { ...turn1, events: [{ kind: "acts", side: 0 }], sides: [{ ...turn1.sides[0], stages: [0, 0, 0, 0, 0, 0], was: field(was), status: [status, status], fieldOn }, { ...turn1.sides[1], fieldOn: [] }] };
+    return narrate(t, names, (s) => (s === 0 ? "Your" : "Their"))[0];
+  };
+  assert.equal(idle({ recharging: true }), "Your Sparky must recharge.");
+  assert.equal(idle({ thrashing: true }), "Your Sparky is thrashing about.");
+  assert.equal(idle({ trapping: true }), "Your Sparky keeps its hold on the other side.");
+  assert.equal(idle({}, 0, ["charging"]), "Your Sparky is charging up.");
+  assert.equal(idle({}, 2), "Your Sparky is fast asleep.");
+  assert.equal(idle({}), "Your Sparky couldn't move.");
+});
+
+test("conditions are told when they change, not on every tick, and cures and field effects are told too", () => {
+  const story = (c: Partial<Turn["sides"][0]>) =>
+    narrate({ ...turn1, events: [], sides: [{ ...turn1.sides[0], stages: [0, 0, 0, 0, 0, 0], ...c }, { ...turn1.sides[1], fieldOn: [] }] }, names, (s) => (s === 0 ? "Your" : "Their"));
+  assert.deepEqual(story({ status: [3, 2] }), [], "a sleep counter ticking down isn't news");
+  assert.deepEqual(story({ status: [2, 0] }), ["Your Sparky woke up."]);
+  assert.deepEqual(story({ status: [0, 1 << 6] }), ["Your Sparky is paralyzed."]);
+  assert.deepEqual(story({ fieldOn: ["substitute", "confused"] }), ["Your Sparky made a substitute.", "Your Sparky became confused."]);
+  assert.deepEqual(story({ fieldOff: ["substitute"] }), ["Your Sparky lost its substitute."]);
+  assert.deepEqual(story({ fieldOn: ["transformed"], stages: [3, 0, 0, 0, 0, 0] }), ["Your Sparky transformed."], "Transform copies stages: no rise");
+});
+
+test("the Pokémon out shows its moves and PP in battle (a transformed one, the copied moves at 5 PP)", () => {
+  const transformed: SideFacts = { ...facts0, mine: { ...facts0.mine, field: field({ transformed: true }) }, mineMoves: [13, 12, 0, 0], mineMovePP: [5, 4, 0, 0] };
+  const v = playerView({ side: 0, phase: "choose", turn: 1, facts: transformed, legal: { kind: "turn", moves: [0, 1], fight: false, switches: [] }, turns: [], opening: [1, 2], names });
+  assert.deepEqual(v.you.team[0]!.moves, [{ name: "Water Gun", pp: 5, max_pp: 5 }, { name: "Growl", pp: 4, max_pp: 5 }]);
+  assert.deepEqual(v.legal.map((l) => l.label), ["Water Gun", "Growl"]);
 });
 
 test("a side that started its part of the turn and used no move didn't attack", () => {
   const t: Turn = { ...turn1, events: [{ kind: "acts", side: 0 }, { kind: "acts", side: 1 }, { kind: "used", side: 1, move: 11 }], sides: [{ ...turn1.sides[0], stages: [0, 0, 0, 0, 0, 0] }, turn1.sides[1]] };
-  assert.deepEqual(narrate(t, names, (s) => (s === 0 ? "Your" : "Their")), ["Your Sparky didn't attack.", "Their Pebble used Tackle."]);
+  assert.deepEqual(narrate(t, names, (s) => (s === 0 ? "Your" : "Their")), ["Your Sparky couldn't move.", "Their Pebble used Tackle.", "Their Pebble is protected by Reflect."]);
 });
 
 test("the HP bar is the game's 48 pixels, and anything left shows", () => {
@@ -119,6 +152,11 @@ test("the house takes the strongest expected move, and switches out of a bad mat
   assert.deepEqual(houseChoice({ kind: "forced", switches: [1] }, facts0, fakeData), { kind: "switch", to: 1 });
   // FIGHT that goes straight on, with nowhere to switch.
   assert.deepEqual(houseChoice({ kind: "turn", moves: [], fight: true, switches: [] }, facts0, fakeData), { kind: "fight" });
+  // FIGHT that goes straight on (trapped, asleep) against a Water type: its own moves are good, so it stays in.
+  assert.deepEqual(houseChoice({ kind: "turn", moves: [], fight: true, switches: [1] }, water, fakeData), { kind: "fight" });
+  // A sleeping reserve is never sent in.
+  const sleepy: SideFacts = { ...facts0, team: [facts0.team[0]!, { ...facts0.team[1]!, status: 3 }] };
+  assert.deepEqual(houseChoice({ kind: "turn", moves: [0, 1], fight: false, switches: [1] }, sleepy, fakeData), { kind: "move", slot: 1 });
 });
 
 test("the rig's version names the emulator build and the code it watches", () => {

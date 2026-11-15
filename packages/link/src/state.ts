@@ -17,8 +17,15 @@ const fnv = (text: string) => {
   return h.toString(16).padStart(8, "0");
 };
 
-/** The emulator's build, the code and memory map, and the format: change any of them and old states stop resuming. */
-export const RIG_VERSION = `${WASM_SHA256.slice(0, 12)}.${fnv(JSON.stringify([CODE, ADDR, FORMAT]))}`;
+/**
+ * The battle logic's revision: bump it whenever the engine plays a turn differently (battle.ts, yellow.ts, format.ts,
+ * state.ts, rig.ts). test/engine.test.ts fails when those files change and this doesn't, so an old saved battle never
+ * resumes under new logic.
+ */
+export const ENGINE_REVISION = 2;
+
+/** The emulator's build, the code and memory map, the format and the engine's revision: change any and old states stop resuming. */
+export const RIG_VERSION = `${WASM_SHA256.slice(0, 12)}.${fnv(JSON.stringify([CODE, ADDR, FORMAT, ENGINE_REVISION]))}`;
 
 const MAGIC = "HWLB";
 const PHASES: Phase[] = ["menu", "moves", "party", "switch-menu", "forced", "waiting", "busy"];
@@ -30,7 +37,7 @@ export function pack(rig: Rig, battle: Battle): Uint8Array {
   if (!battle.atDecision()) throw new Error("A battle is packed only at a decision point.");
   const states = [rig.saveState(0), rig.saveState(1)];
   const header = new TextEncoder().encode(`${MAGIC}${RIG_VERSION}`);
-  const body = new Uint8Array(header.length + 1 + 2 + 2 + 8 + states[0]!.length + states[1]!.length);
+  const body = new Uint8Array(header.length + 1 + 2 + 2 + 1 + 8 + states[0]!.length + states[1]!.length);
   const view = new DataView(body.buffer);
   let at = 0;
   body.set(header, at);
@@ -40,6 +47,8 @@ export function pack(rig: Rig, battle: Battle): Uint8Array {
   at += 2;
   body[at++] = PHASES.indexOf(battle.phase(0));
   body[at++] = PHASES.indexOf(battle.phase(1));
+  // The cable's bits in flight: a turn nobody chooses is packed while both games are mid-exchange.
+  body[at++] = rig.cable;
   for (const state of states) {
     view.setUint32(at, state.length);
     at += 4;
@@ -70,12 +79,14 @@ export function unpack(rig: Rig, packed: Uint8Array): { battle: Battle } & Pause
   at += 2;
   const phases = [PHASES[body[at]!]!, PHASES[body[at + 1]!]!] as [Phase, Phase];
   at += 2;
+  const cable = body[at++]!;
   for (const side of [0, 1] as Side[]) {
     const length = view.getUint32(at);
     at += 4;
     rig.loadState(side, body.subarray(at, at + length));
     at += length;
   }
+  rig.cable = cable;
   const battle = new Battle(rig, { phases, turn });
   // One frame shows each game's phase again; a packed battle was at a decision point, so it's there at once.
   if (battle.runToDecision(30) || !battle.atDecision()) throw new Error("The packed battle didn't resume at its decision point.");

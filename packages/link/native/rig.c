@@ -163,6 +163,17 @@ EMSCRIPTEN_KEEPALIVE void rig_watch_clear(void) {
 /** seq, as uint32s: side 0's MAX_WATCHES stamps and its count, then side 1's. */
 EMSCRIPTEN_KEEPALIVE uint32_t *rig_seq(void) { return &seq[0][0]; }
 
+/**
+ * The cable's bits in flight: each side's outgoing bit, held until the other's transfer ends. They live here, not in
+ * SameBoy's state, so a saved battle carries them (bit 0: side 0's, bit 1: side 1's) and resumes exactly at any frame.
+ */
+EMSCRIPTEN_KEEPALIVE int rig_cable_get(void) { return (bit_to_send[0] ? 1 : 0) | (bit_to_send[1] ? 2 : 0); }
+
+EMSCRIPTEN_KEEPALIVE void rig_cable_set(int bits) {
+  bit_to_send[0] = (bits & 1) != 0;
+  bit_to_send[1] = (bits & 2) != 0;
+}
+
 EMSCRIPTEN_KEEPALIVE int rig_pc(int side) { return GB_get_registers(&gbs[side])->pc; }
 
 EMSCRIPTEN_KEEPALIVE void rig_set_key(int side, int key, int pressed) { GB_set_key_state(&gbs[side], (GB_key_t)key, pressed != 0); }

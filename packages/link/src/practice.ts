@@ -26,7 +26,12 @@ export interface PracticeStep {
 export type Labels = [string, string];
 
 const dice = () => new Uint8Array(randomBytes(DICE_LENGTH));
-const CAP = 200;
+/** The turn cap (4.2): turns where somebody chose, so forced replacements count and locked-in turns don't. */
+export const TURN_CAP = 60;
+/** How long one step plays turns the agent isn't asked about before handing back (the next call continues). */
+const STEP_MS = 20_000;
+
+const chosenTurns = (state: MatchState) => state.turns.filter((t) => t.decisions.some((d) => d !== null)).length;
 
 function ended(state: MatchState, agent: Side): PracticeStep["ended"] {
   if (state.void) return { reason: "void", winner: null, message: state.void.message };
@@ -36,29 +41,27 @@ function ended(state: MatchState, agent: Side): PracticeStep["ended"] {
   return { reason: "knockout", winner: o.winner === agent ? "you" : "house" };
 }
 
-/** Plays house-only turns until the agent is asked, then builds the step. */
+/**
+ * Plays turns the agent isn't asked about (the house's alone, or nobody's) until it is, the battle ends or the step's
+ * time is up, then builds the step. Every turn since the agent's last decision is told in its view.
+ */
 async function settle(rom: Uint8Array, match: LinkMatch, state: MatchState, packed: Uint8Array | null, agent: Side, labels: Labels, since: number): Promise<PracticeStep> {
   const house = (1 - agent) as Side;
-  while (packed && !match.asked(agent) && state.turn < CAP) {
+  const until = performance.now() + STEP_MS;
+  while (packed && !match.asked(agent) && performance.now() < until) {
     const decisions: [Action | null, Action | null] = [null, null];
-    decisions[house] = match.house(house);
+    decisions[house] = match.asked(house) ? match.house(house) : null;
     const r = match.play(decisions, dice());
     state = r.state;
     packed = r.packed;
     if (packed) match = await LinkMatch.open(rom, state, packed);
   }
-  const over = ended(state, agent);
-  if (!over && state.turn >= CAP) {
-    // The turn cap (4.2): a draw.
-    state = { ...state, outcome: { winner: null, reason: "draw" } };
+  if (packed && !ended(state, agent) && chosenTurns(state) >= TURN_CAP) {
+    state = { ...state, outcome: { winner: null, reason: "draw" }, final: match.facts(0) };
     packed = null;
   }
   const live = packed ? match : undefined;
-  const view: PlayerView = live
-    ? live.view(agent)
-    : { ...(match.view(agent) as PlayerView), phase: "ended", legal: [] };
-  // Every turn since the agent's last decision, not only the last: a house-only turn (a replacement after a faint, say)
-  // would otherwise hide what the agent's own move did.
+  const view = match.view(agent, state);
   const told = state.turns.filter((t) => t.turn > since);
   view.last_turn = told.flatMap((t) => [...(told.length > 1 ? [`Turn ${t.turn}:`] : []), ...narrate(t, match.data, (s) => (s === agent ? "Your" : "Their"))]);
   return { state, packed, view, spectator: watch(state, match.data, labels, live), turn: state.turn, ended: ended(state, agent) };
@@ -69,10 +72,17 @@ export async function practiceStart(rom: Uint8Array, bootstrap: [Uint8Array, Uin
   return settle(rom, match, match.state, packed, agent, labels, 0);
 }
 
-/** The agent's move, the house's, and on to the agent's next decision. An illegal move throws BattleError "illegal". */
-export async function practiceMove(rom: Uint8Array, state: MatchState, packed: Uint8Array, agent: Side, action: Action, labels: Labels): Promise<PracticeStep> {
+/**
+ * The agent's move, the house's, and on to the agent's next decision. With no action, continues a battle where the agent
+ * isn't asked (a step that ran out of time). An illegal move, or a missing one, throws BattleError "illegal".
+ */
+export async function practiceMove(rom: Uint8Array, state: MatchState, packed: Uint8Array, agent: Side, action: Action | null, labels: Labels): Promise<PracticeStep> {
   const match = await LinkMatch.open(rom, state, packed);
-  if (!match.asked(agent)) throw new BattleError("illegal", "It isn't your turn to choose.");
+  if (!match.asked(agent)) {
+    if (action) throw new BattleError("illegal", "It isn't your turn to choose; call with no action to let the battle go on.");
+    return settle(rom, match, state, packed, agent, labels, state.turn);
+  }
+  if (!action) throw new BattleError("illegal", "Choose one of the legal actions in your view.");
   const legal = match.legal(agent);
   const ok =
     legal &&
@@ -104,6 +114,8 @@ export function linkRules() {
     banned_why: "They desync link battles in the original game, so they're never legal while anything else is.",
     hidden: "You see what your own screen shows: your team in full, the other side's Pokémon out with its HP as a bar, what it has shown, and the moves it has used.",
     dice: "Fresh random dice are dealt into both games every turn, so nothing you see predicts the next roll.",
-    practice: "link_practice plays Highwire's house fighter: it picks the move with the best expected damage and switches out of bad matches. Unrated, one at a time, kept for an hour.",
+    team: "Both sides have the same three Pokémon at level 50: Charizard, Blastoise and Venusaur, with fixed moves.",
+    cap: `After ${TURN_CAP} turns where somebody chose, the battle is a draw.`,
+    practice: "link_practice plays Highwire's house fighter: it picks the move with the best expected damage and switches out of bad matches. Unrated, one at a time, kept for an hour after your last move. Send the `turn` from the view you're answering with each action; when the view says waiting, call with no action and the battle goes on.",
   };
 }

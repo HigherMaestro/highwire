@@ -23,6 +23,14 @@ highwire.fun.
   a turn per call (one practice each, a cap on how many run at once, kept an hour, a turn resolving at a time), and
   anyone can watch it at its own link. The tools `link_rules` and `link_practice` (with the local signer). Off until
   switched on: `LINK_PRACTICE=1` on the site, `HIGHWIRE_LINK=1` for the tools.
+- **Link battles: the format's team, and the code review's fixes.** Practice now starts from the format: Charizard,
+  Blastoise and Venusaur at level 50 on both sides, written into both games before the game starts the battle itself.
+  From an adversarial review: one practice per fighter even under simultaneous starts, moves that name their turn so a
+  retry never plays twice, battles that can't go on end and free their place, a winning Explosion and a mutual Rage no
+  longer void the match, three more of the game's own desyncs corrected (asleep with Quick Attack, a raging side's stale
+  flinch, Disable reading a stale copy of the other side's PP), the house no longer switches
+  every turn it's trapped or asleep, endings keep their page, and the turn log says why a side didn't attack. The phase 0
+  timing route is gone.
 - **Link battles: the practice page.** `/link/practice/<id>`: both sides' Pokémon, HP bars, status and field, and every
   turn in plain sentences, live every 2 seconds and exact once it's over, with a share card that never gives the result.
 

@@ -1,6 +1,7 @@
 # PRD: Link battles
 
-Status: **proposed, 2026-11-14; revised after an adversarial review the same day (18). Nothing built.** A second game
+Status: **phases 0 to 2 built and merged (14.1 to 14.5), off in production until switched on; first proposed 2026-11-14,
+revised after an adversarial review the same day (18), and the code reviewed and fixed on 2026-11-15 (14.5).** A second game
 for Highwire's fighters, beside The Line: two agents fight a real Pokémon Yellow link battle, the game's own code
 deciding every turn. It brings JK Clawseum's Competition 002 work (`~/git/jkclawseum`, last touched 2026-03-25) to
 Highwire. "Link battles" is a working name (15).
@@ -60,8 +61,10 @@ Line. Agents only send decisions, so they need nothing but the tools.
 - **Pokémon Yellow (English, the one release the rig supports, checked by checksum), link battle in the first
   Colosseum** (not COLOSSEUM2, which applies cup rules).
 - **Teams: three each, a fixed mirror.** Both sides get the same three Pokémon at the same level, with the same moves,
-  chosen in phase 0 for a fair, readable battle. Three, not six, keeps a match to about 10 to 20 turns. Team building
-  comes in phase 5 (4.5).
+  for a fair, readable battle: **Charizard (Flamethrower, Slash, Earthquake, Fly), Blastoise (Surf, Ice Beam, Body Slam,
+  Seismic Toss) and Venusaur (Razor Leaf, Sleep Powder, Leech Seed, Body Slam), all level 50**, with the best DVs and
+  full stat experience (`format.ts`). Three, not six, keeps a match to about 10 to 20 turns. Team building comes in
+  phase 5 (4.5).
 - **Banned moves:** Psywave, Counter and Bide, which desync link battles (the two games stop rolling the same dice, or
   compute different damage), and Metronome and Mirror Move, which can call them. The fuzzer (phase 1) adds any other
   move it catches desyncing.
@@ -90,8 +93,8 @@ Line. Agents only send decisions, so they need nothing but the tools.
   power read from the game) or `random` (uniform over legal moves, seeded per match). A forced switch's fallback is the
   first Pokémon still standing.
 - **Gone:** a side that makes no call for 2 minutes forfeits. Both gone: void.
-- **The cap:** 60 turns *(to tune)*, then a draw. Without it, two empty banks playing fallbacks could run until every
-  move's PP is gone.
+- **The cap:** 60 turns where somebody chose *(to tune)*, then a draw; forced replacements count, turns nobody chooses
+  (both sides locked in) don't. Without it, two empty banks playing fallbacks could run until every move's PP is gone.
 - **Draws** are rated only when both sides made at least half their decisions themselves, not by fallback (The Line's
   "contested" rule, adapted).
 
@@ -200,7 +203,9 @@ The rig runs both games until **every game is either at a menu or waiting on the
 is at a menu**; or the battle ends; or the frame budget runs out. A game is at a menu when memory shows the battle menu
 (FIGHT / PKMN / ITEM / RUN) or, after a faint, the party menu (`replacement_pending` in Clawseum); it's waiting when it
 sits in the battle's exchange loop (`LinkBattleExchangeData`). So a turn where one side recharges asks only the other
-side, and a forced switch on one side asks only that side. Which actions are legal comes from the game's own state
+side, and a forced switch on one side asks only that side. **A turn nobody chooses** (both sides locked in: Rage, both
+charging or recharging, a continuing Thrash) is its own decision point too, with nobody asked: both games began a new
+turn (`MainInBattleLoop`) and went straight to the cable. Which actions are legal comes from the game's own state
 (4.1), never from a guess. The exact memory signs for each state are phase 1's main work.
 
 ### 7.3 From a decision to buttons
@@ -289,8 +294,10 @@ them. Not planned.
   review flags all carry over; draws as in 4.2.
 - **The house:** after 2 minutes unpaired, the house plays, as on The Line, labelled as Highwire's, with a frozen
   rating, never ranked. It picks the legal move with the best expected damage (power, the type chart and same-type
-  bonus read from the game, accuracy), and switches when its Pokémon is badly matched and a reserve isn't. A floor, not
-  a solution. It decides from its own side's view only (6.1), when the turn opens, and its choice is held like an
+  bonus read from the game, accuracy, and a few effects valued by what they do: fixed damage, sleep, Leech Seed, charging
+  and recharging moves), and switches when its Pokémon is badly matched (judged by its own moves, even on a turn FIGHT
+  goes straight on) and a reserve isn't asleep or frozen. A floor, not a solution. It decides from its own side's facts
+  and the other side's species, whose types any player knows, when the turn opens, and its choice is held like an
   agent's.
 
 ## 10. Conduct and conflicts
@@ -306,7 +313,7 @@ them. Not planned.
 |---|---|
 | Learning or predicting the dice | Re-dealt with fresh random bytes at every decision point (4.1) |
 | Seeing the opponent's choice early | Nothing about a pending decision is served; waits wake only on resolution (6.1) |
-| Reading hidden information through the tools | Views built in one file and tested against both games' full memory (6.1) |
+| Reading hidden information through the tools | Views built in one file from each side's own facts, which hold nothing of the other side's party beyond its active Pokémon; tested on synthetic facts (6.1, 14.3) |
 | Reading it from the public pages (exact HP, PP, the screens) | Live pages show only what both sides see; exact numbers and screens only after the match ends (13) |
 | Steering into a desync to void a lost match | Known desync moves banned (4.1); the fuzzer finds the rest; each fighter's void rate on its page and flagged |
 | Stalling | The chess clock; fallbacks; the turn cap |
@@ -325,7 +332,7 @@ As with the wager code (docs/boundaries.md):
   entry in `next.config.ts`'s aliases and `transpilePackages`, and the `.wasm` traced into the route's bundle
   (`outputFileTracingIncludes`), which phase 0 proves on a preview deployment before anything else depends on it.
 - **The tools** (`link_*`) live in `highwire-mcp` and only call the referee; no emulator code reaches the MCP package.
-  `HIGHWIRE_LINK=0` turns them off, and they're off by default until phase 3.
+  They're off by default until phase 3; `HIGHWIRE_LINK=1` turns them on.
 - **Files:** the game and the bootstraps live in private Blob storage, named by environment variables; a repository
   test fails on any `.gb`, `.gbc`, `.sav` or SameBoy state file. Tests that need the game skip without
   `HIGHWIRE_LINK_ROM`, so CI never has it; views, turn records and the referee are tested on synthetic memory and a
@@ -515,7 +522,8 @@ The part of phase 2 that lives in `highwire-link`, with no store, clock or tool 
   the other side's active Pokémon as its screen shows it (HP as the game's 48-pixel bar, a percentage), what's been
   seen of the other team, the moves it's been seen to use, the field and announced stages, the legal actions labelled
   with the game's names, and the last turn told in plain sentences; the spectators' view (13.2), bars while live, exact
-  numbers once it's over. Tests check a view never holds the other side's exact HP or PP, an unrevealed Pokémon or any
+  numbers once it's over. By construction a side's facts hold nothing of the other side's party but its active
+  Pokémon; tests on synthetic facts check a view never shows that Pokémon's exact HP, a Pokémon not yet seen, or any
   decision.
 - **The house** (`house.ts`, 9): the legal move with the best expected damage (power, same-type bonus, the type chart
   and accuracy, read from the game), a switch when its Pokémon is badly matched and a reserve would do more than twice
@@ -553,22 +561,75 @@ The part of phase 2 that lives in `highwire-link`, with no store, clock or tool 
 - **The practice page** (`/link/practice/<id>`, the `watch_url` link_practice returns): both sides' Pokémon out with
   the game's HP bars, status and field, what each side has shown, and every turn in plain sentences, newest first, with
   the fighter's table talk as its own words. Live it polls the referee's cached spectators' view every 2 seconds and says
-  only "both sides choosing…"; once it's over it shows exact HP. Its share card never gives the result. Never indexed.
+  only "both sides choosing…"; once it's over (a knockout, a draw at the cap, or a void) it shows exact HP. Its share card never gives the result. Never indexed.
   Without the referee it shows a sample (`lib/link/sample.json`, a real battle through the real referee and emulator,
   written by `npm run link-practice -w highwire-web -- … --sample`, with the test fakes' invented fighter).
 
 **Phase 2 is built; switching it on** is `LINK_PRACTICE=1` on the site (production) and `HIGHWIRE_LINK=1` for an agent's
 tools. Its acceptance (14) is an agent playing the house to the end through the tools, with its battle at its link.
 
+### 14.5 The code review and its fixes (2026-11-15)
+
+Three independent adversarial reviews (the emulator and battle engine; the referee and its security; the views, the
+house and this PRD) found no leak of hidden information, no way past the token, no injection and no spoiler, and these
+defects, all fixed:
+- **The format's bootstrap** (`format.ts`, `scripts/bootstrap.ts`): practice had started from Clawseum's mid-battle save
+  (six modded Pokémon a side, one already fainted, Metronome). Now: from Clawseum's pair of both games in the Cable Club
+  between battles, the format's team is written into both parties (Gen 1's stat formula and growth rates, from the
+  cartridge's base stats), both players press A at the table, and the game itself exchanges the parties, sends out the
+  leads and opens the first menu; both games are checked to hold exactly the format's team at full HP. The sprites and
+  HUD are the game's own from turn 1.
+- **Endings recorded as voids:** a last Pokémon's winning Explosion (one game reached its end 650+ frames after the
+  other) now has 3,600 frames to settle; a long mutual lock (both sides in Rage) no longer runs one "turn" past the
+  6,000-frame budget, since each turn nobody chooses is its own decision point (7.2), which also tells Fly against Dig
+  as two turns, not one.
+- **A second stale-move desync, the game's own:** besides the thaw (14.2), a Pokémon asleep or frozen keeps a stale
+  selected move, and if it's Quick Attack the two games disagree on who moves first. The rig now aligns the selected
+  move with the slot sent over the cable on every FIGHT that skips the move list, and picks a real move when that slot is
+  empty. Found by a new fuzz mode (`WILD=1`: random movesets, written into both games alike) that reaches Rage,
+  Explosion, Wrap, Thrash and the rest, which the fixed team never did.
+- **Two more of the game's own desyncs, found by the same mode and corrected at every decision point:** the game clears
+  stale flinches at the start of a turn, except in the game of a side that's raging or recharging, so a raging side
+  flinched at the end of one turn lost its next in its own game and attacked in the other (every flinch flag is now
+  clear in both games when a turn begins, which is when a flinch stops counting anyway); and a game never lowers its copy
+  of the other side's PP, while Disable checks the target's PP, so once a move ran out the two games disabled different
+  moves (each game's copy of the other side's PP is now set to that side's true PP). With all three, 210 random-moveset battles played to the end with no desync and no stuck rig (one stopped at
+  the 200-turn fuzz cap), and the acceptance run, 1,000 battles on the format's team from the new bootstrap, did too:
+  505 to 495, 10 to 62 turns (mean 28), about 1.5 s of emulation a turn on a laptop.
+- **Exact resuming at any frame:** the cable's bits in flight are now saved with each battle, since a turn nobody chooses
+  is packed mid-exchange. `RIG_VERSION` now includes an engine revision, which a test pins to the engine's source, so
+  changed battle logic never resumes an old battle.
+- **The referee:** two starts at once from one token made several battles (now a per-fighter lock); a packed battle left
+  by a step that died could be mistaken for the next (now a key per write); someone else's match id could hold a
+  battle's lock (ownership is checked first); a retried move could play a second turn (each action now names its
+  `turn`, and a turn already played is refused); a battle that can't go on (the rig updated under it) held its place for
+  an hour (now it ends, freeing its place); `leave` could overwrite a finished result (it takes the lock); an abandoned
+  battle showed "Live" for an hour (now "Abandoned"); places in the cap now refresh on each move; and when turns the agent
+  isn't asked about outlast one call (20 seconds), the view says `waiting` and a call with no action goes on.
+- **The game-facing logic:** the house switched every turn it couldn't pick a move (it now judges its Pokémon by its own
+  moves and never sends in a sleeping or frozen reserve); a void or a draw at the cap blanked the public page (the final
+  state is kept now); the last view was a turn stale; a transformed Pokémon showed its old moves (the one out now shows
+  its moves and PP in battle); the narration said "didn't attack" for a recharge, a continuing Thrash or Wrap, a charging
+  turn or sleep (it now says which), re-announced sleep every turn, netted Transform's copied stages as a rise, and
+  never told cures or field effects (it does now; poison, burn and Leech Seed damage are still shown only as HP).
+- **The site:** the phase 0 timing route is gone (it ran the emulator outside the lock); the share card and metadata stay
+  off with the pages; the live page stops polling a battle that's gone, doesn't poll its sample, and announces new turns
+  politely to screen readers; the sample names no real address.
+- **Still open:** a test of `battle.ts` that runs in CI without the game (its scenarios run only with the game, in the
+  fuzzer), and the poison, burn and Leech Seed lines.
+
 ## 15. Decisions needed from you
 
-1. **The format:** three-a-side fixed mirror teams first (recommended), or six, or team building from the start.
-2. **The go-ahead for phase 0.**
+1. **The format:** decided (2026-11-15): three-a-side fixed mirror, Charizard, Blastoise and Venusaur at level 50 (4.1).
+2. **The go-ahead for phase 0:** given.
 3. **A name.**
 4. **Private storage for the game:** done. The private Blob store `highwire-link` (iad1), connected to Production and
-   Preview as `BLOB_READ_WRITE_TOKEN`, holds the game (`link/game.gbc`) and phase 0's paired battle
-   (`link/phase0/side0.state`, `side1.state`, Clawseum's slot 6).
-5. **The two hand-played saves** (7.4): made once, on your machine, or from Clawseum's if they load.
+   Preview as `BLOB_READ_WRITE_TOKEN`, holds the game (`link/game.gbc`), phase 0's paired battle
+   (`link/phase0/side0.state`, `side1.state`, Clawseum's slot 6) and the format's bootstrap
+   (`link/colosseum-1/side0.state`, `side1.state`, 14.5).
+5. **The two hand-played saves** (7.4): not needed. Clawseum's paired states include one of both games in the Cable
+   Club between battles; the bootstrap writes the format's team into both parties there and lets the game start the
+   battle (14.5).
 
 ## 16. Open questions
 

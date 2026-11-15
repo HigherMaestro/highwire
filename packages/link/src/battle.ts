@@ -6,6 +6,7 @@ import {
   CODE,
   dealDice,
   disagreements,
+  PARTY_MON,
   party,
   snapshot,
   STATUS,
@@ -69,6 +70,8 @@ export interface SideChange {
   status: [number, number];
   /** Stat stages after minus before, by attack, defense, speed, special, accuracy, evasion. */
   stages: number[];
+  /** The field before the turn (what the side was locked into, for the story of a turn it didn't choose). */
+  was: Field;
   /** Field effects that came on, and that went off. */
   fieldOn: (keyof Field)[];
   fieldOff: (keyof Field)[];
@@ -84,6 +87,7 @@ function change(before: Mon, after: Mon): SideChange {
     hp: [before.hp, after.hp],
     maxHp: after.maxHp,
     status: [before.status, after.status],
+    was: before.field,
     stages: switched ? after.stages.map(() => 0) : after.stages.map((v, i) => v - (before.stages[i] ?? v)),
     fieldOn: keys.filter((k) => after.field[k] && !before.field[k]),
     fieldOff: keys.filter((k) => !after.field[k] && before.field[k]),
@@ -130,6 +134,11 @@ const SIDES: readonly Side[] = [0, 1];
 export const TURN_BUDGET = 6000;
 /** Frames one menu step (a button and the game's answer) may take. */
 const STEP_BUDGET = 600;
+/**
+ * Frames both games may take to reach their end of battle once one has. One game can lag the other by a whole faint
+ * sequence (a last Pokémon's Explosion: its own faint is silent, the other game plays both), measured at over 650.
+ */
+const FINISH_BUDGET = 3600;
 
 /** The main battle menu's two columns, by the cursor's X (wTopMenuItemX). */
 const LEFT_COLUMN = 9;
@@ -143,6 +152,8 @@ export class Battle {
   private readonly startCounts: [number, number];
 
   private readonly resumed: [Phase, Phase] | null;
+  /** Each game's main-loop stamp at the last decision point: a later one means a new turn has begun. */
+  private mark: [number, number];
 
   /**
    * Watches the game's code on `rig`, whose two games are in a link battle. A battle resumed from states saved at a
@@ -155,12 +166,20 @@ export class Battle {
   ) {
     this.resumed = resume?.phases ?? null;
     this.turnNumber = resume?.turn ?? 0;
+    rig.clearWatches();
     const ids = {} as Record<keyof typeof CODE, number>;
     for (const [name, [bank, addr]] of Object.entries(CODE) as [keyof typeof CODE, readonly [number, number]][]) {
       ids[name] = rig.watch(addr, bank, STOPS.has(name));
     }
     this.ids = ids;
     this.startCounts = [this.count(0), this.count(1)];
+    // Resumed at a turn nobody chooses (both games locked in, waiting on the cable), it's a decision point at once.
+    const lockedIn = this.resumed?.[0] === "waiting" && this.resumed?.[1] === "waiting";
+    this.mark = lockedIn ? [-1, -1] : [0, 0];
+  }
+
+  private mainLoop(side: Side): number {
+    return this.rig.stamps(side)[this.ids.mainLoop]!;
   }
 
   get turn(): number {
@@ -185,10 +204,16 @@ export class Battle {
     throw new BattleError("stuck", `No decision point within ${budget} frames (phases ${this.phases.join(", ")}).`);
   }
 
-  /** Whether both games are at a decision point now. */
+  /**
+   * Whether both games are at a decision point now: each at a menu or waiting on the cable, and at least one at a menu;
+   * or a turn nobody chooses, where both games began a new turn and went straight to the cable (both locked in: Rage,
+   * charging, recharging, a continuing Thrash), which is its own turn, not part of the one before.
+   */
   atDecision(): boolean {
     const ready = (p: Phase) => p === "menu" || p === "forced" || p === "waiting";
-    return ready(this.phases[0]) && ready(this.phases[1]) && (this.asked(0) || this.asked(1));
+    if (!ready(this.phases[0]) || !ready(this.phases[1])) return false;
+    if (this.asked(0) || this.asked(1)) return true;
+    return SIDES.every((side) => this.phases[side] === "waiting" && this.mainLoop(side) > this.mark[side]);
   }
 
   /** Whether `side` has a choice to make at this decision point. */
@@ -244,8 +269,11 @@ export class Battle {
     }
     const before = [snapshot(this.rig, 0), snapshot(this.rig, 1)] as [Snapshot, Snapshot];
     const f0 = this.rig.frameCount;
+    // This turn has begun in both games: the next one is the next main-loop pass.
+    this.mark = [this.mainLoop(0), this.mainLoop(1)];
     dealDice(this.rig, dice);
-    for (const side of SIDES) if (decisions[side]?.kind === "fight") this.alignFrozenMove(side);
+    this.alignTurnStart();
+    for (const side of SIDES) if (decisions[side]?.kind === "fight") this.alignStaleMove(side);
     this.events = [[], []];
     for (const side of SIDES) {
       const action = decisions[side];
@@ -277,16 +305,42 @@ export class Battle {
   }
 
   /**
-   * The game's own thaw desync (docs/link-battles.md 14.2): a frozen Pokémon selects no move, but a Fire move can thaw it
-   * mid-turn, and then it attacks. Its own game uses whatever move was selected last (perhaps another Pokémon's), while
-   * the other game looks up the move slot sent over the cable. Setting the selected move to that slot's makes both games
-   * use the same one.
+   * Two more of the game's own link desyncs, corrected at every decision point (docs/link-battles.md 14.5):
+   * - A flinch is cleared at the start of each turn, except in the game of a side that's raging or recharging, which
+   *   skips the reset: a side flinched at the end of one turn then loses its next in one game and acts in the other.
+   *   A flinch only ever counts within the turn it's inflicted, so here every flinch flag is clear in both games.
+   * - A game never lowers its copy of the other side's PP, and Disable checks the target's PP: once a move is out of
+   *   PP, the two games disable different moves. Here each game's copy of the other side's PP (the Pokémon out and the
+   *   party records) is set to that side's own, true PP.
    */
-  private alignFrozenMove(side: Side): void {
-    if ((this.rig.read(side, ADDR.battleMonStatus) & STATUS.FREEZE) === 0) return;
-    const slot = this.rig.read(side, ADDR.playerMoveListIndex);
-    const move = slot < 4 ? this.rig.read(side, ADDR.battleMonMoves + slot) : 0;
-    if (move !== 0) this.rig.write(side, ADDR.playerSelectedMove, move);
+  private alignTurnStart(): void {
+    const FLINCHED = 1 << 3;
+    for (const side of SIDES) {
+      const other = (1 - side) as Side;
+      for (const addr of [ADDR.playerBattleStatus1, ADDR.enemyBattleStatus1]) this.rig.write(side, addr, this.rig.read(side, addr) & ~FLINCHED);
+      this.rig.readBytes(other, ADDR.battleMonPP, 4).forEach((pp, i) => this.rig.write(side, ADDR.enemyMonPP + i, pp));
+      const count = Math.min(this.rig.read(other, ADDR.partyCount), 6);
+      for (let k = 0; k < count; k++) {
+        const at = (base: number) => base + k * PARTY_MON.length + PARTY_MON.pp;
+        this.rig.readBytes(other, at(ADDR.partyMons), 4).forEach((pp, i) => this.rig.write(side, at(ADDR.enemyMons) + i, pp));
+      }
+    }
+  }
+
+  /**
+   * The game's own stale-move desyncs (docs/link-battles.md 14.2, 14.5): when FIGHT skips the move list (asleep, frozen),
+   * a game keeps whatever move was selected last, perhaps another Pokémon's, while the other game looks up the move slot
+   * sent over the cable. They then disagree on what was used if a Fire move thaws it mid-turn, and on who moves first if
+   * the stale move is Quick Attack. Setting the selected move to that slot's makes both games agree. When the game picks
+   * the move itself after FIGHT (Struggle, a trapped Pokémon that can't move), it overwrites this in both games alike.
+   */
+  private alignStaleMove(side: Side): void {
+    const moves = this.rig.readBytes(side, ADDR.battleMonMoves, 4);
+    let slot = this.rig.read(side, ADDR.playerMoveListIndex);
+    // The slot left over from the last move list may be past this Pokémon's moves: then its first move, in both games.
+    if (slot >= 4 || moves[slot] === 0) slot = Math.max(0, moves.findIndex((m) => m !== 0));
+    this.rig.write(side, ADDR.playerMoveListIndex, slot);
+    this.rig.write(side, ADDR.playerSelectedMove, moves[slot]!);
   }
 
   // ---- The buttons (docs/link-battles.md 7.3) ----
@@ -296,6 +350,7 @@ export class Battle {
       if (action.kind !== "switch") throw new BattleError("illegal", "After a faint, the only action is a switch.");
       this.cursorTo(side, "forced", action.to);
       this.tap(side, "A", ["waiting"]);
+      this.landed(side, action);
       return;
     }
     if (action.kind === "switch") {
@@ -305,6 +360,7 @@ export class Battle {
       this.tap(side, "A", ["switch-menu"]);
       this.cursorTo(side, "switch-menu", 0);
       this.tap(side, "A", ["waiting"]);
+      this.landed(side, action);
       return;
     }
     this.mainMenu(side, LEFT_COLUMN);
@@ -317,6 +373,19 @@ export class Battle {
     // The move list's items count from 1 (its row 0 is the box's border).
     this.cursorTo(side, "moves", action.slot + 1);
     this.tap(side, "A", ["waiting"]);
+    this.landed(side, action);
+  }
+
+  /** Checks the game took the decision (7.3): the move it selected, or the Pokémon it's sending out. */
+  private landed(side: Side, action: Action): void {
+    const r = (addr: number) => this.rig.read(side, addr);
+    const ok =
+      action.kind === "move"
+        ? r(ADDR.playerSelectedMove) === r(ADDR.battleMonMoves + action.slot)
+        : action.kind === "switch"
+          ? r(ADDR.whichPokemon) === action.to
+          : true;
+    if (!ok) throw new BattleError("stuck", `Side ${side}'s game didn't take ${JSON.stringify(action)}.`);
   }
 
   /** Puts the main menu's cursor on FIGHT (left column) or PKMN (right column), top row, and checks it isn't on RUN. */
@@ -444,7 +513,7 @@ export class Battle {
 
   /** Runs until both games have reached their end of battle, and checks they agree on it. */
   private finish(): Outcome {
-    for (let i = 0; i < STEP_BUDGET && SIDES.some((side) => this.result(side) === null); i++) this.frame();
+    for (let i = 0; i < FINISH_BUDGET && SIDES.some((side) => this.result(side) === null); i++) this.frame();
     const [a, b] = [this.result(0), this.result(1)];
     if (a === "ran" || b === "ran") throw new BattleError("ran", "A game ran from the battle.");
     if (a === "lost" && b === "lost") return { winner: null, reason: "draw" };

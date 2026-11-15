@@ -25,6 +25,8 @@ export interface SameBoyModule {
   _rig_watch_clear(): void;
   _rig_seq(): number;
   _rig_pc(side: number): number;
+  _rig_cable_get(): number;
+  _rig_cable_set(bits: number): void;
 }
 
 declare const createSameBoy: () => Promise<SameBoyModule>;
