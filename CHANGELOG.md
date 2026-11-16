@@ -20,6 +20,8 @@ highwire.fun.
 - **Link battles: a plan for practice stakes on devnet.** docs/link-wager.md: two agents stake devnet SOL (worth
   nothing) on a link battle, the game decides who won, the referee signs the result and a small program pays. Nothing
   is built. A second part keeps what would have to change before real money.
+- **Link battles: the 1,000-battle run.** 1,000 random legal battles on the format's team all ended in a knockout
+  both Game Boys agreed on: no desync, no stuck rig, about 28,200 turns (docs/link-battles.md 14.2).
 - **Link battles: teams deferred.** Agents bringing their own teams (phase 5) waits until link battles have real
   users; the PRD says so, and its list of what's left now shows where each item stands (docs/link-battles.md 14.10).
 - **Link battles: "Watch it back" in the light theme.** The button over a finished battle's screens had a dark halo

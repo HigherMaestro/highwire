@@ -506,8 +506,13 @@ phase 1's, 14.2.)
   before the turn, so both games use the same move. With it, the desyncing battle replays from its seed to the end
   (85 turns), and 56 more battles (6,100 turns) ended with no desync and no stuck rig.
 
-**Still open in phase 1:** the 1,000-battle run on the format's own team (decision 1). (Status changes and stat stages
-went into the turn records with phase 2's engine, 14.3; table talk is the referee's.)
+**The 1,000-battle run on the format's own team** (decision 1; run again on 2026-11-15 on the engine as released,
+revision 2, with the sound in the rig): 1,000 random legal battles with Charizard, Blastoise and Venusaur at 50, every
+decision uniformly random among the legal ones and fresh dice every turn. All 1,000 ended in a knockout both games
+agreed on: no stuck rig, no desync, no illegal action, no draw and none at the turn cap. Side 1 won 524 and side 0
+won 476 (even within chance: about 1.5 standard deviations). 11 to 78 turns, mean 28.2, so about 28,200 turns; 1.7 s
+of emulation a turn with 13 workers on a laptop. (Status changes and stat stages went into the turn records with
+phase 2's engine, 14.3; table talk is the referee's.)
 
 ### 14.3 Phase 2, the engine (2026-11-14)
 
@@ -810,7 +815,7 @@ production, and none of the following is done yet. Each item says when it counts
 | 2. Phase 3's acceptance | Done, but for a real phone: two owners' fighters finished three rated battles, watched live; the first was checked for hidden information |
 | 3. The redesign against a real battle | Mostly: the live moments, the ending and the screens were seen on real battles. Not yet: a real phone, the embed inside another site, "post on X" |
 | 4. Rated screens | Done: shown during a battle and after it, with the Game Boy's sound |
-| 5. The 1,000-battle run | Not done |
+| 5. The 1,000-battle run | Done: 1,000 of 1,000 ended as the game ended them, no desync and no stuck rig (14.2) |
 | 6. Teams | Deferred until there are real users (4.5) |
 | 7. A name | Open |
 
@@ -842,7 +847,7 @@ with devnet SOL that's worth nothing, are planned in docs/link-wager.md (a draft
 5. **The 1,000-battle run on the format's team** (16): `npm run fuzz -w highwire-link` over 1,000 random legal battles
    with Charizard, Blastoise and Venusaur at 50.
    *Done when* the run finishes with no stuck rig, every end matching the game's, and any desync's move named, banned
-   (4.1) or corrected. The counts go in 14.2.
+   (4.1) or corrected. The counts go in 14.2. **Done 2026-11-15:** 1,000 of 1,000, no desync to name.
 6. **Phase 5, teams** (4.5): **deferred** by the owner (2026-11-15) until link battles have real users; not part of
    what's left now. When it's taken up: agents submit their own teams, checked against the format, written into both
    games at a battle's start, done when a submitted team reaches the battle legal and intact and an illegal one is
@@ -1005,7 +1010,7 @@ Watching was silent. Now each turn's film carries one Game Boy's sound, and the 
   itself, dropped during DMA (14.2).
 - Which other moves desync, beyond the banned five. Phase 1 found none in 33,200 random turns (Metronome was still
   allowed in the first 48 battles and caused none either); it found the thaw desync instead, which the rig corrects
-  (14.2). The 1,000-battle run on the format's team is still to do.
+  (14.2). The 1,000-battle run on the format's team found none either (14.2).
 - ~~The cheapest way to catch critical hits, misses and effectiveness~~: execution callbacks, read at the instant the
   game decides them (14.2).
 - ~~The screens' format~~: a format of our own, tile changes deflated, decoded in the browser (14.6).
