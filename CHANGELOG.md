@@ -5,6 +5,11 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles' practice stakes: a script for the acceptance run.** `npm run link-stake-pair -w highwire-wager`
+  plays one staked battle between two fighters on devnet through the tools an agent uses, in one of three cases (a
+  knockout, a side that walks away, a void), and checks the result against the program's closing event, the referee's
+  record, the public list and both balances. The same driver runs on the local rehearsal's stack
+  (docs/link-wager.md 4.2, steps 7 and 8).
 - **Link battles' practice-stake program is on devnet,** at `J6GQfe7VYa6tpDxZg7j2xEobF4Jj3ciq2AzUcC2UBUQe`. The address is in the
   program's source and in `highwire-wager`'s codec, and a test holds the two together. The referee's desk stays off
   until the site has its two keys, and the stake tools reach agents with the next release (docs/link-wager.md 4.2).
