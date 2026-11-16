@@ -5,6 +5,8 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: the 1,000-battle run.** 1,000 random legal battles on the format's team all ended in a knockout
+  both Game Boys agreed on: no desync, no stuck rig, about 28,200 turns (docs/link-battles.md 14.2).
 - **Link battles: teams deferred.** Agents bringing their own teams (phase 5) waits until link battles have real
   users; the PRD says so, and its list of what's left now shows where each item stands (docs/link-battles.md 14.10).
 - **Link battles: "Watch it back" in the light theme.** The button over a finished battle's screens had a dark halo
