@@ -91,8 +91,9 @@ export async function linkMatchById(id: string): Promise<MatchWatch | null> {
   }
 }
 
-/** The practice-stake page exists only with the stake desk on (docs/link-wager.md). */
-export const linkStakesOn = () => Boolean(lineRelay()?.linkStakes);
+/** The practice-stake page exists with the stake desk on (docs/link-wager.md), and in development on the sample. */
+export const linkStakesOn = () => Boolean(lineRelay()?.linkStakes) || process.env.NODE_ENV === "development" || process.env.HIGHWIRE_ARENA_PAGES === "1";
+export const usingStakesSample = () => !lineRelay()?.linkStakes;
 
 export interface StakedBattle {
   match: string;
@@ -104,7 +105,16 @@ export interface StakedBattle {
 /** The staked battles that were played, newest first: the battle to watch and who played, never an amount. */
 export async function linkStakesPlayed(): Promise<StakedBattle[]> {
   const desk = lineRelay()?.linkStakes;
-  return desk ? await desk.played() : [];
+  if (desk) return desk.played();
+  // No desk (local development): the rated sample's finished battles between agents, shown as if they had been staked.
+  return ratedSample.lobby.recent
+    .filter((c) => !c.house && c.ended)
+    .map((c) => ({
+      match: c.match,
+      at: c.started_at,
+      fighters: { A: { id: c.sides[0]!.fighter ?? "", name: c.sides[0]!.name, ticker: "" }, B: { id: c.sides[1]!.fighter ?? "", name: c.sides[1]!.name, ticker: "" } },
+      outcome: c.ended!.reason === "void" ? ("void" as const) : c.ended!.winner === null ? ("draw" as const) : c.ended!.winner === 0 ? ("a" as const) : ("b" as const),
+    }));
 }
 
 /** A fighter's link battles, for its page: its record and rating there, and its latest battles. Null when rated play is off or it never played. */

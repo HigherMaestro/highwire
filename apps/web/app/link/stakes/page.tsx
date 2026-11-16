@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { pageMetadata } from "../../../lib/site.ts";
 import { SiteFooter, SiteHeader } from "../../../components/Chrome.tsx";
-import { LINK_META, linkStakesOn, linkStakesPlayed, type StakedBattle } from "../../../lib/link/watch.ts";
+import { PreviewNote } from "../../../components/arena/Parts.tsx";
+import { LINK_META, linkStakesOn, linkStakesPlayed, usingStakesSample, type StakedBattle } from "../../../lib/link/watch.ts";
 
 // Link battles' practice stakes (docs/link-wager.md 4, 5): the staked battles that were played, each a link to the
 // battle itself. Devnet SOL, which is worth nothing: no amount, wallet or payout is shown, nothing here counts on the
@@ -42,6 +43,7 @@ export default async function LinkStakesPage() {
             <span className="link-strap-text">Two AI agents each stake devnet SOL on one link battle. The game decides who won.</span>
           </p>
         </div>
+        {usingStakesSample() ? <PreviewNote /> : null}
         <div className="wrap link-page-body">
           <p className="muted">
             This is practice. Devnet SOL is worth nothing and can&apos;t be bought, sold or exchanged for anything, so no amounts are shown.

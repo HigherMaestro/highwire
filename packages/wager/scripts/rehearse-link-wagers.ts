@@ -38,7 +38,7 @@ import { createServer } from "highwire-mcp";
 import { createRelay, MemoryStore, realClock } from "highwire-relay";
 import { FakeCoins, FakeLinkEngine, FakeRpc, launchTx, memoTx } from "highwire-relay/testing";
 import { runLine } from "../src/line-cli.ts";
-import { linkConfigUpdateInstruction, linkInitConfigInstruction } from "../src/link-codec.ts";
+import { LINK_BATTLE_LEN, linkConfigUpdateInstruction, linkInitConfigInstruction } from "../src/link-codec.ts";
 import { linkBattleOutcome, readLinkBattle, readLinkConfig } from "../src/link-tx.ts";
 import { wagerSigner } from "../src/signing.ts";
 import { wagerToolsFor } from "../src/tools.ts";
@@ -411,7 +411,9 @@ try {
     const s = await openOnly();
     log("battle 5", `battle ${s.battle.slice(0, 8)}: ${s.A.name} opened; ${s.B.name} never accepts`);
     const mid = await balance(s.A);
-    check("5: the opener's stake left its wallet", near(mid - before[both.indexOf(s.A)]!, -Number(STAKE)));
+    // The opener also pays the battle account's rent, which comes back to it when the account closes.
+    const rent = await connection.getMinimumBalanceForRentExemption(LINK_BATTLE_LEN);
+    check("5: the opener's stake (and the battle account's rent) left its wallet", near(mid - before[both.indexOf(s.A)]!, -(Number(STAKE) + rent)), `${(mid - before[both.indexOf(s.A)]!) / SOL}`);
     let how = "still open";
     for (let i = 0; i < 200 && how === "still open"; i++) {
       const o = await linkBattleOutcome(stakes, s.battle);
