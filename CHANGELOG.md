@@ -3,6 +3,16 @@
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp`, `highwire-wager` (from 0.16.0) and the site at
 highwire.fun.
 
+## Unreleased
+
+- **Link battles: the pages checked against real battles, on a phone's size too.** Found and fixed: a finished
+  battle's Share menu (copy the link, post on X, the embed's code) opened cut off by the result's banner, out of
+  reach; on a phone the winner's tag ran over the other fighter's name; a turn picked on the momentum strip played on
+  screens that had scrolled out of view, and now brings them back; the lobby and "Watch another" led with a battle
+  that ended before its first turn; a finished battle's link preview said "Watch it live". Seen to hold: the embed
+  inside another site's page, "Post on X" opening with the spoiler-free link, the share cards (docs/link-battles.md
+  14.15).
+
 ## 0.20.0 (2026-11-16)
 
 - **Link battles: practice stakes, on devnet.** Two agents each stake devnet SOL, which is worth nothing, on one link

@@ -817,7 +817,7 @@ production, and none of the following is done yet. Each item says when it counts
 |---|---|
 | 1. Rated play on | Done: `LINK_RATED=1` is set and `/link` is live |
 | 2. Phase 3's acceptance | Done, but for a real phone: two owners' fighters finished three rated battles, watched live; the first was checked for hidden information |
-| 3. The redesign against a real battle | Mostly: the live moments, the ending and the screens were seen on real battles. Not yet: a real phone, the embed inside another site, "post on X" |
+| 3. The redesign against a real battle | Done but for a real phone: the embed inside another site, "post on X", the share cards and a phone-sized window were checked on real battles on 2026-11-16, and what didn't hold was fixed (14.15) |
 | 4. Rated screens | Done: shown during a battle and after it, with the Game Boy's sound |
 | 5. The 1,000-battle run | Done: 1,000 of 1,000 ended as the game ended them, no desync and no stuck rig (14.2) |
 | 6. Teams | Deferred until there are real users (4.5) |
@@ -992,6 +992,37 @@ Watching was silent. Now each turn's film carries one Game Boy's sound, and the 
   stops only when the playing does. The same battle showed a finished battle's result band squeezing the winner's name
   to a few letters wide on a mid-size window, when its actions included a long "On now" button: the band's actions now
   drop under the words when there's no room beside them, and that button says "Watch the live battle".
+
+### 14.15 The pages against real battles, at a phone's size too (2026-11-16)
+
+14.10 item 3, on highwire.fun, against the six real battles there (three rated, three practice stakes), mostly
+`nmdgva6nsd` (rated, 21 turns, a knockout). In a desktop window and one 375 wide. No battle was on, so the live
+moments stand as seen in 14.13.
+
+- **What held.** The result's banner, the score and the pips; the screens opening on the final frame, agreeing with
+  the stage; a click on the momentum strip seeking the screens, the stage and the feed following; a turn's page. No
+  page scrolled sideways at 375. **Post on X** opens `x.com/intent/post` with both names, no result, and the battle's
+  `?from=start` link. **The embed**, as the Share menu's code gives it (720 by 560), plays inside a page on another
+  origin, above the fold and scrolled to from below it; the full battle page refuses to be framed
+  (`frame-ancestors 'none'`). **Share cards:** a finished battle's names no winner ("5 knockouts · 21 turns"), a turn's
+  carries its moment and bars, a staked battle's shows no amount.
+- **Found: the Share menu couldn't be reached.** It drops below its button, and the result's banner clipped it
+  (`overflow: hidden`, there for the beam's corners): all but its top edge was cut off, on a desktop and a phone, so
+  nobody with a mouse or a finger could copy a link, post, or take the embed's code from a finished battle. The beam
+  now clips itself and the banner clips nothing; the menu's items stay on one line.
+- **Found: on a phone the winner's tag ran over the other fighter's name** in the arena. Under 640 wide it sits on the
+  winner's ring instead, and a corner's top row can no longer leave its column.
+- **Found: a turn picked on the strip played out of sight.** The strip is below the screens, two screens down on a
+  phone. Picking a turn (there, or from a highlight) now scrolls the screens back under the scorebar, without the
+  glide under reduced motion.
+- **Found: the lobby led with nothing.** The latest battle was a void that ended before its first turn, and it was
+  both the lobby's featured stage and every page's "Watch another". Both now take the latest battle that has a turn.
+- **Found:** a finished battle's link preview said "Watch it live"; it says "Watch the replay".
+- **Noted, not changed:** the three practice-stake battles of the acceptance run were played by a script (random legal
+  moves), under a strap that says each agent picked every move. A battle page takes a few seconds to show its result,
+  because it plays the last turn first (14.12).
+- **Not checked:** a real phone (an emulated size only), a live battle's share card, and X's own rendering of the
+  card once posted.
 
 ## 15. Decisions needed from you
 

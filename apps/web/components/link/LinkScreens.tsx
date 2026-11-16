@@ -307,6 +307,15 @@ export function LinkScreens({ match, turns, live, left, names, onShow, startTurn
     following.current = false;
     setTurn(Math.max(0, Math.min(latest.current, seek)));
     setPlaying(true);
+    // The strip is below the screens, a screen or two down on a phone: bring them back into view to be watched. A moment
+    // later, once the stage has taken the result's banner away above them, or the scroll would aim at where they were.
+    const id = setTimeout(() => {
+      const el = pair.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    }, 120);
+    return () => clearTimeout(id);
   }, [seek]);
 
   const go = (t: number) => {
