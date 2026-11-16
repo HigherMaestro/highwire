@@ -256,7 +256,9 @@ keypair sits beside the `.so` (a fresh one `cargo build-sbf` makes), not the add
 npm run link-wager-admin -w highwire-wager -- status
 ```
 
-It says "deployed; upgrade authority 7bK1LThaA8xMKpmJt3wosCRcYvVA2R8V2PzoiAdqfu4B" and "no config yet". A deploy
+It says "deployed; upgrade authority 7bK1LThaA8xMKpmJt3wosCRcYvVA2R8V2PzoiAdqfu4B" and "no config yet". (**Done
+2026-11-15:** the build is 165,376 bytes, sha256 `b999a0764e4dda1063a7e6c4ced11f68dd0d70431589c5837f2bd529bda6c446`,
+and `solana program dump` returns exactly those bytes.) A deploy
 that fails leaves a buffer holding the build's rent (and prints the seed phrase of that buffer's throwaway key,
 nothing else); once a deploy has succeeded, take it back:
 
