@@ -375,6 +375,18 @@ export class LinkStakeDesk {
     return { results };
   }
 
+  /**
+   * A finished battle's signed result, for anyone: a result is no secret (its signature is on-chain the moment it's
+   * used), and the program lets anyone send it, so a winner whose own agent and daemon are both down can still be
+   * paid by anybody before the refund's time comes. Read from the desk's books only: it asks the chain nothing. Null
+   * while the battle has no result, and once the stake is off the books.
+   */
+  async publicResult(battleId: string): Promise<{ result: LinkResultRecord; signature: string } | null> {
+    if (!/^[0-9a-f]{64}$/.test(battleId)) return null;
+    const s = (await this.store.get<LinkStake>(LINK_STAKE(battleId)))?.value;
+    return s && s.status === "over" ? this.signed(s) : null;
+  }
+
   private configRead: { at: number; value: Promise<LinkStakeProgramConfig | null> } | null = null;
   private mismatchSaid: string | null = null;
 

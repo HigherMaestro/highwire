@@ -615,11 +615,13 @@ async fn every_closing_announces_how_the_battle_ended() {
             AccountMeta::new(incinerator::ID, false),
         ],
     );
+    env.past(&t).await;
     let logs = env.logs(vec![cancel], &[&a]).await;
     assert!(logs.contains(&event(2, &t.battle_id, 255)), "{logs:#?}");
     // A refund.
     let t = env.live(36).await;
-    env.set_time(T0 + REFUND_AFTER as i64).await;
+    let at = env.battle(&t.battle_id).await.unwrap().refund_at;
+    env.set_time(at).await;
     let logs = env.logs(vec![ix(LinkWagerInstruction::Refund, env.payout_accounts(&t))], &[]).await;
     assert!(logs.contains(&event(3, &t.battle_id, 255)), "{logs:#?}");
 }

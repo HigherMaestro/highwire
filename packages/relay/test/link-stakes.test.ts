@@ -166,6 +166,10 @@ test("the battle starts once both stakes are in, once, and its result is signed 
   for (const f of board.fighters) assert.deepEqual([f.rating, f.record.rated, f.record.unrated], [1500, { win: 0, draw: 0, loss: 0 }, { win: 0, draw: 0, loss: 0 }]);
   assert.ok(won.body.you.rating > 1500 && lost.body.you.rating < 1500);
   assert.deepEqual([won.body.you.record.win, lost.body.you.record.loss], [1, 1]);
+  // Anyone may settle a finished battle, so anyone may have its signed result: the same one, with nothing else in it.
+  const open = await s.r.call("GET", `/api/link/stake/result/${p.id}`);
+  assert.deepEqual([open.status, open.body], [200, { result: res, signature: won.body.result.signature }]);
+  assert.equal((await s.r.call("GET", `/api/link/stake/result/${"ab".repeat(32)}`)).status, 404);
   // The result stays to be settled with, whatever the fighter does next, until the chain closes the battle.
   const owed = await s.r.call("GET", "/api/link/stake/results", undefined, loser);
   assert.deepEqual([owed.body.results.length, owed.body.results[0].battle, owed.body.results[0].you, owed.body.results[0].signature], [1, p.id, "lost", won.body.result.signature]);
@@ -184,6 +188,7 @@ test("the battle starts once both stakes are in, once, and its result is signed 
   s.chain.states.set(p.id, { state: "closed", how: "settled" });
   await s.r.advance(60_000);
   assert.deepEqual((await s.r.call("GET", "/api/link/stake/results", undefined, winner)).body.results, [], "settled: nothing left to send");
+  assert.equal((await s.r.call("GET", `/api/link/stake/result/${p.id}`)).status, 404, "closed: nothing left to settle");
   const closed = await s.state(winner);
   assert.deepEqual([closed.body.status, closed.body.closed], ["done", "settled"]);
   const next = await s.join(winner, { wait: false });

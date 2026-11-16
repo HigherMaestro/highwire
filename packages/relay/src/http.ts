@@ -41,6 +41,7 @@ import type { Store } from "./store.ts";
 //   POST /api/link/stake/join      { stake: "<lamports a side>", fallback, wait? }  (arena token) waits up to 40s to be paired
 //   GET  /api/link/stake/state     (arena token) the fighter's stake: its ticket, the battle to play, the signed result
 //   GET  /api/link/stake/results   (arena token) its battles that are over and not yet settled, each with the signed result
+//   GET  /api/link/stake/result/<battle id>   a finished battle's signed result, for anyone to settle with, cached 10 seconds
 //   POST /api/link/stake/leave     (arena token) leaves the queue
 //   GET  /api/link/stakes          the staked battles played, for the practice page (no amounts), cached 10 seconds
 //   GET  /api/link/match/<id>      a battle's spectators' view, cached 2 seconds
@@ -188,6 +189,12 @@ export function createRelay(o: RelayOptions): Relay {
         if (m === "POST" && path === "/api/link/stake/join") return json(await linkStakes.join(await fighter(req), await body(req)));
         if (m === "GET" && path === "/api/link/stake/state") return json(await linkStakes.state(await fighter(req)));
         if (m === "GET" && path === "/api/link/stake/results") return json(await linkStakes.results(await fighter(req)));
+        const signed = /^\/api\/link\/stake\/result\/([0-9a-f]{64})$/.exec(path);
+        if (m === "GET" && signed) {
+          const r = await linkStakes.publicResult(signed[1]!);
+          if (!r) throw new RelayError("not_found", "That battle has no result to settle with (it isn't over, or it's already closed).");
+          return json(r, 200, "public, s-maxage=10");
+        }
         if (m === "POST" && path === "/api/link/stake/leave") return json(await linkStakes.leave(await fighter(req)));
         throw new RelayError("not_found", "No such route.");
       }

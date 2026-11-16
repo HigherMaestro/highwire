@@ -4,15 +4,16 @@
 // replaced: a fake engine where each side has three hits in it, so the rehearsal needs no ROM. It plays:
 //
 //   0. the config set up by the authority, with this rehearsal's two keys;
-//   1. a battle to a knockout, settled by the winner's link_settle: the winner is paid both stakes;
+//   1. a battle to a knockout, settled by the winner's link_settle: the winner is paid both stakes, and not before the
+//      battle's ticket has run out (the program closes no battle while its ticket could still open it again);
 //   2. a battle both lose at once (a draw), settled by link_settle: both are refunded;
 //   3. a battle voided on purpose (the engine refuses every turn), settled as a void: both are refunded;
 //   4. the config paused: nothing new is paired;
-//   5. a stake nobody accepts, cancelled by a daemon after the deadline (skipped with --quick: two minutes);
+//   5. a stake nobody accepts, cancelled by a daemon once its ticket has run out (skipped with --quick: a minute);
 //   6. a battle one agent walks away from mid-battle: it forfeits, and a daemon settles with no tool call.
 //
 // After each it checks the program's own closing event, both wallets' balances, the desk's record, and that the free
-// ladder never moved. The refund after the program's deadline isn't rehearsed here (30 minutes at the least;
+// ladder never moved. The refund after the program's deadline isn't rehearsed here (an hour at the least;
 // programs/link-wager/tests covers it with a moved clock).
 //
 // It never touches a public cluster: `solana-test-validator` runs locally on a throwaway ledger, its wallets come from
@@ -76,7 +77,8 @@ if (stale.length) {
   console.error(`rehearse-link-wagers: ${SO} is older than ${stale.map((f) => f.slice(ROOT.length)).join(", ")}; rebuild it: (cd programs/link-wager && cargo build-sbf)`);
   process.exit(2);
 }
-// The address the program's source declares: the program checks its own accounts against it.
+// The address the program's source declares. The program itself goes by the address it runs at (its accounts, and the
+// tickets and results it checks, all name that one), so the rehearsal loads it at the declared address, as a deploy does.
 const declared = /declare_id!\("([1-9A-HJ-NP-Za-km-z]{32,44})"\)/.exec(readFileSync(join(PROGRAM_DIR, "src/lib.rs"), "utf8"))?.[1];
 if (!declared) {
   console.error("rehearse-link-wagers: couldn't read the program's address from programs/link-wager/src/lib.rs");
@@ -139,7 +141,7 @@ await admin(
     tiers: [STAKE],
     maxStake: STAKE,
     openStakeCap: BigInt(5 * SOL),
-    refundAfterSeconds: 1800,
+    refundAfterSeconds: 3600,
   }),
 );
 const config0 = await readLinkConfig(stakes);
@@ -314,6 +316,18 @@ async function play(choose: (p: Agent, side: 0 | 1) => typeof HIT | null, limit 
   throw new Error("the battle never ended");
 }
 
+/** Calls link_settle until it has something to do for the battle (nothing closes before its ticket runs out). */
+async function settleWhenDue(p: Agent): Promise<any> {
+  let out: any = null;
+  for (let i = 0; i < 90; i++) {
+    out = await p.call("link_settle", { confirm: true });
+    if (out.error) throw new Error(`${p.name} couldn't settle: ${JSON.stringify(out.error)}`);
+    if (!out.settled?.length || out.settled[0].did !== "nothing yet") return out;
+    await sleep(1_000);
+  }
+  return out;
+}
+
 const closed = async (battle: string) => {
   for (let i = 0; i < 40; i++) {
     const o = await linkBattleOutcome(stakes, battle);
@@ -347,7 +361,10 @@ try {
     });
     const w = winner as unknown as Agent;
     const l = both.find((p) => p !== w)!;
-    const paid = await w.call("link_settle", { confirm: true });
+    // The battle took seconds; its ticket runs for 25. Nothing may close it yet, and link_settle says so.
+    const early = await w.call("link_settle", { confirm: true });
+    check("1: nothing is paid while the battle's ticket still runs", early.settled?.[0]?.did === "nothing yet" && /ticket has run out/.test(String(early.settled[0].why)), JSON.stringify(early.settled?.[0] ?? early).slice(0, 200));
+    const paid = await settleWhenDue(w);
     check("1: the winner's link_settle sent the referee's result", paid.settled?.[0]?.did === "settle" && paid.settled[0].sent?.confirmed === true, JSON.stringify(paid.settled?.[0] ?? paid));
     check("1: the program's closing event says settled", (await closed(s.battle)) === "settled");
     const after = await Promise.all(both.map(balance));
@@ -366,8 +383,8 @@ try {
     const s = await stakeIn();
     log("battle 2", `battle ${s.battle.slice(0, 8)}: both hit every turn`);
     await play(() => HIT);
-    const out = await s.B.call("link_settle", { confirm: true });
-    check("2: a draw settles as a refund of both", out.settled?.[0]?.did === "settle" && /draw: both refunded/.test(String(out.settled[0].result)), JSON.stringify(out.settled?.[0] ?? out));
+    const out = await settleWhenDue(s.B);
+    check("2: a draw settles as a refund of both", out.settled?.[0]?.did === "settle" && /draw: both stakes refunded/.test(String(out.settled[0].referee_result)), JSON.stringify(out.settled?.[0] ?? out));
     check("2: the program's closing event says settled", (await closed(s.battle)) === "settled");
     const after = await Promise.all(both.map(balance));
     check("2: both wallets are back where they were (less fees)", both.every((_, i) => near(after[i]! - before[i]!, 0)), both.map((p, i) => `${p.name} ${(after[i]! - before[i]!) / SOL}`).join(", "));
@@ -383,8 +400,8 @@ try {
     engine.refuse = null;
     const view = await s.A.call("link_state", { wait: false });
     check("3: the battle was voided, after fallbacks were tried in the refused decisions' place", view.ended?.reason === "void", JSON.stringify(view.ended));
-    const out = await s.A.call("link_settle", { confirm: true });
-    check("3: a void settles as a refund of both", out.settled?.[0]?.did === "settle" && /void: both refunded/.test(String(out.settled[0].result)), JSON.stringify(out.settled?.[0] ?? out));
+    const out = await settleWhenDue(s.A);
+    check("3: a void settles as a refund of both", out.settled?.[0]?.did === "settle" && /void: both stakes refunded/.test(String(out.settled[0].referee_result)), JSON.stringify(out.settled?.[0] ?? out));
     await closed(s.battle);
     const after = await Promise.all(both.map(balance));
     check("3: both wallets are back where they were (less fees)", both.every((_, i) => near(after[i]! - before[i]!, 0)));
@@ -420,7 +437,7 @@ try {
       if (o.state === "closed") how = o.how;
       else await sleep(1_000);
     }
-    check("5: a daemon cancelled it after the deadline and its margin", how === "cancelled", how);
+    check("5: a daemon cancelled it once its ticket had run out", how === "cancelled", how);
     check("5: the opener has its stake back (less fees)", near((await balance(s.A)) - before[both.indexOf(s.A)]!, 0));
   }
 

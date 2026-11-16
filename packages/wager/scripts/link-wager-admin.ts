@@ -1,14 +1,16 @@
 // Link battles' practice-stake program's maintainer tool (docs/link-wager.md 4.2). Not shipped: run from the
 // repository. Devnet only: there is no other cluster for this program, and every command checks the RPC's genesis hash.
 //
-//   keys --out-dir <dir>
+//   keys --out-dir <dir> [--show]
 //       makes the desk's two keys: 32 random bytes each, written as hex to <dir>/link-stake-ticket.key and
 //       <dir>/link-stake-result.key (mode 600, never overwritten): the values LINK_STAKE_TICKET_KEY and
 //       LINK_STAKE_RESULT_KEY take in the site's environment. Prints only the two public keys, which `init` takes.
+//       <dir> is an absolute path outside the repository (the command refuses one inside it). With --show it makes
+//       nothing and prints the public keys of the files already there.
 //   status
 //       the program (deployed? its upgrade authority) and its config.
 //   init --ticket-key <public key> --result-key <public key> [--ticket-key-id 1] [--result-key-id 1]
-//       [--tiers 0.1,0.25] [--max-stake 0.25] [--open-cap 20] [--refund-after 3600] [--send]
+//       [--tiers 0.1,0.25] [--max-stake 0.25] [--open-cap 20] [--refund-after 7200] [--send]
 //       the one-time config, signed by the program's upgrade authority (--authority), who becomes its authority.
 //   pause | unpause [--send]
 //       stops (or restarts) new staked battles. Ones already staked play on and settle as usual.
@@ -20,9 +22,10 @@
 //
 // Signing (init, pause, unpause, config, freeze): --authority <keypair file>. Without --send a command builds and
 // simulates only. It never prints a secret, and it doesn't deploy the program or fund a wallet: those are yours.
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { ed25519 } from "@noble/curves/ed25519";
 import bs58 from "bs58";
@@ -59,6 +62,7 @@ const { values, positionals } = parseArgs({
     "open-cap": { type: "string" },
     "refund-after": { type: "string" },
     battle: { type: "string" },
+    show: { type: "boolean" },
   },
 });
 const v: Values = values;
@@ -89,9 +93,25 @@ const tiers = (fallback?: string): bigint[] =>
     return Number.isFinite(n) && n > 0 ? solToLamports(n) : fail("--tiers is a list of SOL amounts, like 0.1,0.25");
   });
 
-// The program's address: the codec's for devnet, or --program before it's listed there (a first deploy).
-const programId = str("program") ?? LINK_WAGER_PROGRAM_IDS.devnet ?? fail("there's no devnet program id in the codec yet: pass --program <address>");
-const PROGRAM = new PublicKey(programId);
+/**
+ * The program's address: the codec's for devnet, or --program before it's listed there (a first deploy). Looked up
+ * only by the commands that need it (`keys` doesn't), and a --program that isn't the codec's says so: every tool and
+ * the site use the codec's.
+ */
+let resolved: PublicKey | null = null;
+function program(): PublicKey {
+  if (resolved) return resolved;
+  const listed = LINK_WAGER_PROGRAM_IDS.devnet;
+  const given = str("program");
+  const id = given ?? listed ?? fail("there's no devnet program id in the codec yet: pass --program <address>");
+  try {
+    resolved = new PublicKey(id);
+  } catch {
+    fail("--program isn't an address");
+  }
+  if (given && listed && given !== listed) console.error(`warning: --program ${given} isn't the address in the codec (${listed}), which the tools and the site use`);
+  return resolved!;
+}
 
 async function connect(): Promise<Connection> {
   const c = new Connection(str("rpc") ?? DEFAULT_RPC_URLS.devnet, "confirmed");
@@ -127,18 +147,20 @@ async function simulateThenSend(c: Connection, ixs: TransactionInstruction[], do
 
 async function status() {
   const c = await connect();
-  console.log(`program ${PROGRAM.toBase58()} on devnet`);
-  const acc = await c.getAccountInfo(PROGRAM);
-  if (!acc) {
-    console.log("not deployed");
+  console.log(`program ${program().toBase58()} on devnet`);
+  const acc = await c.getAccountInfo(program());
+  // A program is an executable account of the upgradeable loader: anything else at the address (lamports someone sent
+  // there, say) isn't one.
+  if (!acc || !acc.executable || !acc.owner.equals(LOADER)) {
+    console.log(acc ? "not deployed: there's an account at that address, and it isn't a program" : "not deployed");
     return;
   }
-  const [programData] = PublicKey.findProgramAddressSync([PROGRAM.toBuffer()], LOADER);
+  const [programData] = PublicKey.findProgramAddressSync([program().toBuffer()], LOADER);
   const pd = await c.getAccountInfo(programData);
   // ProgramData: a 4-byte tag, the deploy slot (8), then an optional upgrade authority.
   const authority = pd && pd.data[12] === 1 ? new PublicKey(pd.data.subarray(13, 45)).toBase58() : null;
   console.log(`deployed; upgrade authority ${authority ?? "none (it can't be upgraded, or set up)"}`);
-  const cfg = await c.getAccountInfo(linkConfigAddress(PROGRAM));
+  const cfg = await c.getAccountInfo(linkConfigAddress(program()));
   if (!cfg) {
     console.log("no config yet: run init");
     return;
@@ -146,7 +168,7 @@ async function status() {
   const k = decodeLinkConfig(Buffer.from(cfg.data));
   console.log(
     [
-      `config ${linkConfigAddress(PROGRAM).toBase58()}`,
+      `config ${linkConfigAddress(program()).toBase58()}`,
       `  authority      ${k.authority}`,
       `  ticket key     ${k.ticketKey} (id ${k.ticketKeyId})`,
       `  result key     ${k.resultKey} (id ${k.resultKeyId})`,
@@ -160,12 +182,28 @@ async function status() {
 }
 
 function keys() {
-  const dir = str("out-dir") ?? fail("keys needs --out-dir <a folder outside the repository>");
+  const given = str("out-dir") ?? fail("keys needs --out-dir <an absolute path to a folder outside the repository>");
+  if (!isAbsolute(given)) fail("--out-dir is an absolute path (a relative one would land inside the repository, where npm runs this)");
+  const dir = resolve(given);
+  const repo = fileURLToPath(new URL("../../../", import.meta.url));
+  const inside = relative(repo, dir);
+  if (inside === "" || (!inside.startsWith("..") && !isAbsolute(inside))) fail("--out-dir is inside the repository: the keys' secrets never go there. Use a folder of your own, like ~/.highwire-devnet");
+  const files = (["ticket", "result"] as const).map((what) => ({ what, file: join(dir, `link-stake-${what}.key`) }));
+  const publicKey = (file: string) => {
+    const hex = readFileSync(file, "utf8").trim();
+    if (!/^[0-9a-f]{64}$/.test(hex)) fail(`${file} doesn't hold a 32-byte key in hex`);
+    return bs58.encode(ed25519.getPublicKey(Uint8Array.from(Buffer.from(hex, "hex"))));
+  };
+  if (v.show === true) {
+    for (const { what, file } of files) console.log(existsSync(file) ? `${what} key: ${publicKey(file)}   (secret in ${file})` : `${what} key: no file at ${file}`);
+    return;
+  }
+  // Both or neither: a run that made one and then stopped would leave a key whose public half was never shown.
+  const there = files.filter((f) => existsSync(f.file));
+  if (there.length) fail(`${there.map((f) => f.file).join(" and ")} exist${there.length === 1 ? "s" : ""}: a key is never overwritten. \`keys --out-dir ${dir} --show\` prints the public keys of what's there; move the files away first if you mean to replace them.`);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const made: string[] = [];
-  for (const what of ["ticket", "result"] as const) {
-    const file = join(dir, `link-stake-${what}.key`);
-    if (existsSync(file)) fail(`${file} exists: it's never overwritten. Move it away first if you mean to replace the key.`);
+  for (const { what, file } of files) {
     const secret = randomBytes(32);
     writeFileSync(file, `${secret.toString("hex")}\n`, { mode: 0o600, flag: "wx" });
     made.push(`${what} key: ${bs58.encode(ed25519.getPublicKey(secret))}   (secret in ${file}, for LINK_STAKE_${what.toUpperCase()}_KEY)`);
@@ -184,7 +222,7 @@ async function init() {
   await simulateThenSend(
     c,
     [
-      linkInitConfigInstruction(PROGRAM, key.publicKey, {
+      linkInitConfigInstruction(program(), key.publicKey, {
         authority: key.publicKey.toBase58(),
         ticketKey,
         ticketKeyId: whole("ticket-key-id", 1),
@@ -193,7 +231,7 @@ async function init() {
         tiers: t,
         maxStake: str("max-stake") ? sol("max-stake") : top,
         openStakeCap: sol("open-cap", 20),
-        refundAfterSeconds: whole("refund-after", 3600),
+        refundAfterSeconds: whole("refund-after", 7200),
       }),
     ],
     "set up",
@@ -210,18 +248,18 @@ async function config() {
   if (str("open-cap")) u.openStakeCap = sol("open-cap");
   if (str("refund-after")) u.refundAfterSeconds = whole("refund-after");
   if (Object.keys(u).length === 0) fail("config changes what it's given: name at least one setting");
-  await simulateThenSend(c, [linkConfigUpdateInstruction(PROGRAM, signer().publicKey, u)], "changed");
+  await simulateThenSend(c, [linkConfigUpdateInstruction(program(), signer().publicKey, u)], "changed");
 }
 
 async function freeze() {
   const c = await connect();
   const id = str("battle");
   if (!id || !/^[0-9a-f]{64}$/.test(id)) fail("--battle is the battle's id: 64 hex characters");
-  const stakes = { chain: new Chain({ cluster: "devnet", rpcUrl: str("rpc") }), program: PROGRAM };
+  const stakes = { chain: new Chain({ cluster: "devnet", rpcUrl: str("rpc") }), program: program() };
   const b = (await readLinkBattle(stakes, id)) ?? fail("there's no such battle on-chain: it was never opened, or it has closed");
   const parties = { playerA: new PublicKey(b.playerA), playerB: new PublicKey(b.playerB) };
   const readOnly = await uncreditable(stakes.chain, [parties.playerA, parties.playerB]);
-  await simulateThenSend(c, [linkFreezeAndRefundInstruction(PROGRAM, signer().publicKey, id, parties, readOnly)], "frozen and refunded");
+  await simulateThenSend(c, [linkFreezeAndRefundInstruction(program(), signer().publicKey, id, parties, readOnly)], "frozen and refunded");
 }
 
 switch (command) {
@@ -236,7 +274,7 @@ switch (command) {
     break;
   case "pause":
   case "unpause":
-    await simulateThenSend(await connect(), [linkConfigUpdateInstruction(PROGRAM, signer().publicKey, { paused: command === "pause" })], command === "pause" ? "paused" : "unpaused");
+    await simulateThenSend(await connect(), [linkConfigUpdateInstruction(program(), signer().publicKey, { paused: command === "pause" })], command === "pause" ? "paused" : "unpaused");
     break;
   case "config":
     await config();
