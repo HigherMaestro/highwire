@@ -5,6 +5,7 @@ import { Referee, type CoinDirectory, type RefereeConfig } from "./arena/referee
 import { Registration, type RegistrationRpc } from "./registration.ts";
 import { LinkReferee, type LinkConfig } from "./link/referee.ts";
 import { LinkArena, linkFilmsVisible, type RatedEngine } from "./link/arena.ts";
+import { LinkStakeDesk } from "./link/stakes.ts";
 import type { Store } from "./store.ts";
 
 // The relay's routes, as one fetch handler (Request in, Response out), so any host can mount it: the relay's own
@@ -36,6 +37,11 @@ import type { Store } from "./store.ts";
 //   GET  /api/link/state?match=&after=&wait=1                      (arena token) this side's view; long-polls
 //   POST /api/link/move            { match, turn, action, line? }  (arena token) this turn's decision, held until it resolves
 //   POST /api/link/leave           (arena token) a forfeit
+//   GET  /api/link/stake           practice stakes (devnet): the program, tiers and the desk's public keys (404 when off)
+//   POST /api/link/stake/join      { stake: "<lamports a side>", fallback, wait? }  (arena token) waits up to 40s to be paired
+//   GET  /api/link/stake/state     (arena token) the fighter's stake: its ticket, the battle to play, the signed result
+//   POST /api/link/stake/leave     (arena token) leaves the queue
+//   GET  /api/link/stakes          the staked battles played, for the practice page (no amounts), cached 10 seconds
 //   GET  /api/link/match/<id>      a battle's spectators' view, cached 2 seconds
 //   GET  /api/link/matches         battles live and recent, for the lobby, cached 5 seconds
 //   GET  /api/link/leaderboard     link battles' ladder, cached 30 seconds
@@ -66,6 +72,8 @@ export interface Relay {
   link: LinkReferee | null;
   /** Rated link battles, when switched on and the engine plays them. */
   linkArena: LinkArena | null;
+  /** Link battles' practice-stake desk, when it's configured and rated battles are on. */
+  linkStakes: LinkStakeDesk | null;
   /**
    * Whether a battle's screens may be shown, read from the store whether or not rated play is on: true once a rated
    * battle is over, false while it's on, null when no rated battle has that id (a practice's, shown as filmed).
@@ -82,6 +90,7 @@ export function createRelay(o: RelayOptions): Relay {
   const link = o.link ? new LinkReferee(o.store, o.clock, o.link, (f, units) => referee.spend(f, units)) : null;
   const rated = o.link?.rated && o.link.engine.startMatch && o.link.engine.resolveMatch ? o.link : null;
   const linkArena = rated ? new LinkArena(o.store, o.clock, rated.engine as typeof rated.engine & RatedEngine, (f, units) => referee.spend(f, units), rated.defer, rated.arena, () => referee.outages()) : null;
+  const linkStakes = linkArena && o.link?.stakes ? new LinkStakeDesk(o.store, o.clock, o.link.stakes, linkArena, (f, units) => referee.spend(f, units)) : null;
 
   const body = async (req: Request): Promise<Record<string, unknown>> => {
     try {
@@ -147,7 +156,7 @@ export function createRelay(o: RelayOptions): Relay {
         return json({ skipped: "a sweep ran in the last 30 seconds" });
       }
       const swept = await referee.sweep();
-      const more = { ...(referee.wager ? { wagers: await referee.wager.sweep() } : {}), ...(linkArena ? { link: await linkArena.sweep() } : {}) };
+      const more = { ...(referee.wager ? { wagers: await referee.wager.sweep() } : {}), ...(linkArena ? { link: await linkArena.sweep() } : {}), ...(linkStakes ? { linkStakes: await linkStakes.sweep() } : {}) };
       return json({ ...swept, ...more });
     }
     if (path === "/api/link" || path.startsWith("/api/link/")) {
@@ -159,6 +168,15 @@ export function createRelay(o: RelayOptions): Relay {
       if (m === "POST" && path === "/api/link/practice/leave") return json(await link.practiceLeave(await fighter(req)));
       const watch = /^\/api\/link\/practice\/([a-z2-9]{10})$/.exec(path);
       if (m === "GET" && watch) return json(await link.watchPractice(watch[1]!), 200, "public, s-maxage=2");
+      if (path === "/api/link/stake" || path === "/api/link/stakes" || path.startsWith("/api/link/stake/")) {
+        if (!linkStakes) throw new RelayError("not_found", "Staking on link battles isn't open.");
+        if (m === "GET" && path === "/api/link/stake") return json(linkStakes.info(), 200, "public, s-maxage=60");
+        if (m === "GET" && path === "/api/link/stakes") return json({ played: await linkStakes.played() }, 200, "public, s-maxage=10");
+        if (m === "POST" && path === "/api/link/stake/join") return json(await linkStakes.join(await fighter(req), await body(req)));
+        if (m === "GET" && path === "/api/link/stake/state") return json(await linkStakes.state(await fighter(req)));
+        if (m === "POST" && path === "/api/link/stake/leave") return json(await linkStakes.leave(await fighter(req)));
+        throw new RelayError("not_found", "No such route.");
+      }
       if (linkArena) {
         if (m === "POST" && path === "/api/link/join") return json(await linkArena.join(await fighter(req), await body(req)));
         if (m === "GET" && path === "/api/link/state") {
@@ -195,6 +213,7 @@ export function createRelay(o: RelayOptions): Relay {
     registration,
     link,
     linkArena,
+    linkStakes,
     linkFilmsVisible: (id) => linkFilmsVisible(o.store, id),
     async fetch(req) {
       try {

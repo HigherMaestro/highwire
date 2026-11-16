@@ -2,6 +2,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import bs58 from "bs58";
 import { rate, START, type Rating } from "highwire-core/arena";
 import type { Clock } from "../clock.ts";
+import { hexBytes, key32, le, toHex } from "../bytes.ts";
 import { fail } from "../errors.ts";
 import { randomHex } from "../registration.ts";
 import { update, type Store } from "../store.ts";
@@ -149,23 +150,6 @@ const TICKET_DOMAIN = new TextEncoder().encode("highwire-line-ticket-1");
 const ratingGap = (waitedMs: number) => 150 + 100 * Math.floor(waitedMs / 30_000);
 const pairKey = (x: string, y: string) => [x, y].sort().join(":");
 const emptyTally = (): Tally => ({ win: 0, draw: 0, loss: 0 });
-
-const le = (n: bigint, bytes: number) => {
-  const out = new Uint8Array(bytes);
-  let v = BigInt.asUintN(bytes * 8, n);
-  for (let i = 0; i < bytes; i++) {
-    out[i] = Number(v & 255n);
-    v >>= 8n;
-  }
-  return out;
-};
-const key32 = (k: string) => {
-  const b = bs58.decode(k);
-  if (b.length !== 32) fail("bad_request", "not a 32-byte address");
-  return b;
-};
-const hexBytes = (h: string) => Uint8Array.from(h.match(/../g)!.map((x) => parseInt(x, 16)));
-const toHex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
 /** The bytes the program checks (programs/line-wager/src/ticket.rs, wager-codec.ts `ticketMessage`). */
 export function wagerTicketMessage(programId: string, t: WagerTicketRecord): Uint8Array {
