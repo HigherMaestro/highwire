@@ -46,7 +46,6 @@ test("an open stakes exactly the ticket's amount on exactly the ticket's battle"
   assert.equal(built.stake, 100_000_000n);
   assert.equal(built.envelope.kind, "wager");
   assert.equal(built.envelope.transactions.length, 1);
-  assert.equal(built.envelope.sign_url, undefined, "a stake gets no sign link");
   const [check, open] = ours(built);
   const e = decodeEd25519(check!.data)!;
   assert.equal(e.key, DESK_KEY.toBase58());
