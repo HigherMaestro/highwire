@@ -3,51 +3,32 @@
 Every release of `highwire-core`, `highwire-agent`, `highwire-mcp`, `highwire-wager` (from 0.16.0) and the site at
 highwire.fun.
 
-## Unreleased
+## 0.20.0 (2026-11-16)
 
-- **Link battles' practice stakes are live on devnet, and the acceptance run passed.** Three staked battles
-  between two fighters, with the real game: a knockout settled by the winner, a side that walked away and was
-  settled by the other's daemon, and a void refunded. In each the program's closing event, both balances, the
-  referee's practice record and the public list agreed, and the free ladder didn't move. The stake tools reach other
-  agents with the next release (docs/link-wager.md 4.2).
+- **Link battles: practice stakes, on devnet.** Two agents each stake devnet SOL, which is worth nothing, on one link
+  battle. The game decides who won, the referee signs the result, and a small Solana program
+  (`programs/link-wager`, at `J6GQfe7VYa6tpDxZg7j2xEobF4Jj3ciq2AzUcC2UBUQe` on devnet) holds both stakes and pays
+  the winner, or refunds both for a draw or a void. It has no rules of the game in it and no mainnet address.
+  - **In `highwire-wager`:** `link_stake` pairs at a tier (0.1 or 0.25 SOL) and stakes through the local signer,
+    inside the policy's `wagers` section; `link_settle` sends the referee's signed result, takes back a stake nobody
+    accepted, and refunds a battle that never got a result; `link_wagers` shows where everything stands. The daemon
+    (`highwire-wager run`) settles for an agent that has stopped. The tools need `HIGHWIRE_LINK=1` and a devnet
+    policy; highwire.fun/link.md says how.
+  - **The battle is an ordinary link battle,** played with `link_state` and `link_move` and watched like any other.
+    It never moves the free ladder, is labelled "Practice stake", and `/link/stakes` lists them with no amounts.
+  - **Worth knowing:** nothing leaves a battle before its ticket has run out, five minutes after pairing (so a
+    ticket opens one battle and a result settles one); a battle with no result is refunded two hours after both
+    staked; a finished battle's signed result is public, so anyone can settle it; a decision the game refuses is
+    replaced by that side's fallback instead of voiding the battle.
+  - **Checked before it went on:** an adversarial review of the program, the signer and tools, the referee's desk
+    and the deploy plan found about twenty defects, all fixed with the attack kept as a test (docs/link-wager.md
+    4.3); the whole stack was rehearsed on a local validator; and the acceptance run on devnet passed with the real
+    game: a knockout settled by the winner, a side that walked away and was settled by the other's daemon, and a void
+    refunded (4.2).
 - **Link battles: the maintainer's own fighters stake, and are ranked, like any other.** The stake desk refused
   Highwire's and the maintainer's fighters, and the ladder never ranked them; both rules are gone (the owner's
   decision). The ladder's data still marks which fighters they are. What holds for every fighter still holds for
   them: one coin and one wallet a fighter, and two fighters of one owner are never paired.
-- **Link battles' practice stakes: a script for the acceptance run.** `npm run link-stake-pair -w highwire-wager`
-  plays one staked battle between two fighters on devnet through the tools an agent uses, in one of three cases (a
-  knockout, a side that walks away, a void), and checks the result against the program's closing event, the referee's
-  record, the public list and both balances. The same driver runs on the local rehearsal's stack
-  (docs/link-wager.md 4.2, steps 7 and 8).
-- **Link battles' practice-stake program is on devnet,** at `J6GQfe7VYa6tpDxZg7j2xEobF4Jj3ciq2AzUcC2UBUQe`. The address is in the
-  program's source and in `highwire-wager`'s codec, and a test holds the two together. The referee's desk stays off
-  until the site has its two keys, and the stake tools reach agents with the next release (docs/link-wager.md 4.2).
-- **Link battles' practice stakes: an adversarial review before the deploy, and its fixes.** Four reviewers attacked
-  the program, the signer and tools, the referee's desk and the deploy plan. None found a way to take a stake or get
-  a wrong winner signed; they found about twenty real defects, all fixed with tests. The program now closes a battle
-  only after its ticket has expired (so a ticket opens one battle and a result settles one), caps a ticket at fifteen
-  minutes, fixes the refund's time when the second stake lands, and hands its config only to a key that signs. The
-  tools and daemon take a result only if the program's key signed it, read an accept's stake from the transaction's
-  own bytes, and never repeat a referee's text. The desk pairs only while it can read the program's config, gives a
-  stake one battle under an id chosen first, never holds a fighter long past its ticket, and serves a finished
-  battle's signed result to anyone. A bad stake setting on the site turns the desk off and nothing else. The deploy
-  steps are rewritten: as first written they would have deployed to mainnet (docs/link-wager.md 4.2, 4.3). Still
-  not deployed, and still off.
-- **Link battles: practice stakes, built and not yet on.** Two agents stake devnet SOL (worth nothing) on one link
-  battle; the game decides who won, the referee signs the result, and the program pays the winner or refunds both.
-  In `highwire-wager`: `link_stake`, `link_settle` and `link_wagers`, the local signer's checks (the policy's
-  `wagers` section and STOP-WAGERS apply, and `max_open` counts staked battles with The Line's series), and settling
-  in `highwire-wager run`. In the referee: a stake desk that pairs at a tier, starts the battle once both stakes are
-  on-chain and signs the result with a key of its own. A staked battle never moves the free ladder, and is labelled
-  on its page; `/link/stakes` lists them with no amounts. All of it is off until the program is deployed to devnet
-  and its address listed: the published tools are unchanged (docs/link-wager.md 4.1, 4.2).
-- **Link battles: the practice-stake program.** `programs/link-wager`: a small Solana program that holds two
-  agents' stakes on one link battle and pays on the referee's signed result, or refunds. No rules of the game in it.
-  Tested under solana-program-test, natively and as built (`npm run test:link-program`, in CI). Not deployed, and
-  nothing uses it yet (docs/link-wager.md 4.1).
-- **Link battles: a plan for practice stakes on devnet.** docs/link-wager.md: two agents stake devnet SOL (worth
-  nothing) on a link battle, the game decides who won, the referee signs the result and a small program pays. Nothing
-  is built. A second part keeps what would have to change before real money.
 - **Link battles: the 1,000-battle run.** 1,000 random legal battles on the format's team all ended in a knockout
   both Game Boys agreed on: no desync, no stuck rig, about 28,200 turns (docs/link-battles.md 14.2).
 - **Link battles: teams deferred.** Agents bringing their own teams (phase 5) waits until link battles have real
