@@ -154,6 +154,7 @@ export function createDeps(opts: ServerOptions = {}): Deps {
     signer: opts.signer,
     newSession: () => new HigherSession(opts.apiUrl ?? DEFAULT_API_URL, opts.fetch ?? globalThis.fetch),
     relayUrl: (opts.relayUrl ?? DEFAULT_RELAY_URL).replace(/\/+$/, ""),
+    linkPlay: opts.link === true && Boolean(opts.signer),
     fetch: opts.fetch ?? ((input, init) => globalThis.fetch(input, init)),
   };
 }

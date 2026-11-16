@@ -3,7 +3,8 @@
 //! - stakes leave a battle's account only to its two players;
 //! - a battle starts from the desk's ticket and ends on the referee's signed result, each checked against the key in
 //!   the config and against this battle's id and wallets;
-//! - a battle with both stakes in and no result for the config's `refund_after_seconds` can be refunded by anyone, so no
+//! - a battle's account closes only after its ticket has expired, so a ticket opens one battle and a result settles one;
+//! - a battle with both stakes in and no result by its `refund_at` (fixed when B staked) can be refunded by anyone, so no
 //!   stake is ever stuck on a referee that's gone;
 //! - the authority can pause new battles, change limits within hard caps, rotate the two keys and freeze-and-refund,
 //!   and nothing else: it can't pay anyone but the players;
@@ -157,6 +158,21 @@ fn check_limits(c: &ConfigInit) -> ProgramResult {
     if !(REFUND_AFTER_MIN..=REFUND_AFTER_MAX).contains(&c.refund_after_seconds) {
         return Err(WagerError::BadInstruction.into());
     }
+    // Three real keys, and never one key for both jobs: a ticket's signer must not be able to sign a result.
+    let none = Pubkey::default();
+    if c.authority == none || c.ticket_key == none || c.result_key == none || c.ticket_key == c.result_key {
+        return Err(WagerError::BadInstruction.into());
+    }
+    Ok(())
+}
+
+/// A battle's account closes only once its ticket has expired. `open` refuses an expired ticket, so the same ticket
+/// can never open a second battle at this address, and a result (which names the battle, not the moment) can never
+/// settle a battle other than the one it was signed for.
+fn after_ticket(b: &Battle) -> ProgramResult {
+    if now()? <= b.ticket_expiry {
+        return Err(WagerError::NotYet.into());
+    }
     Ok(())
 }
 
@@ -231,6 +247,11 @@ fn update_config(program_id: &Pubkey, accounts: &[AccountInfo], u: ConfigUpdate)
         return Err(WagerError::NotAuthority.into());
     }
     if let Some(a) = u.authority {
+        // The new authority signs too: the config can't be handed to a mistyped address, or to nobody.
+        let new_authority = next_account_info(it)?;
+        if !new_authority.is_signer || *new_authority.key != a {
+            return Err(WagerError::NotAuthority.into());
+        }
         c.authority = a;
     }
     if let Some((k, id)) = u.ticket_key {
@@ -315,7 +336,7 @@ fn open(program_id: &Pubkey, accounts: &[AccountInfo], battle_id: [u8; 32], play
         return Err(WagerError::NotAPlayer.into());
     }
     let t = now()?;
-    if t > expiry || accept_deadline > expiry || key_id != c.ticket_key_id {
+    if t > expiry || accept_deadline > expiry || expiry.saturating_sub(t) > TICKET_LIFETIME_MAX || key_id != c.ticket_key_id {
         return Err(WagerError::TicketExpired.into());
     }
     let ticket = Ticket { battle_id, player_a: *player_a.key, player_b, stake, accept_deadline, expiry, key_id };
@@ -345,6 +366,7 @@ fn open(program_id: &Pubkey, accounts: &[AccountInfo], battle_id: [u8; 32], play
         ticket_expiry: expiry,
         opened_at: t,
         live_at: 0,
+        refund_at: 0,
     };
     save(&battle, battle_acc)?;
     // Reserve both stakes against the cap now, so an accept can't push it over.
@@ -383,6 +405,7 @@ fn accept(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     invoke(&system_instruction::transfer(player_b.key, battle_acc.key, b.stake), &[player_b.clone(), battle_acc.clone(), system.clone()])?;
     b.status = STATUS_LIVE;
     b.live_at = t;
+    b.refund_at = t.checked_add(c.refund_after_seconds as i64).ok_or(WagerError::Math)?;
     save(&b, battle_acc)
 }
 
@@ -400,10 +423,10 @@ fn cancel(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     if *player_a.key != b.player_a {
         return Err(WagerError::WrongPayee.into());
     }
-    let by_a = caller.is_signer && *caller.key == b.player_a;
-    if !by_a && now()? <= b.accept_deadline {
-        return Err(WagerError::NotYet.into());
-    }
+    // Anyone, once the ticket has expired (by then B can no longer accept): A included. Not before, even by A: a
+    // cancel while the ticket still runs would let the same ticket open the battle again.
+    let _ = caller;
+    after_ticket(&b)?;
     release(config_acc, program_id, b.stake.checked_mul(2).ok_or(WagerError::Math)?)?;
     announce(CLOSED_CANCELLED, &b.battle_id, OUTCOME_NONE);
     close(battle_acc, player_a, burn)
@@ -437,6 +460,7 @@ fn settle(program_id: &Pubkey, accounts: &[AccountInfo], outcome: u8, key_id: u1
     if *player_a.key != b.player_a || *player_b.key != b.player_b {
         return Err(WagerError::WrongPayee.into());
     }
+    after_ticket(&b)?;
     let pot = b.stake.checked_mul(2).ok_or(WagerError::Math)?;
     match outcome {
         OUTCOME_A => pay_player(battle_acc, player_a, burn, pot)?,
@@ -452,7 +476,7 @@ fn settle(program_id: &Pubkey, accounts: &[AccountInfo], outcome: u8, key_id: u1
 }
 
 /// Refunds every stake in a battle's account and closes it: anyone, once both have staked and no result has come for
-/// the config's `refund_after_seconds`; or the authority at any time, whoever has staked.
+/// the battle's `refund_at`; or the authority, whoever has staked. Never before the ticket has expired.
 fn refund_all(program_id: &Pubkey, accounts: &[AccountInfo], by_authority: bool) -> ProgramResult {
     let it = &mut accounts.iter();
     let (config_acc, battle_acc) = if by_authority {
@@ -475,15 +499,15 @@ fn refund_all(program_id: &Pubkey, accounts: &[AccountInfo], by_authority: bool)
         return Err(WagerError::WrongPayee.into());
     }
     if !by_authority {
-        // A battle only A has staked on is cancelled, not refunded (A at once, anyone after the deadline).
+        // A battle only A has staked on is cancelled, not refunded.
         if b.status != STATUS_LIVE {
             return Err(WagerError::WrongStatus.into());
         }
-        let c = load_config(program_id, config_acc)?;
-        if now()?.saturating_sub(b.live_at) < c.refund_after_seconds as i64 {
+        if now()? < b.refund_at {
             return Err(WagerError::NotYet.into());
         }
     }
+    after_ticket(&b)?;
     match b.status {
         STATUS_OPEN => {}
         STATUS_LIVE => pay_player(battle_acc, player_b, burn, b.stake)?,

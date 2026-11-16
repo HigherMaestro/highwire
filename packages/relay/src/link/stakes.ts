@@ -7,7 +7,8 @@ import type { Clock } from "../clock.ts";
 import { fail } from "../errors.ts";
 import { randomHex } from "../registration.ts";
 import { update, type Store } from "../store.ts";
-import { LINK_STAKE, LINK_STAKE_OF, practiceGoing, type FallbackKind, type LinkArena, type LinkEnding } from "./arena.ts";
+import { LINK_STAKE, LINK_STAKE_OF, practiceGoing, stakeHolds, type FallbackKind, type LinkArena, type LinkEnding } from "./arena.ts";
+import { linkMatchId } from "./common.ts";
 
 // Link battles' practice stakes (docs/link-wager.md 3), the referee's side. Devnet only: its SOL is worth nothing, and
 // this desk has no setting that would make it anything else.
@@ -20,17 +21,32 @@ import { LINK_STAKE, LINK_STAKE_OF, practiceGoing, type FallbackKind, type LinkA
 //   it; the program checks the signature and pays the winner, or refunds both for a draw or a void.
 // - Two keys, apart: the ticket key signs pairings, the result key signs results. Neither moves money, and neither is
 //   ever in a response, a log or the store.
+// - One battle for a stake, ever: the battle's id is chosen and written into the stake before the battle is made, so
+//   a start that died or is tried twice finds the same battle, and a result is only ever that battle's.
 // - Every way a stake can stall ends: a ticket nobody used expires, an opening nobody accepted frees both, a battle
 //   that can't be started is signed void (so both are refunded), and a result nobody sends leaves the program's own
-//   refund after its deadline.
+//   refund. A stake never holds its fighters past its ticket by more than a few minutes, whatever the chain's RPC does.
+// - It pairs only while it can read the program's config and the config is the one it was set up for (its two keys,
+//   its tiers): a desk that can't see the chain, or that the program wouldn't recognise, signs nothing.
 // - It keeps a practice rating of its own. A staked battle never moves the free ladder (docs/link-wager.md 5).
+
+/** The program's config as the desk needs it: whether it's paused, and what it would accept. */
+export interface LinkStakeProgramConfig {
+  paused: boolean;
+  ticketKeyId: number;
+  resultKeyId: number;
+  /** The two public keys (base58) and the tiers (lamports a side), when the deployment reads them: compared with the desk's own. */
+  ticketKey?: string;
+  resultKey?: string;
+  tiers?: bigint[];
+}
 
 /** What the deployment tells the desk about the chain: where each battle it ticketed stands. */
 export interface LinkStakeChain {
   /** open: A staked. live: both staked. closed: the battle's account is gone, and how. none: no account, no closing found. */
   status(battleId: string): Promise<{ state: "none" | "open" | "live" } | { state: "closed"; how: "settled" | "cancelled" | "refunded" }>;
-  /** The program's config as it stands. With it, the desk pairs only when a ticket could open and a result could settle. */
-  config?(): Promise<{ paused: boolean; ticketKeyId: number; resultKeyId: number }>;
+  /** The program's config as it stands. With it, the desk pairs only when it answers and a ticket could open and a result settle. */
+  config?(): Promise<LinkStakeProgramConfig>;
 }
 
 export interface LinkStakeConfig {
@@ -47,7 +63,7 @@ export interface LinkStakeConfig {
   chain: LinkStakeChain;
   /** Different owners waiting at a tier before it pairs. Default 2. */
   minQueue?: number;
-  /** How long the ticket lives from the pairing: A must open and B accept within it. Default 5 minutes. */
+  /** How long the ticket lives from the pairing: A must open and B accept within it. Default 5 minutes; 14 at most (the program refuses a ticket over 15). */
   acceptSeconds?: number;
   perPairPerWeek?: number;
   longPollMs?: number;
@@ -77,7 +93,8 @@ export interface LinkResultRecord {
 
 /**
  * How a stake left the desk's books. settled, cancelled, refunded: the chain's. expired: never opened. unaccepted: A
- * opened and B never did (A cancels on-chain). unread: its account went with no closing the desk could find.
+ * opened and B never did (cancelled on-chain once the ticket has run out). unread: its account went with no closing
+ * the desk could find.
  */
 export type LinkStakeClosed = "settled" | "cancelled" | "refunded" | "expired" | "unaccepted" | "unread";
 
@@ -96,7 +113,9 @@ export interface LinkStake {
   seen?: { state: "open" | "live"; at: number };
   /** When both stakes were first seen in. */
   liveAt?: number;
-  /** The link battle (arena.ts), once it started. */
+  /** The link battle this stake gets, chosen before it's made so every try makes (or finds) the same one. */
+  starting?: { match: string; at: number };
+  /** The link battle (arena.ts), once it started: `starting.match`. */
   match?: string;
   /** The battle's outcome, when (ms), and both practice ratings before it (so a retried close rates the same). */
   result?: { outcome: LinkStakeOutcome; at: number; before: { A: Rating; B: Rating } };
@@ -128,6 +147,8 @@ interface StakeQueue {
   pairs: { week: number; counts: Record<string, number> };
 }
 
+type ChainStatus = Awaited<ReturnType<LinkStakeChain["status"]>>;
+
 const QUEUE = "link:stake-queue";
 const OPEN = "link:stakes-open";
 const PLAYED = "link:stakes-played";
@@ -135,8 +156,12 @@ const STANDING = (fighter: string) => `link:stake-standing:${fighter}`;
 /** A fighter's latest stakes, so a result it hasn't settled is still there after it stakes again. */
 const MINE = (fighter: string) => `link:stakes-of:${fighter}`;
 const MINE_MAX = 20;
+/** How many of a fighter's unsettled stakes one `results` call moves on. */
+const RESULTS_ADVANCED = 5;
 const POLL = (fighter: string) => `link:stake-poll:${fighter}`;
 const STARTING = (id: string) => `link:stake-starting:${id}`;
+const START_WAIT = (id: string) => `link:stake-start-wait:${id}`;
+const CHAIN = (id: string) => `link:stake-chain:${id}`;
 const fighterKey = (id: string) => `arena:fighter:${id}`;
 const PLAYED_MAX = 500;
 const ALIVE_MS = 60_000;
@@ -144,9 +169,21 @@ const ALIVE_MS = 60_000;
 const EXPIRY_MARGIN_MS = 2 * 60_000;
 /** Both stakes in and no battle after this long (the rig is down, a fighter is gone): signed void, so both are refunded. */
 const START_GIVE_UP_MS = 5 * 60_000;
+/** A start is one at a time, for as long as a function may run; after one that made no battle, the next waits a little. */
+const START_LOCK_SECONDS = 300;
+const START_RETRY_SECONDS = 20;
 /** A stake whose account vanished with no closing found, or whose result nobody sent or refunded: off the books after this. */
 const UNREAD_AFTER_MS = 60 * 60_000;
 const UNSETTLED_AFTER_MS = 8 * 86_400_000;
+/**
+ * How long one read of a battle's chain state is believed, in seconds: however often a stake is looked at (by its two
+ * agents, the cron, anyone), the chain is asked about it at most this often. Longer when there's no account, since
+ * that read can cost a search through the address's history.
+ */
+const CHAIN_FRESH_SECONDS = 3;
+const CHAIN_NONE_FRESH_SECONDS = 10;
+/** The program refuses a ticket with more than this left to run (state.rs `TICKET_LIFETIME_MAX`). */
+const TICKET_LIFETIME_MAX_SECONDS = 15 * 60;
 const WEEK_MS = 7 * 86_400_000;
 const FALLBACKS: FallbackKind[] = ["first", "strongest", "random"];
 const TICKET_DOMAIN = new TextEncoder().encode("highwire-link-ticket-1");
@@ -221,7 +258,9 @@ export class LinkStakeDesk {
     if (this.ticketKey === this.resultKey) throw new Error("the ticket key and the result key must be different keys");
     this.minQueue = cfg.minQueue ?? 2;
     if (!Number.isInteger(this.minQueue) || this.minQueue < 2) throw new Error("minQueue is at least 2");
-    this.acceptMs = (cfg.acceptSeconds ?? 300) * 1000;
+    const accept = cfg.acceptSeconds ?? 300;
+    if (!Number.isFinite(accept) || accept < 10 || accept > TICKET_LIFETIME_MAX_SECONDS - 60) throw new Error("acceptSeconds is from 10 seconds to 14 minutes: the program refuses a ticket that runs over fifteen");
+    this.acceptMs = accept * 1000;
     this.perPair = cfg.perPairPerWeek ?? 2;
     this.longPollMs = cfg.longPollMs ?? 40_000;
     this.tiers = new Set(cfg.tiers.map(String));
@@ -289,12 +328,17 @@ export class LinkStakeDesk {
     };
   }
 
-  /** The stake a fighter is in, moved on as far as the chain and the battle allow; null when it's in none still open. */
+  /** A stake as it stands after being moved on; as stored if moving it on failed (the chain or the store didn't answer). */
+  private async moved(id: string): Promise<LinkStake | null> {
+    return this.advance(id).catch(async () => (await this.store.get<LinkStake>(LINK_STAKE(id)))?.value ?? null);
+  }
+
+  /** The stake that holds a fighter now (arena.ts `stakeHolds`), moved on as far as the chain and the battle allow. */
   private async active(fighter: string): Promise<LinkStake | null> {
     const id = (await this.store.get<string>(LINK_STAKE_OF(fighter)))?.value;
     if (!id) return null;
-    const s = await this.advance(id).catch(async () => (await this.store.get<LinkStake>(LINK_STAKE(id)))?.value ?? null);
-    return s && (s.status === "ticketed" || s.status === "playing") ? s : null;
+    const s = await this.moved(id);
+    return s && (await stakeHolds(this.store, s, this.clock.now())) ? s : null;
   }
 
   /**
@@ -304,7 +348,7 @@ export class LinkStakeDesk {
   async state(f: Fighter): Promise<(LinkStakeView | { none: true }) & { you: { rating: number; record: Tally } }> {
     await this.spend(f, 1);
     const id = (await this.store.get<string>(LINK_STAKE_OF(f.id)))?.value;
-    const s = id ? await this.advance(id).catch(async () => (await this.store.get<LinkStake>(LINK_STAKE(id)))?.value ?? null) : null;
+    const s = id ? await this.moved(id) : null;
     const w = await this.standing(f.id);
     const you = { rating: Math.round(w.rating.r), record: w.record };
     return s ? { ...this.view(s, f), you } : { none: true, you };
@@ -315,11 +359,15 @@ export class LinkStakeDesk {
    * agent (or its daemon) settles with, whatever it has staked on since.
    */
   async results(f: Fighter): Promise<{ results: { battle: string; match?: string; result: LinkResultRecord; signature: string; you: "won" | "lost" | "draw" | "void" }[] }> {
-    await this.spend(f, 1);
+    await this.spend(f, 2);
     const ids = ((await this.store.get<string[]>(MINE(f.id)))?.value ?? []).slice().reverse();
     const results = [];
+    let advanced = 0;
     for (const id of ids) {
-      const s = await this.advance(id).catch(async () => (await this.store.get<LinkStake>(LINK_STAKE(id)))?.value ?? null);
+      let s = (await this.store.get<LinkStake>(LINK_STAKE(id)))?.value ?? null;
+      if (!s || s.status === "done") continue;
+      // Only the newest few are moved on in one call (each may ask the chain); the rest as they stand.
+      if (advanced++ < RESULTS_ADVANCED) s = await this.moved(id);
       if (!s || s.status !== "over") continue;
       const v = this.view(s, f);
       if (v.result) results.push({ battle: s.id, ...(s.match ? { match: s.match } : {}), ...v.result });
@@ -327,14 +375,57 @@ export class LinkStakeDesk {
     return { results };
   }
 
-  private configRead: { at: number; value: Promise<{ paused: boolean; ticketKeyId: number; resultKeyId: number } | null> } | null = null;
+  /**
+   * A finished battle's signed result, for anyone: a result is no secret (its signature is on-chain the moment it's
+   * used), and the program lets anyone send it, so a winner whose own agent and daemon are both down can still be
+   * paid by anybody before the refund's time comes. Read from the desk's books only: it asks the chain nothing. Null
+   * while the battle has no result, and once the stake is off the books.
+   */
+  async publicResult(battleId: string): Promise<{ result: LinkResultRecord; signature: string } | null> {
+    if (!/^[0-9a-f]{64}$/.test(battleId)) return null;
+    const s = (await this.store.get<LinkStake>(LINK_STAKE(battleId)))?.value;
+    return s && s.status === "over" ? this.signed(s) : null;
+  }
 
-  /** The program's config, read at most every 30 seconds; null when the deployment can't say (pairing goes on). */
-  private programConfig() {
+  private configRead: { at: number; value: Promise<LinkStakeProgramConfig | null> } | null = null;
+  private mismatchSaid: string | null = null;
+
+  /** The program's config, read at most every 30 seconds; null when it couldn't be read. */
+  private programConfig(): Promise<LinkStakeProgramConfig | null> {
     const now = this.clock.now();
-    if (!this.cfg.chain.config) return Promise.resolve(null);
-    if (!this.configRead || now - this.configRead.at > 30_000) this.configRead = { at: now, value: this.cfg.chain.config().catch(() => null) };
+    const chain = this.cfg.chain;
+    if (!chain.config) return Promise.resolve(null);
+    if (!this.configRead || now - this.configRead.at > 30_000) this.configRead = { at: now, value: chain.config().catch(() => null) };
     return this.configRead.value;
+  }
+
+  /**
+   * Refuses to pair unless a ticket signed now could open and its result could settle. A desk that can't read the
+   * program's config signs nothing (a ticket it can't follow on-chain would only lock two stakes), and neither does
+   * one whose keys or tier aren't the program's: each pairing would hold two fighters on a ticket the program
+   * refuses, or play a battle whose result could never pay.
+   */
+  private async mayPair(tier: string): Promise<void> {
+    if (!this.cfg.chain.config) return;
+    const c = await this.programConfig();
+    if (!c) return fail("paused", "Staking on link battles isn't available right now (the referee can't read the chain). Try again in a few minutes.");
+    if (c.paused) fail("refused", "Staking on link battles is paused: no new battles for now. Try again later.");
+    const wrong =
+      c.ticketKeyId !== this.cfg.ticketKeyId || c.resultKeyId !== this.cfg.resultKeyId
+        ? "the key ids"
+        : (c.ticketKey !== undefined && c.ticketKey !== this.ticketKey) || (c.resultKey !== undefined && c.resultKey !== this.resultKey)
+          ? "the keys"
+          : c.tiers !== undefined && !c.tiers.map(String).includes(tier)
+            ? `the tier ${tier}`
+            : null;
+    if (wrong) {
+      // Said once per kind of mismatch, without a key in it: the public keys are in `info()` for whoever compares.
+      if (this.mismatchSaid !== wrong) {
+        this.mismatchSaid = wrong;
+        console.error(`link stakes: the desk and the program's config disagree on ${wrong}; nothing is paired until they match`);
+      }
+      fail("refused", "The referee's stake settings are being changed: no new staked battles for now. Try again later.");
+    }
   }
 
   /**
@@ -344,23 +435,24 @@ export class LinkStakeDesk {
    */
   async join(f: Fighter, input: { stake?: unknown; fallback?: unknown; wait?: unknown }): Promise<LinkStakeJoin> {
     if (f.operator) fail("refused", "Highwire's and the maintainer's own fighters never stake against the public.");
+    const wait = input.wait !== false;
+    // Paid for before anything is read: every call here may ask the chain.
+    await this.spend(f, wait ? 5 : 1);
     const current = await this.active(f.id);
     if (current) return { stake: this.view(current, f) };
-    const onChain = await this.programConfig();
-    if (onChain?.paused) fail("refused", "Staking on link battles is paused: no new battles for now. Try again later.");
-    if (onChain && (onChain.ticketKeyId !== this.cfg.ticketKeyId || onChain.resultKeyId !== this.cfg.resultKeyId)) fail("refused", "The referee's keys are being changed: no new staked battles for a few minutes. Try again later.");
     const tier = typeof input.stake === "string" ? input.stake : typeof input.stake === "number" ? String(input.stake) : "";
     if (!this.tiers.has(tier)) fail("bad_request", `stake is one of the tiers, in lamports a side: ${[...this.tiers].join(", ")}.`);
     const fallback = typeof input.fallback === "string" && (FALLBACKS as string[]).includes(input.fallback) ? (input.fallback as FallbackKind) : null;
     if (!fallback) fail("bad_request", 'Declare a fallback for decisions you miss: "first", "strongest" or "random".');
+    await this.mayPair(tier);
     const now = this.clock.now();
     const cooling = await this.arena.cooldownLeft(f.id);
     if (cooling > 0) fail("rate_limited", `You stopped answering in your last battle; you can stake again in ${Math.ceil(cooling / 60_000)} minutes.`);
     if (await this.arena.inBattle(f.id)) fail("conflict", "You have a link battle going: finish it (link_state, link_move) or leave it (link_leave) first.");
     if (await practiceGoing(this.store, f.id, now)) fail("conflict", "You have a practice battle going: finish it or leave it (link_practice with leave) first.");
     await this.arena.enrol(f);
-    const wait = input.wait !== false;
-    await this.spend(f, wait ? 5 : 1);
+    // Staking is instead of the free queue, not beside it: a place left there could be paired while this one is.
+    await this.arena.dequeue(f.id);
     // One join at a time per fighter, waiting or not: two at once could queue it again after the other paired it.
     if ((await this.store.cas(POLL(f.id), 0, 1, Math.ceil(this.longPollMs / 1000) + 5)) === null) fail("rate_limited", "One stake join at a time per fighter.");
     try {
@@ -397,7 +489,7 @@ export class LinkStakeDesk {
   private async step(f: Fighter, tier: string, fallback: FallbackKind, now: number): Promise<{ stake?: string; atTier: number; waited: number }> {
     const held = (await this.store.get<string>(LINK_STAKE_OF(f.id)))?.value;
     const mine = held ? (await this.store.get<LinkStake>(LINK_STAKE(held)))?.value : null;
-    if (mine && (mine.status === "ticketed" || mine.status === "playing")) return { stake: mine.id, atTier: 0, waited: 0 };
+    if (mine && (await stakeHolds(this.store, mine, now))) return { stake: mine.id, atTier: 0, waited: 0 };
     const id = randomHex(32);
     const week = Math.floor(now / WEEK_MS);
     const rating = (await this.standing(f.id)).rating.r;
@@ -454,13 +546,16 @@ export class LinkStakeDesk {
 
   /**
    * Signs the ticket for a pairing and records the stake. Which of the two is A is random. Both fighters are held from
-   * here (arena.ts `stakeHeld`): each is taken by compare-and-set, so a fighter is never in two stakes, and a failure
-   * at any point leaves nothing the sweep can't finish.
+   * here (arena.ts `stakeHeld`): each is taken by compare-and-set, so a fighter is never in two stakes. Once both are
+   * held it looks again for a battle or practice either has (the arena does the same from its side, claiming first
+   * and then looking for a hold, so whichever wrote second sees the other): if there is one, this pairing never
+   * happened. A failure at any point leaves nothing the sweep can't finish.
    */
   private async ticket(f: Fighter, fallback: FallbackKind, partner: Entry, id: string, tier: string, now: number): Promise<boolean> {
     const other = (await this.store.get<Fighter>(fighterKey(partner.fighter)))?.value;
     if (!other || other.operator || other.wallet === f.wallet) return false;
-    if ((await this.arena.inBattle(other.id)) || (await practiceGoing(this.store, other.id, now))) return false;
+    const busy = async (x: string) => (await this.arena.inBattle(x)) || (await practiceGoing(this.store, x, this.clock.now())) || (await this.arena.cooldownLeft(x)) > 0;
+    if (await busy(other.id)) return false;
     const [a, b] = Math.random() < 0.5 ? [f, other] : [other, f];
     const fallbacks = a === f ? { A: fallback, B: partner.fallback } : { A: partner.fallback, B: fallback };
     // One time for both: the program refuses an accept deadline later than the expiry.
@@ -474,24 +569,27 @@ export class LinkStakeDesk {
       if (await this.hold(x.id, id)) taken.push(x.id);
       else break;
     }
-    if (taken.length === 2) {
-      for (const x of [a, b]) await update<string[]>(this.store, MINE(x.id), (cur) => [...(cur ?? []).filter((y) => y !== id), id].slice(-MINE_MAX));
+    if (taken.length === 2 && !(await busy(a.id)) && !(await busy(b.id))) {
+      for (const x of [a, b]) {
+        await this.arena.dequeue(x.id).catch(() => undefined);
+        await update<string[]>(this.store, MINE(x.id), (cur) => [...(cur ?? []).filter((y) => y !== id), id].slice(-MINE_MAX));
+      }
       return true;
     }
-    // One of them was taken by another pairing meanwhile: this one never happened.
+    // One of them was taken by another pairing, or started something else, meanwhile: this one never happened.
     for (const x of taken) await this.letGo(x, id);
     await this.store.del(LINK_STAKE(id)).catch(() => undefined);
     await update<string[]>(this.store, OPEN, (cur) => (cur?.includes(id) ? cur.filter((x) => x !== id) : undefined));
     return false;
   }
 
-  /** Points a fighter at a stake, unless it's held by another that's still on. */
+  /** Points a fighter at a stake, unless another still holds it. */
   private async hold(fighter: string, id: string): Promise<boolean> {
     for (let attempt = 0; attempt < 4; attempt++) {
       const cur = await this.store.get<string>(LINK_STAKE_OF(fighter));
       if (cur && cur.value !== id) {
         const st = (await this.store.get<LinkStake>(LINK_STAKE(cur.value)))?.value;
-        if (st && (st.status === "ticketed" || st.status === "playing")) return false;
+        if (await stakeHolds(this.store, st, this.clock.now())) return false;
       }
       if ((await this.store.cas(LINK_STAKE_OF(fighter), cur?.version ?? 0, id)) !== null) return true;
     }
@@ -501,6 +599,15 @@ export class LinkStakeDesk {
   private async letGo(fighter: string, id: string) {
     const cur = await this.store.get<string>(LINK_STAKE_OF(fighter));
     if (cur?.value === id) await this.store.del(LINK_STAKE_OF(fighter)).catch(() => undefined);
+  }
+
+  /** Where a battle stands on-chain, asked at most every few seconds however often it's looked at. */
+  private async chainStatus(id: string): Promise<ChainStatus> {
+    const cached = (await this.store.get<ChainStatus>(CHAIN(id)))?.value;
+    if (cached) return cached;
+    const st = await this.cfg.chain.status(id);
+    await this.store.cas(CHAIN(id), 0, st, st.state === "none" ? CHAIN_NONE_FRESH_SECONDS : CHAIN_FRESH_SECONDS).catch(() => undefined);
+    return st;
   }
 
   /**
@@ -515,35 +622,25 @@ export class LinkStakeDesk {
     const set = async (patch: (cur: LinkStake) => LinkStake | undefined) => (await update<LinkStake>(this.store, LINK_STAKE(id), (cur) => (cur ? patch(cur) : undefined))) ?? (await this.store.get<LinkStake>(LINK_STAKE(id)))?.value ?? null;
 
     if (s.status === "ticketed") {
-      const st = await this.cfg.chain.status(id);
-      if (st.state === "closed") return this.close(s, st.how);
+      const st = await this.chainStatus(id);
+      if (st.state === "closed") return (await this.close(s, st.how)).stake;
       if (st.state === "none") {
         if (!s.seen && now > s.ticket.expiry * 1000 + EXPIRY_MARGIN_MS) {
-          // Never played: the pair gets its weekly count back.
-          await this.uncount(s.ticket.playerA, s.ticket.playerB, Math.floor(s.createdAt / WEEK_MS));
-          return this.close(s, "expired");
+          // Never played: the pair gets its weekly count back, once (by whichever call closes it).
+          const closed = await this.close(s, "expired");
+          if (closed.first) await this.uncount(s.ticket.playerA, s.ticket.playerB, Math.floor(s.createdAt / WEEK_MS));
+          return closed.stake;
         }
-        if (s.seen && now - s.seen.at > UNREAD_AFTER_MS) return this.close(s, s.seen.state === "open" ? "unaccepted" : "unread");
+        // Seen opened and now gone, past the time B could accept: it was cancelled (the closing may be out of reach).
+        if (s.seen?.state === "open" && now > s.ticket.acceptDeadline * 1000 + EXPIRY_MARGIN_MS) return (await this.close(s, "unaccepted")).stake;
+        if (s.seen && now - s.seen.at > UNREAD_AFTER_MS) return (await this.close(s, "unread")).stake;
         return s;
       }
       const state = st.state;
       s = await set((cur) => (cur.status === "ticketed" ? { ...cur, seen: { state, at: now }, ...(state === "live" && !cur.liveAt ? { liveAt: now } : {}) } : undefined));
       if (!s || s.status !== "ticketed") return s;
-      if (state === "open") return now > s.ticket.acceptDeadline * 1000 + EXPIRY_MARGIN_MS ? this.close(s, "unaccepted") : s;
-      // Both stakes are in: start the battle, once.
-      if ((await this.store.cas(STARTING(id), 0, 1, 90)) === null) return s;
-      try {
-        const m = await this.arena.startStaked(id, { fighter: s.fighters.A, fallback: s.fallbacks.A }, { fighter: s.fighters.B, fallback: s.fallbacks.B }).catch(() => null);
-        if (m) {
-          await update<string[]>(this.store, PLAYED, (cur) => [...(cur ?? []).filter((x) => x !== id), id].slice(-PLAYED_MAX));
-          s = await set((cur) => (cur.status === "ticketed" ? { ...cur, status: "playing", match: m.id } : undefined));
-        } else if (now - (s.liveAt ?? now) > START_GIVE_UP_MS) {
-          // No battle can be played for it: a void, so the stakes go back as soon as either side sends it.
-          s = await this.conclude(s, "void");
-        }
-      } finally {
-        await this.store.del(STARTING(id)).catch(() => undefined);
-      }
+      if (state === "open") return now > s.ticket.acceptDeadline * 1000 + EXPIRY_MARGIN_MS ? (await this.close(s, "unaccepted")).stake : s;
+      s = await this.start(s, now);
       if (!s || s.status !== "playing") return s;
     }
 
@@ -554,13 +651,54 @@ export class LinkStakeDesk {
       if (!s || s.status !== "over") return s;
     }
 
-    // over: the result is signed; the stake leaves the books when the chain closes it.
-    const st = await this.cfg.chain.status(id);
-    if (st.state === "closed") return this.close(s, st.how);
+    // over: the result is signed; the stake leaves the books when the chain closes it. A rating a failed write left
+    // out is put in here (it's counted once, however often this runs).
+    await this.rateOnce(s);
+    const st = await this.chainStatus(id);
+    if (st.state === "closed") return (await this.close(s, st.how)).stake;
     const since = s.result?.at ?? s.createdAt;
-    if (st.state === "none" && now - since > UNREAD_AFTER_MS) return this.close(s, "unread");
-    if (now - since > UNSETTLED_AFTER_MS) return this.close(s, "unread");
+    if (st.state === "none" && now - since > UNREAD_AFTER_MS) return (await this.close(s, "unread")).stake;
+    if (now - since > UNSETTLED_AFTER_MS) return (await this.close(s, "unread")).stake;
     return s;
+  }
+
+  /**
+   * Both stakes are in: starts the stake's battle. The battle's id is chosen and written into the stake first, so
+   * every try (this one, a retry after a function died, another instance) makes or finds the same battle: a stake
+   * gets one battle, ever. One try at a time. With no battle made five minutes after both staked, and none existing
+   * under the stake's id, it's signed void; if a battle then turns up after all, it's voided too (it has no stake).
+   */
+  private async start(s: LinkStake, now: number): Promise<LinkStake | null> {
+    const id = s.id;
+    const set = async (patch: (cur: LinkStake) => LinkStake | undefined) => (await update<LinkStake>(this.store, LINK_STAKE(id), (cur) => (cur ? patch(cur) : undefined))) ?? (await this.store.get<LinkStake>(LINK_STAKE(id)))?.value ?? null;
+    if (!s.starting) {
+      const chosen = linkMatchId();
+      const next = await set((cur) => (cur.status === "ticketed" && !cur.starting ? { ...cur, starting: { match: chosen, at: now } } : undefined));
+      if (!next?.starting || next.status !== "ticketed") return next;
+      s = next;
+    }
+    const match = s.starting!.match;
+    // A try that made nothing a moment ago (the rig is down): the next waits a little rather than start the emulator
+    // on every poll.
+    if (await this.store.get(START_WAIT(id))) return s;
+    if ((await this.store.cas(STARTING(id), 0, 1, START_LOCK_SECONDS)) === null) return s;
+    try {
+      const m = await this.arena.startStaked(id, match, { fighter: s.fighters.A, fallback: s.fallbacks.A }, { fighter: s.fighters.B, fallback: s.fallbacks.B }).catch(() => null);
+      // A start that threw may still have made the battle: what's stored is what counts.
+      if (m || (await this.arena.exists(match))) {
+        await update<string[]>(this.store, PLAYED, (cur) => [...(cur ?? []).filter((x) => x !== id), id].slice(-PLAYED_MAX));
+        const next = await set((cur) => (cur.status === "ticketed" ? { ...cur, status: "playing", match } : undefined));
+        // The stake was concluded without it meanwhile (given up on, or closed): the battle has nothing riding on it.
+        if (next && next.match !== match) await this.arena.abandon(match).catch(() => undefined);
+        return next;
+      }
+      await this.store.cas(START_WAIT(id), 0, 1, START_RETRY_SECONDS).catch(() => undefined);
+      // No battle can be played for it: a void, so the stakes go back as soon as either side sends it.
+      if (now - (s.liveAt ?? now) > START_GIVE_UP_MS) return this.conclude(s, "void");
+      return s;
+    } finally {
+      await this.store.del(STARTING(id)).catch(() => undefined);
+    }
   }
 
   /**
@@ -572,29 +710,41 @@ export class LinkStakeDesk {
     const now = this.clock.now();
     const before = { A: (await this.standing(s.fighters.A)).rating, B: (await this.standing(s.fighters.B)).rating };
     const done = (await update<LinkStake>(this.store, LINK_STAKE(s.id), (cur) => (cur && !cur.result && cur.status !== "done" ? { ...cur, status: "over", result: { outcome, at: now, before } } : undefined))) ?? (await this.store.get<LinkStake>(LINK_STAKE(s.id)))?.value ?? null;
-    if (!done?.result) return done;
-    const r = done.result;
-    const score = r.outcome === "void" ? null : r.outcome === "draw" ? 0.5 : r.outcome === "a" ? 1 : 0;
-    for (const role of ["A", "B"] as const) {
-      const other = role === "A" ? "B" : "A";
-      const mine = score === null ? null : role === "A" ? score : 1 - score;
-      if (mine !== null) {
-        await update<StakeStanding>(this.store, STANDING(done.fighters[role]), (cur) => {
-          const w = cur ?? { rating: START, record: emptyTally(), applied: [] };
-          if (w.applied.includes(done.id)) return undefined;
-          const record = mine === 1 ? { ...w.record, win: w.record.win + 1 } : mine === 0 ? { ...w.record, loss: w.record.loss + 1 } : { ...w.record, draw: w.record.draw + 1 };
-          return { rating: rate(r.before[role], [{ opponent: r.before[other], score: mine as 0 | 0.5 | 1 }]), record, applied: [...w.applied, done.id].slice(-50) };
-        });
-      }
-    }
+    if (done?.result) await this.rateOnce(done);
     return done;
   }
 
-  /** Takes a stake off the books: how it left, both fighters free, off the open list. Safe to repeat. */
-  private async close(s: LinkStake, how: LinkStakeClosed): Promise<LinkStake | null> {
-    const done = (await update<LinkStake>(this.store, LINK_STAKE(s.id), (cur) => (cur && cur.status !== "done" ? { ...cur, status: "done", closed: how } : undefined))) ?? (await this.store.get<LinkStake>(LINK_STAKE(s.id)))?.value ?? null;
+  /** Counts a concluded stake in both fighters' practice standings, unless it's there already. A void counts nothing. */
+  private async rateOnce(s: LinkStake): Promise<void> {
+    const r = s.result;
+    if (!r || r.outcome === "void") return;
+    const score = r.outcome === "draw" ? 0.5 : r.outcome === "a" ? 1 : 0;
+    for (const role of ["A", "B"] as const) {
+      const other = role === "A" ? "B" : "A";
+      const mine = role === "A" ? score : 1 - score;
+      await update<StakeStanding>(this.store, STANDING(s.fighters[role]), (cur) => {
+        const w = cur ?? { rating: START, record: emptyTally(), applied: [] };
+        if (w.applied.includes(s.id)) return undefined;
+        const record = mine === 1 ? { ...w.record, win: w.record.win + 1 } : mine === 0 ? { ...w.record, loss: w.record.loss + 1 } : { ...w.record, draw: w.record.draw + 1 };
+        return { rating: rate(r.before[role], [{ opponent: r.before[other], score: mine as 0 | 0.5 | 1 }]), record, applied: [...w.applied, s.id].slice(-50) };
+      });
+    }
+  }
+
+  /**
+   * Takes a stake off the books: how it left, off the open list. Safe to repeat; `first` is true only for the call
+   * that made the change (so what goes with a closing, like giving a pair its count back, happens once).
+   */
+  private async close(s: LinkStake, how: LinkStakeClosed): Promise<{ stake: LinkStake | null; first: boolean }> {
+    let first = false;
+    const done =
+      (await update<LinkStake>(this.store, LINK_STAKE(s.id), (cur) => {
+        // Decided afresh on every try of the write: a try that lost to another call's close made no change.
+        first = Boolean(cur && cur.status !== "done");
+        return first ? { ...cur!, status: "done", closed: how } : undefined;
+      })) ?? (await this.store.get<LinkStake>(LINK_STAKE(s.id)))?.value ?? null;
     await update<string[]>(this.store, OPEN, (cur) => (cur?.includes(s.id) ? cur.filter((x) => x !== s.id) : undefined));
-    return done;
+    return { stake: done, first };
   }
 
   /** The cron's pass over every stake still on the books. */

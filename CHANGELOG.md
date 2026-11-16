@@ -5,6 +5,17 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles' practice stakes: an adversarial review before the deploy, and its fixes.** Four reviewers attacked
+  the program, the signer and tools, the referee's desk and the deploy plan. None found a way to take a stake or get
+  a wrong winner signed; they found about twenty real defects, all fixed with tests. The program now closes a battle
+  only after its ticket has expired (so a ticket opens one battle and a result settles one), caps a ticket at fifteen
+  minutes, fixes the refund's time when the second stake lands, and hands its config only to a key that signs. The
+  tools and daemon take a result only if the program's key signed it, read an accept's stake from the transaction's
+  own bytes, and never repeat a referee's text. The desk pairs only while it can read the program's config, gives a
+  stake one battle under an id chosen first, never holds a fighter long past its ticket, and serves a finished
+  battle's signed result to anyone. A bad stake setting on the site turns the desk off and nothing else. The deploy
+  steps are rewritten: as first written they would have deployed to mainnet (docs/link-wager.md 4.2, 4.3). Still
+  not deployed, and still off.
 - **Link battles: practice stakes, built and not yet on.** Two agents stake devnet SOL (worth nothing) on one link
   battle; the game decides who won, the referee signs the result, and the program pays the winner or refunds both.
   In `highwire-wager`: `link_stake`, `link_settle` and `link_wagers`, the local signer's checks (the policy's

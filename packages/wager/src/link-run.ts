@@ -2,7 +2,8 @@ import { PublicKey } from "@solana/web3.js";
 import type { AuditLog, ExecuteResult, LocalSigner } from "highwire-agent";
 import { type Cluster } from "highwire-core";
 import type { LinkBattleAccount, LinkResult } from "./link-codec.ts";
-import { buildLinkExit, buildLinkSettle, readLinkBattlesAt, type LinkStakes, type SignedLinkResult } from "./link-tx.ts";
+import type { LinkWagerConfig } from "./link-codec.ts";
+import { buildLinkExit, buildLinkSettle, isLinkResultFor, linkStakesProgram, readLinkBattlesAt, type LinkStakes, type SignedLinkResult } from "./link-tx.ts";
 import { LINK_KIND } from "./signing.ts";
 
 // What a wallet owes its staked link battles once they're on-chain (docs/link-wager.md 3.5, 3.6), for the tools and
@@ -12,36 +13,40 @@ import { LINK_KIND } from "./signing.ts";
 export type LinkStakeAction = { kind: "settle"; signed: SignedLinkResult } | { kind: "cancel" } | { kind: "refund" };
 
 /**
- * Cancelling early would lose a battle B could still accept (the program lets A cancel at any time), so the daemon
- * waits this long past the accept deadline, for a chain clock that lags.
+ * Seconds past a deadline before acting on it, for the gap between this machine's clock and the chain's. The program
+ * refuses anything early (a battle closes only after its ticket has expired, a refund only from its `refund_at`), and
+ * an early try fails in simulation and is never sent, so the margin only saves a wasted try.
  */
-export const LINK_CANCEL_MARGIN_SECONDS = 90;
-/** Seconds past the refund deadline before trying it, for the gap between this machine's clock and the chain's. */
-export const LINK_REFUND_MARGIN_SECONDS = 10;
+export const LINK_CLOCK_MARGIN_SECONDS = 10;
 /**
  * Both sides' daemons see the result, and only one settle can land. The winner's (A's, for a draw or a void) sends at
  * once; the other waits this long after it first saw the result, in case the first is down.
  */
 export const LINK_SETTLE_GRACE_SECONDS = 30;
 
-/** What this wallet should do now for one staked battle. Pure: the chain's account, the time, and the referee's result. */
+/**
+ * What this wallet should do now for one staked battle. Pure: the chain's account, the time, and the referee's result.
+ * `result` must already be one the program would take (`isLinkResultFor`): anything else is dropped before this, so a
+ * result that can't settle never stands in the way of the refund.
+ */
 export function nextLinkStakeAction(
   b: LinkBattleAccount,
   wallet: string,
   now: number,
-  o: { result?: SignedLinkResult; refundAfterSeconds: number; /** When the result was first seen (seconds); omit to settle at once. */ resultSeenAt?: number },
+  o: { result?: SignedLinkResult; /** When the result was first seen (seconds); omit to settle at once. */ resultSeenAt?: number } = {},
 ): LinkStakeAction | null {
   const me = b.playerA === wallet ? "A" : b.playerB === wallet ? "B" : null;
   if (!me) return null;
-  if (b.status === "open") return now > b.acceptDeadline + LINK_CANCEL_MARGIN_SECONDS ? { kind: "cancel" } : null;
+  // Nothing closes a battle while its ticket still runs.
+  if (now <= b.ticketExpiry + LINK_CLOCK_MARGIN_SECONDS) return null;
+  if (b.status === "open") return { kind: "cancel" };
   const r = o.result;
-  // Only a result for this battle and these two wallets: anything else isn't this battle's.
   if (r && r.result.battleId === b.battleId && r.result.playerA === b.playerA && r.result.playerB === b.playerB) {
     const first = r.result.outcome === "a" ? me === "A" : r.result.outcome === "b" ? me === "B" : me === "A";
     if (first || o.resultSeenAt === undefined || now >= o.resultSeenAt + LINK_SETTLE_GRACE_SECONDS) return { kind: "settle", signed: r };
     return null;
   }
-  if (now > b.liveAt + o.refundAfterSeconds + LINK_REFUND_MARGIN_SECONDS) return { kind: "refund" };
+  if (now >= b.refundAt + LINK_CLOCK_MARGIN_SECONDS) return { kind: "refund" };
   return null;
 }
 
@@ -83,6 +88,17 @@ export function signedResultOf(x: unknown): SignedLinkResult | null {
   return { result, signature: o.signature };
 }
 
+/** The referee's results the program would take now, by battle: each checked against the config's key and its own battle. */
+export function usableResults(s: LinkStakes, config: Pick<LinkWagerConfig, "resultKey" | "resultKeyId">, battles: readonly LinkBattleAccount[], served: ReadonlyMap<string, SignedLinkResult>): Map<string, SignedLinkResult> {
+  const program = linkStakesProgram(s);
+  const out = new Map<string, SignedLinkResult>();
+  for (const b of battles) {
+    const r = served.get(b.battleId);
+    if (r && isLinkResultFor(program, config, b, r)) out.set(b.battleId, r);
+  }
+  return out;
+}
+
 type Signer = Pick<LocalSigner, "wallet" | "publicKey" | "execute">;
 
 /** Builds and executes one action for a staked battle through the local signer: a move that stakes nothing. */
@@ -98,10 +114,11 @@ export interface LinkStakeRunnerOptions {
   wallet: string;
   /** The wallet's staked battles on-chain. */
   battles: () => Promise<LinkBattleAccount[]>;
-  /** The referee's signed results for this fighter's unsettled battles, by battle id. Asked only when a battle is live. */
-  results: () => Promise<Map<string, SignedLinkResult>>;
-  /** The program's refund deadline, in seconds after both staked. */
-  refundAfterSeconds: () => Promise<number>;
+  /**
+   * The referee's signed results the program would take, for these battles, by battle id (`usableResults`: checked
+   * against the config's result key). Asked only when a battle is live.
+   */
+  results: (battles: LinkBattleAccount[]) => Promise<Map<string, SignedLinkResult>>;
   act: (battleId: string, action: LinkStakeAction) => Promise<string>;
   stopped: () => boolean;
   /** Why nothing should be sent now (a dry-run policy, or one without wagers), or null. */
@@ -122,7 +139,6 @@ const RETRY_MAX_MS = 5 * 60_000;
 export class LinkStakeRunner {
   private readonly tried = new Map<string, { at: number; failures: number }>();
   private readonly seen = new Map<string, number>();
-  private refundAfter: number | null = null;
 
   constructor(private readonly o: LinkStakeRunnerOptions) {}
 
@@ -146,17 +162,15 @@ export class LinkStakeRunner {
     if (battles.length === 0) return [];
     let results = new Map<string, SignedLinkResult>();
     if (battles.some((b) => b.status === "live")) {
-      // Without the referee's answer nothing is settled this pass; a refund past its deadline still goes.
-      results = await this.o.results().catch(() => new Map());
-      this.refundAfter ??= await this.o.refundAfterSeconds().catch(() => null);
+      // Without the referee's answer nothing is settled this pass; a refund past its time still goes.
+      results = await this.o.results(battles.filter((b) => b.status === "live")).catch(() => new Map());
     }
     const now = this.now();
     const out: { battleId: string; action: LinkStakeAction["kind"]; result: string }[] = [];
     for (const b of battles) {
       const result = results.get(b.battleId);
       if (result && !this.seen.has(b.battleId)) this.seen.set(b.battleId, now);
-      // Until the refund deadline is known, nothing is refunded: a guess could only fail on-chain.
-      const action = nextLinkStakeAction(b, this.o.wallet, now, { result, refundAfterSeconds: this.refundAfter ?? Number.POSITIVE_INFINITY, resultSeenAt: this.seen.get(b.battleId) });
+      const action = nextLinkStakeAction(b, this.o.wallet, now, { result, resultSeenAt: this.seen.get(b.battleId) });
       if (!action) continue;
       const key = `${b.battleId}:${action.kind}`;
       const last = this.tried.get(key);

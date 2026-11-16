@@ -57,7 +57,7 @@ export function linkBattleBytes(v: LinkBattleAccount): Buffer {
   o += new PublicKey(v.playerB).toBuffer().copy(b, o);
   o = b.writeBigUInt64LE(v.stake, o);
   o = b.writeUInt16LE(v.ticketKeyId, o);
-  for (const t of [v.acceptDeadline, v.ticketExpiry, v.openedAt, v.liveAt]) o = b.writeBigInt64LE(BigInt(t), o);
+  for (const t of [v.acceptDeadline, v.ticketExpiry, v.openedAt, v.liveAt, v.refundAt]) o = b.writeBigInt64LE(BigInt(t), o);
   return b;
 }
 
@@ -73,6 +73,7 @@ export const battleOf = (t: LinkTicket, status: "open" | "live", at = Math.floor
   ticketExpiry: t.expiry,
   openedAt: at,
   liveAt: status === "live" ? at : 0,
+  refundAt: status === "live" ? at + LINK_CONFIG.refundAfterSeconds : 0,
 });
 
 export const signTicket = (t: LinkTicket, secret = DESK_SECRET, program = LINK_PROGRAM) => ({ ticket: t, signature: Buffer.from(ed25519.sign(linkTicketMessage(program, t), secret)).toString("hex") });
@@ -91,6 +92,8 @@ export interface FakeDevnet {
   landed: string[];
   setConfig(c?: Partial<LinkWagerConfig>): void;
   setBattle(b: LinkBattleAccount | null, battleId?: string): void;
+  /** Runs out every battle's ticket (as if its few minutes had passed): from then a battle may close. */
+  runOutTickets(): void;
 }
 
 /** A devnet that holds the link-wager program's config (and whatever a test adds), answering over JSON-RPC. */
@@ -122,12 +125,12 @@ export function fakeDevnet(program = LINK_PROGRAM): FakeDevnet {
     const cur = accounts.get(at);
     const event = (kind: number, battleId: string, outcome: number) => [`Program ${program.toBase58()} invoke [1]`, `Program data: ${b64("link-wager")} ${b64(Uint8Array.of(kind))} ${b64(Buffer.from(battleId, "hex"))} ${b64(Uint8Array.of(outcome))}`, `Program ${program.toBase58()} success`];
     if (wg.kind === "open") {
-      accounts.set(at, { data: linkBattleBytes({ status: "open", battleId: wg.battleId, playerA: ix.keys[0]!.toBase58(), playerB: wg.playerB, stake: wg.stake, ticketKeyId: wg.keyId, acceptDeadline: wg.acceptDeadline, ticketExpiry: wg.expiry, openedAt: now, liveAt: 0 }) });
+      accounts.set(at, { data: linkBattleBytes({ status: "open", battleId: wg.battleId, playerA: ix.keys[0]!.toBase58(), playerB: wg.playerB, stake: wg.stake, ticketKeyId: wg.keyId, acceptDeadline: wg.acceptDeadline, ticketExpiry: wg.expiry, openedAt: now, liveAt: 0, refundAt: 0 }) });
       landed.push("open");
     } else if (!cur) {
       throw new Error("no such battle");
     } else if (wg.kind === "accept") {
-      accounts.set(at, { data: linkBattleBytes({ ...decodeLinkBattle(cur.data), status: "live", liveAt: now }) });
+      accounts.set(at, { data: linkBattleBytes({ ...decodeLinkBattle(cur.data), status: "live", liveAt: now, refundAt: now + LINK_CONFIG.refundAfterSeconds }) });
       landed.push("accept");
     } else if (wg.kind === "settle" || wg.kind === "cancel" || wg.kind === "refund") {
       const b = decodeLinkBattle(cur.data);
@@ -187,6 +190,14 @@ export function fakeDevnet(program = LINK_PROGRAM): FakeDevnet {
       const at = linkBattleAddress(program, b?.battleId ?? battleId!).toBase58();
       if (b) accounts.set(at, { data: linkBattleBytes(b) });
       else accounts.delete(at);
+    },
+    runOutTickets: () => {
+      const past = Math.floor(Date.now() / 1000) - 120;
+      for (const [at, a] of accounts) {
+        if (a.owner || a.data.length !== LINK_BATTLE_LEN) continue;
+        const b = decodeLinkBattle(a.data);
+        accounts.set(at, { data: linkBattleBytes({ ...b, acceptDeadline: Math.min(b.acceptDeadline, past), ticketExpiry: Math.min(b.ticketExpiry, past) }) });
+      }
     },
   };
   net.setConfig();

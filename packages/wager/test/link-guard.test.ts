@@ -104,18 +104,30 @@ test("a settle: only the expected one, with exactly the referee's result just be
   no(tx(resultIx(), settle(result, { playerA: attacker, playerB: other })), /names other players than its result/, expectSettle);
   // The desk's ticket can't stand in for a result.
   no(tx(ticketIx(), settle()), /isn't signed by the referee's key/, expectSettle);
+  // A signature check takes no accounts of its own.
+  const check = resultIx();
+  const withAccount = new TransactionInstruction({ programId: check.programId, keys: [{ pubkey: attacker, isSigner: false, isWritable: true }], data: check.data });
+  no(tx(withAccount, settle()), /an Ed25519 check takes no accounts/, expectSettle);
 });
 
 test("a cancel and a refund carry no signature check, and exactly their accounts", () => {
   const cancel = linkWagerInstruction(program, wallet, battleId, { kind: "cancel" }, parties);
   const refund = linkWagerInstruction(program, wallet, battleId, { kind: "refund" }, parties);
-  ok(tx(cancel), { kind: "cancel", battleId });
-  ok(tx(refund), { kind: "refund", battleId });
-  no(tx(refund), /not the link-wager instruction this flow builds/, { kind: "cancel", battleId });
-  no(tx(ticketIx(), cancel), /only a link battle's stake or settle carries/, { kind: "cancel", battleId });
+  ok(tx(cancel), { kind: "cancel", battleId, parties });
+  ok(tx(refund), { kind: "refund", battleId, parties });
+  no(tx(refund), /not the link-wager instruction this flow builds/, { kind: "cancel", battleId, parties });
+  no(tx(ticketIx(), cancel), /only a link battle's stake or settle carries/, { kind: "cancel", battleId, parties });
+  // The payees are the battle's own two wallets, in their places: nothing else is taken, even though the program
+  // would refuse it too (a refused transaction still costs its fee).
+  const swapped = { playerA: attacker, playerB: other };
+  no(tx(linkWagerInstruction(program, wallet, battleId, { kind: "cancel" }, swapped)), /opener's wallet isn't the expected one/, { kind: "cancel", battleId, parties });
+  no(tx(linkWagerInstruction(program, wallet, battleId, { kind: "refund" }, swapped)), /opener's wallet isn't the expected one/, { kind: "refund", battleId, parties });
+  no(tx(linkWagerInstruction(program, wallet, battleId, { kind: "refund" }, { playerA: wallet, playerB: attacker })), /second wallet isn't the expected one/, { kind: "refund", battleId, parties });
+  no(tx(cancel), /without the battle's wallets/, { kind: "cancel", battleId });
+  no(tx(refund), /without the battle's wallets/, { kind: "refund", battleId });
   // The authority's instructions are never a player's.
   const freeze = new TransactionInstruction({ programId: program, keys: [{ pubkey: wallet, isSigner: true, isWritable: false }, { pubkey: linkConfigAddress(program), isSigner: false, isWritable: true }, { pubkey: linkBattleAddress(program, battleId), isSigner: false, isWritable: true }], data: Buffer.from([LINK_WAGER_TAGS.freezeAndRefund]) });
-  no(tx(freeze), /not the link-wager instruction this flow builds/, { kind: "refund", battleId });
+  no(tx(freeze), /not the link-wager instruction this flow builds/, { kind: "refund", battleId, parties });
 });
 
 test("what a stake's envelope does is read from its bytes", () => {
@@ -124,6 +136,14 @@ test("what a stake's envelope does is read from its bytes", () => {
   assert.deepEqual(linkWagerFacts(env(tx(resultIx(), settle())), program), { kind: "settle", battle: linkBattleAddress(program, battleId).toBase58() });
   assert.equal(linkWagerFacts(env(tx(memo)), program), null, "not one of this program's");
   assert.throws(() => linkWagerFacts(env(tx(ticketIx(), open(), open())), program), /more than one/);
+  // An accept names no amount of its own: it's the ticket's, in the check just before it, which the program requires
+  // to be the battle's own ticket. Never an RPC's word.
+  const accept = linkWagerInstruction(program, other, battleId, { kind: "accept" });
+  assert.deepEqual(linkWagerFacts(env(txBy(other, ticketIx(), accept)), program), { kind: "accept", battle: linkBattleAddress(program, battleId).toBase58(), stake: 100_000_000n });
+  assert.deepEqual(linkWagerFacts(env(txBy(other, ticketIx({ ...ticket, stake: 250_000_000n }), accept)), program)?.stake, 250_000_000n);
+  assert.throws(() => linkWagerFacts(env(txBy(other, accept)), program), /without its ticket just before it/);
+  assert.throws(() => linkWagerFacts(env(txBy(other, resultIx(), accept)), program), /without its ticket just before it/, "a result is no ticket");
+  assert.throws(() => linkWagerFacts(env(txBy(other, ticketIx(), memo, accept)), program), /without its ticket just before it/);
 });
 
 test("a closed battle's outcome is the program's own closing event for it, and nothing else", () => {

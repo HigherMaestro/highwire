@@ -239,8 +239,10 @@ export function encodeLinkConfigUpdate(u: LinkConfigUpdate): Buffer {
   ]);
 }
 
+/** By the authority. A change of authority is signed by the new one too, so the config can't be handed to a mistyped address. */
 export function linkConfigUpdateInstruction(program: PublicKey, authority: PublicKey, u: LinkConfigUpdate): TransactionInstruction {
-  return new TransactionInstruction({ programId: program, keys: [r(authority, true), w(linkConfigAddress(program))], data: encodeLinkConfigUpdate(u) });
+  const keys = [r(authority, true), w(linkConfigAddress(program)), ...(u.authority === undefined ? [] : [r(new PublicKey(u.authority), true)])];
+  return new TransactionInstruction({ programId: program, keys, data: encodeLinkConfigUpdate(u) });
 }
 
 /** The authority alone: refunds whoever has staked on a battle, in full. */
@@ -353,7 +355,7 @@ export function decodeLinkConfig(data: Buffer): LinkWagerConfig {
 }
 
 export const LINK_BATTLE_STATUS = { open: 1, live: 2 } as const;
-export const LINK_BATTLE_LEN = 140;
+export const LINK_BATTLE_LEN = 148;
 /** Where each player's wallet sits in a battle's account: for getProgramAccounts filters. */
 export const LINK_BATTLE_PLAYER_OFFSETS = { A: 34, B: 66 } as const;
 
@@ -371,6 +373,8 @@ export interface LinkBattleAccount {
   /** Unix seconds: when A staked, and when B did (0 until then). */
   openedAt: number;
   liveAt: number;
+  /** Unix seconds: from when anyone may refund both if no result has come (0 until B stakes). Fixed when B stakes. */
+  refundAt: number;
 }
 
 export function decodeLinkBattle(data: Buffer): LinkBattleAccount {
@@ -389,5 +393,6 @@ export function decodeLinkBattle(data: Buffer): LinkBattleAccount {
     ticketExpiry: rd.i64(),
     openedAt: rd.i64(),
     liveAt: rd.i64(),
+    refundAt: rd.i64(),
   };
 }

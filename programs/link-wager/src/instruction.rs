@@ -36,21 +36,21 @@ pub struct ConfigUpdate {
 pub enum LinkWagerInstruction {
     /// Once, by the program's upgrade authority. [payer & upgrade authority (s, w), config (w), program data, system program]
     InitConfig(ConfigInit),
-    /// [authority (s), config (w)]
+    /// [authority (s), config (w)], and the new authority (s) when it changes: a config is never handed to a key that didn't sign.
     UpdateConfig(ConfigUpdate),
     /// Player A stakes and opens the battle from the desk's ticket (an Ed25519 instruction just before this one).
     /// [player A (s, w), config (w), battle (w), instructions sysvar, system program]
     Open { battle_id: [u8; 32], player_b: Pubkey, stake: u64, accept_deadline: i64, expiry: i64, key_id: u16 },
     /// Player B stakes, with the same ticket; the battle can start. [player B (s, w), config (w), battle (w), instructions sysvar, system program]
     Accept,
-    /// B never accepted: A at any time, or anyone after the deadline. Refunds A. [caller (s), config (w), battle (w), player A (w), incinerator (w)]
+    /// B never accepted: anyone, once the ticket has expired (never before, even by A). Refunds A. [caller (s), config (w), battle (w), player A (w), incinerator (w)]
     Cancel,
     /// Anyone, with the referee's signed result (an Ed25519 instruction just before this one): pays the winner both
     /// stakes, or refunds both on a draw or a void. [battle (w), config (w), player A (w), player B (w), instructions sysvar, incinerator (w)]
     Settle { outcome: u8, key_id: u16 },
-    /// Anyone, once both have staked and no result has come for the config's `refund_after_seconds`: refunds both in
+    /// Anyone, once both have staked and no result has come by the battle's `refund_at` (fixed when B staked): refunds both in
     /// full. [battle (w), config (w), player A (w), player B (w), incinerator (w)]
     Refund,
-    /// The authority only: refunds both stakes in full. [authority (s), config (w), battle (w), player A (w), player B (w), incinerator (w)]
+    /// The authority only, once the ticket has expired: refunds both stakes in full. [authority (s), config (w), battle (w), player A (w), player B (w), incinerator (w)]
     FreezeAndRefund,
 }

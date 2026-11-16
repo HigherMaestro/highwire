@@ -2,7 +2,7 @@ import { Buffer } from "buffer";
 import { PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { formatLamports, PROGRAMS, resolveInstructions, UnsafeTransactionError, type CompiledIx, type Envelope, type ProgramGuard } from "highwire-core";
 import { decodeEd25519, ED25519_PROGRAM_ID, INCINERATOR } from "./codec.ts";
-import { decodeLinkWager, linkBattleAddress, linkConfigAddress, linkResultMessage, linkTicketMessage, type LinkResult, type LinkTicket, type LinkWagerKind } from "./link-codec.ts";
+import { decodeLinkWager, LINK_TICKET_DOMAIN, linkBattleAddress, linkConfigAddress, linkResultMessage, linkTicketMessage, type LinkResult, type LinkTicket, type LinkWagerKind } from "./link-codec.ts";
 
 // Link battles' practice-stake program's safety checks and plain-language decoding, as a guard for highwire-core's
 // assertSafe and describeTransaction (docs/boundaries.md 5.2, docs/link-wager.md 4). Core knows nothing of the
@@ -25,6 +25,8 @@ export interface LinkWagerExpectation {
   /** For settle: the referee's result and its key. */
   result?: LinkResult;
   resultKey?: PublicKey;
+  /** For settle, cancel and refund: the battle's two wallets, as the chain records them: the only accounts it pays. */
+  parties?: { playerA: PublicKey; playerB: PublicKey };
 }
 
 /** Which of an instruction's accounts is the battle, by its kind. */
@@ -80,6 +82,7 @@ export function linkWagerGuard(program: PublicKey, wx?: LinkWagerExpectation): P
           if (p === ED25519_PROGRAM_ID) {
             const e = decodeEd25519(ix.data);
             if (!e) return fail(`instruction ${i + 1}: an Ed25519 check that isn't exactly one signature inside itself`);
+            if (ix.keys.length !== 0) fail(`instruction ${i + 1}: an Ed25519 check takes no accounts`);
             if (stake && wx?.ticket && wx.ticketKey) {
               if (e.key !== wx.ticketKey.toBase58()) fail(`instruction ${i + 1}: the ticket isn't signed by the desk's key`);
               if (!e.message.equals(linkTicketMessage(program, wx.ticket))) fail(`instruction ${i + 1}: the ticket isn't this battle's ticket`);
@@ -132,6 +135,8 @@ export function linkWagerGuard(program: PublicKey, wx?: LinkWagerExpectation): P
               at(1, config, "config");
               at(2, battle, "battle account");
               if (ix.keys.length !== 5) fail(`instruction ${i + 1}: a cancel with unexpected accounts`);
+              if (!wx.parties) return fail(`instruction ${i + 1}: a cancel without the battle's wallets`);
+              at(3, wx.parties.playerA, "opener's wallet");
               burns();
               break;
             case "settle": {
@@ -147,12 +152,16 @@ export function linkWagerGuard(program: PublicKey, wx?: LinkWagerExpectation): P
               if (r.battleId !== wx.battleId) fail(`instruction ${i + 1}: the result is for another battle`);
               if (wg.outcome !== r.outcome || wg.keyId !== r.keyId) fail(`instruction ${i + 1}: the settle doesn't match its result`);
               if (!key(2).equals(new PublicKey(r.playerA)) || !key(3).equals(new PublicKey(r.playerB))) fail(`instruction ${i + 1}: the settle names other players than its result`);
+              if (wx.parties && (!key(2).equals(wx.parties.playerA) || !key(3).equals(wx.parties.playerB))) fail(`instruction ${i + 1}: the settle names other players than the battle's`);
               break;
             }
             case "refund":
               at(0, battle, "battle account");
               at(1, config, "config");
               if (ix.keys.length !== 5) fail(`instruction ${i + 1}: a refund with unexpected accounts`);
+              if (!wx.parties) return fail(`instruction ${i + 1}: a refund without the battle's wallets`);
+              at(2, wx.parties.playerA, "opener's wallet");
+              at(3, wx.parties.playerB, "second wallet");
               burns();
               break;
             default:
@@ -169,14 +178,34 @@ export function linkWagerGuard(program: PublicKey, wx?: LinkWagerExpectation): P
   };
 }
 
-/** What a link-wager envelope does, read from its bytes: one transaction, one of the program's instructions. */
+/** Where the stake sits in a ticket's message: after the domain, the program and the battle's id and two wallets. */
+const TICKET_STAKE_OFFSET = LINK_TICKET_DOMAIN.length + 32 * 4;
+const TICKET_LENGTH = TICKET_STAKE_OFFSET + 8 + 8 + 8 + 2;
+
+/**
+ * What a link-wager envelope does, read from its bytes: one transaction, one of the program's instructions. A stake's
+ * amount comes from the bytes too: an open's from its own data, an accept's from the ticket in the Ed25519 check just
+ * before it, which the program requires to be the battle's own ticket (so the amount it names is the amount that
+ * moves). Nothing here asks an RPC.
+ */
 export function linkWagerFacts(env: Envelope, program: PublicKey): { kind: string; battle: string; stake?: bigint } | null {
   if (env.transactions.length !== 1) throw new UnsafeTransactionError("a stake on a link battle is exactly one transaction");
   const found: { kind: string; battle: string; stake?: bigint }[] = [];
-  for (const ix of resolveInstructions(VersionedTransaction.deserialize(Buffer.from(env.transactions[0]!.base64, "base64")))) {
+  const ixs = resolveInstructions(VersionedTransaction.deserialize(Buffer.from(env.transactions[0]!.base64, "base64")));
+  for (const [i, ix] of ixs.entries()) {
     if (!ix.programId.equals(program)) continue;
     const wg = decodeLinkWager(ix.data);
-    if (wg) found.push({ kind: wg.kind, battle: ix.keys[battleIndex(wg.kind)]?.toBase58() ?? "?", ...(wg.kind === "open" ? { stake: wg.stake } : {}) });
+    if (!wg) continue;
+    let stake: bigint | undefined;
+    if (wg.kind === "open") stake = wg.stake;
+    else if (wg.kind === "accept") {
+      const before = ixs[i - 1];
+      const ticket = before && before.programId.toBase58() === ED25519_PROGRAM_ID ? decodeEd25519(before.data)?.message : undefined;
+      const head = Buffer.concat([Buffer.from(LINK_TICKET_DOMAIN, "utf8"), program.toBuffer()]);
+      if (!ticket || ticket.length !== TICKET_LENGTH || !ticket.subarray(0, head.length).equals(head)) throw new UnsafeTransactionError("an accept without its ticket just before it");
+      stake = ticket.readBigUInt64LE(TICKET_STAKE_OFFSET);
+    }
+    found.push({ kind: wg.kind, battle: ix.keys[battleIndex(wg.kind)]?.toBase58() ?? "?", ...(stake !== undefined ? { stake } : {}) });
   }
   if (found.length > 1) throw new UnsafeTransactionError("the transaction carries more than one link-wager instruction");
   return found[0] ?? null;

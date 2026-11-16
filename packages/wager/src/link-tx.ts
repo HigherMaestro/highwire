@@ -82,6 +82,9 @@ export interface BuiltLinkStake extends Finished {
   stake: bigint;
 }
 
+/** The longest a ticket may still have to run when its battle opens (state.rs `TICKET_LIFETIME_MAX`). */
+export const LINK_TICKET_LIFETIME_MAX_SECONDS = 15 * 60;
+
 const sigBytes = (hex: string, what: string): Uint8Array => {
   if (!/^[0-9a-f]{128}$/.test(hex)) throw new ValidationError(`${what}'s signature is 64 bytes of hex.`);
   return Uint8Array.from(Buffer.from(hex, "hex"));
@@ -105,7 +108,11 @@ export async function buildLinkOpen(s: LinkStakes, req: LinkStakeRequest): Promi
   const p = linkStakesProgram(s);
   const t = req.ticket;
   if (t.playerA !== req.wallet.toBase58()) throw new ValidationError("This ticket opens a battle for another wallet.");
-  if (Math.floor(Date.now() / 1000) > t.expiry) throw new ValidationError("The ticket has expired; ask for a new pairing.");
+  const now = Math.floor(Date.now() / 1000);
+  if (now > t.expiry || now > t.acceptDeadline) throw new ValidationError("The ticket has expired; ask for a new pairing.");
+  // A stake can't leave a battle before its ticket expires, so a ticket that runs for long holds it for long: the
+  // program refuses one over fifteen minutes, and so does this, whatever the desk signed.
+  if (t.acceptDeadline > t.expiry || t.expiry - now > LINK_TICKET_LIFETIME_MAX_SECONDS) throw new ValidationError("The ticket runs longer than a ticket may; nothing was staked. Ask for a new pairing.");
   const config = await readLinkConfig(s);
   const sig = checkTicket(p, config, req);
   const ticketKey = new PublicKey(config.ticketKey);
@@ -146,6 +153,27 @@ export async function buildLinkAccept(s: LinkStakes, req: LinkStakeRequest): Pro
   return { ...built, stake: t.stake };
 }
 
+/** A battle's account closes only once its ticket has expired (the program's rule: a ticket opens one battle, ever). */
+function notBeforeTicket(b: LinkBattleAccount, done: string) {
+  if (Math.floor(Date.now() / 1000) <= b.ticketExpiry) throw new ValidationError(`That battle can be ${done} once its ticket has run out, at ${new Date(b.ticketExpiry * 1000).toISOString()}.`);
+}
+
+/**
+ * Whether this is the referee's result for this battle as the program would take it now: this battle and its two
+ * wallets, the key id the config holds, and a signature by the config's result key. Anything else isn't a result:
+ * whoever handed it over, it must not stand in the way of a refund.
+ */
+export function isLinkResultFor(program: PublicKey, config: Pick<LinkWagerConfig, "resultKey" | "resultKeyId">, b: Pick<LinkBattleAccount, "battleId" | "playerA" | "playerB">, s: SignedLinkResult): boolean {
+  const r = s.result;
+  if (r.battleId !== b.battleId || r.playerA !== b.playerA || r.playerB !== b.playerB || r.keyId !== config.resultKeyId) return false;
+  if (!/^[0-9a-f]{128}$/.test(s.signature)) return false;
+  try {
+    return ed25519.verify(Uint8Array.from(Buffer.from(s.signature, "hex")), linkResultMessage(program, r), new PublicKey(config.resultKey).toBytes());
+  } catch {
+    return false;
+  }
+}
+
 async function parties(s: LinkStakes, battleId: string) {
   const battle = await readLinkBattle(s, battleId);
   if (!battle) throw new ValidationError("There's no such staked battle open: it was never opened, or it has closed.");
@@ -159,6 +187,7 @@ export async function buildLinkSettle(s: LinkStakes, req: SignedLinkResult & { w
   const r = req.result;
   const [config, { battle, both, readOnly }] = await Promise.all([readLinkConfig(s), parties(s, r.battleId)]);
   if (battle.status !== "live") throw new ValidationError("That battle hasn't both stakes in: there's nothing to settle.");
+  notBeforeTicket(battle, "settled");
   if (battle.playerA !== r.playerA || battle.playerB !== r.playerB) throw new ValidationError("The result names other wallets than the battle on-chain.");
   if (r.keyId !== config.resultKeyId) throw new ValidationError("The result was signed with a retired referee key; ask the referee for it again.");
   const sig = sigBytes(req.signature, "The result");
@@ -171,7 +200,7 @@ export async function buildLinkSettle(s: LinkStakes, req: SignedLinkResult & { w
     wallet: req.wallet,
     kind: "wager",
     simulate: req.simulate,
-    txs: [{ tx, label: `settle link battle ${r.battleId.slice(0, 8)} on the referee's result`, expect: expect(req.wallet, linkWagerGuard(p, { kind: "settle", battleId: r.battleId, result: r, resultKey })) }],
+    txs: [{ tx, label: `settle link battle ${r.battleId.slice(0, 8)} on the referee's result`, expect: expect(req.wallet, linkWagerGuard(p, { kind: "settle", battleId: r.battleId, result: r, resultKey, parties: both })) }],
   });
 }
 
@@ -181,6 +210,8 @@ export async function buildLinkExit(s: LinkStakes, req: { wallet: PublicKey; bat
   const { battle, both, readOnly } = await parties(s, req.battleId);
   if (req.kind === "cancel" && battle.status !== "open") throw new ValidationError("Both have staked on that battle: it's settled or refunded, not cancelled.");
   if (req.kind === "refund" && battle.status !== "live") throw new ValidationError("Only its opener has staked on that battle: cancel it instead.");
+  notBeforeTicket(battle, req.kind === "cancel" ? "cancelled" : "refunded");
+  if (req.kind === "refund" && Math.floor(Date.now() / 1000) < battle.refundAt) throw new ValidationError(`That battle can be refunded from ${new Date(battle.refundAt * 1000).toISOString()}, if it has had no result by then.`);
   const microLamports = await priorityFee(s.chain, [req.wallet, linkBattleAddress(p, req.battleId)]);
   const tx = compose(req.wallet, microLamports, [linkWagerInstruction(p, req.wallet, req.battleId, { kind: req.kind }, both, readOnly)]);
   return finish({
@@ -188,7 +219,7 @@ export async function buildLinkExit(s: LinkStakes, req: { wallet: PublicKey; bat
     wallet: req.wallet,
     kind: "wager",
     simulate: req.simulate,
-    txs: [{ tx, label: `${req.kind === "cancel" ? "cancel the unaccepted" : "refund the unsettled"} link battle ${req.battleId.slice(0, 8)}`, expect: expect(req.wallet, linkWagerGuard(p, { kind: req.kind, battleId: req.battleId })) }],
+    txs: [{ tx, label: `${req.kind === "cancel" ? "cancel the unaccepted" : "refund the unsettled"} link battle ${req.battleId.slice(0, 8)}`, expect: expect(req.wallet, linkWagerGuard(p, { kind: req.kind, battleId: req.battleId, parties: both })) }],
   });
 }
 

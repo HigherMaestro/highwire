@@ -120,10 +120,11 @@ export const registerWagerTools: WagerExtension = wagerToolsFor();
 
 function registerTools(server: McpServer, deps: Deps, signer: ExecutionSigner, relay: RelayCall, linkProgram?: PublicKey): StakedSeries {
   const { chain } = deps;
-  // Link battles' practice stakes (link-tools.ts): only where their program is known. Until it's deployed and listed,
-  // those tools don't exist, rather than exist and always refuse.
+  // Link battles' practice stakes (link-tools.ts): only where their program is known (until it's deployed and listed,
+  // those tools don't exist, rather than exist and always refuse), and only on a server that can play the battle
+  // (HIGHWIRE_LINK=1): a stake with no link_move to play it would only be forfeited.
   const link = linkProgram ?? linkWagerProgram(chain.cluster);
-  if (link) registerLinkStakeTools(server, deps, signer, relay, link);
+  if (link && deps.linkPlay) registerLinkStakeTools(server, deps, signer, relay, link);
   const secrets = () => new WagerSecrets(signer.paths.wagerSecrets);
   const wallet = new PublicKey(signer.wallet);
   const program = () => {

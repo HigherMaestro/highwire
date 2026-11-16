@@ -133,6 +133,7 @@ fn both_accounts_are_laid_out_the_same() {
         ticket_expiry: t.expiry,
         opened_at: 1_800_000_010,
         live_at: 1_800_000_020,
+        refund_at: 1_800_003_620,
     };
     let bytes = borsh::to_vec(&battle).unwrap();
     assert_eq!(bytes.len(), Battle::LEN);

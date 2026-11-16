@@ -2,9 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import { Keypair, PublicKey, VersionedTransaction } from "@solana/web3.js";
-import { assertSafe, describeTransaction, resolveInstructions, type Finished } from "highwire-core";
+import { assertSafe, Chain, describeTransaction, resolveInstructions, type Finished } from "highwire-core";
 import { decodeEd25519, ED25519_PROGRAM_ID, INCINERATOR } from "../src/codec.ts";
-import { decodeLinkBattle, decodeLinkConfig, decodeLinkWager, linkBattleAddress, linkConfigAddress, linkResultMessage, linkTicketMessage, type LinkResult, type LinkTicket } from "../src/link-codec.ts";
+import { decodeLinkBattle, decodeLinkConfig, decodeLinkWager, LINK_WAGER_PROGRAM_IDS, linkBattleAddress, linkConfigAddress, linkResultMessage, linkTicketMessage, type LinkResult, type LinkTicket } from "../src/link-codec.ts";
 import { linkWagerFacts, linkWagerGuard } from "../src/link-guard.ts";
 import { buildLinkAccept, buildLinkExit, buildLinkOpen, buildLinkSettle, linkStakesProgram, readLinkBattle, readLinkConfig } from "../src/link-tx.ts";
 import { battleOf, DESK_KEY, fakeDevnet, LINK_CONFIG, LINK_PROGRAM, linkBattleBytes, linkConfigBytes, REFEREE_KEY, signResult, signTicket } from "./link-fake.ts";
@@ -29,9 +29,12 @@ test("the test's account bytes are the layout the codec reads", () => {
 
 test("nothing builds for a cluster the program isn't deployed on", async () => {
   const net = fakeDevnet();
-  // The codec's table has no address yet (docs/link-wager.md 4.1), so only a program handed in, in code, builds.
-  assert.throws(() => linkStakesProgram({ chain: net.chain }), /isn't deployed on devnet yet/);
-  await assert.rejects(buildLinkOpen({ chain: net.chain }, { wallet: a, ...signTicket(ticket()) }), /isn't deployed on devnet yet/);
+  // Practice stakes are devnet's alone: the codec never lists a mainnet program, so nothing builds there, whatever
+  // devnet's entry holds. (Tests and the rehearsal hand a program in, in code.)
+  assert.equal(LINK_WAGER_PROGRAM_IDS.mainnet, null);
+  const mainnet = new Chain({ cluster: "mainnet", rpcUrl: "https://rpc.test", fetch: net.fetch });
+  assert.throws(() => linkStakesProgram({ chain: mainnet }), /isn't deployed on mainnet yet/);
+  await assert.rejects(buildLinkOpen({ chain: mainnet }, { wallet: a, ...signTicket(ticket()) }), /isn't deployed on mainnet yet/);
   assert.equal(net.calls.length, 0, "refused before anything is read");
   // A program with no config: not set up.
   net.accounts.clear();
@@ -71,6 +74,12 @@ test("an open is refused for the wrong wallet, a stale ticket, a forged one, a r
   const s = { chain: net.chain, program: LINK_PROGRAM };
   await assert.rejects(buildLinkOpen(s, { wallet: b, ...signTicket(ticket()) }), /opens a battle for another wallet/);
   await assert.rejects(buildLinkOpen(s, { wallet: a, ...signTicket(ticket({ expiry: now() - 1 })) }), /ticket has expired/);
+  await assert.rejects(buildLinkOpen(s, { wallet: a, ...signTicket(ticket({ acceptDeadline: now() - 1 })) }), /ticket has expired/, "nobody could accept it");
+  // A stake stays in its battle until the ticket expires, so a ticket that runs for long holds it for long: refused
+  // over fifteen minutes, however validly the desk signed it.
+  await assert.rejects(buildLinkOpen(s, { wallet: a, ...signTicket(ticket({ acceptDeadline: now() + 86_400 * 3650, expiry: now() + 86_400 * 3650 })) }), /runs longer than a ticket may/);
+  await assert.rejects(buildLinkOpen(s, { wallet: a, ...signTicket(ticket({ expiry: now() + 16 * 60 })) }), /runs longer than a ticket may/);
+  await assert.rejects(buildLinkOpen(s, { wallet: a, ...signTicket(ticket({ acceptDeadline: now() + 700, expiry: now() + 600 })) }), /runs longer than a ticket may/);
   await assert.rejects(buildLinkOpen(s, { wallet: a, ...signTicket(ticket(), new Uint8Array(32).fill(8)) }), /isn't signed by the desk's key/);
   // A real signature on another ticket (a smaller stake) doesn't carry over.
   await assert.rejects(buildLinkOpen(s, { wallet: a, ticket: ticket({ stake: 250_000_000n }), signature: signTicket(ticket()).signature }), /isn't signed by the desk's key/);
@@ -95,7 +104,7 @@ test("an accept stakes only on the battle its ticket describes, as it stands on-
   assert.ok(decodeEd25519(check!.data)!.message.equals(linkTicketMessage(LINK_PROGRAM, t)));
   assert.equal(decodeLinkWager(accept!.data)!.kind, "accept");
   assert.equal(accept!.keys[0]!.toBase58(), b.toBase58());
-  assert.deepEqual(linkWagerFacts(built.envelope, LINK_PROGRAM), { kind: "accept", battle: linkBattleAddress(LINK_PROGRAM, battleId).toBase58() });
+  assert.deepEqual(linkWagerFacts(built.envelope, LINK_PROGRAM), { kind: "accept", battle: linkBattleAddress(LINK_PROGRAM, battleId).toBase58(), stake: 100_000_000n }, "the amount is the ticket's, in the bytes");
   // Not for A, not once it has started, not when the account says something other than the ticket, not late.
   await assert.rejects(buildLinkAccept(s, { wallet: a, ...signTicket(t) }), /for another wallet to accept/);
   net.setBattle({ ...battleOf(t, "open"), stake: 250_000_000n });
@@ -119,6 +128,9 @@ test("a settle carries the referee's result for the two wallets on-chain, and an
   net.setBattle(battleOf(t, "open"));
   await assert.rejects(buildLinkSettle(s, { wallet: sender, ...signResult(result()) }), /hasn't both stakes in/);
   net.setBattle(battleOf(t, "live"));
+  // Nothing closes a battle while its ticket runs (a ticket opens one battle, ever).
+  await assert.rejects(buildLinkSettle(s, { wallet: sender, ...signResult(result()) }), /can be settled once its ticket has run out/);
+  net.runOutTickets();
   for (const outcome of ["a", "b", "draw", "void"] as const) {
     const r = result({ outcome });
     const built = await buildLinkSettle(s, { wallet: sender, ...signResult(r) });
@@ -148,13 +160,20 @@ test("a cancel is for a battle nobody accepted, a refund for one both staked on"
   const t = ticket();
   await assert.rejects(buildLinkExit(s, { wallet: a, battleId, kind: "cancel" }), /no such staked battle/);
   net.setBattle(battleOf(t, "open"));
+  await assert.rejects(buildLinkExit(s, { wallet: a, battleId, kind: "cancel" }), /can be cancelled once its ticket has run out/, "not even by its opener");
+  net.runOutTickets();
   const cancel = await buildLinkExit(s, { wallet: a, battleId, kind: "cancel" });
   assert.equal(decodeLinkWager(ours(cancel)[0]!.data)!.kind, "cancel");
   assert.equal(ours(cancel).length, 1, "no signature check: nothing signed is needed to take your own stake back");
   await assert.rejects(buildLinkExit(s, { wallet: a, battleId, kind: "refund" }), /cancel it instead/);
   net.setBattle(battleOf(t, "live"));
+  net.runOutTickets();
+  await assert.rejects(buildLinkExit(s, { wallet: b, battleId, kind: "refund" }), /can be refunded from/, "not before the time fixed when B staked");
+  net.setBattle({ ...battleOf(t, "live", now() - 7200), acceptDeadline: now() - 7000, ticketExpiry: now() - 7000 });
   const refund = await buildLinkExit(s, { wallet: b, battleId, kind: "refund" });
   assert.equal(decodeLinkWager(ours(refund)[0]!.data)!.kind, "refund");
+  // The payees in the bytes are the battle's own two wallets, and the guard holds the builder to them.
+  assert.deepEqual(ours(refund)[0]!.keys.slice(2, 4).map((k) => k.toBase58()), [a.toBase58(), b.toBase58()]);
   await assert.rejects(buildLinkExit(s, { wallet: a, battleId, kind: "cancel" }), /settled or refunded, not cancelled/);
   // A player whose wallet can't be credited (a program's account) is passed read-only, so the refund still lands.
   net.accounts.set(b.toBase58(), { data: Buffer.alloc(0), owner: "BPFLoaderUpgradeab1e11111111111111111111111", executable: true });

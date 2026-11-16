@@ -6,7 +6,7 @@ use link_wager::error::WagerError;
 use link_wager::instruction::{ConfigInit, ConfigUpdate, LinkWagerInstruction};
 use link_wager::processor::battle_address;
 use link_wager::signed::{BattleResult, Ticket};
-use link_wager::state::{Battle, Config, CONFIG_SEED, OUTCOME_A, OUTCOME_B, OUTCOME_DRAW, OUTCOME_VOID, REFUND_AFTER_MIN, STATUS_LIVE, STATUS_OPEN};
+use link_wager::state::{Battle, Config, CONFIG_SEED, OUTCOME_A, OUTCOME_B, OUTCOME_DRAW, OUTCOME_VOID, REFUND_AFTER_MIN, STATUS_LIVE, STATUS_OPEN, TICKET_LIFETIME_MAX};
 use solana_program_test::{processor, BanksClientError, ProgramTest, ProgramTestContext};
 use solana_sdk::{
     account::Account,
@@ -18,7 +18,7 @@ use solana_sdk::{
     instruction::{AccountMeta, Instruction, InstructionError},
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    system_program, sysvar,
+    system_instruction, system_program, sysvar,
     transaction::{Transaction, TransactionError},
 };
 
@@ -26,6 +26,8 @@ const SOL: u64 = 1_000_000_000;
 const T0: i64 = 1_800_000_000;
 const STAKE: u64 = SOL / 10;
 const REFUND_AFTER: u32 = 2 * 60 * 60;
+/// How long the tests' tickets run.
+const TICKET: i64 = 300;
 
 fn program_id() -> Pubkey {
     link_wager::id()
@@ -79,6 +81,8 @@ struct Env {
     b: Keypair,
     stranger: Keypair,
     nonce: u32,
+    /// The clock, as last set.
+    now: i64,
 }
 
 impl Env {
@@ -98,7 +102,7 @@ impl Env {
         data.extend_from_slice(authority.pubkey().as_ref());
         pt.add_account(pd, Account { lamports: SOL, data, owner: bpf_loader_upgradeable::ID, ..Account::default() });
         let ctx = pt.start_with_context().await;
-        let mut env = Env { ctx, authority, ticket_key: key(7), result_key: key(9), a, b, stranger, nonce: 0 };
+        let mut env = Env { ctx, authority, ticket_key: key(7), result_key: key(9), a, b, stranger, nonce: 0, now: T0 };
         env.set_time(T0).await;
         env
     }
@@ -129,6 +133,7 @@ impl Env {
         let mut clock: Clock = self.ctx.banks_client.get_sysvar().await.unwrap();
         clock.unix_timestamp = t;
         self.ctx.set_sysvar(&clock);
+        self.now = t;
     }
 
     /// Sends `ixs` paid for by the test payer (so the players' balances move only by their stakes), with a compute
@@ -140,6 +145,16 @@ impl Env {
         all.extend_from_slice(signers);
         let tx = Transaction::new_signed_with_payer(&ixs, Some(&self.ctx.payer.pubkey()), &all, self.ctx.last_blockhash);
         failure(self.ctx.banks_client.process_transaction(tx).await)
+    }
+
+    /// Whether `ixs` are refused, for whatever reason (the runtime's own refusals included).
+    async fn fails(&mut self, mut ixs: Vec<Instruction>, signers: &[&Keypair]) -> bool {
+        self.nonce += 1;
+        ixs.push(ComputeBudgetInstruction::set_compute_unit_limit(1_400_000 - self.nonce));
+        let mut all: Vec<&Keypair> = vec![&self.ctx.payer];
+        all.extend_from_slice(signers);
+        let tx = Transaction::new_signed_with_payer(&ixs, Some(&self.ctx.payer.pubkey()), &all, self.ctx.last_blockhash);
+        self.ctx.banks_client.process_transaction(tx).await.is_err()
     }
 
     /// Sends `ixs` and returns the log of a successful transaction.
@@ -168,8 +183,27 @@ impl Env {
         self.send(vec![i], &[signer]).await
     }
 
+    /// Hands the config to `to`, which signs as well (or doesn't, with `signs` false).
+    async fn hand_over(&mut self, signer: &Keypair, to: &Keypair, signs: bool) -> Option<Failure> {
+        let u = ConfigUpdate { authority: Some(to.pubkey()), ..ConfigUpdate::default() };
+        let i = ix(LinkWagerInstruction::UpdateConfig(u), vec![AccountMeta::new_readonly(signer.pubkey(), true), AccountMeta::new(config_address(), false), AccountMeta::new_readonly(to.pubkey(), signs)]);
+        if signs {
+            self.send(vec![i], &[signer, to]).await
+        } else {
+            self.send(vec![i], &[signer]).await
+        }
+    }
+
+    /// A ticket from now: B may accept for five minutes, and it expires then too (as the desk signs them).
     fn ticket(&self, id: [u8; 32]) -> Ticket {
-        Ticket { battle_id: id, player_a: self.a.pubkey(), player_b: self.b.pubkey(), stake: STAKE, accept_deadline: T0 + 300, expiry: T0 + 600, key_id: 1 }
+        Ticket { battle_id: id, player_a: self.a.pubkey(), player_b: self.b.pubkey(), stake: STAKE, accept_deadline: self.now + TICKET, expiry: self.now + TICKET, key_id: 1 }
+    }
+
+    /// Moves the clock to just past a ticket's expiry: from then its battle may close.
+    async fn past(&mut self, t: &Ticket) {
+        if self.now <= t.expiry {
+            self.set_time(t.expiry + 1).await;
+        }
     }
 
     fn signed_ticket(&self, t: &Ticket) -> Instruction {
@@ -214,11 +248,13 @@ impl Env {
         self.send(ixs, &[&b]).await
     }
 
-    /// Both stake at the current time; returns the ticket.
+    /// Both stake at the current time, and the clock moves past the ticket's expiry (a battle outlasts its ticket);
+    /// returns the ticket.
     async fn live(&mut self, seed: u8) -> Ticket {
         let t = self.ticket([seed; 32]);
         assert_eq!(self.open(&t).await, None);
         assert_eq!(self.accept(&t).await, None);
+        self.past(&t).await;
         t
     }
 
@@ -431,8 +467,9 @@ async fn a_paused_config_takes_no_new_stakes() {
     assert_eq!(env.accept(&t).await, Some((1, code(WagerError::Paused))));
     let other = env.ticket([8; 32]);
     assert_eq!(env.open(&other).await, Some((1, code(WagerError::Paused))));
-    // What's already staked can still leave: A cancels.
+    // What's already staked can still leave: cancelled once its ticket has run out.
     let a = clone(&env.a);
+    env.past(&t).await;
     assert_eq!(env.cancel(&a, &t).await, None);
     assert_eq!(env.config().await.open_stake, 0);
 }
@@ -459,24 +496,61 @@ async fn a_battle_b_never_joins_is_cancelled_and_a_gets_everything_back() {
     let a0 = env.balance(&a_key).await;
     let t = env.ticket([10; 32]);
     assert_eq!(env.open(&t).await, None);
-    // A stranger can't cancel before the deadline; A can at any time.
+    // Nobody cancels while the ticket runs, A included: a cancel then would let the same ticket open it again.
     let stranger = clone(&env.stranger);
-    assert_eq!(env.cancel(&stranger, &t).await, Some((0, code(WagerError::NotYet))));
     let a = clone(&env.a);
-    assert_eq!(env.cancel(&a, &t).await, None);
+    assert_eq!(env.cancel(&stranger, &t).await, Some((0, code(WagerError::NotYet))));
+    assert_eq!(env.cancel(&a, &t).await, Some((0, code(WagerError::NotYet))));
+    env.set_time(t.expiry).await;
+    assert_eq!(env.cancel(&a, &t).await, Some((0, code(WagerError::NotYet))));
+    // Once it has run out, anyone can, and everything goes back to A.
+    env.past(&t).await;
+    assert_eq!(env.cancel(&stranger, &t).await, None);
     assert_eq!(env.balance(&a_key).await, a0);
     assert_eq!(env.battle(&t.battle_id).await, None);
     assert_eq!(env.config().await.open_stake, 0);
-    // After the deadline, anyone can, and the stake still goes to A.
-    let t = env.ticket([11; 32]);
-    assert_eq!(env.open(&t).await, None);
-    env.set_time(T0 + 301).await;
-    assert_eq!(env.cancel(&stranger, &t).await, None);
-    assert_eq!(env.balance(&a_key).await, a0);
     // A live battle isn't cancelled.
-    env.set_time(T0).await;
     let t = env.live(12).await;
     assert_eq!(env.cancel(&a, &t).await, Some((0, code(WagerError::WrongStatus))));
+}
+
+#[tokio::test]
+async fn a_ticket_opens_one_battle_ever_and_a_result_settles_one() {
+    // Cancelled: the same ticket can't open the battle again.
+    let mut env = Env::ready().await;
+    let a = clone(&env.a);
+    let t = env.ticket([13; 32]);
+    assert_eq!(env.open(&t).await, None);
+    assert_eq!(env.open(&t).await, Some((1, code(WagerError::WrongStatus))), "not twice while it's open");
+    env.past(&t).await;
+    assert_eq!(env.cancel(&a, &t).await, None);
+    assert_eq!(env.open(&t).await, Some((1, code(WagerError::TicketExpired))));
+    // Settled: a battle isn't paid while its ticket still runs, so there's never a closed battle the ticket could
+    // open again for the same (public) result to settle a second time.
+    let mut env = Env::ready().await;
+    let (ak, bk) = (env.a.pubkey(), env.b.pubkey());
+    let (a0, b0) = (env.balance(&ak).await, env.balance(&bk).await);
+    let t = env.ticket([14; 32]);
+    assert_eq!(env.open(&t).await, None);
+    assert_eq!(env.accept(&t).await, None);
+    assert_eq!(env.settle(&t, OUTCOME_A).await, Some((1, code(WagerError::NotYet))));
+    let authority = clone(&env.authority);
+    assert_eq!(env.freeze(&authority, &t).await, Some((0, code(WagerError::NotYet))), "nor frozen, even by the authority");
+    env.past(&t).await;
+    assert_eq!(env.settle(&t, OUTCOME_A).await, None);
+    assert_eq!(env.open(&t).await, Some((1, code(WagerError::TicketExpired))));
+    assert_eq!(env.settle(&t, OUTCOME_A).await, Some((1, code(WagerError::WrongBattleAccount))));
+    assert_eq!((env.balance(&ak).await, env.balance(&bk).await), (a0 + STAKE, b0 - STAKE), "paid once");
+}
+
+#[tokio::test]
+async fn a_ticket_runs_fifteen_minutes_at_most() {
+    let mut env = Env::ready().await;
+    let a = clone(&env.a);
+    let long = Ticket { accept_deadline: T0 + 60, expiry: T0 + TICKET_LIFETIME_MAX + 1, ..env.ticket([15; 32]) };
+    assert_eq!(env.send(vec![env.signed_ticket(&long), env.open_ix(&long)], &[&a]).await, Some((1, code(WagerError::TicketExpired))));
+    let most = Ticket { accept_deadline: T0 + 60, expiry: T0 + TICKET_LIFETIME_MAX, ..env.ticket([16; 32]) };
+    assert_eq!(env.send(vec![env.signed_ticket(&most), env.open_ix(&most)], &[&a]).await, None);
 }
 
 // ---------------------------------------------------------------- the end
@@ -541,11 +615,13 @@ async fn every_closing_announces_how_the_battle_ended() {
             AccountMeta::new(incinerator::ID, false),
         ],
     );
+    env.past(&t).await;
     let logs = env.logs(vec![cancel], &[&a]).await;
     assert!(logs.contains(&event(2, &t.battle_id, 255)), "{logs:#?}");
     // A refund.
     let t = env.live(36).await;
-    env.set_time(T0 + REFUND_AFTER as i64).await;
+    let at = env.battle(&t.battle_id).await.unwrap().refund_at;
+    env.set_time(at).await;
     let logs = env.logs(vec![ix(LinkWagerInstruction::Refund, env.payout_accounts(&t))], &[]).await;
     assert!(logs.contains(&event(3, &t.battle_id, 255)), "{logs:#?}");
 }
@@ -634,6 +710,27 @@ async fn with_no_result_anyone_refunds_both_after_the_deadline() {
 }
 
 #[tokio::test]
+async fn the_refund_time_is_fixed_when_b_stakes() {
+    let mut env = Env::ready().await;
+    let authority = clone(&env.authority);
+    let t = env.live(44).await;
+    let b = env.battle(&t.battle_id).await.unwrap();
+    assert_eq!(b.refund_at, b.live_at + REFUND_AFTER as i64);
+    // The authority shortens the window: a battle already being played keeps the one it started with.
+    assert_eq!(env.update(&authority, ConfigUpdate { refund_after_seconds: Some(REFUND_AFTER_MIN), ..Default::default() }).await, None);
+    env.set_time(b.live_at + REFUND_AFTER_MIN as i64 + 1).await;
+    assert_eq!(env.refund(&t).await, Some((0, code(WagerError::NotYet))));
+    env.set_time(b.refund_at - 1).await;
+    assert_eq!(env.refund(&t).await, Some((0, code(WagerError::NotYet))));
+    env.set_time(b.refund_at).await;
+    assert_eq!(env.refund(&t).await, None);
+    // A battle staked after the change gets the new window.
+    let t = env.live(45).await;
+    let b = env.battle(&t.battle_id).await.unwrap();
+    assert_eq!(b.refund_at, b.live_at + REFUND_AFTER_MIN as i64);
+}
+
+#[tokio::test]
 async fn the_authority_alone_freezes_and_refunds_whoever_has_staked() {
     let mut env = Env::ready().await;
     let (a, b) = (env.a.pubkey(), env.b.pubkey());
@@ -648,6 +745,7 @@ async fn the_authority_alone_freezes_and_refunds_whoever_has_staked() {
     // Only A staked: B is paid nothing, A gets its stake back.
     let t = env.ticket([42; 32]);
     assert_eq!(env.open(&t).await, None);
+    env.past(&t).await;
     assert_eq!(env.freeze(&authority, &t).await, None);
     assert_eq!((env.balance(&a).await, env.balance(&b).await), (a0, b0));
     assert_eq!(env.config().await.open_stake, 0);
@@ -674,15 +772,222 @@ async fn the_open_stake_counter_comes_back_to_zero_on_every_way_out() {
     assert_eq!(env.settle(&t, OUTCOME_DRAW).await, None);
     assert_eq!(env.config().await.open_stake, 0);
     let t = env.live(51).await;
-    env.set_time(T0 + REFUND_AFTER as i64).await;
+    let at = env.battle(&t.battle_id).await.unwrap().refund_at;
+    env.set_time(at).await;
     assert_eq!(env.refund(&t).await, None);
     assert_eq!(env.config().await.open_stake, 0);
-    env.set_time(T0).await;
     let t = env.live(52).await;
     assert_eq!(env.freeze(&authority, &t).await, None);
     assert_eq!(env.config().await.open_stake, 0);
     let t = env.ticket([53; 32]);
     assert_eq!(env.open(&t).await, None);
+    env.past(&t).await;
     assert_eq!(env.cancel(&a, &t).await, None);
     assert_eq!(env.config().await.open_stake, 0);
+}
+
+// ---------------------------------------------------------------- attacks (from the review of 2026-11-15)
+
+#[tokio::test]
+async fn the_config_takes_three_real_keys_and_changes_hands_only_to_a_key_that_signs() {
+    let mut env = Env::new().await;
+    let authority = clone(&env.authority);
+    // No key is all zeroes, and the two signing keys are never the same key.
+    for bad in [
+        ConfigInit { authority: Pubkey::default(), ..env.init() },
+        ConfigInit { ticket_key: Pubkey::default(), ..env.init() },
+        ConfigInit { result_key: Pubkey::default(), ..env.init() },
+        ConfigInit { result_key: pubkey_of(&env.ticket_key), ..env.init() },
+    ] {
+        assert_eq!(env.init_config(&authority, bad).await, Some((0, code(WagerError::BadInstruction))));
+    }
+    let init = env.init();
+    assert_eq!(env.init_config(&authority, init).await, None);
+    let same = ConfigUpdate { result_key: Some((pubkey_of(&env.ticket_key), 2)), ..Default::default() };
+    assert_eq!(env.update(&authority, same).await, Some((0, code(WagerError::BadInstruction))));
+    let zero = ConfigUpdate { ticket_key: Some((Pubkey::default(), 2)), ..Default::default() };
+    assert_eq!(env.update(&authority, zero).await, Some((0, code(WagerError::BadInstruction))));
+    // The config is handed only to a key that signs for it: never to a mistyped address, or to nobody.
+    let next = clone(&env.stranger);
+    assert_eq!(env.hand_over(&authority, &next, false).await, Some((0, code(WagerError::NotAuthority))));
+    let bare = ix(LinkWagerInstruction::UpdateConfig(ConfigUpdate { authority: Some(next.pubkey()), ..Default::default() }), vec![AccountMeta::new_readonly(authority.pubkey(), true), AccountMeta::new(config_address(), false)]);
+    assert!(env.fails(vec![bare], &[&authority]).await, "nor with the new key left out");
+    assert_eq!(env.config().await.authority, authority.pubkey());
+    assert_eq!(env.hand_over(&authority, &next, true).await, None);
+    assert_eq!(env.config().await.authority, next.pubkey());
+    assert_eq!(env.update(&authority, ConfigUpdate { paused: Some(true), ..Default::default() }).await, Some((0, code(WagerError::NotAuthority))));
+    assert_eq!(env.update(&next, ConfigUpdate { paused: Some(true), ..Default::default() }).await, None);
+}
+
+/// A hand-made Ed25519 instruction: `count` signature entries (one given), then `body`.
+fn raw_ed25519(sig: (u16, u16), key: (u16, u16), msg: (u16, u16, u16), body: &[u8], count: u8) -> Instruction {
+    let mut d = vec![count, 0];
+    for v in [sig.0, sig.1, key.0, key.1, msg.0, msg.1, msg.2] {
+        d.extend_from_slice(&v.to_le_bytes());
+    }
+    d.extend_from_slice(body);
+    Instruction { program_id: solana_sdk::ed25519_program::id(), accounts: vec![], data: d }
+}
+
+#[tokio::test]
+async fn a_signature_check_that_points_at_another_instruction_is_no_ticket() {
+    use ed25519_dalek::Signer as _;
+    let mut env = Env::ready().await;
+    let t = env.ticket([60; 32]);
+    let a = clone(&env.a);
+    let msg = t.message(&program_id());
+    let len = msg.len() as u16;
+    let attacker = key(99);
+    let sig = attacker.sign(&msg).to_bytes();
+    // Instruction 0 is an honest check of the ATTACKER's signature over the ticket. Instruction 1 carries the desk's
+    // key and the message in its own bytes, and points the precompile at instruction 0's signature, key and message.
+    let honest = new_ed25519_instruction(&attacker, &msg);
+    let mut body = vec![];
+    body.extend_from_slice(pubkey_of(&env.ticket_key).as_ref()); // at 16
+    body.extend_from_slice(&sig); // at 48
+    body.extend_from_slice(&msg); // at 112
+    let pointing = raw_ed25519((48, 0), (16, 0), (112, len, 0), &body, 1);
+    assert_eq!(env.send(vec![honest.clone(), pointing, env.open_ix(&t)], &[&a]).await, Some((2, code(WagerError::BadTicket))));
+    // Any one of the three pointing elsewhere is refused.
+    for (si, ki, mi) in [(0u16, u16::MAX, u16::MAX), (u16::MAX, 0, u16::MAX), (u16::MAX, u16::MAX, 0)] {
+        let p = raw_ed25519((48, si), (16, ki), (112, len, mi), &body, 1);
+        assert!(env.fails(vec![honest.clone(), p, env.open_ix(&t)], &[&a]).await);
+    }
+    // No signatures at all (the precompile then checks nothing), with the desk's key and the message sitting in the data.
+    let none = raw_ed25519((48, u16::MAX), (16, u16::MAX), (112, len, u16::MAX), &body, 0);
+    assert!(env.fails(vec![none, env.open_ix(&t)], &[&a]).await);
+    // Two signatures in one check.
+    let mut two = vec![2u8, 0];
+    let base = 2 + 28u16;
+    for _ in 0..2 {
+        for v in [base + 32, u16::MAX, base, u16::MAX, base + 96, len, u16::MAX] {
+            two.extend_from_slice(&v.to_le_bytes());
+        }
+    }
+    two.extend_from_slice(&attacker.public.to_bytes());
+    two.extend_from_slice(&sig);
+    two.extend_from_slice(&msg);
+    let two = Instruction { program_id: solana_sdk::ed25519_program::id(), accounts: vec![], data: two };
+    assert!(env.fails(vec![two, env.open_ix(&t)], &[&a]).await);
+    // The desk's real check, bytes and all, under another program's id.
+    let fake = Instruction { program_id: system_program::ID, accounts: vec![], data: env.signed_ticket(&t).data };
+    assert!(env.fails(vec![fake, env.open_ix(&t)], &[&a]).await);
+    assert_eq!(env.battle(&t.battle_id).await, None, "nothing was opened");
+}
+
+fn make_program(env: &mut Env, who: Pubkey) {
+    env.ctx.set_account(&who, &Account { lamports: 5 * SOL, data: vec![0; 36], owner: bpf_loader_upgradeable::ID, executable: true, rent_epoch: u64::MAX }.into());
+}
+
+#[tokio::test]
+async fn a_player_who_becomes_a_program_cant_hold_up_the_others_money() {
+    // A turns its wallet into a program after both staked. B wins: B is paid in full, and what was A's is burned.
+    let mut env = Env::ready().await;
+    let (a, b) = (env.a.pubkey(), env.b.pubkey());
+    let b0 = env.balance(&b).await;
+    let t = env.live(61).await;
+    make_program(&mut env, a);
+    let burnt0 = env.balance(&incinerator::ID).await;
+    assert_eq!(env.settle(&t, OUTCOME_B).await, None);
+    assert_eq!(env.balance(&b).await, b0 + STAKE);
+    assert!(env.balance(&incinerator::ID).await > burnt0, "the battle account's rent, which was A's, is burned");
+    // A draw: B's stake comes back whole.
+    let mut env = Env::ready().await;
+    let (a, b) = (env.a.pubkey(), env.b.pubkey());
+    let b0 = env.balance(&b).await;
+    let t = env.live(62).await;
+    make_program(&mut env, a);
+    assert_eq!(env.settle(&t, OUTCOME_DRAW).await, None);
+    assert_eq!(env.balance(&b).await, b0);
+    // B is the program: A is whole on a void, a refund and a freeze.
+    for how in 0..3u8 {
+        let mut env = Env::ready().await;
+        let (a, b) = (env.a.pubkey(), env.b.pubkey());
+        let a0 = env.balance(&a).await;
+        let t = env.live(63 + how).await;
+        make_program(&mut env, b);
+        match how {
+            0 => assert_eq!(env.settle(&t, OUTCOME_VOID).await, None),
+            1 => {
+                let at = env.battle(&t.battle_id).await.unwrap().refund_at;
+                env.set_time(at).await;
+                assert_eq!(env.refund(&t).await, None);
+            }
+            _ => {
+                let authority = clone(&env.authority);
+                assert_eq!(env.freeze(&authority, &t).await, None);
+            }
+        }
+        assert_eq!(env.balance(&a).await, a0, "way out {how}");
+        assert_eq!(env.config().await.open_stake, 0);
+    }
+    // And a program can't stake in the first place.
+    let mut env = Env::ready().await;
+    let a = env.a.pubkey();
+    make_program(&mut env, a);
+    let t = env.ticket([66; 32]);
+    assert_eq!(env.open(&t).await, Some((1, code(WagerError::NotAPlayer))));
+}
+
+#[tokio::test]
+async fn emptied_wallets_are_still_paid_and_a_funded_battle_address_still_opens() {
+    // Both wallets emptied to nothing after staking: every outcome still settles.
+    for outcome in [OUTCOME_A, OUTCOME_B, OUTCOME_DRAW, OUTCOME_VOID] {
+        let mut env = Env::ready().await;
+        let (a, b) = (env.a.pubkey(), env.b.pubkey());
+        let t = env.live(70 + outcome).await;
+        env.ctx.set_account(&a, &Account::default().into());
+        env.ctx.set_account(&b, &Account::default().into());
+        assert_eq!(env.settle(&t, outcome).await, None, "outcome {outcome}");
+    }
+    // Someone sends lamports to a battle's address before it opens: it opens all the same, and A gets them at the close.
+    let mut env = Env::ready().await;
+    let a = env.a.pubkey();
+    let a0 = env.balance(&a).await;
+    let stranger = clone(&env.stranger);
+    let t = env.ticket([75; 32]);
+    let at = battle_address(&program_id(), &t.battle_id).0;
+    assert_eq!(env.send(vec![system_instruction::transfer(&stranger.pubkey(), &at, SOL)], &[&stranger]).await, None);
+    assert_eq!(env.open(&t).await, None);
+    env.past(&t).await;
+    assert_eq!(env.cancel(&stranger, &t).await, None);
+    assert_eq!(env.balance(&a).await, a0 + SOL);
+    assert_eq!(env.config().await.open_stake, 0);
+}
+
+#[tokio::test]
+async fn the_wrong_account_in_any_place_is_refused() {
+    let mut env = Env::ready().await;
+    let t = env.live(80).await;
+    let r = env.result(&t, OUTCOME_A);
+    let stranger = env.stranger.pubkey();
+    let swaps: Vec<(usize, AccountMeta)> = vec![
+        (3, AccountMeta::new(t.player_a, false)),             // A as both payees
+        (2, AccountMeta::new(t.player_b, false)),             // B as both payees
+        (0, AccountMeta::new(config_address(), false)),       // the config as the battle
+        (1, AccountMeta::new(battle_address(&program_id(), &t.battle_id).0, false)), // the battle as the config
+        (1, AccountMeta::new(stranger, false)),               // an account that isn't the config
+        (4, AccountMeta::new_readonly(stranger, false)),      // not the instructions sysvar
+    ];
+    for (at, meta) in swaps {
+        let mut i = env.settle_ix(&t, OUTCOME_A, 1);
+        i.accounts[at] = meta;
+        assert!(env.fails(vec![env.signed_result(&r), i], &[]).await, "settle with account {at} swapped");
+    }
+    // A refund and a cancel with an account that isn't the config.
+    let at = env.battle(&t.battle_id).await.unwrap().refund_at;
+    env.set_time(at).await;
+    let mut acc = env.payout_accounts(&t);
+    acc[1] = AccountMeta::new(stranger, false);
+    assert!(env.fails(vec![ix(LinkWagerInstruction::Refund, acc)], &[]).await);
+    let open = env.ticket([81; 32]);
+    assert_eq!(env.open(&open).await, None);
+    env.past(&open).await;
+    let a = clone(&env.a);
+    let i = ix(
+        LinkWagerInstruction::Cancel,
+        vec![AccountMeta::new_readonly(a.pubkey(), true), AccountMeta::new(stranger, false), AccountMeta::new(battle_address(&program_id(), &open.battle_id).0, false), AccountMeta::new(open.player_a, false), AccountMeta::new(incinerator::ID, false)],
+    );
+    assert!(env.fails(vec![i], &[&a]).await);
+    assert_eq!(env.config().await.open_stake, 4 * STAKE, "both battles still hold their stakes");
 }
