@@ -2,8 +2,13 @@ import { lstatSync, readFileSync } from "node:fs";
 import { agentPaths, holdProcessLock, loadPolicy, lockHolder, type LocalSigner } from "highwire-agent";
 import { WagerRunner, writeBeat, type WagerAction } from "./runner.ts";
 import { WagerSecrets } from "./secrets.ts";
-import { wagerSigning } from "./signing.ts";
+import { wagerSigning, wagerSigningFor } from "./signing.ts";
 import { lamportsNumber, type Chain } from "highwire-core";
+import type { PublicKey } from "@solana/web3.js";
+import { AuditLog } from "highwire-agent";
+import { linkWagerProgram } from "./link-codec.ts";
+import { actOnLinkBattle, LinkStakeRunner, signedResultOf, walletLinkBattles } from "./link-run.ts";
+import { readLinkConfig, type SignedLinkResult } from "./link-tx.ts";
 import { wagerProgram, type SeriesAccountData } from "./codec.ts";
 import { buildWagerMove, listWalletSeries, readSeriesMany, type WagerMoveRequest } from "./tx.ts";
 import { createDeps, serverOptionsFromEnv, signerFromEnv } from "highwire-mcp";
@@ -11,6 +16,8 @@ import { createDeps, serverOptionsFromEnv, signerFromEnv } from "highwire-mcp";
 // `highwire-wager run|series`: The Line's wager series for the wallet in HIGHWIRE_KEYPAIR_PATH. `run` is the reveal
 // daemon (docs/wager-mode.md 7.3): until Ctrl-C it reveals every committed move and owed fallback, applies passed
 // deadlines, settles, and cancels or refunds, through the local signer and inside the policy. One at a time.
+// Where link battles' practice-stake program is known, the same daemon brings those stakes home too (link-run.ts):
+// it settles a battle on the referee's signed result, cancels an opening nobody accepted, and refunds one with no result.
 
 export const LINE_USAGE = `highwire-wager: The Line's wager series, for HIGHWIRE_KEYPAIR_PATH's wallet
 
@@ -29,6 +36,8 @@ export interface LineIo {
   err: (line: string) => void;
   signal: AbortSignal;
   env?: Env;
+  /** Link battles' practice-stake program where the codec lists none (tests, the local rehearsal). In code only. */
+  linkProgram?: PublicKey;
 }
 
 function argsFor(action: WagerAction): WagerMoveRequest["args"] {
@@ -98,7 +107,7 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
     io.out(LINE_USAGE);
     return cmd === undefined || cmd === "--help" ? 0 : 2;
   }
-  const signer = signerFromEnv(env, io.err, [wagerSigning]);
+  const signer = signerFromEnv(env, io.err, [io.linkProgram ? wagerSigningFor({ linkProgram: io.linkProgram }) : wagerSigning]);
   if (!signer) {
     io.err(`highwire-wager ${cmd}: set HIGHWIRE_KEYPAIR_PATH to the signer's keypair file, as for the MCP server.`);
     return 2;
@@ -182,7 +191,52 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
         },
         log: (l) => io.err(`${new Date().toISOString().slice(11, 19)}  ${l}`),
       });
-      await runner.run(io.signal);
+      // Staked link battles, where their program is known: settled, cancelled and refunded by the same daemon.
+      const linkProgram = io.linkProgram ?? linkWagerProgram(deps.chain.cluster);
+      const stakes = linkProgram ? { chain: deps.chain, program: linkProgram } : null;
+      const link = stakes
+        ? new LinkStakeRunner({
+            wallet: signer.wallet,
+            battles: () => walletLinkBattles(stakes, new AuditLog(paths.audit), signer.wallet, deps.chain.cluster),
+            results: async () => {
+              const out = new Map<string, SignedLinkResult>();
+              const token = arenaToken(paths.agent, deps.relayUrl);
+              if (!token) return out;
+              const res = await deps.fetch(`${deps.relayUrl}/api/link/stake/results`, { headers: { authorization: `Bearer ${token}` } });
+              if (!res.ok) throw new Error(`the referee answered ${res.status}`);
+              const body = (await res.json()) as { results?: unknown };
+              for (const x of Array.isArray(body.results) ? body.results : []) {
+                const r = signedResultOf(x);
+                if (r) out.set(r.result.battleId, r);
+              }
+              return out;
+            },
+            refundAfterSeconds: async () => (await readLinkConfig(stakes)).refundAfterSeconds,
+            act: async (id, action) => {
+              const r = await actOnLinkBattle(stakes, signer, "highwire-wager run", id, action);
+              const sig = r.transactions[0]?.signature;
+              return `${r.status}${sig ? ` ${sig}` : ""}${r.transactions[0]?.error ? ` (${r.transactions[0].error})` : ""}`;
+            },
+            idle: () => {
+              try {
+                const p = loadPolicy(paths.policy);
+                return !p.live || !p.actions.includes("wager") || !p.wagers || p.cluster !== deps.chain.cluster ? "the policy doesn't let this daemon send" : null;
+              } catch (err) {
+                return err instanceof Error ? err.message : String(err);
+              }
+            },
+            stopped: () => {
+              try {
+                lstatSync(paths.stop);
+                return true;
+              } catch {
+                return false;
+              }
+            },
+            log: (l) => io.err(`${new Date().toISOString().slice(11, 19)}  ${l}`),
+          })
+        : null;
+      await Promise.all([runner.run(io.signal), link?.run(io.signal)]);
       return 0;
     } finally {
       release();

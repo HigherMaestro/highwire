@@ -7,7 +7,9 @@ import { WagerSecrets, type WagerFallback } from "./secrets.ts";
 import { arena, HigherError, lamportsNumber, solToLamports, ValidationError } from "highwire-core";
 import { commitDeadline, revealDeadline, seriesAddress, sideIndexOf, wagerProgram, type SeriesAccountData, type WagerTicket } from "./codec.ts";
 import { buildWagerAccept, buildWagerMove, buildWagerOpen, listWalletSeries, readSeries, readSeriesMany, seriesOutcome } from "./tx.ts";
-import { EXECUTE, READ_ONLY, run, type Deps, type ExecutionSigner, type RelayCall, type StakedSeries } from "highwire-mcp";
+import { EXECUTE, READ_ONLY, run, type Deps, type ExecutionSigner, type RelayCall, type StakedSeries, type WagerExtension } from "highwire-mcp";
+import { linkWagerProgram } from "./link-codec.ts";
+import { registerLinkStakeTools } from "./link-tools.ts";
 
 // Wagers on The Line (docs/wager-mode.md 7.3, 7.6): series staked from the local signer's wallet, on the cluster the
 // referee's wager desk plays on (devnet now; mainnet after the switch, docs/wager-mainnet.md).
@@ -104,8 +106,24 @@ export function wagerView(s: SeriesAccountData, wallet: string, now = Math.floor
   };
 }
 
-export function registerWagerTools(server: McpServer, deps: Deps, signer: ExecutionSigner, relay: RelayCall): StakedSeries {
+/**
+ * The wager tools with link battles' practice stakes for a program handed in, in code: the tests and the local
+ * rehearsal, where the codec lists no address. `registerWagerTools` is this with nothing handed in.
+ */
+export const wagerToolsFor =
+  (opts: { linkProgram?: PublicKey } = {}): WagerExtension =>
+  (server, deps, signer, relay) =>
+    registerTools(server, deps, signer, relay, opts.linkProgram);
+
+/** The wager tools as highwire-wager's bin passes them: The Line's, and link battles' where the codec lists the program. */
+export const registerWagerTools: WagerExtension = wagerToolsFor();
+
+function registerTools(server: McpServer, deps: Deps, signer: ExecutionSigner, relay: RelayCall, linkProgram?: PublicKey): StakedSeries {
   const { chain } = deps;
+  // Link battles' practice stakes (link-tools.ts): only where their program is known. Until it's deployed and listed,
+  // those tools don't exist, rather than exist and always refuse.
+  const link = linkProgram ?? linkWagerProgram(chain.cluster);
+  if (link) registerLinkStakeTools(server, deps, signer, relay, link);
   const secrets = () => new WagerSecrets(signer.paths.wagerSecrets);
   const wallet = new PublicKey(signer.wallet);
   const program = () => {

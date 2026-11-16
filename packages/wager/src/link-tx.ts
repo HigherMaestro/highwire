@@ -227,3 +227,46 @@ export function linkClosingEvent(logs: readonly string[], programId: string, bat
   }
   return null;
 }
+
+/** Where a staked battle stands on-chain, for the referee's desk (highwire-relay's `LinkStakeChain`). */
+export type LinkBattleOutcome = { state: "none" | "open" | "live" } | { state: "closed"; how: "settled" | "cancelled" | "refunded" };
+
+/**
+ * Reads a staked battle's state from the chain: its account while it's open or live; once it's gone, the program's own
+ * closing event in the battle's recent transactions (the newest 50). "none": no account and no closing event found,
+ * whether it never opened or its closing is out of reach; the desk tells the two apart by what it saw before.
+ */
+export async function linkBattleOutcome(s: LinkStakes, battleId: string): Promise<LinkBattleOutcome> {
+  const p = linkStakesProgram(s);
+  const live = await readLinkBattle(s, battleId);
+  if (live) return { state: live.status };
+  const sigs = await s.chain.connection.getSignaturesForAddress(linkBattleAddress(p, battleId), { limit: 50 }, "confirmed");
+  for (const sig of sigs) {
+    if (sig.err) continue;
+    const tx = await s.chain.connection.getTransaction(sig.signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" });
+    const found = linkClosingEvent(tx?.meta?.logMessages ?? [], p.toBase58(), battleId);
+    if (found) return { state: "closed", how: found.how };
+  }
+  return { state: "none" };
+}
+
+/** The staked battles at these addresses that are still on-chain (the program's own accounts; anything else is skipped). */
+export async function readLinkBattlesAt(s: LinkStakes, addresses: string[]): Promise<LinkBattleAccount[]> {
+  const p = linkStakesProgram(s);
+  const out: LinkBattleAccount[] = [];
+  for (let i = 0; i < addresses.length; i += 100) {
+    const chunk = addresses.slice(i, i + 100);
+    const infos = await s.chain.connection.getMultipleAccountsInfo(chunk.map((a) => new PublicKey(a)), "confirmed");
+    infos.forEach((acc, j) => {
+      if (!acc || !acc.owner.equals(p) || acc.data.length === 0) return;
+      try {
+        const b = decodeLinkBattle(Buffer.from(acc.data));
+        // Only at its own address: an account can't claim to be another battle.
+        if (linkBattleAddress(p, b.battleId).toBase58() === chunk[j]) out.push(b);
+      } catch {
+        /* not a battle this version reads */
+      }
+    });
+  }
+  return out;
+}

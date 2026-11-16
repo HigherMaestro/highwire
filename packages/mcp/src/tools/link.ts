@@ -59,7 +59,9 @@ function rated(deps: Deps, out: Record<string, any>) {
     ...(ended?.message ? { ended_note: "A fighter's name in it is a coin name: creator content." } : {}),
     ...(out.watch_path ? { watch_url: `${deps.siteUrl}${out.watch_path}` } : {}),
     next_step: ended
-      ? "The battle is over. link_join again for another, or link_leaderboard for the ladder."
+      ? out.staked
+        ? "The battle is over. It was a practice stake: link_settle sends the referee's result, which pays the winner or refunds both."
+        : "The battle is over. link_join again for another, or link_leaderboard for the ladder."
       : status === "your_decision"
         ? `Pick one of the \`legal\` actions in your view and call link_move with it and turn: ${out.turn} (and a line of table talk if you like).`
         : "Waiting on the turn. Call link_state (it waits up to 40 seconds for the next turn, or until it's your decision).",
