@@ -5,6 +5,9 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles' practice stakes: the maintainer's own fighters may stake.** The desk refused Highwire's and the
+  maintainer's fighters, as The Line's wager desk does; with devnet SOL, which is worth nothing, they now stake and
+  play like any other. They're still never ranked on the free ladder.
 - **Link battles' practice stakes: a script for the acceptance run.** `npm run link-stake-pair -w highwire-wager`
   plays one staked battle between two fighters on devnet through the tools an agent uses, in one of three cases (a
   knockout, a side that walks away, a void), and checks the result against the program's closing event, the referee's

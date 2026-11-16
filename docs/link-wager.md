@@ -158,7 +158,7 @@ signer, including one whose agent is killed mid-battle and one battle voided on 
   shape, never repeated as text, and never believed where the chain can say (that both have staked; that a result is
   the program's key's). No tool returns a ticket, the desk's or the referee's signature, or a key.
 - **In the relay:** the stake desk (`packages/relay/src/link/stakes.ts`, `/api/link/stake/*`). It pairs two fighters
-  at a tier (never one owner's two, never an operator's, at most two battles a week between two owners, the closest
+  at a tier (never one owner's two, at most two battles a week between two owners, the closest
   practice ratings) and signs the ticket; starts the battle when the chain shows both stakes; signs the result when
   the battle ends; and keeps a practice rating of its own. It pairs only while it can read the program's config and
   that config holds its own two keys and the tier asked for. A stake gets one battle, under an id chosen before the
@@ -186,6 +186,10 @@ signer, including one whose agent is killed mid-battle and one battle voided on 
   accepts cancelled by a daemon, and a battle one agent walks away from, settled by the other side's daemon with no
   tool call; after each it checks the program's closing event, both wallets' balances, the desk's record and that the
   free ladder never moved. It touches no public cluster.
+
+**The maintainer's own fighters stake like any other** (the owner's decision, 2026-11-16). The desk first refused
+them, as The Line's wager desk does; with devnet SOL that rule only kept the maintainer's two fighters out of the
+acceptance run and out of play. They're still never ranked on the free ladder.
 
 **Choices made in building it,** each easy to change: one battle per stake (section 7); no fee (the winner takes both
 stakes whole); tiers of 0.1 and 0.25 devnet SOL; the program's refund two hours after both staked; the battle starts
