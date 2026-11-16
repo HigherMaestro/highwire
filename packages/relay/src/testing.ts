@@ -4,6 +4,7 @@ import { MAINNET_GENESIS, type RegistrationRpc, type RpcTransaction } from "./re
 import type { CoinDirectory, CoinFacts } from "./arena/referee.ts";
 import type { LinkAction, LinkEngine, LinkStep } from "./link/referee.ts";
 import type { LinkMatchStep, RatedSidesSpec } from "./link/arena.ts";
+import { RelayError } from "./errors.ts";
 
 // Fakes for tests of the relay and of its clients (highwire-relay/testing): an RPC that serves hand-built transactions
 // in getTransaction's JSON shape, a coin directory, and a link battles engine without the emulator. Never used outside
@@ -113,6 +114,10 @@ export class FakeLinkEngine implements LinkEngine {
   /** When set, starts and resolutions wait for it: to hold one open while other calls arrive. */
   gateStart: Promise<void> | null = null;
   gateResolve: Promise<void> | null = null;
+  /** When set, every start throws it (a rig that's down). */
+  failStart: Error | null = null;
+  /** When set, a resolution whose decisions it accepts is refused by the game, as an illegal action would be. */
+  refuse: ((decisions: [LinkAction | null, LinkAction | null]) => boolean) | null = null;
   films: string[] = [];
   async rules() {
     return { format: "colosseum-1" };
@@ -156,6 +161,7 @@ export class FakeLinkEngine implements LinkEngine {
   async startMatch(sides: RatedSidesSpec) {
     this.starts++;
     if (this.gateStart) await this.gateStart;
+    if (this.failStart) throw this.failStart;
     return this.step({ hp: [3, 3], turn: 0 }, sides);
   }
   async resolveMatch(state: unknown, packed: Uint8Array, decisions: [LinkAction | null, LinkAction | null], sides: RatedSidesSpec) {
@@ -167,6 +173,7 @@ export class FakeLinkEngine implements LinkEngine {
       this.failOnce = null;
       throw e;
     }
+    if (this.refuse?.(decisions)) throw new RelayError("bad_request", "The game refused that action.");
     const s = JSON.parse(new TextDecoder().decode(packed)) as FakeLinkState;
     if (JSON.stringify(s) !== JSON.stringify(state)) throw new Error("the packed battle and the document disagree");
     const hp: [number, number] = [...s.hp];

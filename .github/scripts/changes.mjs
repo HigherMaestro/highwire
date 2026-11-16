@@ -1,4 +1,4 @@
-// Decides whether a push or pull request needs the wager program's tests (`npm run test:program`: the Rust toolchain,
+// Decides whether a push or pull request needs the wager programs' tests (`npm run test:program` and `test:link-program`: the Rust toolchain,
 // several minutes). They run when anything they depend on changed, and whenever this can't tell. No dependencies: it
 // runs before the install.
 //
@@ -15,6 +15,8 @@ export const PROGRAM_INPUTS = [
   /^packages\/core\/scripts\/wager-fixtures\.ts$/,
   /^packages\/wager\/scripts\/wager-instructions\.ts$/,
   /^packages\/core\/test\/fixtures\/wager-codec\.json$/,
+  /^packages\/wager\/src\/link-codec\.ts$/,
+  /^packages\/wager\/test\/fixtures\/link-codec\.json$/,
   /^package(-lock)?\.json$/,
   /^\.github\//,
 ];

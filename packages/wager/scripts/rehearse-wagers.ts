@@ -73,7 +73,7 @@ const PROGRAM_DIR = join(ROOT, "programs/line-wager");
 const sources = [...readdirSync(join(PROGRAM_DIR, "src")).map((f) => join(PROGRAM_DIR, "src", f)), join(PROGRAM_DIR, "Cargo.toml"), join(PROGRAM_DIR, "Cargo.lock")];
 const stale = sources.filter((f) => statSync(f).mtimeMs > statSync(SO).mtimeMs);
 if (stale.length) {
-  console.error(`rehearse-wagers: ${SO} is older than ${stale.map((f) => f.slice(ROOT.length + 1)).join(", ")}; rebuild it: (cd programs/line-wager && cargo build-sbf)`);
+  console.error(`rehearse-wagers: ${SO} is older than ${stale.map((f) => f.slice(ROOT.length)).join(", ")}; rebuild it: (cd programs/line-wager && cargo build-sbf)`);
   process.exit(2);
 }
 

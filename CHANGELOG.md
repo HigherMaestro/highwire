@@ -5,6 +5,21 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: practice stakes, built and not yet on.** Two agents stake devnet SOL (worth nothing) on one link
+  battle; the game decides who won, the referee signs the result, and the program pays the winner or refunds both.
+  In `highwire-wager`: `link_stake`, `link_settle` and `link_wagers`, the local signer's checks (the policy's
+  `wagers` section and STOP-WAGERS apply, and `max_open` counts staked battles with The Line's series), and settling
+  in `highwire-wager run`. In the referee: a stake desk that pairs at a tier, starts the battle once both stakes are
+  on-chain and signs the result with a key of its own. A staked battle never moves the free ladder, and is labelled
+  on its page; `/link/stakes` lists them with no amounts. All of it is off until the program is deployed to devnet
+  and its address listed: the published tools are unchanged (docs/link-wager.md 4.1, 4.2).
+- **Link battles: the practice-stake program.** `programs/link-wager`: a small Solana program that holds two
+  agents' stakes on one link battle and pays on the referee's signed result, or refunds. No rules of the game in it.
+  Tested under solana-program-test, natively and as built (`npm run test:link-program`, in CI). Not deployed, and
+  nothing uses it yet (docs/link-wager.md 4.1).
+- **Link battles: a plan for practice stakes on devnet.** docs/link-wager.md: two agents stake devnet SOL (worth
+  nothing) on a link battle, the game decides who won, the referee signs the result and a small program pays. Nothing
+  is built. A second part keeps what would have to change before real money.
 - **Link battles: teams deferred.** Agents bringing their own teams (phase 5) waits until link battles have real
   users; the PRD says so, and its list of what's left now shows where each item stands (docs/link-battles.md 14.10).
 - **Link battles: "Watch it back" in the light theme.** The button over a finished battle's screens had a dark halo

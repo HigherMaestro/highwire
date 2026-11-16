@@ -318,7 +318,7 @@ them. Not planned.
 | Learning or predicting the dice | Re-dealt with fresh random bytes at every decision point (4.1) |
 | Seeing the opponent's choice early | Nothing about a pending decision is served; waits wake only on resolution (6.1) |
 | Reading hidden information through the tools | Views built in one file from each side's own facts, which hold nothing of the other side's party beyond its active Pokémon; tested on synthetic facts (6.1, 14.3) |
-| Reading it from the public pages (exact HP, PP, the screens) | Live pages show only what both sides see; exact numbers and screens only after the match ends (13) |
+| Reading it from the public pages (exact HP, PP, the screens) | The spectators' view keeps to bars while a battle is live. The screens were held until the end; since 14.13 they're public as each turn is played, by the owner's decision, so each side's exact HP and PP for turns already played are there for both sides alike. A decision still held is never shown |
 | Steering into a desync to void a lost match | Known desync moves banned (4.1); the fuzzer finds the rest; each fighter's void rate on its page and flagged |
 | Stalling | The chess clock; fallbacks; the turn cap |
 | Quitting to deny a rating | Forfeits rated after 3 turns |
@@ -813,6 +813,9 @@ production, and none of the following is done yet. Each item says when it counts
 | 5. The 1,000-battle run | Not done |
 | 6. Teams | Deferred until there are real users (4.5) |
 | 7. A name | Open |
+
+**Staking** is not in this list: anything of value tied to results is a non-goal here (2). Practice stakes on devnet,
+with devnet SOL that's worth nothing, are planned in docs/link-wager.md (a draft; nothing built).
 
 1. **Rated play on in production.** The maintainer sets `LINK_RATED=1` on the site's Production environment, with the
    link films' Blob store and the sweep's cron already in place. Until then the lobby, `/link/watch`'s target and every

@@ -4,7 +4,8 @@ import { fail, RelayError } from "../errors.ts";
 import { update, type Store } from "../store.ts";
 import type { Fighter } from "../arena/types.ts";
 import type { LinkArenaConfig, RatedEngine } from "./arena.ts";
-import { ratedGoing } from "./arena.ts";
+import type { LinkStakeConfig } from "./stakes.ts";
+import { ratedGoing, stakeHeld } from "./arena.ts";
 import { linkMatchId, parseAction, type LinkAction } from "./common.ts";
 
 export { linkMatchId, parseAction, type LinkAction } from "./common.ts";
@@ -77,6 +78,11 @@ export interface LinkConfig {
   rated?: boolean;
   /** Rated battles' clocks and waits, for tests. */
   arena?: LinkArenaConfig;
+  /**
+   * Practice stakes on link battles (link/stakes.ts, docs/link-wager.md): devnet only. On only with rated battles,
+   * which a staked battle is played as. Without it the stake routes don't exist.
+   */
+  stakes?: LinkStakeConfig;
 }
 
 interface Practice {
@@ -191,6 +197,7 @@ export class LinkReferee {
     if (going) return this.out(going);
     // One battle at a time: practice waits for a rated battle to end (and link_join for a practice).
     if (await ratedGoing(this.store, f.id, this.clock.now())) fail("conflict", "You have a rated link battle going: finish it (link_state, link_move) or leave it (link_leave) first.");
+    if (await stakeHeld(this.store, f.id)) fail("conflict", "You're paired for a staked battle: stake on it (link_stake), or wait for its ticket to run out, first.");
     if ((await this.store.cas(STARTING(f.id), 0, 1, 90)) === null) fail("conflict", "Your practice battle is already being set up; read it with link_practice in a moment.");
     try {
       // Checked again under the lock: another start may have just finished.

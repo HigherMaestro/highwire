@@ -126,6 +126,16 @@ export interface LinkMatchDoc {
   ratings?: [number | null, number | null];
   houseCounted?: boolean;
   settled: boolean;
+  /**
+   * A practice stake's battle (link/stakes.ts, docs/link-wager.md): the stake's id. It plays as any battle does, moves
+   * no rating and no record on the free ladder, and a decision the game refuses is replaced by that side's fallback
+   * rather than voiding the battle (2: a void would let a losing side trade an illegal move for a refund).
+   */
+  staked?: string;
+  /** How many times this turn's held decisions were refused by the game and swapped for fallbacks (staked battles). */
+  refused?: number;
+  /** The decisions as the sides made them, kept while fallbacks stand in for them. */
+  held?: [LinkAction | null, LinkAction | null];
 }
 
 /** A fighter's link battles record and rating: its own ladder (`colosseum-1`), beside The Line's. */
@@ -227,6 +237,18 @@ export async function practiceGoing(store: Store, fighter: string, now: number):
   if (!id) return false;
   const p = (await store.get<{ ended: unknown; updatedAt: number }>(`link:practice:${id}`))?.value;
   return Boolean(p && !p.ended && now - p.updatedAt <= PRACTICE_MS);
+}
+
+/** Where the stake desk (link/stakes.ts) keeps a stake, and which stake holds a fighter. */
+export const LINK_STAKE = (id: string) => `link:stake:${id}`;
+export const LINK_STAKE_OF = (fighter: string) => `link:stake-of:${fighter}`;
+
+/** Whether a fighter is paired for a staked battle that hasn't ended: it plays nothing else until then. */
+export async function stakeHeld(store: Store, fighter: string): Promise<boolean> {
+  const id = (await store.get<string>(LINK_STAKE_OF(fighter)))?.value;
+  if (!id) return false;
+  const st = (await store.get<{ status: string }>(LINK_STAKE(id)))?.value;
+  return st?.status === "ticketed" || st?.status === "playing";
 }
 
 /** Whether a fighter has a rated battle going, or one being made for it. */
@@ -401,6 +423,7 @@ export class LinkArena {
     const now = this.clock.now();
     if ((me.cooldownUntil ?? 0) > now) fail("rate_limited", `You stopped answering in your last battle; you can join again in ${Math.ceil(((me.cooldownUntil ?? 0) - now) / 60_000)} minutes.`);
     if (await practiceGoing(this.store, f.id, now)) fail("conflict", "You have a practice battle going: finish it or leave it (link_practice with leave) first.");
+    if (await stakeHeld(this.store, f.id)) fail("conflict", "You're paired for a staked battle: stake on it (link_stake), or wait for its ticket to run out, first.");
     if (opponent === "house") {
       await this.spend(f, 3);
       return this.startHouse(f, me, fallback!);
@@ -509,6 +532,55 @@ export class LinkArena {
     return true;
   }
 
+  /**
+   * Starts a practice stake's battle, for the pair the stake desk made, once both stakes are in (link/stakes.ts). Null
+   * when either fighter is gone or can't be claimed (the desk tries again, then voids the stake). Never rated: a
+   * staked battle moves nothing on the free ladder.
+   */
+  async startStaked(stake: string, a: { fighter: string; fallback: FallbackKind }, b: { fighter: string; fallback: FallbackKind }): Promise<LinkMatchDoc | null> {
+    const [fa, fb] = await Promise.all([a, b].map(async (x) => (await this.store.get<LinkFighter>(FIGHTER(x.fighter)))?.value));
+    if (!fa || !fb) return null;
+    // Started already (by a call that died before it could say so): that battle, never a second.
+    for (const f of [fa, fb]) {
+      const going = f.match ? (await this.store.get<LinkMatchDoc>(MATCH(f.match)))?.value : null;
+      if (going?.staked === stake) return going;
+    }
+    const id = linkMatchId();
+    if (!(await this.claim(fa.id, id))) return null;
+    if (!(await this.claim(fb.id, id))) {
+      await this.release(fa.id, id);
+      return null;
+    }
+    const now = this.clock.now();
+    const sa = this.side("fighter", fa, a.fallback, now);
+    const sb = this.side("fighter", fb, b.fallback, now);
+    return this.create(id, Math.random() < 0.5 ? [sa, sb] : [sb, sa], false, false, stake);
+  }
+
+  /** A battle's ending, for the stake desk: null while it plays (or when there's no such battle). Read only. */
+  async ending(id: string): Promise<{ ended: LinkEnding; fighters: [string, string] } | null> {
+    const m = (await this.store.get<LinkMatchDoc>(MATCH(id)))?.value;
+    if (!m || m.status !== "over" || !m.ended) return null;
+    return { ended: m.ended, fighters: [m.sides[0].id, m.sides[1].id] };
+  }
+
+  /** Whether a fighter is in a battle (or one being made): the stake desk pairs only fighters that aren't. */
+  async inBattle(fighter: string): Promise<boolean> {
+    const f = (await this.store.get<LinkFighter>(FIGHTER(fighter)))?.value;
+    return f ? this.busy(f) : false;
+  }
+
+  /** How long (ms) a fighter that stopped answering in its last battle must still wait to play again; 0 when it needn't. */
+  async cooldownLeft(fighter: string): Promise<number> {
+    const f = (await this.store.get<LinkFighter>(FIGHTER(fighter)))?.value;
+    return Math.max(0, (f?.cooldownUntil ?? 0) - this.clock.now());
+  }
+
+  /** The fighter's link record made (or brought up to date), so a battle can be started for it later. */
+  async enrol(f: Fighter): Promise<void> {
+    await this.linkFighter(f);
+  }
+
   /** A battle against the house, at once: unrated (its deviation only moves, as on The Line). Capped across fighters. */
   private async startHouse(f: Fighter, me: LinkFighter, fallback: FallbackKind) {
     const now = this.clock.now();
@@ -547,7 +619,7 @@ export class LinkArena {
   }
 
   /** Starts the battle in the engine and writes the match (its fighters are already claimed for it). */
-  private async create(id: string, sides: [MatchSide, MatchSide], rated: boolean, house: boolean): Promise<LinkMatchDoc> {
+  private async create(id: string, sides: [MatchSide, MatchSide], rated: boolean, house: boolean, staked?: string): Promise<LinkMatchDoc> {
     const now = this.clock.now();
     const seed = randomHex(16);
     const base = { sides, seed };
@@ -564,6 +636,7 @@ export class LinkArena {
       turn: 0, chosen: 0, status: "deciding", openedAt: now, resolvingSince: null, attempts: 0,
       asked: [false, false], decided: [null, null], fallbacks: [null, null], lines: [],
       state: null, stateKey: null, views: [null, null], spectator: null, ended: null, settled: false,
+      ...(staked ? { staked } : {}),
     };
     this.apply(m, step, now);
     if (step.packed) {
@@ -596,6 +669,8 @@ export class LinkArena {
     m.openedAt = now;
     m.resolvingSince = null;
     m.attempts = 0;
+    delete m.refused;
+    delete m.held;
     m.updatedAt = now;
     for (const s of SIDES) {
       if (step.asked[s] && m.sides[s].kind === "fighter") m.sides[s].asked++;
@@ -779,6 +854,11 @@ export class LinkArena {
         step = await this.engine.resolveMatch(m.state, fromBase64(packed), m.decided, this.spec(m), this.labels(m));
       } catch (err) {
         if (!(err instanceof RelayError && (err.code === "expired" || err.code === "bad_request"))) throw err;
+        if (err.code === "bad_request" && m.staked && (await this.swapRefused(id, m))) {
+          await this.store.del(RESOLVING(id));
+          this.resolveLater(id);
+          return;
+        }
         await this.voidMatch(id, err.code === "expired" ? err.message : "A held decision was refused by the game.");
         return;
       }
@@ -814,6 +894,26 @@ export class LinkArena {
         if (now?.m.status === "resolving") this.resolveLater(id);
       }
     }
+  }
+
+  /**
+   * A staked battle's turn the game refused: puts a fallback in a refused side's place and leaves the turn to be
+   * resolved again. Which side's decision was refused isn't known, so they're tried in turn: side 0's fallback, then
+   * side 1's, then both; an innocent side's own decision is played whenever the game takes it. False when there's
+   * nothing left to try (the battle is then voided, and both stakes refunded).
+   */
+  private async swapRefused(id: string, m: LinkMatchDoc): Promise<boolean> {
+    const held = m.held ?? m.decided;
+    const can = (s: Side) => m.sides[s].kind === "fighter" && m.asked[s] && m.fallbacks[s] !== null && JSON.stringify(m.fallbacks[s]) !== JSON.stringify(held[s]);
+    const tries: [boolean, boolean][] = [[true, false], [false, true], [true, true]];
+    for (let n = m.refused ?? 0; n < tries.length; n++) {
+      const [zero, one] = tries[n]!;
+      if ((zero && !can(0)) || (one && !can(1))) continue;
+      const decided: [LinkAction | null, LinkAction | null] = [zero ? m.fallbacks[0] : held[0], one ? m.fallbacks[1] : held[1]];
+      const set = await update<LinkMatchDoc>(this.store, MATCH(id), (cur) => (cur && cur.status === "resolving" && cur.turn === m.turn && sameDecisions(cur.decided, m.decided) ? { ...cur, decided, held, refused: n + 1 } : undefined), MATCH_TTL);
+      return Boolean(set && set.refused === n + 1);
+    }
+    return false;
   }
 
   private async voidMatch(id: string, why: string) {
@@ -910,6 +1010,8 @@ export class LinkArena {
     const now = this.clock.now();
     const next: LinkFighter = { ...f, match: f.match === m.id ? null : f.match, last: m.id };
     if (m.ended?.silent?.includes(side)) next.cooldownUntil = now + COOLDOWN_MS;
+    // A practice stake's battle: no record and no rating here. The stake desk keeps its own, apart (docs/link-wager.md 5).
+    if (m.staked) return next;
     const score = scoreOf(m, side);
     if (score === null) return next;
     const contested = SIDES.every((s) => m.sides[s].kind === "house" || m.sides[s].own * 2 >= m.sides[s].asked);
@@ -944,6 +1046,7 @@ export class LinkArena {
     return {
       match: m.id,
       rated: m.rated,
+      ...(m.staked ? { staked: true } : {}),
       opponent: { name: m.sides[other].name, house: m.sides[other].kind === "house" },
       turn: m.turn,
       status: m.status === "over" ? "ended" : yours ? "your_decision" : "waiting",
@@ -966,6 +1069,7 @@ export class LinkArena {
       match: m.id,
       rated: m.rated,
       house: m.house,
+      staked: Boolean(m.staked),
       // Each clock as the turn opened, never as it stands: one that stopped would say that side had decided.
       sides: m.sides.map((s, i) => ({ name: s.name, kind: s.kind, fighter: s.kind === "fighter" ? s.id : null, clock_seconds: s.kind === "fighter" ? Math.floor((s.bankAtOpen ?? s.bank) / 1000) : null, rating_change: m.settled ? (m.ratings?.[i] ?? null) : null })),
       turn: m.turn,
@@ -981,7 +1085,7 @@ export class LinkArena {
   private async card(id: string) {
     const v = await this.spectate(id).catch(() => null);
     // With the spectators' view, so a card can show both teams and the score (public, as on the battle's page).
-    return v ? { match: v.match, rated: v.rated, house: v.house, sides: v.sides, turn: v.turn, live: v.live, ended: v.ended, started_at: v.started_at, spectator: v.spectator } : null;
+    return v ? { match: v.match, rated: v.rated, house: v.house, staked: v.staked, sides: v.sides, turn: v.turn, live: v.live, ended: v.ended, started_at: v.started_at, spectator: v.spectator } : null;
   }
 
   /** Whether a battle's screens may be shown (13.3): a rated battle's are, as its turns are played; null when it isn't one. */

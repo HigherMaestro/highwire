@@ -38,10 +38,13 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "wager-admin": "tsx --conditions=highwire-source scripts/wager-admin.ts",
+    "link-wager-admin": "tsx --conditions=highwire-source scripts/link-wager-admin.ts",
     "wager-pair": "tsx --conditions=highwire-source scripts/wager-pair.ts",
     "rehearse-wagers": "tsx --conditions=highwire-source scripts/rehearse-wagers.ts",
+    "rehearse-link-wagers": "tsx --conditions=highwire-source scripts/rehearse-link-wagers.ts",
     "prepack": "npm run build && cp ../../LICENSE .",
-    "wager-instructions": "tsx --conditions=highwire-source scripts/wager-instructions.ts"
+    "wager-instructions": "tsx --conditions=highwire-source scripts/wager-instructions.ts",
+    "link-codec-fixture": "tsx --conditions=highwire-source scripts/link-codec-fixture.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
