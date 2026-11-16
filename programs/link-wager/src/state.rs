@@ -16,9 +16,16 @@ pub const TIERS: usize = 4;
 
 /// How long after both have staked, with no result, anyone may refund both (docs/link-wager.md 2): never so short that a
 /// battle still being played could be refunded out from under its winner, never so long that stakes sit on a referee
-/// that's gone.
-pub const REFUND_AFTER_MIN: u32 = 30 * 60;
+/// that's gone. The floor is well above the longest battle the referee allows: up to five minutes to start, two
+/// eight-minute clocks, and a few seconds of emulation for each of at most 200 turns (packages/relay/src/link/arena.ts,
+/// stakes.ts), with room for the referee's clocks pausing during an outage while the chain's doesn't.
+pub const REFUND_AFTER_MIN: u32 = 60 * 60;
 pub const REFUND_AFTER_MAX: u32 = 7 * 24 * 60 * 60;
+
+/// The longest a ticket may still have to run when its battle opens. A battle's account never closes before its
+/// ticket has expired (so a ticket opens one battle, ever), which makes this the longest a stake can be held on a
+/// battle nobody joined.
+pub const TICKET_LIFETIME_MAX: i64 = 15 * 60;
 
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct Config {
@@ -60,13 +67,16 @@ pub struct Battle {
     pub ticket_key_id: u16,
     pub accept_deadline: i64,
     pub ticket_expiry: i64,
-    /// When A staked, and when B did (0 until then): the refund's clock runs from the second.
+    /// When A staked, and when B did (0 until then).
     pub opened_at: i64,
     pub live_at: i64,
+    /// From when anyone may refund both if no result has come: fixed when B stakes (0 until then), so a later change
+    /// to the config's window never moves it under a battle being played.
+    pub refund_at: i64,
 }
 
 impl Battle {
-    pub const LEN: usize = 1 + 1 + 32 + 32 + 32 + 8 + 2 + 8 + 8 + 8 + 8;
+    pub const LEN: usize = 1 + 1 + 32 + 32 + 32 + 8 + 2 + 8 + 8 + 8 + 8 + 8;
 }
 
 /// A result's outcome, in terms of the two wallets (the referee maps the game's sides to them).

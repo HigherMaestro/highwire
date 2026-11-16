@@ -71,9 +71,12 @@ async function built(wallet: PublicKey, battleId = "5a".repeat(32), stake = 100_
   const open = (await buildLinkOpen(s, { wallet, ...signTicket(asA) })).envelope;
   net.setBattle(battleOf(asB, "open"));
   const accept = (await buildLinkAccept(s, { wallet, ...signTicket(asB) })).envelope;
+  // Nothing closes a battle while its ticket runs, and a refund waits for its time: both long past here.
   net.setBattle(battleOf(asA, "open"));
+  net.runOutTickets();
   const cancel = (await buildLinkExit(s, { wallet, battleId, kind: "cancel" })).envelope;
-  net.setBattle(battleOf(asA, "live"));
+  net.setBattle(battleOf(asA, "live", now() - 7200));
+  net.runOutTickets();
   const settle = (await buildLinkSettle(s, { wallet, ...signResult(result) })).envelope;
   const refund = (await buildLinkExit(s, { wallet, battleId, kind: "refund" })).envelope;
   const address = linkBattleAddress(LINK_PROGRAM, battleId);
@@ -112,14 +115,16 @@ test("the signer takes a link stake's kind and amount from its bytes and the cha
   // 0.25 SOL is one of the program's tiers, and not one of this policy's.
   const big = await built(signer.publicKey, "5b".repeat(32), 250_000_000n);
   await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: ask(), envelope: big.open }), /isn't one of the policy's tiers/);
-  // An accept's stake is the battle account's, whatever anyone says: 0.1 SOL passes, the same battle at 0.25 doesn't.
-  assert.equal((await signer.execute(fakeConnection({ accounts: e.onChain() }), { tool: "t", intent: ask("link_accept"), envelope: e.accept })).status, "sent");
+  // An accept's stake is its ticket's, in the transaction's own bytes (the program takes no other ticket for the
+  // battle), so no RPC is asked for it and none can understate it. 0.1 SOL passes, with the chain saying nothing at all.
+  assert.equal((await signer.execute(fakeConnection(), { tool: "t", intent: ask("link_accept"), envelope: e.accept })).status, "sent");
+  // A 0.25 SOL accept is outside this policy's tiers, even from an RPC that swears the battle holds 0.1 a side and a
+  // caller that declares 0.1.
   const again = live();
+  const lied = await built(again.signer.publicKey, "5c".repeat(32), 250_000_000n);
+  await assert.rejects(again.signer.execute(fakeConnection({ accounts: lied.onChain(LINK_PROGRAM, 100_000_000n) }), { tool: "t", intent: ask("link_accept", 0.1), envelope: lied.accept }), /isn't one of the policy's tiers/);
+  await assert.rejects(again.signer.execute(fakeConnection({ accounts: lied.onChain(LINE, 100_000_000n) }), { tool: "t", intent: ask("link_accept", 0.1), envelope: lied.accept }), /isn't one of the policy's tiers/);
   const f = await built(again.signer.publicKey);
-  await assert.rejects(again.signer.execute(fakeConnection({ accounts: f.onChain(LINK_PROGRAM, 250_000_000n) }), { tool: "t", intent: ask("link_accept", 0.1), envelope: f.accept }), /isn't one of the policy's tiers/);
-  // A battle that isn't on-chain, or an account there that isn't the program's, is nothing to accept.
-  await assert.rejects(again.signer.execute(fakeConnection(), { tool: "t", intent: ask(), envelope: f.accept }), /battle to accept isn't on-chain/);
-  await assert.rejects(again.signer.execute(fakeConnection({ accounts: f.onChain(LINE) }), { tool: "t", intent: ask(), envelope: f.accept }), /isn't the staking program's account/);
   // A move that says it stakes is refused.
   await assert.rejects(again.signer.execute(fakeConnection(), { tool: "t", intent: ask("link_settle", 0.1), envelope: f.settle }), /stakes nothing/);
 });
@@ -133,6 +138,10 @@ test("max_open counts staked battles and The Line's series together", async () =
   const open = new Map([[first.address, { owner: LINK_PROGRAM, data: Buffer.alloc(0) }]]);
   await assert.rejects(signer.execute(fakeConnection({ accounts: open }), { tool: "t", intent: ask(), envelope: second.open }), /1 series already open/);
   assert.match(log(paths).at(-1)!.reason!, /already open/);
+  // Sent a moment ago and not on-chain yet: still counted against another battle...
+  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: ask(), envelope: second.open }), /1 series already open/);
+  // ...but never against itself: a stake that didn't land may be sent again while its ticket lasts.
+  assert.equal((await signer.execute(fakeConnection(), { tool: "t", intent: ask(), envelope: first.open })).status, "sent");
   // With two allowed, it goes.
   const two = live({ wagers: { max_stake_sol: 0.25, max_open: 2, tiers: [0.1], allow_retire: false } });
   const a = await built(two.signer.publicKey, "03".repeat(32));
@@ -171,6 +180,16 @@ test("a transaction that stakes on a battle and plays The Line at once is neithe
   );
   const env: Envelope = { ...e.cancel, transactions: [{ ...e.cancel.transactions[0]!, base64: Buffer.from(both.serialize()).toString("base64") }] };
   await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: ask(), envelope: env }), /stakes on a link battle and plays The Line at once/);
+  // With two of The Line's instructions beside it, it still isn't read as the link instruction alone (a move).
+  const three = new VersionedTransaction(
+    new TransactionMessage({
+      payerKey: w,
+      recentBlockhash: PublicKey.default.toBase58(),
+      instructions: [linkWagerInstruction(LINK_PROGRAM, w, "5a".repeat(32), { kind: "cancel" }, { playerA: w, playerB: other }), wagerInstruction(LINE, w, "55".repeat(32), { kind: "timeout" }), wagerInstruction(LINE, w, "56".repeat(32), { kind: "timeout" })],
+    }).compileToV0Message(),
+  );
+  const env3: Envelope = { ...e.cancel, transactions: [{ ...e.cancel.transactions[0]!, base64: Buffer.from(three.serialize()).toString("base64") }] };
+  await assert.rejects(signer.execute(fakeConnection(), { tool: "t", intent: ask(), envelope: env3 }), /stakes on a link battle and plays The Line at once/);
   // Two of the program's instructions in one transaction: refused before anything is counted.
   const twice = new VersionedTransaction(
     new TransactionMessage({

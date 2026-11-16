@@ -33,9 +33,21 @@ const ticket: LinkTicket = { battleId: f.ticket.battleId, playerA: f.ticket.play
 const result: LinkResult = { battleId: f.result.battleId, playerA: f.result.playerA, playerB: f.result.playerB, outcome: f.result.outcome, keyId: f.result.keyId };
 const hex = (b: Buffer) => b.toString("hex");
 
-test("the program isn't deployed anywhere yet, so staking on link battles has no address to use", () => {
-  assert.deepEqual(LINK_WAGER_PROGRAM_IDS, { devnet: null, mainnet: null });
-  assert.equal(linkWagerProgram("devnet"), null);
+test("the program's address is one address everywhere: the codec's is the one the Rust declares, and never mainnet's", () => {
+  // Practice stakes are devnet's alone.
+  assert.equal(LINK_WAGER_PROGRAM_IDS.mainnet, null);
+  assert.equal(linkWagerProgram("mainnet"), null);
+  // `declare_id!` in the program and the codec's devnet entry change together: before the deploy the codec lists
+  // nothing and the Rust holds a stand-in nobody has a key for; after it, both hold the deployed address.
+  const declared = /declare_id!\("([1-9A-HJ-NP-Za-km-z]{32,44})"\)/.exec(readFileSync(new URL("../../../programs/link-wager/src/lib.rs", import.meta.url), "utf8"))?.[1];
+  assert.ok(declared, "lib.rs declares an address");
+  const STAND_IN = "H9qF6ZB9BR1cSFfHxbGCwnKrSA9DXLKtikEqr4tEmv7S";
+  if (LINK_WAGER_PROGRAM_IDS.devnet === null) assert.equal(declared, STAND_IN, "the Rust has a deployed address and the codec lists none");
+  else {
+    assert.equal(LINK_WAGER_PROGRAM_IDS.devnet, declared, "the codec and the Rust name different programs");
+    assert.notEqual(declared, STAND_IN);
+    assert.equal(linkWagerProgram("devnet")?.toBase58(), declared);
+  }
 });
 
 test("addresses, the ticket's message and the result's are the fixture's", () => {
@@ -90,7 +102,7 @@ test("both accounts decode from the bytes the program writes", () => {
   });
   const battle = Buffer.from(f.accounts.battle, "hex");
   assert.equal(battle.length, LINK_BATTLE_LEN);
-  assert.deepEqual(decodeLinkBattle(battle), { status: "live", battleId: ticket.battleId, playerA: ticket.playerA, playerB: ticket.playerB, stake: ticket.stake, ticketKeyId: 7, acceptDeadline: ticket.acceptDeadline, ticketExpiry: ticket.expiry, openedAt: 1_800_000_010, liveAt: 1_800_000_020 });
+  assert.deepEqual(decodeLinkBattle(battle), { status: "live", battleId: ticket.battleId, playerA: ticket.playerA, playerB: ticket.playerB, stake: ticket.stake, ticketKeyId: 7, acceptDeadline: ticket.acceptDeadline, ticketExpiry: ticket.expiry, openedAt: 1_800_000_010, liveAt: 1_800_000_020, refundAt: 1_800_003_620 });
   // The wallets sit where the filters look for them.
   assert.equal(new PublicKey(battle.subarray(LINK_BATTLE_PLAYER_OFFSETS.A, LINK_BATTLE_PLAYER_OFFSETS.A + 32)).toBase58(), ticket.playerA);
   assert.equal(new PublicKey(battle.subarray(LINK_BATTLE_PLAYER_OFFSETS.B, LINK_BATTLE_PLAYER_OFFSETS.B + 32)).toBase58(), ticket.playerB);

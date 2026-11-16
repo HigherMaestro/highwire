@@ -27,7 +27,7 @@ const config = Buffer.concat([
   Buffer.from([1]), key(init.authority), key(init.ticketKey), u16(init.ticketKeyId), key(init.resultKey), u16(init.resultKeyId), Buffer.from([1]),
   u64(100_000_000n), u64(250_000_000n), u64(0n), u64(0n), u64(init.maxStake), u64(init.openStakeCap), u64(200_000_000n), u32(init.refundAfterSeconds),
 ]);
-const battle = Buffer.concat([Buffer.from([1, 2]), Buffer.from(battleId, "hex"), key(ticket.playerA), key(ticket.playerB), u64(ticket.stake), u16(ticket.keyId), i64(ticket.acceptDeadline), i64(ticket.expiry), i64(1_800_000_010), i64(1_800_000_020)]);
+const battle = Buffer.concat([Buffer.from([1, 2]), Buffer.from(battleId, "hex"), key(ticket.playerA), key(ticket.playerB), u64(ticket.stake), u16(ticket.keyId), i64(ticket.acceptDeadline), i64(ticket.expiry), i64(1_800_000_010), i64(1_800_000_020), i64(1_800_003_620)]);
 
 const out = {
   note: "Written by packages/wager/scripts/link-codec-fixture.ts. Checked by packages/wager/test/link-codec.test.ts and programs/link-wager/tests/codec.rs.",

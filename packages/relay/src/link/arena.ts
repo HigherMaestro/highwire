@@ -243,12 +243,37 @@ export async function practiceGoing(store: Store, fighter: string, now: number):
 export const LINK_STAKE = (id: string) => `link:stake:${id}`;
 export const LINK_STAKE_OF = (fighter: string) => `link:stake-of:${fighter}`;
 
+/**
+ * How long past its ticket's expiry a stake nobody has moved on still holds its fighters. The desk normally lets a
+ * stake go within minutes of the expiry; this is for when it can't (its RPC is down, or it has been switched off): a
+ * hold never outlives its ticket by more than this, so a fighter is never shut out of free play for good.
+ */
+export const STAKE_HOLD_AFTER_EXPIRY_MS = 10 * 60_000;
+
+/** What the stake desk writes of a stake that the arena needs to know whether it still holds a fighter. */
+export interface StakeHold {
+  status: string;
+  ticket?: { expiry?: number };
+  match?: string;
+}
+
+/**
+ * Whether a stake still holds its fighters: while it waits for both deposits (its ticket not long expired), and while
+ * its battle is being played. Never once the battle is over, and never on a stake that's concluded or closed.
+ */
+export async function stakeHolds(store: Store, st: StakeHold | null | undefined, now: number): Promise<boolean> {
+  if (!st) return false;
+  if (st.status === "ticketed") return now <= (st.ticket?.expiry ?? 0) * 1000 + STAKE_HOLD_AFTER_EXPIRY_MS;
+  if (st.status !== "playing" || !st.match) return false;
+  const m = (await store.get<LinkMatchDoc>(MATCH(st.match)))?.value;
+  return Boolean(m && m.status !== "over");
+}
+
 /** Whether a fighter is paired for a staked battle that hasn't ended: it plays nothing else until then. */
-export async function stakeHeld(store: Store, fighter: string): Promise<boolean> {
+export async function stakeHeld(store: Store, fighter: string, now: number): Promise<boolean> {
   const id = (await store.get<string>(LINK_STAKE_OF(fighter)))?.value;
   if (!id) return false;
-  const st = (await store.get<{ status: string }>(LINK_STAKE(id)))?.value;
-  return st?.status === "ticketed" || st?.status === "playing";
+  return stakeHolds(store, (await store.get<StakeHold>(LINK_STAKE(id)))?.value, now);
 }
 
 /** Whether a fighter has a rated battle going, or one being made for it. */
@@ -305,13 +330,23 @@ export class LinkArena {
     return m ? m.status !== "over" : this.clock.now() - (f.claimedAt ?? 0) < CLAIM_STALE_MS;
   }
 
-  /** Claims a fighter for battle `id` by compare-and-set: false if it's busy with another, or changed under the claim. */
-  private async claim(fighter: string, id: string): Promise<boolean> {
+  /**
+   * Claims a fighter for battle `id` by compare-and-set: false if it's busy with another, or changed under the claim.
+   * A free battle also looks, after the claim is written, whether a stake holds the fighter, and lets go if one does:
+   * the stake desk does the same from its side (it holds, then looks for a battle), so whichever wrote second sees the
+   * other, and a fighter is never in a free battle and held by a stake at once.
+   */
+  private async claim(fighter: string, id: string, staked = false): Promise<boolean> {
     for (let attempt = 0; attempt < 4; attempt++) {
       const d = await this.store.get<LinkFighter>(FIGHTER(fighter));
       if (!d) return false;
       if (await this.busy(d.value, id)) return false;
-      if ((await this.store.cas(FIGHTER(fighter), d.version, { ...d.value, match: id, claimedAt: this.clock.now() })) !== null) return true;
+      if ((await this.store.cas(FIGHTER(fighter), d.version, { ...d.value, match: id, claimedAt: this.clock.now() })) === null) continue;
+      if (!staked && (await stakeHeld(this.store, fighter, this.clock.now()))) {
+        await this.release(fighter, id);
+        return false;
+      }
+      return true;
     }
     return false;
   }
@@ -423,7 +458,7 @@ export class LinkArena {
     const now = this.clock.now();
     if ((me.cooldownUntil ?? 0) > now) fail("rate_limited", `You stopped answering in your last battle; you can join again in ${Math.ceil(((me.cooldownUntil ?? 0) - now) / 60_000)} minutes.`);
     if (await practiceGoing(this.store, f.id, now)) fail("conflict", "You have a practice battle going: finish it or leave it (link_practice with leave) first.");
-    if (await stakeHeld(this.store, f.id)) fail("conflict", "You're paired for a staked battle: stake on it (link_stake), or wait for its ticket to run out, first.");
+    if (await stakeHeld(this.store, f.id, now)) fail("conflict", "You're paired for a staked battle: stake on it (link_stake), or wait for its ticket to run out, first.");
     if (opponent === "house") {
       await this.spend(f, 3);
       return this.startHouse(f, me, fallback!);
@@ -533,35 +568,55 @@ export class LinkArena {
   }
 
   /**
-   * Starts a practice stake's battle, for the pair the stake desk made, once both stakes are in (link/stakes.ts). Null
-   * when either fighter is gone or can't be claimed (the desk tries again, then voids the stake). Never rated: a
-   * staked battle moves nothing on the free ladder.
+   * Starts a practice stake's battle, for the pair the stake desk made, once both stakes are in (link/stakes.ts). The
+   * desk chooses the battle's id first and keeps it with the stake, so however many times this is tried (a call that
+   * died, a retry) there is one battle for a stake, ever: an existing battle under that id is returned as it stands,
+   * finished or not. Null when either fighter is gone or can't be claimed (the desk tries again, then voids the
+   * stake). Never rated: a staked battle moves nothing on the free ladder.
    */
-  async startStaked(stake: string, a: { fighter: string; fallback: FallbackKind }, b: { fighter: string; fallback: FallbackKind }): Promise<LinkMatchDoc | null> {
+  async startStaked(stake: string, id: string, a: { fighter: string; fallback: FallbackKind }, b: { fighter: string; fallback: FallbackKind }): Promise<LinkMatchDoc | null> {
+    const existing = (await this.store.get<LinkMatchDoc>(MATCH(id)))?.value;
+    if (existing) return existing.staked === stake ? existing : null;
     const [fa, fb] = await Promise.all([a, b].map(async (x) => (await this.store.get<LinkFighter>(FIGHTER(x.fighter)))?.value));
     if (!fa || !fb) return null;
-    // Started already (by a call that died before it could say so): that battle, never a second.
-    for (const f of [fa, fb]) {
-      const going = f.match ? (await this.store.get<LinkMatchDoc>(MATCH(f.match)))?.value : null;
-      if (going?.staked === stake) return going;
-    }
-    const id = linkMatchId();
-    if (!(await this.claim(fa.id, id))) return null;
-    if (!(await this.claim(fb.id, id))) {
+    if (!(await this.claim(fa.id, id, true))) return null;
+    if (!(await this.claim(fb.id, id, true))) {
       await this.release(fa.id, id);
       return null;
     }
     const now = this.clock.now();
     const sa = this.side("fighter", fa, a.fallback, now);
     const sb = this.side("fighter", fb, b.fallback, now);
-    return this.create(id, Math.random() < 0.5 ? [sa, sb] : [sb, sa], false, false, stake);
+    await this.create(id, Math.random() < 0.5 ? [sa, sb] : [sb, sa], false, false, stake);
+    // The battle as stored: if another call made it first, that one.
+    return (await this.store.get<LinkMatchDoc>(MATCH(id)))?.value ?? null;
   }
 
-  /** A battle's ending, for the stake desk: null while it plays (or when there's no such battle). Read only. */
+  /** Whether a battle exists under this id (the stake desk asks before it gives up on starting one). */
+  async exists(id: string): Promise<boolean> {
+    return Boolean(await this.store.get<LinkMatchDoc>(MATCH(id)));
+  }
+
+  /**
+   * A staked battle's ending, for the stake desk: null while it plays (or when there's no such battle). It plays the
+   * battle's clocks forward first, as an agent's call would, so a battle both sides have walked away from ends here
+   * even if nothing else is looking at it.
+   */
   async ending(id: string): Promise<{ ended: LinkEnding; fighters: [string, string] } | null> {
-    const m = (await this.store.get<LinkMatchDoc>(MATCH(id)))?.value;
+    const m = await this.current(id).catch(() => null);
     if (!m || m.status !== "over" || !m.ended) return null;
     return { ended: m.ended, fighters: [m.sides[0].id, m.sides[1].id] };
+  }
+
+  /** Voids a staked battle the desk has given up on (its stake was already concluded without it). */
+  async abandon(id: string): Promise<void> {
+    const m = (await this.store.get<LinkMatchDoc>(MATCH(id)))?.value;
+    if (m?.staked && m.status !== "over") await this.voidMatch(id, "The battle's stake was closed before it could start.");
+  }
+
+  /** Takes a fighter out of the free queue (it has been paired for a staked battle). */
+  async dequeue(fighter: string): Promise<void> {
+    await update<Queue>(this.store, QUEUE, (cur) => (cur?.entries.some((e) => e.fighter === fighter) ? { ...cur, entries: cur.entries.filter((e) => e.fighter !== fighter) } : undefined));
   }
 
   /** Whether a fighter is in a battle (or one being made): the stake desk pairs only fighters that aren't. */
@@ -643,7 +698,11 @@ export class LinkArena {
       m.stateKey = STATE(id, step.turn);
       await this.store.cas(m.stateKey, 0, toBase64(step.packed), STATE_TTL);
     }
-    await this.store.cas(MATCH(id), 0, m, MATCH_TTL);
+    if ((await this.store.cas(MATCH(id), 0, m, MATCH_TTL)) === null && staked) {
+      // Another call made this stake's battle first (the desk hands every try the same id): that one stands.
+      const first = (await this.store.get<LinkMatchDoc>(MATCH(id)))?.value;
+      if (first) return first;
+    }
     for (const s of sides) {
       if (s.kind !== "fighter") continue;
       await update<string[]>(this.store, FIGHTER_MATCHES(s.id), (cur) => [id, ...(cur ?? []).filter((x) => x !== id)].slice(0, FIGHTER_MATCHES_MAX));
@@ -832,6 +891,7 @@ export class LinkArena {
     if ((await this.store.cas(RESOLVING(id), 0, 1, Math.ceil(STALE_RESOLVE_MS / 1000))) === null) return;
     // Once this call has played a turn, it looks again as it lets go of the lock (see the end).
     let played = false;
+    let handed = false;
     try {
       // Counting the attempt is a write like any other: one that loses to a write that left the turn alone (a fighter
       // noted as present, a poll) is made again, or the turn would wait two minutes for the sweep.
@@ -841,7 +901,7 @@ export class LinkArena {
         if (start.m.status !== "resolving") return;
         const attempts = (start.m.attempts ?? 0) + 1;
         if (attempts > MAX_RESOLVES) {
-          await this.voidMatch(id, "The battle couldn't be resolved (Highwire's rig kept failing on this turn).");
+          await this.voidMatch(id, "The battle couldn't be resolved (Highwire's rig kept failing on this turn).", start.m.turn);
           return;
         }
         if ((await this.store.cas(MATCH(id), start.version, { ...start.m, attempts }, MATCH_TTL)) !== null) m = { ...start.m, attempts };
@@ -854,12 +914,18 @@ export class LinkArena {
         step = await this.engine.resolveMatch(m.state, fromBase64(packed), m.decided, this.spec(m), this.labels(m));
       } catch (err) {
         if (!(err instanceof RelayError && (err.code === "expired" || err.code === "bad_request"))) throw err;
-        if (err.code === "bad_request" && m.staked && (await this.swapRefused(id, m))) {
-          await this.store.del(RESOLVING(id));
-          this.resolveLater(id);
-          return;
+        if (err.code === "bad_request" && m.staked) {
+          const swapped = await this.swapRefused(id, m);
+          if (swapped === "again") {
+            handed = true;
+            await this.store.del(RESOLVING(id));
+            this.resolveLater(id);
+            return;
+          }
+          // The battle moved on under this resolution (another resolved the turn): nothing to void.
+          if (swapped === "moved") return;
         }
-        await this.voidMatch(id, err.code === "expired" ? err.message : "A held decision was refused by the game.");
+        await this.voidMatch(id, err.code === "expired" ? err.message : "A held decision was refused by the game.", m.turn);
         return;
       }
       const key = step.packed ? STATE(id, step.turn) : null;
@@ -882,11 +948,13 @@ export class LinkArena {
       this.filmLater(id, step);
       if (committed.status === "over") await this.finish(id);
       else if (committed.status === "resolving") {
+        handed = true;
         await this.store.del(RESOLVING(id));
         this.resolveLater(id);
       }
     } finally {
-      await this.store.del(RESOLVING(id)).catch(() => undefined);
+      // Once the lock has been let go for the next resolution, it's that one's: deleting it again here could drop it.
+      if (!handed) await this.store.del(RESOLVING(id)).catch(() => undefined);
       // The turn it played was public before the lock was let go: a quick agent's next decision may have completed the
       // next turn meanwhile, found the lock held, and left. So it looks once more, now that the lock is free.
       if (played) {
@@ -898,11 +966,13 @@ export class LinkArena {
 
   /**
    * A staked battle's turn the game refused: puts a fallback in a refused side's place and leaves the turn to be
-   * resolved again. Which side's decision was refused isn't known, so they're tried in turn: side 0's fallback, then
-   * side 1's, then both; an innocent side's own decision is played whenever the game takes it. False when there's
-   * nothing left to try (the battle is then voided, and both stakes refunded).
+   * resolved again ("again"). Which side's decision was refused isn't known, so they're tried in turn: side 0's
+   * fallback, then side 1's, then both; an innocent side's own decision is played whenever the game takes it. "none"
+   * when there's nothing left to try (the battle is then voided, and both stakes refunded); "moved" when the battle is
+   * no longer on this turn with these decisions, so there's nothing for this call to do. A swap is a new try of the
+   * turn in its own right: it doesn't count against the tries the rig gets for failing.
    */
-  private async swapRefused(id: string, m: LinkMatchDoc): Promise<boolean> {
+  private async swapRefused(id: string, m: LinkMatchDoc): Promise<"again" | "none" | "moved"> {
     const held = m.held ?? m.decided;
     const can = (s: Side) => m.sides[s].kind === "fighter" && m.asked[s] && m.fallbacks[s] !== null && JSON.stringify(m.fallbacks[s]) !== JSON.stringify(held[s]);
     const tries: [boolean, boolean][] = [[true, false], [false, true], [true, true]];
@@ -910,16 +980,22 @@ export class LinkArena {
       const [zero, one] = tries[n]!;
       if ((zero && !can(0)) || (one && !can(1))) continue;
       const decided: [LinkAction | null, LinkAction | null] = [zero ? m.fallbacks[0] : held[0], one ? m.fallbacks[1] : held[1]];
-      const set = await update<LinkMatchDoc>(this.store, MATCH(id), (cur) => (cur && cur.status === "resolving" && cur.turn === m.turn && sameDecisions(cur.decided, m.decided) ? { ...cur, decided, held, refused: n + 1 } : undefined), MATCH_TTL);
-      return Boolean(set && set.refused === n + 1);
+      let wrote = false;
+      await update<LinkMatchDoc>(this.store, MATCH(id), (cur) => {
+        if (!cur || cur.status !== "resolving" || cur.turn !== m.turn || !sameDecisions(cur.decided, m.decided)) return undefined;
+        wrote = true;
+        return { ...cur, decided, held, refused: n + 1, attempts: 0 };
+      }, MATCH_TTL);
+      return wrote ? "again" : "moved";
     }
-    return false;
+    return "none";
   }
 
-  private async voidMatch(id: string, why: string) {
+  /** Voids a battle; with `turn`, only if it's still on that turn (a resolution that fell behind voids nothing). */
+  private async voidMatch(id: string, why: string, turn?: number) {
     const now = this.clock.now();
     await update<LinkMatchDoc>(this.store, MATCH(id), (cur) => {
-      if (!cur || cur.status === "over") return undefined;
+      if (!cur || cur.status === "over" || (turn !== undefined && cur.turn !== turn)) return undefined;
       cur.ended = { reason: "void", winner: null, message: why };
       cur.status = "over";
       cur.updatedAt = now;

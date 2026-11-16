@@ -157,8 +157,20 @@ export function createRelay(o: RelayOptions): Relay {
         return json({ skipped: "a sweep ran in the last 30 seconds" });
       }
       const swept = await referee.sweep();
-      const more = { ...(referee.wager ? { wagers: await referee.wager.sweep() } : {}), ...(linkArena ? { link: await linkArena.sweep() } : {}), ...(linkStakes ? { linkStakes: await linkStakes.sweep() } : {}) };
-      return json({ ...swept, ...more });
+      // Each of the other sweeps on its own: one that throws doesn't cost the rest their minute.
+      const each = async <T>(what: string, run: (() => Promise<T>) | null): Promise<T | { failed: true } | undefined> => {
+        if (!run) return undefined;
+        try {
+          return await run();
+        } catch (err) {
+          console.error(`sweep: ${what} failed: ${err instanceof Error ? err.message : String(err)}`);
+          return { failed: true };
+        }
+      };
+      const wagers = await each("the wager desk", referee.wager ? () => referee.wager!.sweep() : null);
+      const linkSwept = await each("link battles", linkArena ? () => linkArena.sweep() : null);
+      const stakesSwept = await each("link battles' stakes", linkStakes ? () => linkStakes.sweep() : null);
+      return json({ ...swept, ...(wagers ? { wagers } : {}), ...(linkSwept ? { link: linkSwept } : {}), ...(stakesSwept ? { linkStakes: stakesSwept } : {}) });
     }
     if (path === "/api/link" || path.startsWith("/api/link/")) {
       if (!link) throw new RelayError("not_found", "Link battles aren't open yet.");

@@ -7,7 +7,7 @@ import { lamportsNumber, type Chain } from "highwire-core";
 import type { PublicKey } from "@solana/web3.js";
 import { AuditLog } from "highwire-agent";
 import { linkWagerProgram } from "./link-codec.ts";
-import { actOnLinkBattle, LinkStakeRunner, signedResultOf, walletLinkBattles } from "./link-run.ts";
+import { actOnLinkBattle, LinkStakeRunner, signedResultOf, usableResults, walletLinkBattles } from "./link-run.ts";
 import { readLinkConfig, type SignedLinkResult } from "./link-tx.ts";
 import { wagerProgram, type SeriesAccountData } from "./codec.ts";
 import { buildWagerMove, listWalletSeries, readSeriesMany, type WagerMoveRequest } from "./tx.ts";
@@ -198,7 +198,7 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
         ? new LinkStakeRunner({
             wallet: signer.wallet,
             battles: () => walletLinkBattles(stakes, new AuditLog(paths.audit), signer.wallet, deps.chain.cluster),
-            results: async () => {
+            results: async (battles) => {
               const out = new Map<string, SignedLinkResult>();
               const token = arenaToken(paths.agent, deps.relayUrl);
               if (!token) return out;
@@ -209,9 +209,10 @@ export async function runLine(argv: string[], io: LineIo): Promise<number> {
                 const r = signedResultOf(x);
                 if (r) out.set(r.result.battleId, r);
               }
-              return out;
+              // Only what the program would take, under the key its config holds now: anything else is no result,
+              // and must not hold up a refund.
+              return usableResults(stakes, await readLinkConfig(stakes), battles, out);
             },
-            refundAfterSeconds: async () => (await readLinkConfig(stakes)).refundAfterSeconds,
             act: async (id, action) => {
               const r = await actOnLinkBattle(stakes, signer, "highwire-wager run", id, action);
               const sig = r.transactions[0]?.signature;

@@ -23,8 +23,11 @@ const hex = (h: string) => Uint8Array.from(h.match(/../g)!.map((x) => parseInt(x
 class FakeChain implements LinkStakeChain {
   states = new Map<string, Awaited<ReturnType<LinkStakeChain["status"]>>>();
   asked = 0;
+  /** The RPC not answering. */
+  down = false;
   async status(id: string) {
     this.asked++;
+    if (this.down) throw new Error("the RPC is down");
     return this.states.get(id) ?? { state: "none" as const };
   }
 }
@@ -325,7 +328,32 @@ test("the desk doesn't pair while the program is paused or holds other keys, and
   const s = await setup({ chain: Object.assign(new FakeChain(), { config: async () => ({ paused: true, ticketKeyId: 1, resultKeyId: 2 }) }) });
   assert.match((await s.join(s.a)).body.error, /paused/);
   const rotated = await setup({ chain: Object.assign(new FakeChain(), { config: async () => ({ paused: false, ticketKeyId: 1, resultKeyId: 3 }) }) });
-  assert.match((await rotated.join(rotated.a)).body.error, /keys are being changed/);
+  assert.match((await rotated.join(rotated.a)).body.error, /stake settings are being changed/);
+  // The program holds other keys than the desk's, or not this tier: a ticket would be refused or a result never pay.
+  const quiet = console.error;
+  console.error = () => undefined;
+  try {
+    const cfg = (extra: object) => Object.assign(new FakeChain(), { config: async () => ({ paused: false, ticketKeyId: 1, resultKeyId: 2, ...extra }) });
+    const key = (secret: Uint8Array) => bs58.encode(ed25519.getPublicKey(secret));
+    const otherResult = await setup({ chain: cfg({ ticketKey: key(TICKET_SECRET), resultKey: key(new Uint8Array(32).fill(3)), tiers: [100_000_000n] }) });
+    assert.match((await otherResult.join(otherResult.a)).body.error, /stake settings are being changed/);
+    const otherTier = await setup({ chain: cfg({ ticketKey: key(TICKET_SECRET), resultKey: key(RESULT_SECRET), tiers: [10_000_000n] }) });
+    assert.match((await otherTier.join(otherTier.a)).body.error, /stake settings are being changed/);
+    const right = await setup({ chain: cfg({ ticketKey: key(TICKET_SECRET), resultKey: key(RESULT_SECRET), tiers: [100_000_000n, 250_000_000n] }) });
+    assert.equal((await right.join(right.a, { wait: false })).body.waiting, true);
+  } finally {
+    console.error = quiet;
+  }
+  // A desk that can't read the program's config signs nothing: a ticket it can't follow would only lock two stakes.
+  const blind = await setup({
+    chain: Object.assign(new FakeChain(), {
+      config: async () => {
+        throw new Error("the RPC is down");
+      },
+    }),
+  });
+  const refused = await blind.join(blind.a);
+  assert.deepEqual([refused.status, /can't read the chain/.test(refused.body.error)], [503, true], refused.text);
   // One owner's two fighters wait at the same tier and are never paired with each other.
   const one = await setup();
   const third = bs58.encode(new Uint8Array(32).fill(103));
@@ -334,4 +362,170 @@ test("the desk doesn't pair while the program is paused or holds other keys, and
   const [x, y] = await Promise.all([one.join(one.a), one.join(mine)]);
   assert.deepEqual([x.body.waiting, y.body.waiting], [true, true], `${x.text} ${y.text}`);
   assert.ok(new LinkStakeDesk(one.r.store, one.r.clock, { programId: PROGRAM, ticketSecret: TICKET_SECRET, ticketKeyId: 1, resultSecret: RESULT_SECRET, resultKeyId: 2, tiers: [1n], chain: new FakeChain() }, one.r.relay.linkArena!, async () => undefined));
+});
+
+// ---------------------------------------------------------------- the review of 2026-11-15: each of these failed before its fix
+
+const counts = (s: Awaited<ReturnType<typeof setup>>) => Object.values(((s.r.store.dump()["link:stake-queue"] as { pairs?: { counts: Record<string, number> } } | undefined)?.pairs?.counts ?? {}) as Record<string, number>);
+
+test("an unused ticket gives the pair's weekly count back once, however many look at it at the same moment", async () => {
+  const s = await setup({ perPairPerWeek: 3 });
+  let p = await s.pair();
+  s.chain.states.set(p.id, { state: "open" });
+  await s.r.advance(8 * 60_000);
+  assert.equal((await s.state(s.a)).body.closed, "unaccepted");
+  assert.deepEqual(counts(s), [1], "a ticket that was opened stays counted");
+  p = await s.pair();
+  assert.deepEqual(counts(s), [2]);
+  // Time passes with no sweep, then both sides and a results call all find it expired at once.
+  s.r.clock.advance(8 * 60_000);
+  await Promise.all([s.state(s.a), s.state(s.b), s.r.call("GET", "/api/link/stake/results", undefined, s.a)]);
+  assert.deepEqual(counts(s), [1], "one pairing given back, once");
+});
+
+test("a fighter waiting in the free queue that stakes is never paired into a free battle while its stake holds it", async () => {
+  const s = await setup();
+  const third = bs58.encode(new Uint8Array(32).fill(103));
+  const thirdWallet = bs58.encode(new Uint8Array(32).fill(33));
+  s.r.coins.coins.set(third, { name: "Third", ticker: "THREE", createdAt: s.r.clock.now(), holders: 1, volumeSol: 0, rugFlag: false, creatorHolds: true, creator: thirdWallet });
+  const z = await s.r.register(third, thirdWallet);
+  // a queues for a free battle and leaves its place there, then stakes and is ticketed.
+  assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a)).body.waiting, true);
+  const p = await s.pair();
+  assert.equal((await s.state(s.a)).body.status, "ticketed");
+  // z looks for a free battle: a's place went when it staked, so z waits, and a isn't in anything but its stake.
+  const zj = await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, z);
+  assert.equal(zj.body.waiting, true, zj.text);
+  assert.equal(await s.r.relay.linkArena!.inBattle(MINT), false);
+  // So when both stake, the battle starts (nothing else has either fighter).
+  s.chain.states.set(p.id, { state: "live" });
+  s.r.clock.advance(11_000);
+  assert.equal((await s.state(s.b)).body.status, "playing");
+  // And a free battle can't claim a held fighter even if a place of its were somehow still in the queue.
+  const q = s.r.store.dump()["link:queue"] as { entries: { fighter: string }[] };
+  assert.ok(!q.entries.some((e) => e.fighter === MINT));
+});
+
+test("a stake's polls are paid for before the chain is read, and the chain is asked at most every few seconds", async () => {
+  const s = await setup();
+  await s.pair();
+  const before = s.chain.asked;
+  let limited = 0;
+  for (let i = 0; i < 400; i++) if ((await s.join(s.a)).status === 429) limited++;
+  assert.ok(limited > 200, `only ${limited} of 400 joins by a held fighter were rate limited`);
+  assert.ok(s.chain.asked - before <= 2, `${s.chain.asked - before} chain reads for 400 polls in one instant`);
+  // A join that fails validation is paid for too (it has already looked at the fighter's stake).
+  const t = await setup();
+  const g = await t.playing();
+  await t.r.call("POST", "/api/link/leave", undefined, t.a);
+  assert.equal((await t.state(t.a)).body.status, "over");
+  const asked = t.chain.asked;
+  let refused = 0;
+  for (let i = 0; i < 300; i++) if ((await t.join(t.a, { stake: "5" })).status === 429) refused++;
+  assert.ok(refused > 100, `only ${refused} of 300 bad joins were rate limited`);
+  assert.ok(t.chain.asked - asked <= 2);
+  assert.ok(g.match);
+});
+
+test("a stake gets one battle, ever: a start that died before saying so is found again, even after that battle ended", async () => {
+  const s = await setup();
+  const p = await s.pair();
+  s.chain.states.set(p.id, { state: "live" });
+  // The start makes the battle, and the write that records it ("playing") fails once: a function that died there.
+  const cas = s.r.store.cas.bind(s.r.store);
+  let failed = false;
+  (s.r.store as { cas: unknown }).cas = async (key: string, version: number, value: { status?: string }, ...rest: unknown[]) => {
+    if (!failed && key === `link:stake:${p.id}` && value?.status === "playing") {
+      failed = true;
+      throw new Error("the function died");
+    }
+    return (cas as (...a: unknown[]) => unknown)(key, version, value, ...rest);
+  };
+  const first = await s.state(s.a);
+  assert.deepEqual([failed, first.body.status, s.engine.starts], [true, "ticketed", 1]);
+  // The agents were claimed for that battle; one leaves at once, so it's over (a forfeit) before the desk looks again.
+  const left = await s.r.call("POST", "/api/link/leave", undefined, s.a);
+  assert.equal(left.body.from, "battle", left.text);
+  s.r.clock.advance(30_000);
+  const [x, y] = [await s.state(s.a), await s.state(s.b)];
+  assert.equal(s.engine.starts, 1, "no second battle for the stake");
+  assert.deepEqual([x.body.status, x.body.result.you, y.body.result.you], ["over", "lost", "won"], "the one battle's result is the stake's");
+});
+
+test("a rating a failed write left out is put in the next time the stake is looked at, once", async () => {
+  const s = await setup();
+  const g = await s.playing();
+  const cas = s.r.store.cas.bind(s.r.store);
+  let failed = false;
+  (s.r.store as { cas: unknown }).cas = async (key: string, ...rest: unknown[]) => {
+    if (!failed && key.startsWith("link:stake-standing:")) {
+      failed = true;
+      throw new Error("the store hiccuped");
+    }
+    return (cas as (...a: unknown[]) => unknown)(key, ...rest);
+  };
+  await s.r.call("POST", "/api/link/leave", undefined, s.a);
+  await s.state(s.b);
+  assert.equal(failed, true);
+  await s.r.advance(5 * 60_000);
+  const [x, y] = [await s.state(s.a), await s.state(s.b)];
+  assert.deepEqual([x.body.you.record.loss, y.body.you.record.win], [1, 1]);
+  await s.r.advance(5 * 60_000);
+  assert.deepEqual([(await s.state(s.a)).body.you.record.loss, (await s.state(s.b)).body.you.record.win], [1, 1], "and only once");
+  assert.ok(g.match);
+});
+
+test("refused decisions and a rig failure on the same turn: the fallbacks are still played, the battle isn't voided", async () => {
+  const s = await setup();
+  const g = await s.playing();
+  s.engine.refuse = (d) => d.some((x) => x?.kind === "move" && x.slot === 0);
+  s.engine.failOnce = new Error("the rig crashed once");
+  const quiet = console.error;
+  console.error = () => undefined;
+  try {
+    for (const t of g.tokens) await s.r.call("POST", "/api/link/move", { match: g.match, turn: 0, action: HIT }, t);
+    await s.flush();
+    // The crashed resolution is picked up by the sweep after two minutes; then each swap is tried in turn.
+    for (let i = 0; i < 6 && (await s.r.call("GET", `/api/link/match/${g.match}`)).body.turn === 0; i++) {
+      await s.r.advance(125_000);
+      await s.flush();
+    }
+  } finally {
+    console.error = quiet;
+  }
+  const v = (await s.r.call("GET", `/api/link/match/${g.match}`)).body;
+  assert.equal(v.ended, null, JSON.stringify(v.ended));
+  assert.deepEqual(v.spectator.bars, [100, 100], "both fallbacks (wait) played: nobody was hit");
+  assert.ok(v.turn >= 1, "the turn was played, with both sides' fallbacks");
+});
+
+test("a stake never holds its fighters long past its ticket, whatever the chain's RPC does", async () => {
+  const s = await setup();
+  await s.pair();
+  s.chain.down = true;
+  // Inside the ticket and a few minutes past it, the hold stands: the desk may only be slow to see the stakes.
+  await s.r.advance(10 * 60_000);
+  assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a)).status, 409);
+  // Three hours on with the RPC still down: both are free to play, though the desk never managed to close the stake.
+  await s.r.advance(3 * 3_600_000);
+  assert.equal((await s.state(s.a)).body.status, "ticketed", "the desk couldn't read the chain to close it");
+  assert.equal((await s.r.call("POST", "/api/link/join", { fallback: "first", wait: false }, s.a)).status, 200);
+  await s.r.call("POST", "/api/link/leave", undefined, s.a);
+  // And they can stake again once the RPC is back (the old ticket closes as expired on the way).
+  s.chain.down = false;
+  const again = await s.join(s.a, { wait: false });
+  assert.equal(again.body.waiting, true, again.text);
+});
+
+test("an opening seen on-chain that then vanishes, past its accept time, frees both at once", async () => {
+  const s = await setup();
+  const p = await s.pair();
+  s.chain.states.set(p.id, { state: "open" });
+  await s.r.advance(60_000);
+  assert.equal((await s.state(s.a)).body.status, "ticketed");
+  // Cancelled on-chain once the ticket ran out, and its closing event out of the desk's reach: "none".
+  s.chain.states.delete(p.id);
+  await s.r.advance(7 * 60_000);
+  const st = await s.state(s.b);
+  assert.deepEqual([st.body.status, st.body.closed], ["done", "unaccepted"]);
 });

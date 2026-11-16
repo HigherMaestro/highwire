@@ -197,7 +197,7 @@ export class LinkReferee {
     if (going) return this.out(going);
     // One battle at a time: practice waits for a rated battle to end (and link_join for a practice).
     if (await ratedGoing(this.store, f.id, this.clock.now())) fail("conflict", "You have a rated link battle going: finish it (link_state, link_move) or leave it (link_leave) first.");
-    if (await stakeHeld(this.store, f.id)) fail("conflict", "You're paired for a staked battle: stake on it (link_stake), or wait for its ticket to run out, first.");
+    if (await stakeHeld(this.store, f.id, this.clock.now())) fail("conflict", "You're paired for a staked battle: stake on it (link_stake), or wait for its ticket to run out, first.");
     if ((await this.store.cas(STARTING(f.id), 0, 1, 90)) === null) fail("conflict", "Your practice battle is already being set up; read it with link_practice in a moment.");
     try {
       // Checked again under the lock: another start may have just finished.

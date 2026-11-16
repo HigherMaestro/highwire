@@ -2,9 +2,11 @@ import { Buffer } from "node:buffer";
 import { PublicKey, type Connection, type Keypair } from "@solana/web3.js";
 import { solToLamports, UnsafeTransactionError, type Cluster, type Envelope } from "highwire-core";
 import { LocalSigner, policyRefused as refused, stopped, type ActionExtension, type AgentPaths, type AuditLog, type Intent, type Policy, type Refusal } from "highwire-agent";
-import { decodeSeriesAccount, wagerProgram } from "./codec.ts";
+import { VersionedTransaction } from "@solana/web3.js";
+import { resolveInstructions } from "highwire-core";
+import { decodeSeriesAccount, decodeWager, wagerProgram } from "./codec.ts";
 import { wagerFacts } from "./guard.ts";
-import { decodeLinkBattle, linkWagerProgram } from "./link-codec.ts";
+import { linkWagerProgram } from "./link-codec.ts";
 import { linkWagerFacts } from "./link-guard.ts";
 
 // What the local signer needs to know about a wager, as its extension for the "wager" action (highwire-agent's
@@ -82,14 +84,17 @@ function stakingPrograms(cluster: Cluster, linkProgram?: PublicKey): PublicKey[]
  * getMultipleAccounts, never getProgramAccounts, which public RPCs throttle), plus any sent in the last ten minutes,
  * which the chain may not show yet.
  */
-export async function openSeries(connection: Connection, audit: AuditLog, cluster: Cluster, linkProgram?: PublicKey): Promise<number> {
+export async function openSeries(connection: Connection, audit: AuditLog, cluster: Cluster, linkProgram?: PublicKey, except?: string): Promise<number> {
   const programs = stakingPrograms(cluster, linkProgram);
   if (programs.length === 0) throw refused("wagers", `wagering isn't deployed on ${cluster}`);
   // Open: a series staked in whose account is still the program's, and any recent stake unless it has provably closed:
   // its latest send confirmed a while ago, and its account gone at a slot no earlier than that confirmation's (an RPC
   // that lags, or a load balancer's other node, can't make an open series look closed).
+  // The account this very transaction stakes on isn't counted against it: a stake that was sent and didn't land may be
+  // sent again (the program takes one open and one accept for an account, so it can't be staked twice).
   const recent = recentStakes(audit, cluster, RECENT_STAKE_MS);
-  const staked = [...new Set(stakedSeriesSince(audit, cluster, 30 * 86_400_000))];
+  if (except) recent.delete(except);
+  const staked = [...new Set(stakedSeriesSince(audit, cluster, 30 * 86_400_000))].filter((a) => a !== except);
   const open = new Set<string>();
   const now = Date.now();
   for (let i = 0; i < staked.length; i += 100) {
@@ -135,13 +140,10 @@ function eitherFacts(env: Envelope, cluster: Cluster, linkProgram?: PublicKey): 
     const f = wagerFacts(env, cluster);
     return { link: false, kind: f.kind, subject: f.series, stake: f.stake };
   }
-  let line = true;
-  try {
-    wagerFacts(env, cluster);
-  } catch {
-    line = false;
-  }
-  if (line) throw new UnsafeTransactionError("the transaction stakes on a link battle and plays The Line at once");
+  // Counted, not inferred from wagerFacts refusing: it refuses two of The Line's instructions as it does none.
+  const line = wagerProgram(cluster);
+  const lines = line ? resolveInstructions(VersionedTransaction.deserialize(Buffer.from(env.transactions[0]!.base64, "base64"))).filter((ix) => ix.programId.equals(line) && decodeWager(ix.data)).length : 0;
+  if (lines > 0) throw new UnsafeTransactionError("the transaction stakes on a link battle and plays The Line at once");
   return { link: true, kind: `${LINK_KIND}${lf.kind}`, subject: lf.battle, stake: lf.stake };
 }
 
@@ -178,19 +180,17 @@ export function wagerSigningFor(opts: WagerSigningOptions = {}): ActionExtension
         if (intent.solOut !== 0n) throw new UnsafeTransactionError("a wager move stakes nothing");
         return { ...intent, wager: { kind: f.kind } };
       }
+      // A link stake's amount is in its own bytes (an open's data, an accept's ticket): no RPC is asked, so none can
+      // understate it. The Line's accept names no amount: that one is the series account's.
       let stake = f.stake;
       if (stake === undefined) {
-        // An accept: the stake is whatever the account it accepts holds, and that account must be the program's own.
+        if (f.link) throw new UnsafeTransactionError("a stake on a link battle that names no amount");
         const acc = await connection.getAccountInfo(new PublicKey(f.subject), "confirmed");
-        if (!acc) throw refused("wagers", `the ${f.link ? "battle" : "series"} to accept isn't on-chain`);
-        if (f.link) {
-          const lp = opts.linkProgram ?? linkWagerProgram(intent.cluster);
-          if (!lp || !acc.owner.equals(lp)) throw refused("wagers", "the battle to accept isn't the staking program's account");
-          stake = decodeLinkBattle(Buffer.from(acc.data)).stake;
-        } else stake = decodeSeriesAccount(Buffer.from(acc.data)).header.stake;
+        if (!acc) throw refused("wagers", "the series to accept isn't on-chain");
+        stake = decodeSeriesAccount(Buffer.from(acc.data)).header.stake;
       }
       const solOut = stake > intent.solOut ? stake : intent.solOut;
-      return { ...intent, solOut, wager: { kind: f.kind, stake, openSeries: await openSeries(connection, audit, intent.cluster, opts.linkProgram) } };
+      return { ...intent, solOut, wager: { kind: f.kind, stake, openSeries: await openSeries(connection, audit, intent.cluster, opts.linkProgram, f.subject) } };
     },
     check: checkWagerPolicy,
     stopped: (paths) => (stopped(paths.stopWagers) ? `No new wagers: ${paths.stopWagers} exists. Open series and battles still play out.` : null),
