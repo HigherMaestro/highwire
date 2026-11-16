@@ -1,7 +1,9 @@
 # PRD: Practice stakes on link battles
 
-Status: **a draft, revised 2026-11-15 after the owner's steer: devnet only, with devnet SOL, which is worth nothing.
-Nothing is built.** Part 1 is the plan. Part 2 is what would have to change before real money, kept so that day
+Status: **built, not deployed (2026-11-15).** Devnet only, with devnet SOL, which is worth nothing: the owner's steer.
+The program, the tools, the referee's desk, the daemon and the pages are in the repository and tested, and the whole
+stack has been rehearsed on a local validator with the compiled program (4.1). Nothing is live: the program isn't
+deployed, so every piece is off (4.2 is how it's turned on). Part 1 is the plan. Part 2 is what would have to change before real money, kept so that day
 doesn't start from nothing; none of it is needed for Part 1. Not legal advice.
 
 Two agents stake devnet SOL on a link battle (docs/link-battles.md) and the winner takes the pot. It follows The
@@ -71,9 +73,10 @@ even with play money: the habits carry over.
    referee watches the program for the two deposits; it never holds or moves the stakes.
 4. **The result.** When the battle ends, the referee signs a **result**: the battle's id, the outcome (side 0 won,
    side 1 won, a draw, a void) and the two wallets. It hands the signed result to both agents in their next answer.
-5. **Settling.** Either agent sends `settle` with the signed result. The program checks the signature against the
-   result key in its config, pays the winner (or refunds both), and closes the battle's account. The reveal daemon
-   The Line's agents already run (`highwire-wager run`) does this for an agent that has stopped.
+5. **Settling.** Either agent sends `settle` with the signed result (`link_settle`). The program checks the signature
+   against the result key in its config, pays the winner (or refunds both), and closes the battle's account. The
+   daemon The Line's agents already run (`highwire-wager run`) does this for an agent that has stopped: the winner's
+   at once, the other side's after 30 seconds.
 6. **If no result ever comes,** `refund` after the deadline returns both stakes.
 
 **The result key** is new: a key that signs results and nothing else, held where the ticket key is. On devnet a wrong
@@ -104,26 +107,91 @@ deadline, a stake above the cap, a paused config, the open-stake counter on ever
 the links that must fail; and two agents stake, play a whole link battle and settle on devnet through the local
 signer, including one whose agent is killed mid-battle and one battle voided on purpose and refunded.
 
-### 4.1 Built so far
+### 4.1 Built (2026-11-15)
 
-- **The program** (`programs/link-wager`, 2026-11-15): `open`, `accept`, `cancel`, `settle`, `refund`,
-  `freeze_and_refund` and its config, with no rules of the game in it. A ticket and a result are each an Ed25519 check
-  placed just before the instruction that needs it, verified by introspection as `line-wager`'s tickets are; each names
-  the program, its battle and both wallets, and starts with its own domain, so a ticket can't stand in for a result,
-  nor The Line's tickets for these. Tested under solana-program-test (`npm run test:link-program`, natively and
-  against the built `.so`; CI runs it with the other program's tests): both stake; a ticket that's forged, for another
-  program, for another stake, or not just before its instruction; tiers, caps and expiry; a paused config; a battle B
-  never joins; each of the four outcomes paying as it should, once; a result that's forged, the desk's, for another
-  battle, another outcome or another program; a rotated result key; a refund before and after its deadline; the
-  authority's freeze; the open-stake counter back to zero on every way out.
-- **Not deployed.** The program's address in the source is a stand-in nobody holds a key for. The maintainer makes the
-  program's keypair, and its address then goes into the source and the codec.
-- **Still to build:** everything in `highwire-wager` (the codec, the guard, the signer's extension, the tools, settling
-  in the daemon), the desk's pairing for link battles, the referee's signed result, the pages, and the rehearsal on a
-  local validator.
+- **The program** (`programs/link-wager`): `open`, `accept`, `cancel`, `settle`, `refund`, `freeze_and_refund` and
+  its config, with no rules of the game in it. A ticket and a result are each an Ed25519 check placed just before the
+  instruction that needs it, verified by introspection as `line-wager`'s tickets are; each names the program, its
+  battle and both wallets, and starts with its own domain, so a ticket can't stand in for a result, nor The Line's
+  tickets for these. Tested under solana-program-test (`npm run test:link-program`, natively and against the built
+  `.so`; CI runs it with the other program's tests): both stake; a ticket that's forged, for another program, for
+  another stake, or not just before its instruction; tiers, caps and expiry; a paused config; a battle B never joins;
+  each of the four outcomes paying as it should, once; a result that's forged, the desk's, for another battle,
+  another outcome or another program; a rotated result key; a refund before and after its deadline; the authority's
+  freeze; the open-stake counter back to zero on every way out.
+- **In `highwire-wager`:** the program's wire format (`link-codec.ts`, pinned to the Rust by a fixture both sides'
+  tests read); its safety guard (`link-guard.ts`: a transaction may carry one of the program's instructions only for
+  a caller that expects exactly it, a stake right after the desk's check of exactly its ticket, a settle right after
+  the referee's check of exactly its result; the sign page, with no guard, refuses every one); the builders
+  (`link-tx.ts`, each through `finish()`); the local signer's extension (`signing.ts`: a link stake is read from its
+  bytes and the chain, checked against the policy's `wagers` section and STOP-WAGERS, logged as `link_open`,
+  `link_settle` and so on, and counted with The Line's series against `max_open`); the tools (`link-tools.ts`); and
+  the daemon's pass (`link-run.ts`, run by `highwire-wager run`).
+- **Three tools,** registered only where the program's address is known (the codec lists none yet, so the published
+  package is unchanged): `link_stake` pairs at a tier and stakes; `link_settle` sends the referee's signed result,
+  takes back a stake nobody accepted, and refunds a battle that never got a result once its deadline has passed;
+  `link_wagers` shows where everything stands. The battle itself is played with `link_state` and `link_move`. No tool
+  returns a ticket, a signature or a key.
+- **In the relay:** the stake desk (`packages/relay/src/link/stakes.ts`, `/api/link/stake/*`). It pairs two fighters
+  at a tier (never one owner's two, never an operator's, at most two battles a week between two owners, the closest
+  practice ratings) and signs the ticket; starts the battle when the chain shows both stakes, once, whoever looks
+  first (an agent's poll or the cron); signs the result when the battle ends; and keeps a practice rating of its own.
+  `LinkArena` plays a staked battle as any other, with two differences: it moves no record and no rating on the free
+  ladder, and a decision the game refuses is replaced by that side's fallback (side 0's, then side 1's, then both)
+  rather than voiding the battle. A fighter held by a stake plays nothing else until its ticket runs out, and one
+  that stopped answering waits out the same cooldown before it may stake again.
+- **Every stall ends.** A ticket nobody used expires and gives the pair its weekly count back. An opening nobody
+  accepted frees both; the opener's daemon (or `link_settle`) cancels it on-chain 90 seconds after the deadline. Both
+  staked and no battle can be started for five minutes (the rig is down): the desk signs a void, so both are
+  refunded. A result nobody sends: the program's own refund, after its deadline.
+- **Pages:** a staked battle is watched like any other and is labelled "Practice stake"; `/link/stakes` lists the
+  ones played, with no amount, wallet or signature, and is never indexed. Off (404) until the desk is on.
+- **The maintainer's tool:** `npm run link-wager-admin -w highwire-wager` (`keys`, `status`, `init`, `pause`,
+  `unpause`, `config`, `freeze`). Devnet only; it never prints a secret, and sends only with `--send`, after
+  simulating.
+- **Rehearsed on a local validator** (`npm run rehearse-link-wagers -w highwire-wager`): the compiled program, two
+  agents with real local signers and policies, the desk and the referee in process, the daemons, and a fake engine in
+  place of the game (so it needs no ROM). It plays a knockout settled by the winner's tool, a draw refunded, a battle
+  voided on purpose and refunded, a paused config, a stake nobody accepts cancelled by a daemon, and a battle one
+  agent walks away from, settled by the other side's daemon with no tool call; after each it checks the program's
+  closing event, both wallets' balances, the desk's record and that the free ladder never moved. It touches no public
+  cluster.
 
-**Two choices made in building it,** both easy to change: one battle per stake (section 7), and no fee (the winner
-takes both stakes whole).
+**Choices made in building it,** each easy to change: one battle per stake (section 7); no fee (the winner takes both
+stakes whole); tiers of 0.1 and 0.25 devnet SOL; the program's refund an hour after both staked; the battle starts
+only after both deposits are seen on-chain (nothing to unwind); and a third tool, `link_settle`, so an agent can
+settle without the daemon.
+
+### 4.2 Turning it on (the maintainer's steps)
+
+Nothing below can be done from the repository alone: it needs keys, a funded devnet wallet and the site's
+environment. None of it touches mainnet.
+
+1. **The program's address.** Make the program's keypair (`solana-keygen new`, kept outside the repository). Put its
+   address in `programs/link-wager/src/lib.rs` (`declare_id!`) and in `LINK_WAGER_PROGRAM_IDS.devnet`
+   (`packages/wager/src/link-codec.ts`), then `npm run link-codec-fixture -w highwire-wager`,
+   `npm run test:link-program` and `npm test`. That is the one code change, and it's what makes the tools appear.
+2. **Deploy to devnet:** `(cd programs/link-wager && cargo build-sbf)`, then `solana program deploy` with that
+   keypair and an upgrade authority you hold, on devnet.
+3. **The desk's two keys:** `npm run link-wager-admin -w highwire-wager -- keys --out-dir <a folder outside the
+   repository>`. It prints the two public keys and writes the secrets to files.
+4. **The config:** `npm run link-wager-admin -w highwire-wager -- init --authority <the upgrade authority's keypair>
+   --ticket-key <public key> --result-key <public key>`, first without `--send` (it simulates), then with.
+   `status` shows it.
+5. **The site's environment** (Vercel, Production): `LINK_STAKE_TICKET_KEY` and `LINK_STAKE_RESULT_KEY` (the two
+   secrets, as sensitive values), and a devnet RPC in `LINK_STAKE_RPC_URL` (the public one throttles reads).
+   `LINK_RATED=1` is already set. Optional: `LINK_STAKE_TIERS`, `LINK_STAKE_MIN_QUEUE`, `LINK_STAKE_PER_PAIR_WEEK`,
+   `LINK_STAKE_TICKET_KEY_ID`, `LINK_STAKE_RESULT_KEY_ID`. A setting the desk refuses turns the desk off and nothing
+   else.
+6. **Release** `highwire-wager` with the address in it (the usual steps in AGENTS.md), so agents' servers have the
+   tools.
+7. **Each agent:** a devnet home and policy, as for The Line's practice wagers (docs/wager-devnet.md): `"cluster":
+   "devnet"`, `"wager"` in its actions, a `wagers` section whose tiers include the stake, `HIGHWIRE_LINK=1`, and
+   devnet SOL in the wallet (yours to fund).
+
+**Done when** two agents stake, play a whole link battle and settle on devnet through the local signer, including one
+whose agent is killed mid-battle and one battle voided on purpose and refunded: the rehearsal's cases, on devnet with
+the real game.
 
 ## 5. The wall around practice
 
@@ -142,9 +210,14 @@ pages say practice.
 - One battle swings on a single critical hit. A best-of-3 halves that and triples the time (a battle between model
   agents runs 5 to 15 minutes). Measure first: a strong scripted player against a weaker one over a few hundred
   battles says how much a better player actually wins.
-- Does the referee start the battle only after seeing both deposits on-chain (slower to start, nothing to unwind), or
-  pair first and void if a deposit never lands?
-- How long before `refund` opens: long enough for the longest battle (the turn cap) plus a margin.
+- ~~Does the referee start the battle only after seeing both deposits on-chain, or pair first and void if a deposit
+  never lands?~~ After both deposits: nothing to unwind (4.1).
+- How long before `refund` opens: long enough for the longest battle (the turn cap) plus a margin. An hour for now
+  (the config's `refund_after`, changed with `link-wager-admin config`); a battle between model agents runs 5 to 15
+  minutes.
+- Two agents that have just played each other wait a minute or two to be paired again: their practice ratings have
+  moved apart, and the allowed gap widens with the wait, as on The Line's desk. Fine with a real queue; slow for a
+  test with two fighters.
 
 ---
 
