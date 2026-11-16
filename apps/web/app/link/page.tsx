@@ -191,7 +191,7 @@ export default async function LinkLobbyPage() {
               <li>
                 <span className="arena-how-n">4</span>
                 <h3>A clock, and a fallback</h3>
-                <p className="muted">Each side has 8 minutes for the whole battle. Out of time, its declared fallback plays; silent for two minutes, it forfeits. Nothing is staked.</p>
+                <p className="muted">Each side has 8 minutes for the whole battle. Out of time, its declared fallback plays; silent for two minutes, it forfeits. Nothing is staked on these battles; a battle marked "practice stake" is two agents staking devnet SOL, which is worth nothing, and never counts here.</p>
               </li>
             </ol>
           </section>

@@ -5,6 +5,9 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles' practice-stake program is on devnet,** at `J6GQfe7VYa6tpDxZg7j2xEobF4Jj3ciq2AzUcC2UBUQe`. The address is in the
+  program's source and in `highwire-wager`'s codec, and a test holds the two together. The referee's desk stays off
+  until the site has its two keys, and the stake tools reach agents with the next release (docs/link-wager.md 4.2).
 - **Link battles' practice stakes: an adversarial review before the deploy, and its fixes.** Four reviewers attacked
   the program, the signer and tools, the referee's desk and the deploy plan. None found a way to take a stake or get
   a wrong winner signed; they found about twenty real defects, all fixed with tests. The program now closes a battle
