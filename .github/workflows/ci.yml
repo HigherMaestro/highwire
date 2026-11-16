@@ -82,7 +82,8 @@ jobs:
             ~/.cache/solana
             ~/.local/share/solana
             programs/line-wager/target
-          key: program-${{ runner.os }}-${{ env.SOLANA_VERSION }}-${{ env.RUST_VERSION }}-${{ hashFiles('programs/line-wager/Cargo.lock') }}
+            programs/link-wager/target
+          key: program-${{ runner.os }}-${{ env.SOLANA_VERSION }}-${{ env.RUST_VERSION }}-${{ hashFiles('programs/line-wager/Cargo.lock', 'programs/link-wager/Cargo.lock') }}
       - name: Rust
         run: rustup toolchain install "$RUST_VERSION" --profile minimal && rustup default "$RUST_VERSION"
       - name: Solana's tools
@@ -93,6 +94,8 @@ jobs:
           echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
       - run: npm ci
       - run: npm run test:program
+      # Link battles' practice-stake program (docs/link-wager.md): natively, then against the built .so.
+      - run: npm run test:link-program
 
   freeze:
     name: the audited program

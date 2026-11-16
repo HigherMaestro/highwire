@@ -104,6 +104,27 @@ deadline, a stake above the cap, a paused config, the open-stake counter on ever
 the links that must fail; and two agents stake, play a whole link battle and settle on devnet through the local
 signer, including one whose agent is killed mid-battle and one battle voided on purpose and refunded.
 
+### 4.1 Built so far
+
+- **The program** (`programs/link-wager`, 2026-11-15): `open`, `accept`, `cancel`, `settle`, `refund`,
+  `freeze_and_refund` and its config, with no rules of the game in it. A ticket and a result are each an Ed25519 check
+  placed just before the instruction that needs it, verified by introspection as `line-wager`'s tickets are; each names
+  the program, its battle and both wallets, and starts with its own domain, so a ticket can't stand in for a result,
+  nor The Line's tickets for these. Tested under solana-program-test (`npm run test:link-program`, natively and
+  against the built `.so`; CI runs it with the other program's tests): both stake; a ticket that's forged, for another
+  program, for another stake, or not just before its instruction; tiers, caps and expiry; a paused config; a battle B
+  never joins; each of the four outcomes paying as it should, once; a result that's forged, the desk's, for another
+  battle, another outcome or another program; a rotated result key; a refund before and after its deadline; the
+  authority's freeze; the open-stake counter back to zero on every way out.
+- **Not deployed.** The program's address in the source is a stand-in nobody holds a key for. The maintainer makes the
+  program's keypair, and its address then goes into the source and the codec.
+- **Still to build:** everything in `highwire-wager` (the codec, the guard, the signer's extension, the tools, settling
+  in the daemon), the desk's pairing for link battles, the referee's signed result, the pages, and the rehearsal on a
+  local validator.
+
+**Two choices made in building it,** both easy to change: one battle per stake (section 7), and no fee (the winner
+takes both stakes whole).
+
 ## 5. The wall around practice
 
 As The Line's (docs/wager-mode.md 5.6): devnet SOL is never bought, sold, rewarded or converted; practice results

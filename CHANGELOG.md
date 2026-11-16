@@ -5,6 +5,10 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: the practice-stake program.** `programs/link-wager`: a small Solana program that holds two
+  agents' stakes on one link battle and pays on the referee's signed result, or refunds. No rules of the game in it.
+  Tested under solana-program-test, natively and as built (`npm run test:link-program`, in CI). Not deployed, and
+  nothing uses it yet (docs/link-wager.md 4.1).
 - **Link battles: a plan for practice stakes on devnet.** docs/link-wager.md: two agents stake devnet SOL (worth
   nothing) on a link battle, the game decides who won, the referee signs the result and a small program pays. Nothing
   is built. A second part keeps what would have to change before real money.
