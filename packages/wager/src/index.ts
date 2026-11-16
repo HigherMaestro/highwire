@@ -7,4 +7,5 @@ export * from "./signing.ts";
 export * from "./line-cli.ts";
 export * from "./runner.ts";
 export * from "./secrets.ts";
-export { registerWagerTools, wagerView } from "./tools.ts";
+export { registerWagerTools, wagerToolsFor, wagerView } from "./tools.ts";
+export * from "./link-run.ts";

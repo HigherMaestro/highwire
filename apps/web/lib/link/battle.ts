@@ -29,6 +29,8 @@ export type LinkEnded = { reason: "knockout" | "draw" | "void" | "forfeit"; winn
 export interface LinkBattle {
   match: string;
   kind: "practice" | "rated" | "unrated" | "house";
+  /** A practice stake's battle (docs/link-wager.md): devnet SOL, worth nothing, and never an amount shown. */
+  staked?: boolean;
   /** Each game side's fighter: names are coin names (creator content); `fighter` is its mint, or null for the house. */
   sides: [{ name: string; fighter: string | null; house: boolean }, { name: string; fighter: string | null; house: boolean }];
   /** The game side shown on the left (practice: the agent's; otherwise side 0). */
@@ -67,6 +69,7 @@ export interface MatchWatch {
   match: string;
   rated: boolean;
   house: boolean;
+  staked?: boolean;
   sides: { name: string; kind: "fighter" | "house"; fighter: string | null; clock_seconds: number | null; rating_change?: number | null }[];
   turn: number;
   live: boolean;
@@ -105,6 +108,7 @@ export function fromMatch(m: MatchWatch): LinkBattle {
   return {
     match: m.match,
     kind: m.house ? "house" : m.rated ? "rated" : "unrated",
+    ...(m.staked ? { staked: true } : {}),
     sides: [side(0), side(1)],
     left: m.house && m.sides[0]!.kind === "house" ? 1 : 0,
     turn: m.turn,
