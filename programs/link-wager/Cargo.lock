@@ -2168,6 +2168,7 @@ version = "0.1.0"
 dependencies = [
  "borsh 1.5.1",
  "ed25519-dalek",
+ "serde_json",
  "solana-program",
  "solana-program-test",
  "solana-sdk",
