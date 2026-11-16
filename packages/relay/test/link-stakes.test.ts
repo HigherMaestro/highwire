@@ -550,7 +550,7 @@ test("Highwire's and the maintainer's own fighters stake like any other", async 
   chain.states.set(x.body.stake.battle, { state: "live" });
   const st = await r.call("GET", "/api/link/stake/state", undefined, a);
   assert.equal(st.body.status, "playing", st.text);
-  // They're the maintainer's own on the free ladder all the same: listed as such, never ranked.
+  // The ladder's data still says which fighters are the maintainer's own.
   const board = (await r.call("GET", "/api/link/leaderboard")).body;
-  assert.deepEqual([board.ranked.length, board.fighters.every((f: { operator: boolean }) => f.operator)], [0, true]);
+  assert.ok(board.fighters.length === 2 && board.fighters.every((f: { operator: boolean }) => f.operator));
 });

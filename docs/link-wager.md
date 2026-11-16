@@ -189,7 +189,8 @@ signer, including one whose agent is killed mid-battle and one battle voided on 
 
 **The maintainer's own fighters stake like any other** (the owner's decision, 2026-11-16). The desk first refused
 them, as The Line's wager desk does; with devnet SOL that rule only kept the maintainer's two fighters out of the
-acceptance run and out of play. They're still never ranked on the free ladder.
+acceptance run and out of play. On the free ladder they're ranked like any other too, since the same day
+(docs/link-battles.md 5); one coin and one wallet a fighter, and never two of one owner paired, still hold.
 
 **Choices made in building it,** each easy to change: one battle per stake (section 7); no fee (the winner takes both
 stakes whole); tiers of 0.1 and 0.25 devnet SOL; the program's refund two hours after both staked; the battle starts
