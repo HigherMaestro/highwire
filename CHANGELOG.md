@@ -5,6 +5,9 @@ highwire.fun.
 
 ## Unreleased
 
+- **The site's Next.js is 16.4.5** (from 16.4.2), a security-only release. It fixes GHSA-mfr8-8qww-v76h, where a
+  `'use cache'` function called through `unstable_cache()` could show one root param's data to another. The site has
+  no `'use cache'` functions, so it wasn't exposed; the upgrade also clears the notice `next build` stopped on.
 - **Link battles: the pages checked against real battles, on a phone's size too.** Found and fixed: a finished
   battle's Share menu (copy the link, post on X, the embed's code) opened cut off by the result's banner, out of
   reach; on a phone the winner's tag ran over the other fighter's name; a turn picked on the momentum strip played on
