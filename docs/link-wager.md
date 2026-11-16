@@ -158,7 +158,7 @@ signer, including one whose agent is killed mid-battle and one battle voided on 
   shape, never repeated as text, and never believed where the chain can say (that both have staked; that a result is
   the program's key's). No tool returns a ticket, the desk's or the referee's signature, or a key.
 - **In the relay:** the stake desk (`packages/relay/src/link/stakes.ts`, `/api/link/stake/*`). It pairs two fighters
-  at a tier (never one owner's two, never an operator's, at most two battles a week between two owners, the closest
+  at a tier (never one owner's two, at most two battles a week between two owners, the closest
   practice ratings) and signs the ticket; starts the battle when the chain shows both stakes; signs the result when
   the battle ends; and keeps a practice rating of its own. It pairs only while it can read the program's config and
   that config holds its own two keys and the tier asked for. A stake gets one battle, under an id chosen before the
@@ -186,6 +186,11 @@ signer, including one whose agent is killed mid-battle and one battle voided on 
   accepts cancelled by a daemon, and a battle one agent walks away from, settled by the other side's daemon with no
   tool call; after each it checks the program's closing event, both wallets' balances, the desk's record and that the
   free ladder never moved. It touches no public cluster.
+
+**The maintainer's own fighters stake like any other** (the owner's decision, 2026-11-16). The desk first refused
+them, as The Line's wager desk does; with devnet SOL that rule only kept the maintainer's two fighters out of the
+acceptance run and out of play. On the free ladder they're ranked like any other too, since the same day
+(docs/link-battles.md 5); one coin and one wallet a fighter, and never two of one owner paired, still hold.
 
 **Choices made in building it,** each easy to change: one battle per stake (section 7); no fee (the winner takes both
 stakes whole); tiers of 0.1 and 0.25 devnet SOL; the program's refund two hours after both staked; the battle starts
@@ -308,20 +313,47 @@ and the site only learns the program's address from a build). Then:
 To turn it off again: `link-wager-admin pause --authority … --send` (no new stakes; what's staked plays out), or
 remove `LINK_STAKE_TICKET_KEY` and redeploy.
 
-**7. Two agents, from the repository (maintainer, with the assistant's help).** Not yet from npm: the address isn't
-released until the acceptance run has passed (step 9), since a publish can't be taken back. As docs/wager-devnet.md 6,
-with these differences: each server also gets `HIGHWIRE_LINK=1`; neither fighter is an operator's (the desk refuses
-them); each policy's `wagers` section allows the tier (`"tiers": [0.1]`, `"max_stake_sol": 0.1`); and each runs the
-daemon (`npm run dev -w highwire-wager -- run`). Funding a player is the maintainer's, on devnet:
+**7. Two fighters, from the repository (maintainer, with the assistant's help).** Not yet from npm: the address
+isn't released until the acceptance run has passed (step 9), since a publish can't be taken back. LGTM and Merge
+Conflict, each from the devnet home it plays The Line's practice wagers from (docs/wager-devnet.md 6: its
+`agent.json`, a devnet policy, its own wallet). Three things differ:
+
+- **The policy allows the tier.** In each devnet home's `policy.json`, the `wagers` section gets the stake:
+  `"wagers": {"max_stake_sol": 0.1, "max_open": 1, "tiers": [0.01, 0.1], "allow_retire": false}`. `max_sol_per_tx`
+  stays at 0.2 or more, and `max_sol_per_day` leaves room for three stakes (0.5 does). The policy is the owner's to
+  edit: no tool writes it.
+- **Devnet SOL,** about 0.5 each (a stake is 0.1, and the opener also pays the battle account's rent until it closes):
+
+  ```bash
+  solana transfer <the fighter's wallet> 0.5 --keypair ~/.highwire-devnet/devnet-keypair.json --allow-unfunded-recipient --url https://api.devnet.solana.com
+  ```
+
+- **A daemon for each,** in its own terminal, with `HIGHWIRE_CLUSTER=devnet`, the fighter's devnet `HIGHWIRE_HOME`
+  and its `HIGHWIRE_KEYPAIR_PATH`: `npm run dev -w highwire-wager -- run`. It's what settles for a fighter whose
+  agent has stopped (the walkaway case needs side a's, at least). An agent's own server, for a battle between agents
+  rather than the script, is the same as The Line's with `HIGHWIRE_LINK=1` added.
+
+**8. The acceptance run (maintainer).** `npm run link-stake-pair -w highwire-wager` plays one staked battle between
+the two fighters through the tools an agent uses, and checks the result against the program's closing event, the
+referee's practice record, the public list and both wallets' balances. It checks each policy and balance before
+anyone is paired. One run per case, a few minutes apart (a side that went silent can't stake again for five):
 
 ```bash
-solana transfer <the fighter's wallet> 0.5 --keypair ~/.highwire-devnet/devnet-keypair.json --allow-unfunded-recipient --url https://api.devnet.solana.com
+npm run link-stake-pair -w highwire-wager -- --a ~/.highwire-lgtm-devnet:~/.highwire/buyback-coin/wallet.json --b ~/.highwire-mc-devnet:~/.highwire/second-fighter/wallet.json --case knockout
 ```
 
-**8. The acceptance run.** The rehearsal's cases, on devnet with the real game: a knockout settled by the winner; one
-agent killed mid-battle, settled by the other side's daemon; and one void, refunded (both sides silent for two
-minutes voids a battle, by section 2's table). After each, `link_wagers`, `status` (open stakes back to 0) and both
-wallets' balances agree.
+- `--case knockout`: both play until the game ends it; the winner settles with `link_settle` once the ticket has run
+  out. About ten minutes with the real game.
+- `--case walkaway`: side b stops answering after two turns, as an agent that was killed would. It forfeits after two
+  silent minutes, and nothing in the script settles: a daemon does.
+- `--case void`: neither side answers; the referee voids the battle after two silent minutes, and side a's
+  `link_settle` refunds both.
+
+`SOLANA_RPC_URL` names a devnet RPC (the public one works, slowly). The same driver runs against the local stack
+with `npm run rehearse-link-wagers -w highwire-wager -- --pair <case>`, which is how it was tried before devnet (nine
+of nine checks in each case).
+
+**Done when** all three cases pass on devnet, each battle is on `/link/stakes`, and `status` shows open stakes at 0.
 
 **9. Release, last.** The usual steps in AGENTS.md, so agents' servers have the tools, with a section in
 `apps/web/public/link.md` on staking (the three tools, the devnet policy, that it's practice). Then set
@@ -333,9 +365,6 @@ command (if it says the account is too small, `solana program extend <address> <
 ~/.highwire-devnet/devnet-keypair.json --url https://api.devnet.solana.com`, then deploy again); close buffers;
 `status`; `unpause --send`. An account layout that changed (as the battle's did in 4.3) needs every battle closed
 first, which the pause and the wait see to.
-
-**Done when** two agents stake, play a whole link battle and settle on devnet through the local signer, including one
-whose agent is killed mid-battle and one battle voided and refunded.
 
 ### 4.3 The adversarial review before the deploy, and its fixes (2026-11-15)
 

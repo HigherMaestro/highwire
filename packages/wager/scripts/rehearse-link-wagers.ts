@@ -22,6 +22,9 @@
 //
 //   (cd programs/link-wager && cargo build-sbf)    # once, for target/deploy/link_wager.so
 //   npm run rehearse-link-wagers -w highwire-wager [-- --quick]
+//   npm run rehearse-link-wagers -w highwire-wager -- --pair knockout|walkaway|void
+//       instead of the scenarios above, one run of the acceptance script's own driver (scripts/link-stake-pair.ts
+//       `runPair`) on this stack: what the maintainer runs on devnet, tried here first
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -39,12 +42,18 @@ import { createServer } from "highwire-mcp";
 import { createRelay, MemoryStore, realClock } from "highwire-relay";
 import { FakeCoins, FakeLinkEngine, FakeRpc, launchTx, memoTx } from "highwire-relay/testing";
 import { runLine } from "../src/line-cli.ts";
+import { runPair, type PairCase } from "./link-stake-pair.ts";
 import { LINK_BATTLE_LEN, linkConfigUpdateInstruction, linkInitConfigInstruction } from "../src/link-codec.ts";
 import { linkBattleOutcome, readLinkBattle, readLinkConfig } from "../src/link-tx.ts";
 import { wagerSigner } from "../src/signing.ts";
 import { wagerToolsFor } from "../src/tools.ts";
 
 const QUICK = process.argv.includes("--quick");
+const PAIR = process.argv.includes("--pair") ? (process.argv[process.argv.indexOf("--pair") + 1] as PairCase) : null;
+if (PAIR && !["knockout", "walkaway", "void"].includes(PAIR)) {
+  console.error("rehearse-link-wagers: --pair is knockout, walkaway or void");
+  process.exit(2);
+}
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const PROGRAM_DIR = join(ROOT, "programs/link-wager");
 const SO = join(PROGRAM_DIR, "target/deploy/link_wager.so");
@@ -347,6 +356,24 @@ const deskResult = async (p: Agent) => {
 };
 
 try {
+  if (PAIR) {
+    // The acceptance script's driver, on this stack. A walkaway is settled by a daemon, so they run from the start.
+    for (const p of both) p.daemon();
+    const out = await runPair({
+      a,
+      b,
+      stakeSol: STAKE_SOL,
+      mode: PAIR,
+      stakes,
+      balance: (wallet) => connection.getBalance(new PublicKey(wallet), "confirmed"),
+      watch: async (match) => (await relay.fetch(new Request(`https://relay.test/api/link/match/${match}`))).json() as Promise<any>,
+      played: () => desk.played(),
+      log,
+      pauseMs: 1_000,
+      daemonWaitMs: 3 * 60_000,
+    });
+    for (const c of out.checks) results.push(c);
+  } else {
   // ---------------------------------------------------------------- 1. a knockout, settled by the winner's tool
   {
     const before = await Promise.all(both.map(balance));
@@ -466,6 +493,7 @@ try {
   check("the program's open-stake counter is back to zero", config.openStake === 0n, String(config.openStake));
   const played = await desk.played();
   check("the practice page's list has the battles that were played, and no amounts", played.length === 4 && !JSON.stringify(played).includes(String(STAKE)), `${played.length} battles`);
+  }
 } finally {
   clearInterval(sweep);
   daemons.abort();

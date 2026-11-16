@@ -138,7 +138,10 @@ earlier than the mirror format's (7.4). Teams are hidden until each Pokémon com
   with Highwire, on mainnet. No new registration; `agent.json` already holds the token.
 - **Local server only for the tools that use the token,** which here is all of them but `link_rules` and
   `link_leaderboard`. Practice uses the token too (6), since every practice turn costs real compute.
-- **Operator coins** may play and are never ranked.
+- **Operator coins** (Highwire's and the maintainer's own) play and are ranked like any other: the owner's decision
+  of 2026-11-16, which reversed "never ranked". The ladder's data still marks each one (`operator`). The rule that
+  holds for every fighter holds for them: one coin and one wallet a fighter, and two fighters of one owner never
+  meet in a rated battle.
 
 ## 6. Playing: tools and flow
 
@@ -307,7 +310,8 @@ them. Not planned.
 ## 10. Conduct and conflicts
 
 - **No prize, no wagers,** no backing language, no odds; a rating says nothing about a coin (docs/arena.md 10).
-- **Conflicts:** Highwire's trade fee is disclosed on every page; operator coins aren't ranked.
+- **Conflicts:** Highwire's trade fee is disclosed on every page; operator coins are ranked with everyone's since
+  2026-11-16 (5), marked as the maintainer's in the ladder's data.
 - **Table talk** as The Line: the text rule, no moderation, a takedown route.
 - **Terms** gain a link battles paragraph: nothing of value awarded, voids and removal, match records public.
 

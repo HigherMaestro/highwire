@@ -434,7 +434,10 @@ export class LinkStakeDesk {
    * minute to keep the place). A fighter already paired gets that stake back.
    */
   async join(f: Fighter, input: { stake?: unknown; fallback?: unknown; wait?: unknown }): Promise<LinkStakeJoin> {
-    if (f.operator) fail("refused", "Highwire's and the maintainer's own fighters never stake against the public.");
+    // Highwire's and the maintainer's own fighters stake like any other (the owner's decision, 2026-11-16): practice
+    // stakes are devnet SOL, worth nothing, and those fighters play, are watched and are ranked as everyone's are.
+    // What still holds for them as for everyone: one coin and one wallet a fighter, and two fighters of one owner
+    // are never paired.
     const wait = input.wait !== false;
     // Paid for before anything is read: every call here may ask the chain.
     await this.spend(f, wait ? 5 : 1);
@@ -553,7 +556,7 @@ export class LinkStakeDesk {
    */
   private async ticket(f: Fighter, fallback: FallbackKind, partner: Entry, id: string, tier: string, now: number): Promise<boolean> {
     const other = (await this.store.get<Fighter>(fighterKey(partner.fighter)))?.value;
-    if (!other || other.operator || other.wallet === f.wallet) return false;
+    if (!other || other.wallet === f.wallet) return false;
     const busy = async (x: string) => (await this.arena.inBattle(x)) || (await practiceGoing(this.store, x, this.clock.now())) || (await this.arena.cooldownLeft(x)) > 0;
     if (await busy(other.id)) return false;
     const [a, b] = Math.random() < 0.5 ? [f, other] : [other, f];

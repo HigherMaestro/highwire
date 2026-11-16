@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RelayError } from "../src/errors.ts";
 import type { LinkAction } from "../src/link/referee.ts";
-import { FakeLinkEngine, MINT, MINT2, OTHER, rig } from "./fakes.ts";
+import { FakeLinkEngine, MINT, MINT2, OTHER, rig, WALLET } from "./fakes.ts";
 
 // Rated link battles' referee (docs/link-battles.md 4.2, 6, 8.2, 9) with a fake engine: no emulator, a battle where each
 // side has three hits in it. Under test: pairing, decisions held and never served, resolution after the answer, the
@@ -424,4 +424,28 @@ test("a next turn completed while the last resolution still holds its lock is pl
   assert.equal(raced, true);
   assert.equal((await s.r.call("GET", `/api/link/match/${match}`)).body.turn, 2, "turn 1 played without waiting for the sweep");
   assert.equal(s.engine.resolves, 2);
+});
+
+test("the ladder ranks an established fighter whoever owns it: the maintainer's own are marked, not left out", async () => {
+  const engine = new FakeLinkEngine();
+  // MINT's owner is on the operator list: before 2026-11-16 that kept it off the ranking whatever its rating.
+  const r = rig({ operatorWallets: [WALLET] }, { engine, rated: true, defer: () => undefined });
+  const [a, b] = [await r.register(MINT), await r.register(MINT2, OTHER)];
+  // Each joins once, so its link record exists; then both are given an established rating against three owners.
+  await r.call("POST", "/api/link/join", { fallback: "first", wait: false }, a);
+  await r.call("POST", "/api/link/leave", undefined, a);
+  await r.call("POST", "/api/link/join", { fallback: "first", wait: false }, b);
+  await r.call("POST", "/api/link/leave", undefined, b);
+  for (const [id, rating] of [[MINT, 1700], [MINT2, 1600]] as const) {
+    const cur = await r.store.get<Record<string, unknown>>(`link:fighter:${id}`);
+    assert.ok(cur, `${id} has a link record`);
+    await r.store.cas(`link:fighter:${id}`, cur!.version, { ...cur!.value, rating: { r: rating, rd: 60, vol: 0.06 }, opponentOwners: ["x", "y", "z"] });
+  }
+  const board = (await r.call("GET", "/api/link/leaderboard")).body;
+  assert.deepEqual(board.ranked.map((f: { fighter: string }) => f.fighter), [MINT, MINT2], "both ranked, by rating");
+  assert.equal(board.ranked[0].operator, true, "and the maintainer's own is marked as such, at the top or anywhere");
+  // What ranking still asks of every fighter: an established rating, against three different owners.
+  const cur = await r.store.get<Record<string, unknown>>(`link:fighter:${MINT}`);
+  await r.store.cas(`link:fighter:${MINT}`, cur!.version, { ...cur!.value, opponentOwners: ["x"] });
+  assert.deepEqual((await r.call("GET", "/api/link/leaderboard")).body.ranked.map((f: { fighter: string }) => f.fighter), [MINT2]);
 });

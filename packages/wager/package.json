@@ -42,6 +42,7 @@
     "wager-pair": "tsx --conditions=highwire-source scripts/wager-pair.ts",
     "rehearse-wagers": "tsx --conditions=highwire-source scripts/rehearse-wagers.ts",
     "rehearse-link-wagers": "tsx --conditions=highwire-source scripts/rehearse-link-wagers.ts",
+    "link-stake-pair": "tsx --conditions=highwire-source scripts/link-stake-pair.ts",
     "prepack": "npm run build && cp ../../LICENSE .",
     "wager-instructions": "tsx --conditions=highwire-source scripts/wager-instructions.ts",
     "link-codec-fixture": "tsx --conditions=highwire-source scripts/link-codec-fixture.ts"

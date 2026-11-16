@@ -1197,7 +1197,11 @@ export class LinkArena {
     return { fighter: f.id, name: f.name, ticker: f.ticker, rating: Math.round(f.rating.r), provisional: f.rating.rd >= PROVISIONAL_RD, record: f.record, battles };
   }
 
-  /** Link battles' ladder: ranked fighters (off provisional, not an operator's) by r − 2·RD, every record, the house. */
+  /**
+   * Link battles' ladder: ranked fighters (off provisional, with rated results against three owners) by r − 2·RD,
+   * every record, the house. Highwire's and the maintainer's own fighters are ranked like any other (the owner's
+   * decision, 2026-11-16); each row still says whether it's one of them (`operator`), so it's never hidden.
+   */
   async leaderboard() {
     const ids = (await this.store.get<string[]>(FIGHTERS))?.value ?? [];
     const all: LinkFighter[] = [];
@@ -1207,7 +1211,7 @@ export class LinkArena {
     }
     const row = (f: LinkFighter) => ({ fighter: f.id, name: f.name, ticker: f.ticker, rating: Math.round(f.rating.r), provisional: f.rating.rd >= PROVISIONAL_RD, record: f.record, operator: f.operator });
     const ranked = all
-      .filter((f) => !f.operator && f.rating.rd < PROVISIONAL_RD && new Set(f.opponentOwners).size >= 3)
+      .filter((f) => f.rating.rd < PROVISIONAL_RD && new Set(f.opponentOwners).size >= 3)
       .map((f) => ({ ...row(f), score: Math.round(conservative(f.rating)) }))
       .sort((x, y) => y.score - x.score);
     const house = (await this.store.get<Tally>(HOUSE_TALLY))?.value ?? empty();

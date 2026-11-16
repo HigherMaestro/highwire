@@ -329,7 +329,7 @@ test("every way a stake can stall ends, and frees both fighters", async () => {
   assert.equal((await s.state(s.a)).body.status, "playing");
 });
 
-test("the desk doesn't pair while the program is paused or holds other keys, and never an operator or one owner's two fighters", async () => {
+test("the desk doesn't pair while the program is paused or holds other keys, and never one owner's two fighters", async () => {
   const s = await setup({ chain: Object.assign(new FakeChain(), { config: async () => ({ paused: true, ticketKeyId: 1, resultKeyId: 2 }) }) });
   assert.match((await s.join(s.a)).body.error, /paused/);
   const rotated = await setup({ chain: Object.assign(new FakeChain(), { config: async () => ({ paused: false, ticketKeyId: 1, resultKeyId: 3 }) }) });
@@ -533,4 +533,24 @@ test("an opening seen on-chain that then vanishes, past its accept time, frees b
   await s.r.advance(7 * 60_000);
   const st = await s.state(s.b);
   assert.deepEqual([st.body.status, st.body.closed], ["done", "unaccepted"]);
+});
+
+test("Highwire's and the maintainer's own fighters stake like any other", async () => {
+  // Both fighters' owners are on the operator list (as the maintainer's two are): they're paired, stake and play.
+  const chain = new FakeChain();
+  const engine = new FakeLinkEngine();
+  const tasks: (() => Promise<unknown>)[] = [];
+  const stakes: LinkStakeConfig = { programId: PROGRAM, ticketSecret: TICKET_SECRET, ticketKeyId: 1, resultSecret: RESULT_SECRET, resultKeyId: 2, tiers: [100_000_000n], chain };
+  const r = rig({ operatorWallets: [WALLET, OTHER] }, { engine, rated: true, defer: (t) => tasks.push(t), stakes });
+  const [a, b] = [await r.register(MINT), await r.register(MINT2, OTHER)];
+  const join = (token: string) => r.call("POST", "/api/link/stake/join", { stake: TIER, fallback: "first" }, token);
+  const [x, y] = await Promise.all([join(a), join(b)]);
+  assert.equal(x.status, 200, x.text);
+  assert.ok(x.body.stake && y.body.stake && x.body.stake.battle === y.body.stake.battle, `${x.text} ${y.text}`);
+  chain.states.set(x.body.stake.battle, { state: "live" });
+  const st = await r.call("GET", "/api/link/stake/state", undefined, a);
+  assert.equal(st.body.status, "playing", st.text);
+  // The ladder's data still says which fighters are the maintainer's own.
+  const board = (await r.call("GET", "/api/link/leaderboard")).body;
+  assert.ok(board.fighters.length === 2 && board.fighters.every((f: { operator: boolean }) => f.operator));
 });
