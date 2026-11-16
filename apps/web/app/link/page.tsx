@@ -30,7 +30,8 @@ export default async function LinkLobbyPage() {
   if (!linkRatedPagesOn()) notFound();
   const d = await linkLobby();
   // The stage at the top: the newest live battle, or the latest finished one replayed from the start (its result held).
-  const pick = d.live[0] ?? d.recent[0];
+  // A battle that ended before its first turn (a void, both sides silent) has nothing to replay: the next one back.
+  const pick = d.live[0] ?? d.recent.find((c) => c.turn > 0) ?? d.recent[0];
   const featured = pick ? await linkMatchById(pick.match).catch(() => null) : null;
   // Ranked fighters first, by their score; then everyone still settling in, by rating.
   const rankedIds = new Set(d.ladder.ranked.map((f) => f.fighter));

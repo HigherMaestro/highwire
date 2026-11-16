@@ -5683,9 +5683,9 @@ a.link-sb-name:hover, a.link-sb-name:focus-visible { text-decoration: underline;
 .link-corner-b { align-items: flex-end; text-align: right; animation-name: link-in-b; }
 @keyframes link-in-a { from { transform: translateX(-40px); opacity: 0; } }
 @keyframes link-in-b { from { transform: translateX(40px); opacity: 0; } }
-.link-corner-top { display: flex; align-items: center; gap: 8px; min-height: 22px; }
+.link-corner-top { display: flex; align-items: center; gap: 8px; min-height: 22px; max-width: 100%; }
 .link-corner-b .link-corner-top { flex-direction: row-reverse; }
-.link-corner-who { font-size: 14px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.link-corner-who { min-width: 0; font-size: 14px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .link-corner-a .link-corner-who { color: var(--side-a); }
 .link-corner-b .link-corner-who { color: var(--side-b); }
 .link-corner-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); background: var(--link-gold); padding: 3px 8px; border-radius: 6px; }
@@ -5862,12 +5862,14 @@ a.link-sb-name:hover, a.link-sb-name:focus-visible { text-decoration: underline;
 /* ---- the result: the winner's name rising, the wire beam from their side, then the actions */
 /* The words keep their room: the actions sit beside them when there's space and drop under them when there isn't (a grid's
    auto column took what its buttons asked and left the name a few letters wide). */
-.link-final { position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px; min-height: 168px; padding: 28px 32px 26px; border-radius: 24px; border: 1px solid var(--line); background: var(--surface-alt); overflow: hidden; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.link-final { position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px; min-height: 168px; padding: 28px 32px 26px; border-radius: 24px; border: 1px solid var(--line); background: var(--surface-alt); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
 .link-final-a { background: radial-gradient(70% 140% at 0% 100%, var(--side-a-soft), transparent 70%), var(--surface-alt); }
 .link-final-b { background: radial-gradient(70% 140% at 0% 100%, var(--side-b-soft), transparent 70%), var(--surface-alt); }
-.link-final-beam { position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--wire); transform-origin: left; animation: link-beam 500ms var(--e-inout) backwards; }
-.link-final-b .link-final-beam { transform-origin: right; }
-.link-final-none .link-final-beam { background: var(--line-strong); }
+/* The beam's layer clips it to the banner's corners, so the banner itself needn't clip (the Share menu drops out of it). */
+.link-final-beam { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.link-final-beam::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--wire); transform-origin: left; animation: link-beam 500ms var(--e-inout) backwards; }
+.link-final-b .link-final-beam::before { transform-origin: right; }
+.link-final-none .link-final-beam::before { background: var(--line-strong); }
 @keyframes link-beam { from { transform: scaleX(0); } }
 .link-final-text { flex: 1 1 360px; min-width: min(100%, 300px); }
 .link-final-head { margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; }
@@ -5888,7 +5890,7 @@ a.link-sb-name:hover, a.link-sb-name:focus-visible { text-decoration: underline;
 .link-final-actions { flex: 0 1 auto; max-width: 100%; display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .link-final-actions .link-btn { white-space: nowrap; }
 /* Ended while watched: the quiet, the beam, the name, the streaks, the rest. */
-.link-final-fresh .link-final-beam { animation-delay: 600ms; }
+.link-final-fresh .link-final-beam::before { animation-delay: 600ms; }
 .link-final-fresh .link-final-name { animation-delay: 900ms; }
 .link-final-fresh .link-final-wins { animation-delay: 1080ms; }
 .link-final-fresh .link-final-sub, .link-final-fresh .link-final-ratings { animation: link-swap 400ms ease 1500ms backwards; }
@@ -5909,7 +5911,7 @@ a.link-sb-name:hover, a.link-sb-name:focus-visible { text-decoration: underline;
 .link-btn-primary { background: var(--fg); color: var(--bg); border-color: transparent; }
 .link-share { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 .link-share-menu { position: absolute; z-index: 9; top: 50px; right: 0; display: grid; min-width: 250px; padding: 6px; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45); text-align: left; animation: link-drop 160ms var(--e-out); }
-.link-share-menu button, .link-share-menu a { display: block; padding: 10px 12px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.link-share-menu button, .link-share-menu a { display: block; white-space: nowrap; padding: 10px 12px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
 .link-share-menu button:hover, .link-share-menu a:hover, .link-share-menu button:focus-visible, .link-share-menu a:focus-visible { background: var(--line); outline: none; }
 .link-share-said { font-size: 13px; color: var(--muted); }
 .link-screens-later { margin: 0; padding: 12px 16px; border: 1px dashed var(--line-strong); border-radius: 14px; color: var(--muted); font-size: 14px; }
@@ -6016,6 +6018,9 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
   .link-page-body .link-turn-nav .link-btn-primary { grid-column: 1 / -1; grid-row: 2; }
   .link-pick-q { flex-basis: 100%; text-align: center; margin: 0; }
   .link-corner-who { font-size: 11px; }
+  /* On a phone the winner's tag sits on its ring: beside the name it ran over the other side's. */
+  .link-corner-winner .link-corner-tag { position: absolute; top: -24px; left: 0; }
+  .link-corner-b.link-corner-winner .link-corner-tag { left: auto; right: 0; }
   .link-sb-score { font-size: 32px; }
   .link-sb-dash { margin: 0 4px; }
   .link-sb-pill { font-size: 9px; padding: 2px 7px; }
@@ -6063,6 +6068,8 @@ a.link-reel-tile:hover, button.link-reel-tile:hover { transform: translateY(-2px
 
 /* ---- both Game Boys' screens: whole pixels, in bezels, the cable between them */
 .link-screens { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+/* A turn picked on the momentum strip scrolls here: clear of the header and the scorebar that sticks under it. */
+.link-screens-pair { scroll-margin-top: 200px; }
 .link-screens-pair { --px: 3; position: relative; display: grid; grid-template-columns: auto 56px auto; justify-content: center; align-items: center; }
 .link-screen { position: relative; padding: 14px; border-radius: 18px; background: #05070A; border: 1px solid var(--line-strong); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4); }
 .link-screen::after { content: ""; position: absolute; left: 18px; right: 18px; bottom: -1px; height: 2px; border-radius: 2px; }

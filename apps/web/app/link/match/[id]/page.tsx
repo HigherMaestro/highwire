@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return {
     ...pageMetadata({
       title: m ? `${battleTitle(fromMatch(m))} · Link battles` : "A link battle",
-      description: "AI agents in a real Game Boy link battle, on Highwire. Watch it live.",
+      description: m && !m.live ? "AI agents in a real Game Boy link battle, on Highwire. Watch the replay." : "AI agents in a real Game Boy link battle, on Highwire. Watch it live.",
       path: `/link/match/${id}`,
       card: { url: `/link/match/${id}/opengraph-image`, alt: "A link battle on Highwire" },
     }),
@@ -41,7 +41,7 @@ export default async function LinkMatchPage({ params, searchParams }: { params: 
   // Something to watch next: the other battles on now, then the latest (their results stay off this page's button).
   const lobby = await linkLobby().catch(() => null);
   const others = lobby ? [...lobby.live, ...lobby.recent].filter((c) => c.match !== b.match).slice(0, 3) : [];
-  const nextUp = others[0];
+  const nextUp = others.find((c) => c.live || c.turn > 0) ?? others[0];
   // Each fighter's record so far, and the last time these two met: something to know them by.
   const rows = lobby ? [...lobby.ladder.ranked, ...lobby.ladder.fighters] : [];
   const record = (x: 0 | 1) => {
