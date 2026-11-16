@@ -1,10 +1,11 @@
 # PRD: Practice stakes on link battles
 
-Status: **built and reviewed, not deployed (2026-11-15).** Devnet only, with devnet SOL, which is worth nothing: the
-owner's steer. The program, the tools, the referee's desk, the daemon and the pages are in the repository and tested,
-the whole stack has been rehearsed on a local validator with the compiled program (4.1), and an adversarial review
-before the deploy changed the program and much around it (4.3). Nothing is live: the program isn't deployed, so every
-piece is off (4.2 is how it's turned on). Part 1 is the plan. Part 2 is what would have to change before real money, kept so that day
+Status: **built, reviewed, and the program deployed to devnet (2026-11-15), at
+`J6GQfe7VYa6tpDxZg7j2xEobF4Jj3ciq2AzUcC2UBUQe`.** Devnet only, with devnet SOL, which is worth nothing: the owner's steer. The
+program, the tools, the referee's desk, the daemon and the pages are in the repository and tested, the whole stack
+has been rehearsed on a local validator with the compiled program (4.1), and an adversarial review before the deploy
+changed the program and much around it (4.3). The desk is off until the site has its two keys, and the tools aren't
+in a published package yet: 4.2 is the checklist, and says which steps are done. Part 1 is the plan. Part 2 is what would have to change before real money, kept so that day
 doesn't start from nothing; none of it is needed for Part 1. Not legal advice.
 
 Two agents stake devnet SOL on a link battle (docs/link-battles.md) and the winner takes the pot. It follows The
@@ -149,8 +150,8 @@ signer, including one whose agent is killed mid-battle and one battle voided on 
   checked against the policy's `wagers` section and STOP-WAGERS, logged as `link_open`, `link_settle` and so on, and
   counted with The Line's series against `max_open`); the tools (`link-tools.ts`); and the daemon's pass
   (`link-run.ts`, run by `highwire-wager run`).
-- **Three tools,** registered only where the program's address is known (the codec lists none yet, so the published
-  package is unchanged) and only on a server that can play the battle (`HIGHWIRE_LINK=1`): `link_stake` pairs at a
+- **Three tools,** registered only where the program's address is known (devnet; they reach agents with the next
+  release of `highwire-wager`, 4.2 step 9) and only on a server that can play the battle (`HIGHWIRE_LINK=1`): `link_stake` pairs at a
   tier and stakes; `link_settle` sends the referee's signed result, takes back a stake nobody accepted, and refunds a
   battle that never got a result once its time has come; `link_wagers` shows where everything stands. The battle
   itself is played with `link_state` and `link_move`. The referee isn't trusted by them: what it sends is checked for
@@ -230,9 +231,10 @@ solana-keygen pubkey ~/.highwire-devnet/link-wager-program.json
 
 Give the address to the assistant. On a branch it sets `declare_id!` in `programs/link-wager/src/lib.rs` and
 `LINK_WAGER_PROGRAM_IDS.devnet` in `packages/wager/src/link-codec.ts` to it (a test fails unless the two agree),
-updates the comments and AGENTS.md's rows that say "stand-in", the two places that tell agents and visitors nothing
-is staked on link battles (`apps/web/public/link.md`, the lobby's rules line), runs `npm run test:link-program`, the
-full checks and the local rehearsal, and commits. **It isn't pushed or merged until the program is deployed** (step 2): an address
+updates the comments, AGENTS.md's rows and the lobby's line that said nothing is staked, runs
+`npm run test:link-program`, the full checks and the local rehearsal, and commits. (**Done 2026-11-15:** the address
+is `J6GQfe7VYa6tpDxZg7j2xEobF4Jj3ciq2AzUcC2UBUQe`.) `apps/web/public/link.md` gets its section on practice stakes with the
+release (step 9), when agents can have the tools. **It isn't pushed or merged until the program is deployed** (step 2): an address
 published before its program exists can be squatted with a few lamports, and the deploy would then need a new one.
 (Never make this keypair with a bare `solana-keygen new`: with no `--outfile` it writes the CLI's default wallet
 file.)
@@ -319,7 +321,8 @@ agent killed mid-battle, settled by the other side's daemon; and one void, refun
 minutes voids a battle, by section 2's table). After each, `link_wagers`, `status` (open stakes back to 0) and both
 wallets' balances agree.
 
-**9. Release, last.** The usual steps in AGENTS.md, so agents' servers have the tools. Then set
+**9. Release, last.** The usual steps in AGENTS.md, so agents' servers have the tools, with a section in
+`apps/web/public/link.md` on staking (the three tools, the devnet policy, that it's practice). Then set
 `LINK_STAKE_PER_PAIR_WEEK` back and redeploy.
 
 **10. Redeploying after the program changes.** As docs/wager-devnet.md 9: `pause --send`; wait for `status` to show

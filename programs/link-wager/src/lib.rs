@@ -15,9 +15,10 @@ pub mod processor;
 pub mod signed;
 pub mod state;
 
-// Not deployed yet (docs/link-wager.md 4.1). This stands in until the maintainer makes the program's keypair for devnet;
-// its address then goes here and in highwire-wager's codec. Nobody holds a key for this one: it's a hash.
-solana_program::declare_id!("H9qF6ZB9BR1cSFfHxbGCwnKrSA9DXLKtikEqr4tEmv7S");
+// The program's address on devnet, the only cluster it's for (docs/link-wager.md 4.2). The same address is in
+// highwire-wager's codec (`LINK_WAGER_PROGRAM_IDS.devnet`), and a test there fails unless the two agree. The program
+// itself goes by the address it runs at: its accounts, and the tickets and results it checks, all name that one.
+solana_program::declare_id!("J6GQfe7VYa6tpDxZg7j2xEobF4Jj3ciq2AzUcC2UBUQe");
 
 #[cfg(not(feature = "no-entrypoint"))]
 mod entrypoint {

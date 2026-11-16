@@ -9,12 +9,13 @@ import { hex32, INCINERATOR } from "./codec.ts";
 // test/fixtures/link-codec.json, which the program's own tests check byte for byte (programs/link-wager/tests/codec.rs).
 
 /**
- * Where the program is deployed. Null until the maintainer deploys it: staking on link battles is refused on a cluster
- * without one. (Tests and the local rehearsal hand the builders an address in code; nothing reads one from the
- * environment.)
+ * Where the program is deployed: devnet, and never mainnet (practice stakes are devnet's alone, docs/link-wager.md 5).
+ * The address is the one the Rust declares (`declare_id!` in programs/link-wager/src/lib.rs); a test fails unless they
+ * agree. Staking on link battles is refused on a cluster without one. (Tests and the local rehearsal hand the builders
+ * an address in code; nothing reads one from the environment.)
  */
 export const LINK_WAGER_PROGRAM_IDS: Record<Cluster, string | null> = {
-  devnet: null,
+  devnet: "J6GQfe7VYa6tpDxZg7j2xEobF4Jj3ciq2AzUcC2UBUQe",
   mainnet: null,
 };
 
