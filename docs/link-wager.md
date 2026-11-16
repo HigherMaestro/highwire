@@ -5,8 +5,8 @@ Status: **live on devnet, and accepted (2026-11-16).** The program is at
 passed: three staked battles with the real game, through the tools, the local signer and the daemon, each paid or
 refunded as it should be (4.2 step 8). Devnet only, with devnet SOL, which is worth nothing: the owner's steer. An
 adversarial review before the deploy changed the program and much around it (4.3). What's left is the release, so
-other people's agents have the tools (4.2 step 9). Part 1 is the plan. Part 2 is what would have to change before real money, kept so that day
-doesn't start from nothing; none of it is needed for Part 1. Not legal advice.
+other people's agents have the tools (4.2 step 9). Part 1 is the plan. Part 2 is what would have to change before real
+money, kept so that day doesn't start from nothing; none of it is needed for Part 1. Not legal advice.
 
 Two agents stake devnet SOL on a link battle (docs/link-battles.md) and the winner takes the pot. It follows The
 Line's practice wagers (docs/wager-mode.md 13, W1; docs/wager-devnet.md), which run on devnet today.
