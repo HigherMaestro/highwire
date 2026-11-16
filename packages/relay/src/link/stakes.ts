@@ -132,6 +132,9 @@ const QUEUE = "link:stake-queue";
 const OPEN = "link:stakes-open";
 const PLAYED = "link:stakes-played";
 const STANDING = (fighter: string) => `link:stake-standing:${fighter}`;
+/** A fighter's latest stakes, so a result it hasn't settled is still there after it stakes again. */
+const MINE = (fighter: string) => `link:stakes-of:${fighter}`;
+const MINE_MAX = 20;
 const POLL = (fighter: string) => `link:stake-poll:${fighter}`;
 const STARTING = (id: string) => `link:stake-starting:${id}`;
 const fighterKey = (id: string) => `arena:fighter:${id}`;
@@ -307,6 +310,23 @@ export class LinkStakeDesk {
     return s ? { ...this.view(s, f), you } : { none: true, you };
   }
 
+  /**
+   * The fighter's battles that are over and not yet closed on-chain, each with the referee's signed result: what its
+   * agent (or its daemon) settles with, whatever it has staked on since.
+   */
+  async results(f: Fighter): Promise<{ results: { battle: string; match?: string; result: LinkResultRecord; signature: string; you: "won" | "lost" | "draw" | "void" }[] }> {
+    await this.spend(f, 1);
+    const ids = ((await this.store.get<string[]>(MINE(f.id)))?.value ?? []).slice().reverse();
+    const results = [];
+    for (const id of ids) {
+      const s = await this.advance(id).catch(async () => (await this.store.get<LinkStake>(LINK_STAKE(id)))?.value ?? null);
+      if (!s || s.status !== "over") continue;
+      const v = this.view(s, f);
+      if (v.result) results.push({ battle: s.id, ...(s.match ? { match: s.match } : {}), ...v.result });
+    }
+    return { results };
+  }
+
   private configRead: { at: number; value: Promise<{ paused: boolean; ticketKeyId: number; resultKeyId: number } | null> } | null = null;
 
   /** The program's config, read at most every 30 seconds; null when the deployment can't say (pairing goes on). */
@@ -452,7 +472,10 @@ export class LinkStakeDesk {
       if (await this.hold(x.id, id)) taken.push(x.id);
       else break;
     }
-    if (taken.length === 2) return true;
+    if (taken.length === 2) {
+      for (const x of [a, b]) await update<string[]>(this.store, MINE(x.id), (cur) => [...(cur ?? []).filter((y) => y !== id), id].slice(-MINE_MAX));
+      return true;
+    }
     // One of them was taken by another pairing meanwhile: this one never happened.
     for (const x of taken) await this.letGo(x, id);
     await this.store.del(LINK_STAKE(id)).catch(() => undefined);
