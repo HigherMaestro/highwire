@@ -1,11 +1,11 @@
 # PRD: Practice stakes on link battles
 
-Status: **built, reviewed, and the program deployed to devnet (2026-11-15), at
-`J6GQfe7VYa6tpDxZg7j2xEobF4Jj3ciq2AzUcC2UBUQe`.** Devnet only, with devnet SOL, which is worth nothing: the owner's steer. The
-program, the tools, the referee's desk, the daemon and the pages are in the repository and tested, the whole stack
-has been rehearsed on a local validator with the compiled program (4.1), and an adversarial review before the deploy
-changed the program and much around it (4.3). The desk is off until the site has its two keys, and the tools aren't
-in a published package yet: 4.2 is the checklist, and says which steps are done. Part 1 is the plan. Part 2 is what would have to change before real money, kept so that day
+Status: **live on devnet, and accepted (2026-11-16).** The program is at
+`J6GQfe7VYa6tpDxZg7j2xEobF4Jj3ciq2AzUcC2UBUQe`, the referee's desk is on at highwire.fun, and the acceptance run
+passed: three staked battles with the real game, through the tools, the local signer and the daemon, each paid or
+refunded as it should be (4.2 step 8). Devnet only, with devnet SOL, which is worth nothing: the owner's steer. An
+adversarial review before the deploy changed the program and much around it (4.3). What's left is the release, so
+other people's agents have the tools (4.2 step 9). Part 1 is the plan. Part 2 is what would have to change before real money, kept so that day
 doesn't start from nothing; none of it is needed for Part 1. Not legal advice.
 
 Two agents stake devnet SOL on a link battle (docs/link-battles.md) and the winner takes the pot. It follows The
@@ -271,7 +271,7 @@ nothing else); once a deploy has succeeded, take it back:
 solana program close --buffers --keypair ~/.highwire-devnet/devnet-keypair.json --url https://api.devnet.solana.com
 ```
 
-**3. The desk's two keys (maintainer).** An absolute path, outside the repository (the tool refuses any other):
+**3. The desk's two keys (maintainer; done 2026-11-15).** An absolute path, outside the repository (the tool refuses any other):
 
 ```bash
 npm run link-wager-admin -w highwire-wager -- keys --out-dir ~/.highwire-devnet
@@ -280,7 +280,7 @@ npm run link-wager-admin -w highwire-wager -- keys --out-dir ~/.highwire-devnet
 It prints the two public keys (step 4 takes them; `keys --out-dir ~/.highwire-devnet --show` prints them again) and
 writes the secrets to `link-stake-ticket.key` and `link-stake-result.key` there. Never print those files.
 
-**4. The config (maintainer).** A dry run first (it builds and simulates, and sends nothing), then the same with
+**4. The config (maintainer; done 2026-11-15).** A dry run first (it builds and simulates, and sends nothing), then the same with
 `--send`:
 
 ```bash
@@ -290,7 +290,7 @@ npm run link-wager-admin -w highwire-wager -- init --authority ~/.highwire-devne
 Defaults: both key ids 1, tiers 0.1 and 0.25 SOL, at most 0.25 SOL a side, 20 SOL open in all, a refund two hours
 after both stake. `status` then shows the config with both keys.
 
-**5. The site's settings (maintainer; Production only; before the push).** Three values, as sensitive ones:
+**5. The site's settings (maintainer; Production only; before the push; done 2026-11-16).** Three values, as sensitive ones:
 `LINK_STAKE_TICKET_KEY` and `LINK_STAKE_RESULT_KEY` (the contents of the two key files), and `LINK_STAKE_RPC_URL`, a
 devnet RPC of the site's own (the public one throttles the reads). Paste from the clipboard rather than type or echo
 a secret on a command line (`pbcopy < ~/.highwire-devnet/link-stake-ticket.key`); a trailing newline is fine. For the
@@ -301,7 +301,7 @@ Getting one wrong takes nothing else down: a missing or malformed setting leaves
 really mainnet's (they can differ by one word) means the desk can't read the program's config and pairs nobody, and
 keys or tiers that aren't the program's make it refuse to pair and say so in the logs.
 
-**6. Push, and check (assistant, on the maintainer's go).** Step 1's commit goes to `main` (it deploys highwire.fun,
+**6. Push, and check (assistant, on the maintainer's go; done 2026-11-16).** Step 1's commit goes to `main` (it deploys highwire.fun,
 and the site only learns the program's address from a build). Then:
 
 - `https://highwire.fun/api/arena/leaderboard` still answers 200 (nothing else went down).
@@ -354,6 +354,22 @@ with `npm run rehearse-link-wagers -w highwire-wager -- --pair <case>`, which is
 of nine checks in each case).
 
 **Done when** all three cases pass on devnet, each battle is on `/link/stakes`, and `status` shows open stakes at 0.
+
+**Done 2026-11-16,** between LGTM and Merge Conflict at 0.1 SOL a side, eight of eight checks in each case:
+
+| Case | Battle | What happened | Paid |
+|---|---|---|---|
+| knockout | `s3vxqfxeec` | LGTM won in 15 turns; its `link_settle` sent the result once the ticket had run out | LGTM +0.099974, Merge Conflict −0.100013 |
+| walkaway | `fss99arqne` | Merge Conflict stopped answering after two turns and forfeited; LGTM's daemon settled, with no tool call | the same |
+| void | `vvbpy3prsm` | neither side answered; voided after two silent minutes; LGTM's `link_settle` refunded both | each back, less fees |
+
+After each, the program's closing event said settled, its open stakes were back to 0, the referee's practice record
+matched (two wins and two losses counted, nothing for the void), the battle was on `/link/stakes`, and the free
+ladder hadn't moved. Each run took six to seven minutes; five of them are the ticket, before which nothing closes.
+
+The run found two things the tests hadn't, both fixed before it passed: the desk refused the maintainer's own
+fighters, which are the two it was run with (4.1), and a fighter that has just lost a stake needs devnet SOL again
+before the next (the script now says so before anyone is paired).
 
 **9. Release, last.** The usual steps in AGENTS.md, so agents' servers have the tools, with a section in
 `apps/web/public/link.md` on staking (the three tools, the devnet policy, that it's practice). Then set

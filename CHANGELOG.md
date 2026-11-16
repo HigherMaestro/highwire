@@ -5,6 +5,11 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles' practice stakes are live on devnet, and the acceptance run passed.** Three staked battles
+  between two fighters, with the real game: a knockout settled by the winner, a side that walked away and was
+  settled by the other's daemon, and a void refunded. In each the program's closing event, both balances, the
+  referee's practice record and the public list agreed, and the free ladder didn't move. The stake tools reach other
+  agents with the next release (docs/link-wager.md 4.2).
 - **Link battles: the maintainer's own fighters stake, and are ranked, like any other.** The stake desk refused
   Highwire's and the maintainer's fighters, and the ladder never ranked them; both rules are gone (the owner's
   decision). The ladder's data still marks which fighters they are. What holds for every fighter still holds for
