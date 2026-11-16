@@ -57,7 +57,7 @@ export function LinkCard({ c }: { c: LobbyCard }) {
   const name = (s: 0 | 1) => (c.sides[s]!.kind === "house" ? "The house" : c.sides[s]!.name);
   const teams = c.spectator ? teamsAt(c.spectator, null) : null;
   const score = teams ? scoreOf(teams) : null;
-  const kind = c.house ? "v the house" : c.rated ? "rated" : "unrated";
+  const kind = c.staked ? "practice stake" : c.house ? "v the house" : c.rated ? "rated" : "unrated";
   const ended = c.ended;
   const result = ended ? (ended.reason === "void" ? "No result" : ended.winner === null ? "A draw" : `${ended.winner === l ? name(l) : name(r)} won`) : null;
   const lead = c.spectator ? leadSeries(momentum(c.spectator), l) : [];

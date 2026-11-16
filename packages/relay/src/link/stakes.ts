@@ -354,6 +354,8 @@ export class LinkStakeDesk {
     const fallback = typeof input.fallback === "string" && (FALLBACKS as string[]).includes(input.fallback) ? (input.fallback as FallbackKind) : null;
     if (!fallback) fail("bad_request", 'Declare a fallback for decisions you miss: "first", "strongest" or "random".');
     const now = this.clock.now();
+    const cooling = await this.arena.cooldownLeft(f.id);
+    if (cooling > 0) fail("rate_limited", `You stopped answering in your last battle; you can stake again in ${Math.ceil(cooling / 60_000)} minutes.`);
     if (await this.arena.inBattle(f.id)) fail("conflict", "You have a link battle going: finish it (link_state, link_move) or leave it (link_leave) first.");
     if (await practiceGoing(this.store, f.id, now)) fail("conflict", "You have a practice battle going: finish it or leave it (link_practice with leave) first.");
     await this.arena.enrol(f);

@@ -210,6 +210,17 @@ test("a draw and a void refund both; leaving a staked battle loses it", async ()
   const [left, stayed] = [await s.state(s.a), await s.state(s.b)];
   assert.deepEqual([left.body.result.you, stayed.body.result.you], ["lost", "won"]);
   assert.equal(stayed.body.result.result.outcome, stayed.body.role === "A" ? "a" : "b");
+  // A side that stopped answering waits out its cooldown before it may stake again, as it would to join a free battle.
+  s = await setup();
+  g = await s.playing();
+  for (let i = 0; i < 3; i++) {
+    s.r.clock.advance(50_000);
+    await s.r.call("GET", `/api/link/state?match=${g.match}`, undefined, s.a);
+  }
+  assert.equal((await s.state(s.a)).body.result.you, "won", "b went silent and forfeited");
+  const cooling = await s.join(s.b, { wait: false });
+  assert.deepEqual([cooling.status, /stopped answering/.test(cooling.body.error)], [429, true], cooling.text);
+  assert.equal((await s.join(s.a, { wait: false })).body.waiting, true);
   // The outcome is the ending's, whichever engine side each ticket letter got.
   assert.equal(stakeOutcome({ reason: "knockout", winner: 1 }, ["x", "y"], { A: "y", B: "x" }), "a");
   assert.equal(stakeOutcome({ reason: "forfeit", winner: 0 }, ["x", "y"], { A: "y", B: "x" }), "b");

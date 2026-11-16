@@ -55,6 +55,7 @@ export interface LobbyCard {
   spectator?: MatchWatch["spectator"];
   rated: boolean;
   house: boolean;
+  staked?: boolean;
   sides: MatchWatch["sides"];
   turn: number;
   live: boolean;
@@ -88,6 +89,22 @@ export async function linkMatchById(id: string): Promise<MatchWatch | null> {
     if ((err as { code?: string }).code === "not_found") return null;
     throw err;
   }
+}
+
+/** The practice-stake page exists only with the stake desk on (docs/link-wager.md). */
+export const linkStakesOn = () => Boolean(lineRelay()?.linkStakes);
+
+export interface StakedBattle {
+  match: string;
+  at: number;
+  fighters: Record<"A" | "B", { id: string; name: string; ticker: string }>;
+  outcome: "a" | "b" | "draw" | "void" | null;
+}
+
+/** The staked battles that were played, newest first: the battle to watch and who played, never an amount. */
+export async function linkStakesPlayed(): Promise<StakedBattle[]> {
+  const desk = lineRelay()?.linkStakes;
+  return desk ? await desk.played() : [];
 }
 
 /** A fighter's link battles, for its page: its record and rating there, and its latest battles. Null when rated play is off or it never played. */

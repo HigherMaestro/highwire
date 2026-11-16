@@ -58,7 +58,14 @@ export default async function LinkMatchPage({ params, searchParams }: { params: 
     <LinkPage
       crumbs={
         <>
-          <a href="/link">Link battles</a> · {KIND[b.kind]}
+          <a href="/link">Link battles</a> ·{" "}
+          {b.staked ? (
+            <a href="/link/stakes" title="Devnet SOL, which is worth nothing. It doesn't count on the ladder.">
+              Practice stake
+            </a>
+          ) : (
+            KIND[b.kind]
+          )}
         </>
       }
       title={battleTitle(b)}

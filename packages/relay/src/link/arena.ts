@@ -570,6 +570,12 @@ export class LinkArena {
     return f ? this.busy(f) : false;
   }
 
+  /** How long (ms) a fighter that stopped answering in its last battle must still wait to play again; 0 when it needn't. */
+  async cooldownLeft(fighter: string): Promise<number> {
+    const f = (await this.store.get<LinkFighter>(FIGHTER(fighter)))?.value;
+    return Math.max(0, (f?.cooldownUntil ?? 0) - this.clock.now());
+  }
+
   /** The fighter's link record made (or brought up to date), so a battle can be started for it later. */
   async enrol(f: Fighter): Promise<void> {
     await this.linkFighter(f);

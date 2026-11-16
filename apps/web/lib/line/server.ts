@@ -1,8 +1,9 @@
 import { Chain, createHttpConfig, DEFAULT_API_URL, evaluateRisk, HigherApi, HIGHWIRE_WALLET, NotFoundError, SolanaRpc, solToLamports } from "highwire-core";
-import { readWagerConfig, seriesOutcome, WAGER_PROGRAM_IDS } from "highwire-wager/chain";
+import { LINK_WAGER_PROGRAM_IDS, linkBattleOutcome, readLinkConfig, readWagerConfig, seriesOutcome, WAGER_PROGRAM_IDS } from "highwire-wager/chain";
+import { PublicKey } from "@solana/web3.js";
 import { GENESIS_HASHES } from "highwire-agent";
 import { serverOptionsFromEnv } from "highwire-mcp";
-import { createRelay, JsonRpc, realClock, UpstashStore, type CoinDirectory, type Relay, type WagerConfig } from "highwire-relay";
+import { createRelay, JsonRpc, realClock, UpstashStore, type CoinDirectory, type LinkStakeConfig, type Relay, type WagerConfig } from "highwire-relay";
 import { after } from "next/server";
 import { lazyLinkEngine, linkConfigured, linkRatedOn } from "../link/lazy.ts";
 
@@ -109,6 +110,58 @@ function wagerConfig(): WagerConfig | undefined {
   };
 }
 
+/**
+ * Practice stakes on link battles (docs/link-wager.md): devnet only, whatever The Line's desk is on. On only with rated
+ * link battles, a program listed for devnet, and both keys in the site's environment, each a 32-byte Ed25519 secret in
+ * hex: LINK_STAKE_TICKET_KEY signs pairings, LINK_STAKE_RESULT_KEY signs results. They are different keys, neither
+ * moves money, and neither may ever reach a response, a log or the repository. LINK_STAKE_TICKET_KEY_ID and
+ * LINK_STAKE_RESULT_KEY_ID are the ids the program's config holds for them (default 1); LINK_STAKE_TIERS the tiers in
+ * devnet SOL (default 0.1 and 0.25); LINK_STAKE_MIN_QUEUE and LINK_STAKE_PER_PAIR_WEEK the pairing rules (default 2
+ * and 2); LINK_STAKE_RPC_URL a devnet RPC (the public one throttles reads).
+ */
+function linkStakeConfig(): LinkStakeConfig | undefined {
+  const env = (name: string) => process.env[`LINK_STAKE_${name}`] || undefined;
+  const programId = LINK_WAGER_PROGRAM_IDS.devnet;
+  const [ticket, result] = [env("TICKET_KEY"), env("RESULT_KEY")];
+  const hex = (k: string | undefined): k is string => !!k && /^[0-9a-f]{64}$/i.test(k);
+  if (!programId || !hex(ticket) || !hex(result) || !linkRatedOn()) return undefined;
+  const stakes = { chain: new Chain({ cluster: "devnet", rpcUrl: env("RPC_URL") }), program: new PublicKey(programId) };
+  // As for The Line's desk: an RPC on another cluster would answer "no such battle" for every live one.
+  let genesis: Promise<void> | null = null;
+  const onDevnet = () =>
+    (genesis ??= stakes.chain.connection.getGenesisHash().then((g) => {
+      if (g !== GENESIS_HASHES.devnet) {
+        console.error(`link: the stake RPC isn't on devnet (genesis ${g}): staked battles won't be read until it is`);
+        throw new Error("the stake RPC isn't on devnet");
+      }
+    })).catch((err: unknown) => {
+      genesis = null;
+      throw err;
+    });
+  const whole = (name: string, fallback: number) => Math.max(1, Math.floor(Number(env(name) ?? fallback)) || fallback);
+  return {
+    programId,
+    ticketSecret: Uint8Array.from(Buffer.from(ticket, "hex")),
+    ticketKeyId: Number(env("TICKET_KEY_ID") ?? 1),
+    resultSecret: Uint8Array.from(Buffer.from(result, "hex")),
+    resultKeyId: Number(env("RESULT_KEY_ID") ?? 1),
+    tiers: (env("TIERS") ?? "0.1,0.25").split(",").map((t) => solToLamports(Number(t.trim()))),
+    minQueue: Math.max(2, whole("MIN_QUEUE", 2)),
+    perPairPerWeek: whole("PER_PAIR_WEEK", 2),
+    chain: {
+      status: async (id) => {
+        await onDevnet();
+        return linkBattleOutcome(stakes, id);
+      },
+      config: async () => {
+        await onDevnet();
+        const c = await readLinkConfig(stakes);
+        return { paused: c.paused, ticketKeyId: c.ticketKeyId, resultKeyId: c.resultKeyId };
+      },
+    },
+  };
+}
+
 let relay: Relay | null = null;
 
 export function lineRelay(): Relay | null {
@@ -135,16 +188,29 @@ export function lineRelay(): Relay | null {
     // Link battles' practice (docs/link-battles.md): the engine runs the emulator, from the private Blob store.
     // Each turn is filmed after the answer (13.3), in the same function: after() starts it once the response is out.
     // Rated battles resolve their turns the same way, after the answer that completes them (8.2). Off until LINK_RATED=1.
-    link: linkConfigured() ? { engine: lazyLinkEngine, agentSide: 1, defer: (task: () => Promise<unknown>) => after(task), rated: linkRatedOn() } : undefined,
+    link: linkConfigured() ? { engine: lazyLinkEngine, agentSide: 1, defer: (task: () => Promise<unknown>) => after(task), rated: linkRatedOn(), stakes: linkStakeConfig() } : undefined,
   } satisfies Parameters<typeof createRelay>[0];
-  try {
-    relay = createRelay(options);
-  } catch (err) {
-    // A wager setting the desk refuses turns wagering off, not The Line.
-    console.error(`line: wagering is off: ${err instanceof Error ? err.message : String(err)}`);
-    relay = createRelay({ ...options, referee: { ...options.referee, wager: undefined } });
+  // A stake or wager setting a desk refuses turns that desk off, never The Line or link battles: link battles'
+  // stakes go first, then The Line's wagers, then both.
+  const noStakes = options.link ? { ...options.link, stakes: undefined } : undefined;
+  const noWager = { ...options.referee, wager: undefined };
+  const attempts: [string, Parameters<typeof createRelay>[0]][] = [
+    ["", options],
+    ["link battles' stakes are off", { ...options, link: noStakes }],
+    ["wagering is off", { ...options, referee: noWager }],
+    ["wagering and link battles' stakes are off", { ...options, link: noStakes, referee: noWager }],
+  ];
+  let failed: unknown = null;
+  for (const [what, o] of attempts) {
+    try {
+      relay = createRelay(o);
+      if (what) console.error(`line: ${what}: ${failed instanceof Error ? failed.message : String(failed)}`);
+      return relay;
+    } catch (err) {
+      failed = err;
+    }
   }
-  return relay;
+  throw failed;
 }
 
 /** The routes' handler: the referee, or a plain "not open yet" while the database isn't connected. */
