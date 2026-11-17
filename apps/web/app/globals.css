@@ -5466,30 +5466,220 @@ a.card:hover,
   color: var(--muted);
 }
 
-/* The arena's front door (/arena): one card a game, in the ideas' cards' frame, with what's on in a ticket's. */
+/* The arena's front door (/arena). It opens on a stage, a shader the height of the screen where the two sides meet on
+   the wire, with the words at its foot; then one card a game, each under a small 3D scene of the game that follows the
+   pointer (components/arena/ArenaStage.tsx). Behind every canvas is a still gradient, for a browser without WebGL. */
+.arena-hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-end;
+  min-height: min(88svh, 900px);
+  overflow: hidden;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.arena-hero-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+}
+
+.arena-hero-canvas.is-flat {
+  background:
+    radial-gradient(55% 70% at 22% 34%, rgba(246, 169, 196, 0.3), transparent 62%),
+    radial-gradient(55% 70% at 78% 34%, rgba(147, 226, 251, 0.3), transparent 62%),
+    var(--bg);
+}
+
+/* The words stay readable whatever the stage is doing behind them. */
+.arena-hero-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 60% at 0% 100%, color-mix(in srgb, var(--bg) 82%, transparent), transparent 70%),
+    linear-gradient(to top, var(--bg) 0%, color-mix(in srgb, var(--bg) 60%, transparent) 24%, transparent 52%);
+}
+
+.arena-hero-copy {
+  width: 100%;
+  padding-top: 140px;
+  padding-bottom: 60px;
+}
+
+.arena-hero h1 {
+  margin: 10px 0 16px;
+  max-width: 9ch;
+  font-size: clamp(52px, 10.5vw, 148px);
+  font-weight: 700;
+  letter-spacing: -0.06em;
+  line-height: 0.9;
+  text-wrap: balance;
+}
+
+.arena-hero .lead {
+  margin: 0;
+  max-width: 44ch;
+  font-size: clamp(17px, 1.55vw, 21px);
+}
+
+.arena-hero-go {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 28px 0 0;
+}
+
+.arena-hero-hint {
+  margin: 24px 0 0;
+  font-family: var(--font-code);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.arena-hint-touch {
+  display: none;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .arena-hint-mouse {
+    display: none;
+  }
+
+  .arena-hint-touch {
+    display: inline;
+  }
+}
+
+.arena-front .arena-body {
+  padding-top: 84px;
+}
+
+.arena-front .section-head h2 {
+  font-size: clamp(30px, 4vw, 52px);
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
 .arena-games {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 20px;
+  perspective: 1600px;
 }
 
+.arena-games > li {
+  min-width: 0;
+}
+
+.arena-games-wide {
+  grid-column: 1 / -1;
+}
+
+/* A card leans toward the pointer (Tilt sets --tilt-x and --tilt-y, 0 without a mouse) and takes its glare. */
 .arena-game {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 12px;
   height: 100%;
-  padding: 28px;
-  border-radius: var(--radius);
+  overflow: hidden;
+  border-radius: 28px;
   border: 1px solid var(--line);
   background: var(--surface);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 24px 60px -40px rgba(0, 0, 0, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 30px 70px -44px rgba(0, 0, 0, 0.8);
+  transform: rotateX(calc(var(--tilt-y) * -5deg)) rotateY(calc(var(--tilt-x) * 6deg));
+  transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms ease, box-shadow 300ms ease;
+}
+
+.arena-game:hover {
+  border-color: var(--line-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 44px 90px -44px rgba(0, 0, 0, 0.9);
+  transition-duration: 140ms, 200ms, 300ms;
+}
+
+.arena-game::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(460px circle at var(--glare-x, 50%) var(--glare-y, 0%), rgba(255, 255, 255, 0.075), transparent 62%);
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.arena-game:hover::after {
+  opacity: 1;
 }
 
 :root[data-theme="light"] .arena-game {
-  box-shadow: 0 18px 40px -32px rgba(14, 17, 22, 0.25);
+  box-shadow: 0 22px 48px -34px rgba(14, 17, 22, 0.3);
+}
+
+:root[data-theme="light"] .arena-game::after {
+  background: radial-gradient(460px circle at var(--glare-x, 50%) var(--glare-y, 0%), rgba(255, 255, 255, 0.5), transparent 62%);
+}
+
+.arena-game-scene {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-alt);
+}
+
+.arena-game-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--surface-alt);
+}
+
+.arena-game-canvas.is-flat {
+  background:
+    radial-gradient(60% 90% at 25% 55%, var(--side-a-soft), transparent 65%),
+    radial-gradient(60% 90% at 75% 55%, var(--side-b-soft), transparent 65%),
+    var(--surface-alt);
+}
+
+.arena-game-live {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(8px);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.arena-game-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  padding: 26px 28px 28px;
 }
 
 .arena-game .link-label,
@@ -5500,10 +5690,10 @@ a.card:hover,
 
 .arena-game-title {
   margin: 0;
-  font-size: clamp(26px, 2.6vw, 32px);
+  font-size: clamp(30px, 3.2vw, 44px);
   font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 1.1;
+  letter-spacing: -0.045em;
+  line-height: 1;
 }
 
 .arena-game-now {
@@ -5539,18 +5729,129 @@ a.card:hover,
   gap: 10px;
 }
 
+/* The games to come: the scene beside the words. */
+.arena-game-next {
+  flex-direction: row;
+}
+
+.arena-game-next .arena-game-scene {
+  flex: 0 0 36%;
+  aspect-ratio: auto;
+  min-height: 230px;
+  border-bottom: 0;
+  border-right: 1px solid var(--line);
+}
+
+.arena-game-next .arena-game-body {
+  justify-content: center;
+}
+
+.arena-game-next .arena-game-what {
+  max-width: 52ch;
+}
+
+/* The steps' numbers walk the wire's colours: gold, pink, blue, mint. */
+.arena-front .arena-how-n {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  color: #F7C84C;
+}
+
+.arena-front .arena-how li:nth-child(2) .arena-how-n {
+  color: #F6A9C4;
+}
+
+.arena-front .arena-how li:nth-child(3) .arena-how-n {
+  color: #93E2FB;
+}
+
+.arena-front .arena-how li:nth-child(4) .arena-how-n {
+  color: #A6EFCB;
+}
+
+:root[data-theme="light"] .arena-front .arena-how-n {
+  color: #A8740A;
+}
+
+:root[data-theme="light"] .arena-front .arena-how li:nth-child(2) .arena-how-n {
+  color: #B8326C;
+}
+
+:root[data-theme="light"] .arena-front .arena-how li:nth-child(3) .arena-how-n {
+  color: #1F5FA8;
+}
+
+:root[data-theme="light"] .arena-front .arena-how li:nth-child(4) .arena-how-n {
+  color: #1E8A5F;
+}
+
 .arena-enter-ask {
   margin: 24px 0 12px;
+}
+
+/* Each part rises into place as it's scrolled to, where the browser can tie an animation to the scroll. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .arena-front .section-head,
+    .arena-front .arena-games > li,
+    .arena-front .arena-how > li {
+      animation: arena-front-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 42%;
+    }
+  }
+}
+
+@keyframes arena-front-rise {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-hero-hint {
+    display: none;
+  }
+
+  .arena-game {
+    transform: none;
+    transition: none;
+  }
 }
 
 @media (max-width: 860px) {
   .arena-games {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .arena-game-next {
+    flex-direction: column;
+  }
+
+  .arena-game-next .arena-game-scene {
+    flex: none;
+    aspect-ratio: 16 / 9;
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
 }
 
 @media (max-width: 520px) {
-  .arena-game {
+  .arena-hero {
+    min-height: min(84svh, 760px);
+  }
+
+  .arena-hero-copy {
+    padding-bottom: 40px;
+  }
+
+  .arena-game-body {
     padding: 22px 18px;
   }
 

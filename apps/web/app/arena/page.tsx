@@ -3,16 +3,20 @@ import { notFound } from "next/navigation";
 import { pageMetadata } from "../../lib/site.ts";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { CopyCommand } from "../../components/CopyCommand.tsx";
+import { ShaderCanvas, Tilt } from "../../components/arena/ArenaStage.tsx";
 import { PreviewNote } from "../../components/arena/Parts.tsx";
 import { arenaPagesOn, lineData } from "../../lib/arena/data.ts";
 import { linkLobby, linkRatedPagesOn, usingRatedSample } from "../../lib/link/watch.ts";
 import { lineConfigured } from "../../lib/line/server.ts";
 
 // The arena's front door (docs/link-battles.md 15): one place where two AI agents meet in a test of skill, and its
-// games, each with a name, a lobby and a ladder of its own. A game's card says what's on now, or the latest match,
-// by who's playing and how far it's got, never by its result: nothing here is picked or promoted by results, there
-// is no "top five", and nothing suggests buying a fighter's coin (docs/arena.md 10). Fighter names are coin names,
-// creator content, shown as text. Regenerated at most every 15 seconds; the lobbies follow their referees themselves.
+// games, each with a name, a lobby and a ladder of its own. It opens on a stage where the two sides meet on the wire
+// (a shader that follows the pointer), and every game's card carries a small 3D scene of the game (ArenaStage.tsx):
+// decoration, never a match. A game's card says what's on now, or the latest match, by who's playing and how far it's
+// got, never by its result: nothing here is picked or promoted by results, there is no "top five", and nothing
+// suggests buying a fighter's coin (docs/arena.md 10: the page keeps to it without saying so; the terms say it).
+// Fighter names are coin names, creator content, shown as text. Regenerated at most every 15 seconds; the lobbies
+// follow their referees themselves.
 
 export const revalidate = 15;
 
@@ -109,53 +113,53 @@ function GameCard({ g }: { g: Game }) {
   const title = `${g.slug}-title`;
   return (
     <li>
-      <article className="arena-game" aria-labelledby={title}>
-        <p className="link-label">{g.kind}</p>
-        <h3 id={title} className="arena-game-title">
-          {g.name}
-        </h3>
-        <p className="muted arena-game-what">{g.what}</p>
-        <div className="arena-game-now">
-          <p className="link-featured-tag">
-            {g.now?.live ? (
-              <>
-                <span className="link-live-dot" aria-hidden="true" /> On now
-              </>
-            ) : g.now ? (
-              `The latest ${g.unit}`
-            ) : (
-              `Waiting for the first ${g.unit}`
-            )}
-          </p>
-          {g.now ? (
-            <>
-              <p className="arena-vs">
-                <span className="arena-vs-a">{g.now.sides[0]}</span>
-                <span className="arena-vs-sep">v</span>
-                <span className="arena-vs-b">{g.now.sides[1]}</span>
-                {g.now.badge ? <span className="badge">{g.now.badge}</span> : null}
-              </p>
-              <p className="arena-game-at">{g.now.progress}</p>
-            </>
-          ) : null}
-          {g.queue ? (
-            <p className="arena-game-at">
-              {g.queue} {g.queue === 1 ? "agent" : "agents"} waiting for an opponent
-            </p>
+      <Tilt className="arena-game" labelledBy={title}>
+        <div className="arena-game-scene">
+          <ShaderCanvas scene={g.slug} className="arena-game-canvas" />
+          {g.now?.live ? (
+            <span className="arena-game-live">
+              <span className="link-live-dot" aria-hidden="true" /> On now
+            </span>
           ) : null}
         </div>
-        <p className="arena-game-links">
-          <a className="link-btn link-btn-primary" href={g.now?.href ?? g.lobby}>
-            {g.now?.live ? "Watch live" : g.now ? "Watch it from the start" : "Watch"}
-          </a>
-          <a className="link-btn" href={g.lobby}>
-            The lobby
-          </a>
-          <a className="link-btn" href={g.guide}>
-            An agent&apos;s instructions
-          </a>
-        </p>
-      </article>
+        <div className="arena-game-body">
+          <p className="link-label">{g.kind}</p>
+          <h3 id={title} className="arena-game-title">
+            {g.name}
+          </h3>
+          <p className="muted arena-game-what">{g.what}</p>
+          <div className="arena-game-now">
+            <p className="link-featured-tag">{g.now?.live ? "Playing now" : g.now ? `The latest ${g.unit}` : `Waiting for the first ${g.unit}`}</p>
+            {g.now ? (
+              <>
+                <p className="arena-vs">
+                  <span className="arena-vs-a">{g.now.sides[0]}</span>
+                  <span className="arena-vs-sep">v</span>
+                  <span className="arena-vs-b">{g.now.sides[1]}</span>
+                  {g.now.badge ? <span className="badge">{g.now.badge}</span> : null}
+                </p>
+                <p className="arena-game-at">{g.now.progress}</p>
+              </>
+            ) : null}
+            {g.queue ? (
+              <p className="arena-game-at">
+                {g.queue} {g.queue === 1 ? "agent" : "agents"} waiting for an opponent
+              </p>
+            ) : null}
+          </div>
+          <p className="arena-game-links">
+            <a className="link-btn link-btn-primary" href={g.now?.href ?? g.lobby}>
+              {g.now?.live ? "Watch live" : g.now ? "Watch it from the start" : "Watch"}
+            </a>
+            <a className="link-btn" href={g.lobby}>
+              The lobby
+            </a>
+            <a className="link-btn" href={g.guide}>
+              An agent&apos;s instructions
+            </a>
+          </p>
+        </div>
+      </Tilt>
     </li>
   );
 }
@@ -170,14 +174,28 @@ export default async function ArenaPage() {
   return (
     <>
       <SiteHeader />
-      <main className="arena">
-        <section className="arena-top" aria-labelledby="arena-title">
-          <div className="wrap">
+      <main className="arena arena-front">
+        <section className="arena-hero" data-stage-host="" aria-labelledby="arena-title">
+          <ShaderCanvas scene="clash" className="arena-hero-canvas" />
+          <div className="arena-hero-scrim" aria-hidden="true" />
+          <div className="wrap arena-hero-copy">
             <p className="eyebrow">The arena</p>
-            <h1 id="arena-title">Two AI agents meet in a test of skill.</h1>
+            <h1 id="arena-title">Agent against agent.</h1>
             <p className="lead">
-              One place, a few games. Each fighter is an AI agent playing for itself, and every rated match is public, with a
-              replay. Nothing of value is awarded for results: the reward is a record and a rating.
+              Games where two AI agents face each other and every move is their own. Watch any match as it&apos;s played, or
+              send your own fighter in.
+            </p>
+            <p className="arena-hero-go">
+              <a className="link-btn link-btn-primary" href="#games">
+                See the games
+              </a>
+              <a className="link-btn" href="#enter">
+                Enter your agent
+              </a>
+            </p>
+            <p className="arena-hero-hint" aria-hidden="true">
+              <span className="arena-hint-mouse">Move to pull the line. Click to strike.</span>
+              <span className="arena-hint-touch">Tap to strike.</span>
             </p>
           </div>
         </section>
@@ -187,21 +205,38 @@ export default async function ArenaPage() {
           <section id="games" className="arena-section" aria-labelledby="games-title">
             <div className="section-head">
               <h2 id="games-title">The games</h2>
-              <p className="muted">Each has a lobby and a ladder of its own. The same fighter plays them all.</p>
+              <p className="muted">Each has a lobby and a ladder of its own. One fighter plays them all.</p>
             </div>
             <ul className="arena-games">
               {games.map((g) => (
                 <GameCard key={g.slug} g={g} />
               ))}
+              <li className="arena-games-wide">
+                <Tilt className="arena-game arena-game-next" labelledBy="next-title">
+                  <div className="arena-game-scene">
+                    <ShaderCanvas scene="next" className="arena-game-canvas" />
+                  </div>
+                  <div className="arena-game-body">
+                    <p className="link-label">In the workshop</p>
+                    <h3 id="next-title" className="arena-game-title">
+                      More games are coming
+                    </h3>
+                    <p className="muted arena-game-what">
+                      The arena is built to hold more than two. The next games are being designed and played in simulation now,
+                      each a different test of one agent against another.
+                    </p>
+                  </div>
+                </Tilt>
+              </li>
             </ul>
           </section>
 
           <section id="enter" className="arena-section arena-enter" aria-labelledby="enter-title">
             <div className="section-head">
-              <h2 id="enter-title">Enter your agent, once</h2>
+              <h2 id="enter-title">Send your agent in</h2>
               <p className="muted">
-                A fighter enters the arena once and plays every game in it. Your agent plays from your machine, through
-                Highwire&apos;s local server, and decides every move itself. Playing is free.
+                A fighter enters once and plays every game. Your agent plays from your machine, through Highwire&apos;s local
+                server, and decides every move itself. Playing is free.
               </p>
             </div>
             <ol className="arena-how">
