@@ -2040,59 +2040,6 @@ a.card:hover,
   }
 }
 
-/* The live wire hero: ink by default, paper when the visitor picks Light (the scene follows the theme too). */
-
-.livewire {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.livewire-canvas,
-.livewire-flat {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.livewire-flat {
-  top: 35%;
-  height: 55%;
-}
-
-/* Darkens behind the copy, and fades the bottom into the page. */
-.livewire-vignette {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background:
-    linear-gradient(90deg, rgba(7, 9, 12, 0.88) 0%, rgba(7, 9, 12, 0.55) 38%, rgba(7, 9, 12, 0) 68%),
-    linear-gradient(180deg, rgba(7, 9, 12, 0) 72%, var(--page-bg, #0A0C10) 100%);
-}
-
-:root[data-theme="light"] .livewire-vignette {
-  --page-bg: #07090C;
-}
-
-@keyframes lw-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
-
-@keyframes lw-ping {
-  70% {
-    box-shadow: 0 0 0 8px rgba(126, 226, 168, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(126, 226, 168, 0);
-  }
-}
-
 /* On phones the header is one row: the logo, the theme switch as an icon, and a menu the links drop down from. */
 .mobile-menu {
   display: none;
@@ -2200,12 +2147,6 @@ a.card:hover,
   }
 }
 
-:root[data-theme="light"] .livewire-vignette {
-  background:
-    linear-gradient(90deg, rgba(246, 244, 238, 0.92) 0%, rgba(246, 244, 238, 0.6) 38%, rgba(246, 244, 238, 0) 68%),
-    linear-gradient(180deg, rgba(246, 244, 238, 0) 72%, #F6F4EE 100%);
-}
-
 /* ------------------------------------------------------------------ Page headers with the wire, and the ideas pages */
 
 .page-hero {
@@ -2258,6 +2199,61 @@ a.card:hover,
 
 .idea-hero h1 {
   max-width: 18ch;
+}
+
+/* A page header's picture (PageStage in components/arena/ArenaStage.tsx): a shader behind the words, one a kind of
+   page. The scrim keeps the words readable on the left and fades the header's foot into the page; without WebGL the
+   header keeps a still wash of the wire's colours. */
+.page-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+}
+
+.page-stage.is-flat {
+  background:
+    radial-gradient(40% 70% at 70% 45%, rgba(246, 169, 196, 0.22), transparent 65%),
+    radial-gradient(40% 70% at 86% 40%, rgba(147, 226, 251, 0.2), transparent 65%),
+    var(--bg);
+}
+
+/* A game's scene, made for a card: the header's right side, its edges faded into the header. */
+.page-stage.is-side {
+  inset: 0 0 0 auto;
+  width: min(62%, 860px);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 38%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 38%, #000 100%);
+}
+
+.page-stage-scrim {
+  --page: #0A0C10;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--bg) 84%, transparent) 0%, color-mix(in srgb, var(--bg) 46%, transparent) 34%, transparent 60%),
+    linear-gradient(180deg, transparent 78%, var(--page) 100%);
+}
+
+:root[data-theme="light"] .page-stage-scrim {
+  --page: #F6F4EE;
+}
+
+.page-hero .arena-motion {
+  z-index: 3;
+}
+
+/* On a phone the words run the header's whole width: the picture sits behind all of them, quieter. */
+@media (max-width: 760px) {
+  .page-stage-scrim {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--bg) 30%, transparent) 0%, color-mix(in srgb, var(--bg) 72%, transparent) 42%, color-mix(in srgb, var(--bg) 80%, transparent) 78%, var(--page) 100%);
+  }
 }
 
 .crumbs {
@@ -3901,7 +3897,8 @@ a.card:hover,
   --side-b-soft: rgba(31, 95, 168, 0.1);
 }
 
-.arena-hero .eyebrow a {
+/* A game's own pages' header (ArenaHero). Not .arena-hero: that is the front door's stage, the height of the screen. */
+.game-hero .eyebrow a {
   color: inherit;
 }
 

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SiteFooter, SiteHeader } from "../components/Chrome.tsx";
-import { AmbientWire } from "../components/hero/AmbientWire.tsx";
+import { PageStage } from "../components/arena/ArenaStage.tsx";
 
 export const metadata: Metadata = { title: "Not found", robots: { index: false } };
 
@@ -10,8 +10,8 @@ export default function NotFound() {
     <>
       <SiteHeader />
       <main>
-        <section className="page-hero not-found" aria-labelledby="nf-title">
-          <AmbientWire />
+        <section className="page-hero not-found" data-stage-host="" aria-labelledby="nf-title">
+          <PageStage scene="snap" />
           <div className="wrap page-hero-copy">
             <p className="eyebrow">404 · off the wire</p>
             <h1 id="nf-title">There&apos;s nothing at this address</h1>

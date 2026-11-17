@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { Connect } from "../../components/Connect.tsx";
-import { AmbientWire } from "../../components/hero/AmbientWire.tsx";
+import { PageStage } from "../../components/arena/ArenaStage.tsx";
 import { SectionNav } from "../../components/ideas/SectionNav.tsx";
 import { getCatalog, groupTools, type ToolInfo } from "../../lib/catalog.ts";
 import { MCP_URL, REPO_URL, pageMetadata } from "../../lib/site.ts";
@@ -268,8 +268,8 @@ export default async function Docs() {
     <>
       <SiteHeader />
       <main>
-        <section className="page-hero docs-hero" aria-labelledby="docs-title">
-          <AmbientWire />
+        <section className="page-hero docs-hero" data-stage-host="" aria-labelledby="docs-title">
+          <PageStage scene="keys" />
           <div className="wrap page-hero-copy">
             <p className="eyebrow">Docs · generated from the running server</p>
             <h1 id="docs-title">Highwire docs</h1>

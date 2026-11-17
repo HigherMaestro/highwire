@@ -5,6 +5,17 @@ highwire.fun.
 
 ## Unreleased
 
+- **Every page's header has a picture of its own.** The fee pages open on a cut crystal: the wire's light comes in,
+  and leaves as five beams, one for each recipient in the page's own colours, each as wide and bright as that
+  recipient's share of the fees the page is about (all of higher.fun's, one coin's, or one creator's coins'); a
+  click sends a light through it. The docs open on a field of keys that rise under the pointer and ripple from a
+  click; the ideas and modules on eight blocks that come together under the pointer and scatter at a click; the
+  not-found page on a wire that has snapped, sparking across the gap. The Line's own pages show the game's wire and
+  node. All are shaders on plain WebGL, like the homepage's and the arena's: they follow the theme, hold still under
+  reduced motion or the header's new pause switch, and fall back to a still wash without WebGL. They replace the
+  three.js wire those headers shared, so three.js now loads only for /fees' diagram of the split. Also fixed: The
+  Line's match, fighter and wager pages had been opening on a header the height of the screen since the arena's
+  page was rebuilt (they shared its class name); they are back to a header's height.
 - **The terms cover the arena and practice stakes.** The terms' section on The Line now covers the arena (The Line
   and Link battles), and says what practice stakes are: devnet SOL on a test network, worth nothing, never sold,
   bought or exchanged by Highwire, changing nothing on the free ladders; held and paid by a program on devnet (The

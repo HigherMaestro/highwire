@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AmbientWire } from "../hero/AmbientWire.tsx";
+import { PageStage } from "./ArenaStage.tsx";
 import { resultFor, sideOf, verdict, when, type ArenaMatch } from "../../lib/arena/data.ts";
 
 // The arena pages' shared parts. Fighter names are coin names: creator content, shown as text and never as links out
@@ -7,8 +7,8 @@ import { resultFor, sideOf, verdict, when, type ArenaMatch } from "../../lib/are
 
 export function ArenaHero({ id, eyebrow, title, lead, facts, children }: { id: string; eyebrow: ReactNode; title: ReactNode; lead?: ReactNode; facts?: { label: string; value: ReactNode }[]; children?: ReactNode }) {
   return (
-    <section className="page-hero arena-hero" aria-labelledby={id}>
-      <AmbientWire />
+    <section className="page-hero game-hero" data-stage-host="" aria-labelledby={id}>
+      <PageStage scene="line" side />
       <div className="wrap page-hero-copy">
         <p className="eyebrow">{eyebrow}</p>
         <h1 id={id}>{title}</h1>
