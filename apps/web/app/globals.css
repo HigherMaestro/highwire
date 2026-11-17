@@ -236,21 +236,6 @@ h3 {
   padding: 72px 0 64px;
 }
 
-.hero-grid {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 48px;
-}
-
-.hero-copy {
-  flex: 999 1 520px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
 .hero-art {
   flex: 1 1 280px;
   display: flex;
@@ -438,103 +423,6 @@ h3 {
   gap: 14px;
 }
 
-.coin-top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.coin-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 20px;
-  display: grid;
-  place-items: center;
-  background: var(--fg);
-  color: var(--bg);
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.coin-names {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-}
-
-.coin-ticker {
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.coin-name {
-  font-size: 14px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.coin-grade {
-  font-family: var(--font-code);
-  font-size: 13px;
-  font-weight: 500;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 2px 8px;
-}
-
-.coin-progress {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 100%;
-  height: 8px;
-  border: 0;
-  border-radius: 4px;
-  background: var(--surface-alt);
-  overflow: hidden;
-}
-
-.coin-progress::-webkit-progress-bar {
-  background: var(--surface-alt);
-  border-radius: 4px;
-}
-
-.coin-progress::-webkit-progress-value {
-  background: var(--wire);
-  border-radius: 4px;
-}
-
-.coin-progress::-moz-progress-bar {
-  background: var(--wire);
-  border-radius: 4px;
-}
-
-.coin-stats {
-  display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.coin-stats strong {
-  color: var(--fg);
-}
-
-.coin-link {
-  font-size: 15px;
-  font-weight: 500;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-}
-
 /* Connect */
 .cards {
   display: grid;
@@ -592,30 +480,6 @@ h3 {
   gap: 2px;
   padding: 12px 0;
   border-top: 1px solid var(--line);
-}
-
-.tool-line {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tool-name {
-  align-self: flex-start;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--fg);
-  text-decoration: none;
-}
-
-.tool-name:hover code {
-  border-color: var(--fg);
-}
-
-.tool-desc {
-  font-size: 15px;
-  color: var(--muted);
 }
 
 /* Safety */
@@ -2177,37 +2041,6 @@ a.card:hover,
 }
 
 /* The live wire hero: ink by default, paper when the visitor picks Light (the scene follows the theme too). */
-.hero-live {
-  --bg: #07090C;
-  --fg: #F1F0EC;
-  --muted: #A3A9B2;
-  --line: #2A2F37;
-  --link: #93E2FB;
-  position: relative;
-  overflow: hidden;
-  min-height: min(calc(100svh - 73px), 940px);
-  padding: clamp(56px, 9vh, 104px) 0 150px;
-  background: radial-gradient(120% 90% at 70% 70%, #10141B 0%, #07090C 60%);
-  color: var(--fg);
-  isolation: isolate;
-}
-
-.hero-live .wrap {
-  position: relative;
-  z-index: 2;
-}
-
-.hero-live .hero-copy {
-  max-width: 680px;
-}
-
-.hero-live .lead {
-  color: #C3C8CF;
-}
-
-.hero-live .stat-label {
-  color: var(--muted);
-}
 
 .livewire {
   position: absolute;
@@ -2244,94 +2077,6 @@ a.card:hover,
   --page-bg: #07090C;
 }
 
-.livewire-corner {
-  position: absolute;
-  z-index: 3;
-  font-family: var(--font-code);
-  font-size: 11.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(241, 240, 236, 0.62);
-}
-
-.livewire-tr {
-  top: 22px;
-  right: max(16px, calc((100vw - 1180px) / 2 + 24px));
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.livewire-bl {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  bottom: 26px;
-  left: max(16px, calc((100vw - 1180px) / 2 + 24px));
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 6px;
-}
-
-.livewire-bl li {
-  display: flex;
-  gap: 12px;
-  animation: lw-in 0.5s ease both;
-}
-
-.livewire-bl li:not(:first-child) {
-  opacity: 0.45;
-}
-
-.livewire-kind {
-  min-width: 6.5em;
-}
-
-.livewire-bl li[data-kind="buy"] .livewire-kind {
-  color: #F7C84C;
-}
-
-.livewire-bl li[data-kind="sell"] .livewire-kind {
-  color: #93E2FB;
-}
-
-.livewire-bl li[data-kind="launch"] .livewire-kind,
-.livewire-bl li[data-kind="graduation"] .livewire-kind {
-  color: #A6EFCB;
-}
-
-.livewire-br {
-  bottom: 26px;
-  right: max(16px, calc((100vw - 1180px) / 2 + 24px));
-  text-align: right;
-}
-
-.livewire-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #6B7280;
-}
-
-.livewire-dot[data-status="live"] {
-  background: #7EE2A8;
-  box-shadow: 0 0 0 0 rgba(126, 226, 168, 0.6);
-  animation: lw-ping 2s ease-out infinite;
-}
-
-@media (max-width: 899px) {
-  .livewire-br {
-    display: none;
-  }
-  .hero-live {
-    padding-bottom: 170px;
-  }
-  .livewire-tr {
-    top: 14px;
-    font-size: 10.5px;
-  }
-}
-
 @keyframes lw-in {
   from {
     opacity: 0;
@@ -2345,113 +2090,6 @@ a.card:hover,
   }
   100% {
     box-shadow: 0 0 0 0 rgba(126, 226, 168, 0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .livewire-bl li,
-  .livewire-dot[data-status="live"] {
-    animation: none;
-  }
-}
-
-/* How it works: the pinned dive. Follows the theme, like the hero. */
-.dive {
-  --fg: #F1F0EC;
-  --muted: #A3A9B2;
-  position: relative;
-  background: #07090C;
-  color: var(--fg);
-}
-
-.dive-sticky {
-  position: sticky;
-  top: 0;
-  height: 100svh;
-  overflow: hidden;
-}
-
-.dive-stage,
-.dive-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.dive-vignette {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(7, 9, 12, 0.85) 0%, rgba(7, 9, 12, 0.3) 45%, rgba(7, 9, 12, 0) 70%),
-    linear-gradient(180deg, #07090C 0%, rgba(7, 9, 12, 0) 14%, rgba(7, 9, 12, 0) 80%, #07090C 100%);
-}
-
-.dive-copy {
-  position: relative;
-  z-index: 2;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 18px;
-}
-
-.dive-stages {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  max-width: 520px;
-}
-
-.dive-stages li {
-  grid-area: 1 / 1;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  opacity: 0;
-  transform: translateY(14px);
-  transition: opacity 0.5s ease, transform 0.5s ease;
-}
-
-.dive-stages li[data-active] {
-  opacity: 1;
-  transform: none;
-}
-
-.dive-index {
-  font-family: var(--font-code);
-  font-size: 12.5px;
-  letter-spacing: 0.14em;
-  color: var(--signal);
-}
-
-.dive-stages h3 {
-  font-size: clamp(34px, 5vw, 56px);
-  letter-spacing: -0.04em;
-}
-
-.dive-stages p {
-  margin: 0;
-  color: #C3C8CF;
-  font-size: clamp(17px, 1.6vw, 20px);
-}
-
-@media (max-width: 760px) {
-  .dive-copy {
-    justify-content: flex-end;
-    padding-bottom: 12vh;
-  }
-  .dive-vignette {
-    background: linear-gradient(180deg, #07090C 0%, rgba(7, 9, 12, 0) 20%, rgba(7, 9, 12, 0.2) 50%, rgba(7, 9, 12, 0.92) 85%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dive-stages li {
-    transition: none;
   }
 }
 
@@ -2562,67 +2200,10 @@ a.card:hover,
   }
 }
 
-/* Paper versions of the hero and the dive. */
-:root[data-theme="light"] .hero-live {
-  --bg: #F6F4EE;
-  --fg: #0E1116;
-  --muted: #4A4F57;
-  --line: #D9D6CE;
-  --link: #1F5FA8;
-  background: radial-gradient(120% 90% at 70% 70%, #FFFFFF 0%, #F6F4EE 55%, #EFECE4 100%);
-}
-
-:root[data-theme="light"] .hero-live .lead {
-  color: #3A3F47;
-}
-
 :root[data-theme="light"] .livewire-vignette {
   background:
     linear-gradient(90deg, rgba(246, 244, 238, 0.92) 0%, rgba(246, 244, 238, 0.6) 38%, rgba(246, 244, 238, 0) 68%),
     linear-gradient(180deg, rgba(246, 244, 238, 0) 72%, #F6F4EE 100%);
-}
-
-:root[data-theme="light"] .livewire-corner {
-  color: rgba(14, 17, 22, 0.62);
-}
-
-:root[data-theme="light"] .livewire-bl li[data-kind="buy"] .livewire-kind {
-  color: #8A5A12;
-}
-
-:root[data-theme="light"] .livewire-bl li[data-kind="sell"] .livewire-kind {
-  color: #1F5FA8;
-}
-
-:root[data-theme="light"] .livewire-bl li[data-kind="launch"] .livewire-kind,
-:root[data-theme="light"] .livewire-bl li[data-kind="graduation"] .livewire-kind {
-  color: #1E6B3A;
-}
-
-:root[data-theme="light"] .dive {
-  --fg: #0E1116;
-  --muted: #4A4F57;
-  background: #F6F4EE;
-}
-
-:root[data-theme="light"] .dive-vignette {
-  background:
-    linear-gradient(90deg, rgba(246, 244, 238, 0.9) 0%, rgba(246, 244, 238, 0.35) 45%, rgba(246, 244, 238, 0) 70%),
-    linear-gradient(180deg, #F6F4EE 0%, rgba(246, 244, 238, 0) 14%, rgba(246, 244, 238, 0) 80%, #F6F4EE 100%);
-}
-
-:root[data-theme="light"] .dive-stages p {
-  color: #3A3F47;
-}
-
-:root[data-theme="light"] .dive-index {
-  color: #1F5FA8;
-}
-
-@media (max-width: 760px) {
-  :root[data-theme="light"] .dive-vignette {
-    background: linear-gradient(180deg, #F6F4EE 0%, rgba(246, 244, 238, 0) 20%, rgba(246, 244, 238, 0.2) 50%, rgba(246, 244, 238, 0.94) 85%);
-  }
 }
 
 /* ------------------------------------------------------------------ Page headers with the wire, and the ideas pages */
@@ -4109,21 +3690,6 @@ a.card:hover,
 
 /* ---------------------------------------------------------------- the home page's sections */
 
-.hero-live .fee-hero-facts {
-  margin-top: 28px;
-}
-
-.hero-fact-link {
-  color: inherit;
-  text-decoration: none;
-  border-bottom: 1px solid var(--line-strong);
-}
-
-.hero-fact-link:hover,
-.hero-fact-link:focus-visible {
-  border-color: var(--signal);
-}
-
 /* Two ways to use it: two cards side by side, the local one with the wire along its top. */
 .ways {
   display: grid;
@@ -4167,8 +3733,7 @@ a.card:hover,
 }
 
 .way-tag,
-.idea-link-meta,
-.release-date {
+.idea-link-meta {
   font-family: var(--font-code);
   font-size: 12px;
   font-weight: 500;
@@ -4215,18 +3780,6 @@ a.card:hover,
 }
 
 /* Live on higher.fun. */
-.live-fresh {
-  margin: 14px 0 0;
-}
-
-.live-sub {
-  margin: 48px 0 6px;
-  font-size: 20px;
-}
-
-.live-sub + .muted {
-  margin: 0 0 20px;
-}
 
 /* What's new: one card a release. */
 .releases {
@@ -4255,35 +3808,6 @@ a.card:hover,
 .release:hover,
 .release:focus-visible {
   border-color: var(--signal);
-}
-
-.release-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.release-v {
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-
-.release-titles {
-  margin: 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.release-go {
-  margin-top: auto;
-  font-size: 14px;
-  color: var(--link);
 }
 
 /* Ideas to launch: one row an idea. */
@@ -5339,7 +4863,6 @@ a.card:hover,
   white-space: nowrap;
 }
 
-
 /* ---------------------------------------------------------------- the header: three places, two icons, one action */
 
 .header-row {
@@ -5924,6 +5447,391 @@ a.card:hover,
 
   .arena-game-links .link-btn {
     flex: 1 1 100%;
+  }
+}
+
+/* The homepage (/). It opens on the same stage as the arena's page (.arena-hero), with the wire as its picture and
+   higher.fun's tape at its corner; then what an agent can do, three cards and the arena as the fourth. */
+.home-hero h1 {
+  max-width: 10ch;
+}
+
+.home-hero-command {
+  max-width: 620px;
+  margin-top: 24px;
+}
+
+.home-hero .arena-hero-go {
+  margin-top: 16px;
+}
+
+/* The tape, at the stage's right: what just happened on higher.fun. */
+.home-tape {
+  position: absolute;
+  right: max(24px, calc((100vw - 1160px) / 2 + 24px));
+  bottom: 68px;
+  width: 250px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  font-family: var(--font-code);
+  font-size: 12px;
+}
+
+.home-tape p {
+  margin: 0;
+}
+
+.home-tape-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.home-tape-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.home-tape-dot[data-status="live"] {
+  background: #A6EFCB;
+  box-shadow: 0 0 0 0 rgba(166, 239, 203, 0.6);
+  animation: home-tape-beat 2s ease-out infinite;
+}
+
+@keyframes home-tape-beat {
+  to {
+    box-shadow: 0 0 0 9px rgba(166, 239, 203, 0);
+  }
+}
+
+.home-tape-list {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.home-tape-list li {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.home-tape-list li:not(:first-child) {
+  opacity: 0.62;
+}
+
+.home-tape-kind {
+  width: 5.5em;
+  flex: none;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.home-tape-list li[data-kind="buy"] .home-tape-kind {
+  color: #A6EFCB;
+}
+
+.home-tape-list li[data-kind="sell"] .home-tape-kind {
+  color: #F6A9C4;
+}
+
+.home-tape-list li[data-kind="launch"] .home-tape-kind {
+  color: #F7C84C;
+}
+
+.home-tape-list li[data-kind="graduation"] .home-tape-kind {
+  color: #93E2FB;
+}
+
+:root[data-theme="light"] .home-tape-list li[data-kind="buy"] .home-tape-kind,
+:root[data-theme="light"] .home-tape-dot[data-status="live"] {
+  color: #1E8A5F;
+}
+
+:root[data-theme="light"] .home-tape-dot[data-status="live"] {
+  background: #1E8A5F;
+}
+
+:root[data-theme="light"] .home-tape-list li[data-kind="sell"] .home-tape-kind {
+  color: #B8326C;
+}
+
+:root[data-theme="light"] .home-tape-list li[data-kind="launch"] .home-tape-kind {
+  color: #A8740A;
+}
+
+:root[data-theme="light"] .home-tape-list li[data-kind="graduation"] .home-tape-kind {
+  color: #1F5FA8;
+}
+
+.home-tape-ticker {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-tape-sol {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.home-tape-note {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* What an agent can do: three cards, each with something to ask. */
+.home-acts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.home-act,
+.home-arena {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--surface);
+}
+
+.home-act h3,
+.home-arena h3 {
+  margin: 0;
+  font-size: clamp(24px, 2.2vw, 30px);
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+
+.home-act p,
+.home-arena p {
+  margin: 0;
+}
+
+/* The numbers walk the wire's colours, as the arena's steps do. */
+.home-act-n {
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  color: #F7C84C;
+}
+
+.home-act:nth-child(2) .home-act-n {
+  color: #F6A9C4;
+}
+
+.home-act:nth-child(3) .home-act-n {
+  color: #93E2FB;
+}
+
+.home-arena .home-act-n {
+  color: #A6EFCB;
+}
+
+:root[data-theme="light"] .home-act-n {
+  color: #A8740A;
+}
+
+:root[data-theme="light"] .home-act:nth-child(2) .home-act-n {
+  color: #B8326C;
+}
+
+:root[data-theme="light"] .home-act:nth-child(3) .home-act-n {
+  color: #1F5FA8;
+}
+
+:root[data-theme="light"] .home-arena .home-act-n {
+  color: #1E8A5F;
+}
+
+/* Something to say to your agent: a line of chat. */
+.home-ask {
+  margin-top: auto !important;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px 14px 14px 4px;
+  background: var(--surface-alt);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.home-ask-who {
+  display: block;
+  margin-bottom: 2px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The fourth: the arena, with its two games' scenes beside the words. */
+.home-arena {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 28px;
+  margin-top: 20px;
+  overflow: hidden;
+}
+
+.home-arena-copy {
+  flex: 1 1 42%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.home-arena-copy .home-ask {
+  margin-top: 4px !important;
+}
+
+.home-arena-go {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto !important;
+  padding-top: 8px;
+}
+
+.home-arena-scenes {
+  flex: 1 1 58%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.home-arena-scene {
+  position: relative;
+  display: block;
+  min-height: 250px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-alt);
+  color: inherit;
+  text-decoration: none;
+}
+
+.home-arena-scene span {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* The page's last ask: the command again, and the wallet under it. */
+.home-end-command {
+  max-width: 720px;
+}
+
+.home-end-command p {
+  margin: 10px 0 0;
+}
+
+.home-support {
+  max-width: 720px;
+  margin-top: 56px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.home-support p {
+  margin: 0 0 12px;
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .home .section-head,
+    .home-acts > li,
+    .home-arena,
+    .home .ways > *,
+    .home .points > li {
+      animation: arena-front-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 42%;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-tape-dot[data-status="live"] {
+    animation: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .home-tape {
+    position: static;
+    width: auto;
+    max-width: 620px;
+    margin: 0 24px 56px;
+  }
+
+  .home-hero {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-end;
+  }
+
+  .home-hero .arena-hero-copy {
+    padding-bottom: 24px;
+  }
+}
+
+@media (max-width: 960px) {
+  .home-acts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-arena {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 520px) {
+  .home-act,
+  .home-arena {
+    padding: 22px 18px;
+  }
+
+  .home-arena-scenes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-arena-scene {
+    min-height: 200px;
+  }
+
+  .home-tape {
+    margin: 0 16px 52px;
   }
 }
 

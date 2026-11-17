@@ -5,9 +5,10 @@
 //
 // Every shader gets: uRes (pixels), uTime (seconds), uPointer (0..1 across its host, eased), uHover (0..1, eased),
 // uLight (0 on ink, 1 on paper), uBg (the colour behind it, read from the page) and uPulse (where and when it was last
-// pressed). GLSL ES 1.00, so it runs on WebGL 1.
+// pressed). The homepage's wire also gets uTrade: the last eight events it was told of (a "stage-trade" event on its
+// canvas), which the homepage sends for each real event on higher.fun's tape. GLSL ES 1.00, so it runs on WebGL 1.
 
-export type SceneName = "clash" | "line" | "link" | "next";
+export type SceneName = "clash" | "wire" | "line" | "link" | "next";
 
 export const VERTEX = /* glsl */ `
 attribute vec2 aPos;
@@ -151,6 +152,80 @@ void main() {
   paper = mix(paper, deepen(wcol), clamp(wireCore + wireHalo, 0.0, 1.0));
   paper = mix(paper, deepen(wcol), clamp(halo * 0.7, 0.0, 0.8));
   paper = mix(paper, vec3(0.055, 0.067, 0.086), core);
+
+  vec3 outc = mix(ink, paper, uLight);
+  outc += (hash21(gl_FragCoord.xy + fract(t) * 91.0) - 0.5) * 0.02;
+  gl_FragColor = vec4(outc, 1.0);
+}
+`;
+
+// The homepage's wire: the brand's wire across the stage, rising to the right, with a current running along it. It can
+// be pulled with the pointer and plucked with a press, and every event it's told of runs it as a head of light.
+const WIRE = /* glsl */ `
+${COMMON}
+// One event: when it started, how big (0..1), and where its colour sits on the wire's gradient.
+uniform vec4 uTrade[8];
+const float CROSS = 3.6;
+float gAspect;
+float wireY(float x) {
+  float u = x / gAspect + 0.5;
+  float base = mix(0.06, 0.33, smoothstep(0.0, 1.0, u)) - 0.05 * sin(u * 3.14159) + 0.008 * sin(x * 7.0 + uTime * 1.1);
+  float px = (uPointer.x - 0.5) * gAspect;
+  base += bell((x - px) * 2.0) * uHover * clamp(uPointer.y - 0.5 - base, -0.16, 0.16);
+  float age = uTime - uPulse.z;
+  float at = (uPulse.x - 0.5) * gAspect;
+  if (age >= 0.0) base += 0.05 * sin((x - at) * 24.0 - age * 15.0) * exp(-age * 1.7) * exp(-abs(x - at) * 1.1);
+  return base;
+}
+void main() {
+  vec2 uv = gl_FragCoord.xy / uRes;
+  gAspect = uRes.x / uRes.y;
+  vec2 p = (uv - 0.5) * vec2(gAspect, 1.0);
+  float t = uTime;
+  float d = p.y - wireY(p.x);
+  vec3 here = wireGradient(uv.x);
+
+  // The current: fine threads of light that run with the wire and thin out away from it.
+  vec2 f = vec2(p.x * 0.9 - t * 0.09, d * 2.6);
+  vec2 warp = vec2(fbm3(f * 1.3 + vec2(0.0, t * 0.04)), fbm3(f * 1.3 + vec2(4.1, -t * 0.03)));
+  float threads = pow(clamp(1.0 - abs(2.0 * fbm(vec2(f.x * 0.7, f.y * 2.4) + warp * 1.6) - 1.0), 0.0, 1.0), 5.0);
+  float mist = smoothstep(0.3, 0.8, fbm3(f * 0.8 + warp));
+  float reach = exp(-abs(d) * 2.8);
+  // Quiet where the words are: the lower left.
+  float calm = mix(0.28, 1.0, smoothstep(0.25, 0.8, uv.y + uv.x * 0.3));
+  float energy = (threads * 0.6 + mist * 0.18) * reach * calm;
+
+  float core = exp(-abs(d) * uRes.y * 0.7);
+  float halo = exp(-abs(d) * 40.0) * 0.32 + exp(-abs(d) * 9.0) * 0.1;
+
+  // Each event runs the wire from the left: a head of light with a tail behind it.
+  vec3 lit = vec3(0.0);
+  float litAmount = 0.0;
+  for (int i = 0; i < 8; i++) {
+    vec4 e = uTrade[i];
+    float age = t - e.x;
+    if (age < 0.0 || age > CROSS + 0.6 || e.y <= 0.0) continue;
+    float x = (age / CROSS - 0.5) * (gAspect + 0.3);
+    vec2 head = vec2(x, wireY(x));
+    float size = 0.012 + 0.03 * e.y;
+    float r = length(p - head);
+    float bloom = bell(r / size) + 0.2 * exp(-r / (size * 3.0));
+    float tail = exp(-max(0.0, x - p.x) * (7.0 - 4.0 * e.y)) * step(p.x, x) * exp(-abs(d) * 70.0) * 0.8;
+    float amount = (bloom + tail) * smoothstep(0.0, 0.15, age);
+    lit += wireGradient(e.z) * amount;
+    litAmount += amount;
+  }
+
+  vec3 ink = uBg + here * energy;
+  ink += here * (core * 0.95 + halo);
+  ink += mix(lit, vec3(litAmount), 0.45);
+
+  vec3 paper = mix(uBg, deepen(here), clamp(energy * 0.9, 0.0, 0.8));
+  paper = mix(paper, deepen(here), clamp(core + halo, 0.0, 1.0));
+  // On paper a light is its own colour, deep, with ink only at its heart.
+  vec3 litHue = lit / max(litAmount, 0.001);
+  paper = mix(paper, deepen(litHue), clamp(litAmount * 0.9, 0.0, 0.9));
+  paper = mix(paper, vec3(0.055, 0.067, 0.086), clamp(litAmount - 1.0, 0.0, 0.7));
 
   vec3 outc = mix(ink, paper, uLight);
   outc += (hash21(gl_FragCoord.xy + fract(t) * 91.0) - 0.5) * 0.02;
@@ -451,4 +526,4 @@ void main() {
 }
 `;
 
-export const FRAGMENT: Record<SceneName, string> = { clash: CLASH, line: LINE, link: LINK, next: NEXT };
+export const FRAGMENT: Record<SceneName, string> = { clash: CLASH, wire: WIRE, line: LINE, link: LINK, next: NEXT };
