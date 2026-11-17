@@ -342,6 +342,67 @@ mistimed jumps, and each referee fix moved the fight further from one pattern. W
 a stronger player reliably beats a weaker one, which needs graded scripted players over many rounds (8, phase 2), and
 one more referee rule (inputs waiting for a free fighter) before that's worth measuring.
 
+### 5.5 Round five: inputs wait for a fighter that can act (2026-11-16)
+
+**The rule, built:** a press or motion starts only when its fighter is free (its move code is standing, crouching or
+walking), has held nothing for 6 frames, and 12 frames have passed since its own last button (the game takes about 9
+to show a button as a move, so "free" can't be trusted sooner). Until then it waits, holding nothing, and starts on
+the first frame it can, with the facing worked out then. If the window ends while it is still waiting, it's dropped
+and that side's state names it (`your_step_not_started`); held actions (block, forward, crouch) never wait. A side is
+told only about its own waiting or carried move.
+
+**Added to the state, for both fighters alike** (all of it on screen): `free_to_act`; `free_in_about`, an estimate
+from each move's measured length, since no counter for it was found in memory; `lands_in_about` for a fighter in the
+air; which side the opponent is on, including when the two overlap. 0x88 is hit stun while crouching. Codes 0x66, 0x94
+and 0x98 turned up in play and are still unnamed.
+
+**Checked:**
+- **Into every can't-act state:** all 13 presses and motions, by both fighters, sent 4, 14 and 28 frames into the
+  fighter's own fireball, heavy kick, jump, sweep and dragon punch, and into hit stun, a knockdown and a blocked heavy
+  kick: **591 of 598 came out once the fighter was free**, among them every dragon punch sent during a fireball's
+  recovery. The other 7 are one case: the fighter let go of block to start a move as the kick arrived, and was hit
+  out of it. That's the game, not a lost input.
+- **5.3's case suite:** 895 of 896. The two jumps after a close punch or kick now come out, which confirms 5.4's
+  guess about them; the one left is the 24-frame walk back.
+- **5.4's cuts:** 390 cuts, 158 mid-input, all 158 came out.
+
+**The round** (same agents, same instructions, with the dragon punch named as the answer to a jump): 30 windows,
+1,237 frames, a knockout (Ryu, 100 against 0), 1.3 minutes, no missed plan, both games agreeing.
+
+| | 5.1 | 5.2 | 5.3 | 5.4 | 5.5 |
+|---|---|---|---|---|---|
+| Windows | 26 | 70 | 84 | 60 | 30 |
+| Fireball steps, both sides | 65 | 50 | 43 | 23 | 12 |
+| Close-range attack steps sent | 25 | 13 | 29 | 25 | 8 |
+| Hits that weren't a fireball | 2 (agents' accounts) | 4 | 5 | 7 | 3: a jump kick, a dragon punch, a sweep |
+| Fireballs that caught a walk, a jump or an attack | (nearly all) | 3 | 5 | 3 | 4, and the knockout |
+| Dragon punch steps sent, and landed | 1, 0 | 2, 0 (three came out by accident) | 1, 0 | 5, 0 | 2, 1 |
+
+A short, one-sided round: Ryu threw 11 fireballs, every one came out, and Ken walked, jumped or threw into them. No
+agent reported a move silently lost; four steps were dropped while waiting, each named in the state, and resent.
+
+**Anti-air dragon punches, the point of this round:** not yet. Ryu's first was sent as Ken jumped but Ryu was still
+recovering from a fireball; it waited, came out late, and Ken's jump kick landed for 8. His second came out and hit
+Ken for 19, but on the ground, after the landing. A scripted check afterwards (the defender free when the jump starts,
+answering in the window that opens 6 frames later) says why: **a reactive dragon punch beat the jump once in six
+tries** (Ryu, a jump from 48 away: 16 to the jumper); in the other five both missed. It never lost: the defender took
+nothing in any of the six, the same as blocking, where a sweep took 8 to 15. The motion costs about 32 frames at this
+game's slow pad reading, plus the 6 of reaction and 9 of lag, against a 48-frame jump: it arrives as the jumper lands.
+So in this port an anti-air has to be committed early or set up (thrown as the opponent leaves the ground into a
+fireball), not reacted to; a sharper motion (shorter holds land 5 times in 6, not 6) would buy a few frames.
+
+**Still open:**
+- A carried jump kick holds a side's next plan for up to 30 frames (the kick comes late in the jump), which the agent
+  on the wrong end read as being unable to block. The state shows it; a jump can't block anyway.
+- The knockout hit wasn't listed in the last window's hits (health wraps past zero and the check skipped it).
+- The three unnamed codes.
+
+**Across five rounds,** each referee rule removed a way for a plan to fail for reasons that weren't the agent's:
+unseen fireballs (5.2), motions misread (5.3), moves cut by a window (5.4), inputs sent to a fighter that couldn't act
+(5.5). What's left to fail is judgement, which is the game. Round to round the same model won and lost by a wide
+margin on small differences in line (5.4's block-and-sweep, 5.5's patient fireballs), so one round says little about
+who is better: the next step is still graded scripted players over many rounds (8, phase 2).
+
 ## 6. The game file, and the law
 
 **How Yellow does it, and what would be the same:** the image stays out of the repository and packages, in private
