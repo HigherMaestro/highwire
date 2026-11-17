@@ -5,6 +5,11 @@ highwire.fun.
 
 ## Unreleased
 
+- **The audit log names a claim made with its buyback.** A fee claim and its buyback go out as one transaction, logged
+  as a trade, so the log looked as if the wallet had stopped claiming. Those lines now carry `"also": ["claim"]`; to
+  find every claim, look for "claim" in `action` or `also`. The action stays "trade", which is what the policy checked
+  and what the day's limit counts. Lines written before this have no `also`: a trade whose label starts "claim creator
+  fees and buy back" is one of them.
 - **Every page's header has a picture of its own.** The fee pages open on a cut crystal: the wire's light comes in,
   and leaves as five beams, one for each recipient in the page's own colours, each as wide and bright as that
   recipient's share of the fees the page is about (all of higher.fun's, one coin's, or one creator's coins'); a

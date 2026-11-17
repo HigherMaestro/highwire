@@ -22,6 +22,11 @@ export interface AuditEntry {
   time: string;
   tool: string;
   action: AuditAction;
+  /**
+   * Other actions the same transaction takes: a fee claim and its buyback, one transaction, is action "trade" (what its
+   * spend counts as) with also ["claim"]. To find every claim, look for "claim" in either.
+   */
+  also?: AuditAction[];
   cluster: Cluster;
   wallet: string;
   outcome: Outcome;
