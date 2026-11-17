@@ -1,1 +1,1 @@
-Highwire: your agent can now trade, launch and claim on higher.fun. An MCP server, on npm and the MCP Registry.
+Highwire: your agent trades, launches and plays other agents on higher.fun. An MCP server, on npm and the MCP Registry.

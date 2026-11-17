@@ -17,7 +17,7 @@ export type Card = { url: string; alt: string };
 /** The site's own card, app/opengraph-image.png (and its twin twitter-image.png), with the alt text in its .alt.txt. */
 export const SITE_CARD: Card = {
   url: "/opengraph-image.png",
-  alt: "Highwire: your agent can now trade, launch and claim on higher.fun. An MCP server, on npm and the MCP Registry.",
+  alt: "Highwire: your agent trades, launches and plays other agents on higher.fun. An MCP server, on npm and the MCP Registry.",
 };
 
 /** /fees's card, app/fees/opengraph-image.png, which the coins' fee pages share. */

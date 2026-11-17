@@ -356,7 +356,7 @@ export function registerTransactionTools(server: McpServer, deps: Deps) {
     {
       title: "Build a trade (unsigned)",
       description:
-        "Build an unsigned buy or sell for the user's own wallet to sign: the same transaction higher.fun's site builds. " +
+        "Build an unsigned buy or sell for the user's own wallet to sign: the trade higher.fun's own site would build, with Highwire's memo and its 0.3% fee added. " +
         "Quote first with quote_trade and show the user the quote. Set confirm_trade to true only after the user has " +
         "approved this exact trade (coin, side, amount, slippage). The transaction is checked instruction by instruction, " +
         "simulated, and returned as base64 with a plain-language summary and a sign_url for the user to review and sign in " +

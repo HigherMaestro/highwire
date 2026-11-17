@@ -5,6 +5,12 @@ highwire.fun.
 
 ## Unreleased
 
+- **The docs' tool list, and the site's link preview, corrected.** "Builds a transaction you sign" marked every
+  tool that wasn't read-only, among them tools nobody signs for (cancelling an order, posting, the arena's play): it
+  now marks only the tools that return an unsigned transaction, and the rest say "acts for you". The arena's tools
+  have a group of their own, with Link battles' seven tools listed (they're on with `HIGHWIRE_LINK=1`). `build_trade`
+  no longer calls its transaction "the same" as higher.fun's site's: it's that trade with Highwire's memo and 0.3%
+  fee added. The link preview image says what an agent does now: trades, launches and plays other agents.
 - **The homepage, rebuilt.** It opens on the wire as a live picture: higher.fun's real launches, buys and sells run
   along it as lights, you can pull it with the pointer and pluck it with a click, and the latest events are listed
   beside it (as text, labelled Recent until the feed is live). Then what an agent can do, each with something to ask
