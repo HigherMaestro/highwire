@@ -3,6 +3,9 @@ import type { Clock } from "./clock.ts";
 import { RelayError } from "./errors.ts";
 import { Referee, type CoinDirectory, type RefereeConfig } from "./arena/referee.ts";
 import { Registration, type RegistrationRpc } from "./registration.ts";
+import { LinkReferee, type LinkConfig } from "./link/referee.ts";
+import { LinkArena, linkFilmsVisible, type RatedEngine } from "./link/arena.ts";
+import { LinkStakeDesk } from "./link/stakes.ts";
 import type { Store } from "./store.ts";
 
 // The relay's routes, as one fetch handler (Request in, Response out), so any host can mount it: the relay's own
@@ -24,7 +27,28 @@ import type { Store } from "./store.ts";
 //   POST /api/arena/wager/join     { stake: "<lamports a side>", wait? }      (arena token) waits up to 40s to be paired
 //   GET  /api/arena/wager/state                                               (arena token) the fighter's series
 //   POST /api/arena/wager/leave                                               (arena token) leaves the queue
+//   GET  /api/link/rules           link battles: the format and the actions (404 without a link engine)
+//   POST /api/link/practice        (arena token) starts a battle against the house, or returns the one going
+//   GET  /api/link/practice/state?match=  (arena token) the fighter's practice view
+//   POST /api/link/practice/move   { match, action, line? }  (arena token) plays the turn; the next view comes back
+//   POST /api/link/practice/leave  (arena token)
+//   GET  /api/link/practice/<id>   the spectators' view of a practice battle, cached 2 seconds
+//   POST /api/link/join            { fallback, opponent?, wait? }  (arena token) rated link battles: queues, waits up to 40s
+//   GET  /api/link/state?match=&after=&wait=1                      (arena token) this side's view; long-polls
+//   POST /api/link/move            { match, turn, action, line? }  (arena token) this turn's decision, held until it resolves
+//   POST /api/link/leave           (arena token) a forfeit
+//   GET  /api/link/stake           practice stakes (devnet): the program, tiers and the desk's public keys (404 when off)
+//   POST /api/link/stake/join      { stake: "<lamports a side>", fallback, wait? }  (arena token) waits up to 40s to be paired
+//   GET  /api/link/stake/state     (arena token) the fighter's stake: its ticket, the battle to play, the signed result
+//   GET  /api/link/stake/results   (arena token) its battles that are over and not yet settled, each with the signed result
+//   GET  /api/link/stake/result/<battle id>   a finished battle's signed result, for anyone to settle with, cached 10 seconds
+//   POST /api/link/stake/leave     (arena token) leaves the queue
+//   GET  /api/link/stakes          the staked battles played, for the practice page (no amounts), cached 10 seconds
+//   GET  /api/link/match/<id>      a battle's spectators' view, cached 2 seconds
+//   GET  /api/link/matches         battles live and recent, for the lobby, cached 5 seconds
+//   GET  /api/link/leaderboard     link battles' ladder, cached 30 seconds
 //   GET  /api/arena/admin/flags (cheating signals), POST /api/arena/admin/hide { match, round, side } (legal takedowns)
+//   GET  /api/arena/admin/metrics?weeks=12 (free play's weekly numbers), POST /api/arena/admin/metrics/backfill
 //                                  (LINE_ADMIN_TOKEN; off without it)
 
 export interface RelayOptions {
@@ -39,12 +63,24 @@ export interface RelayOptions {
   /** Who's calling, for the per-caller limit on registration (an IP, from the host). */
   clientKey?: (req: Request) => string | null;
   referee?: RefereeConfig;
+  /** Link battles (docs/link-battles.md): the battle engine, passed in by the host; without it the routes don't exist. */
+  link?: LinkConfig;
 }
 
 export interface Relay {
   fetch(req: Request): Promise<Response>;
   referee: Referee;
   registration: Registration;
+  link: LinkReferee | null;
+  /** Rated link battles, when switched on and the engine plays them. */
+  linkArena: LinkArena | null;
+  /** Link battles' practice-stake desk, when it's configured and rated battles are on. */
+  linkStakes: LinkStakeDesk | null;
+  /**
+   * Whether a battle's screens may be shown, read from the store whether or not rated play is on: true once a rated
+   * battle is over, false while it's on, null when no rated battle has that id (a practice's, shown as filmed).
+   */
+  linkFilmsVisible(id: string): Promise<boolean | null>;
 }
 
 const json = (body: unknown, status = 200, cache = "no-store") =>
@@ -53,6 +89,10 @@ const json = (body: unknown, status = 200, cache = "no-store") =>
 export function createRelay(o: RelayOptions): Relay {
   const referee = new Referee(o.store, o.clock, o.coins, o.referee);
   const registration = new Registration(o.store, o.rpc, () => o.clock.now());
+  const link = o.link ? new LinkReferee(o.store, o.clock, o.link, (f, units) => referee.spend(f, units)) : null;
+  const rated = o.link?.rated && o.link.engine.startMatch && o.link.engine.resolveMatch ? o.link : null;
+  const linkArena = rated ? new LinkArena(o.store, o.clock, rated.engine as typeof rated.engine & RatedEngine, (f, units) => referee.spend(f, units), rated.defer, rated.arena, () => referee.outages()) : null;
+  const linkStakes = linkArena && o.link?.stakes ? new LinkStakeDesk(o.store, o.clock, o.link.stakes, linkArena, (f, units) => referee.spend(f, units)) : null;
 
   const body = async (req: Request): Promise<Record<string, unknown>> => {
     try {
@@ -118,11 +158,67 @@ export function createRelay(o: RelayOptions): Relay {
         return json({ skipped: "a sweep ran in the last 30 seconds" });
       }
       const swept = await referee.sweep();
-      return json(referee.wager ? { ...swept, wagers: await referee.wager.sweep() } : swept);
+      // Each of the other sweeps on its own: one that throws doesn't cost the rest their minute.
+      const each = async <T>(what: string, run: (() => Promise<T>) | null): Promise<T | { failed: true } | undefined> => {
+        if (!run) return undefined;
+        try {
+          return await run();
+        } catch (err) {
+          console.error(`sweep: ${what} failed: ${err instanceof Error ? err.message : String(err)}`);
+          return { failed: true };
+        }
+      };
+      const wagers = await each("the wager desk", referee.wager ? () => referee.wager!.sweep() : null);
+      const linkSwept = await each("link battles", linkArena ? () => linkArena.sweep() : null);
+      const stakesSwept = await each("link battles' stakes", linkStakes ? () => linkStakes.sweep() : null);
+      return json({ ...swept, ...(wagers ? { wagers } : {}), ...(linkSwept ? { link: linkSwept } : {}), ...(stakesSwept ? { linkStakes: stakesSwept } : {}) });
+    }
+    if (path === "/api/link" || path.startsWith("/api/link/")) {
+      if (!link) throw new RelayError("not_found", "Link battles aren't open yet.");
+      if (m === "GET" && path === "/api/link/rules") return json(await link.rules(), 200, "public, s-maxage=300");
+      if (m === "POST" && path === "/api/link/practice") return json(await link.practice(await fighter(req)));
+      if (m === "GET" && path === "/api/link/practice/state") return json(await link.practiceState(await fighter(req), url.searchParams.get("match") ?? undefined));
+      if (m === "POST" && path === "/api/link/practice/move") return json(await link.practiceMove(await fighter(req), await body(req)));
+      if (m === "POST" && path === "/api/link/practice/leave") return json(await link.practiceLeave(await fighter(req)));
+      const watch = /^\/api\/link\/practice\/([a-z2-9]{10})$/.exec(path);
+      if (m === "GET" && watch) return json(await link.watchPractice(watch[1]!), 200, "public, s-maxage=2");
+      if (path === "/api/link/stake" || path === "/api/link/stakes" || path.startsWith("/api/link/stake/")) {
+        if (!linkStakes) throw new RelayError("not_found", "Staking on link battles isn't open.");
+        if (m === "GET" && path === "/api/link/stake") return json(linkStakes.info(), 200, "public, s-maxage=60");
+        if (m === "GET" && path === "/api/link/stakes") return json({ played: await linkStakes.played() }, 200, "public, s-maxage=10");
+        if (m === "POST" && path === "/api/link/stake/join") return json(await linkStakes.join(await fighter(req), await body(req)));
+        if (m === "GET" && path === "/api/link/stake/state") return json(await linkStakes.state(await fighter(req)));
+        if (m === "GET" && path === "/api/link/stake/results") return json(await linkStakes.results(await fighter(req)));
+        const signed = /^\/api\/link\/stake\/result\/([0-9a-f]{64})$/.exec(path);
+        if (m === "GET" && signed) {
+          const r = await linkStakes.publicResult(signed[1]!);
+          if (!r) throw new RelayError("not_found", "That battle has no result to settle with (it isn't over, or it's already closed).");
+          return json(r, 200, "public, s-maxage=10");
+        }
+        if (m === "POST" && path === "/api/link/stake/leave") return json(await linkStakes.leave(await fighter(req)));
+        throw new RelayError("not_found", "No such route.");
+      }
+      if (linkArena) {
+        if (m === "POST" && path === "/api/link/join") return json(await linkArena.join(await fighter(req), await body(req)));
+        if (m === "GET" && path === "/api/link/state") {
+          const after = url.searchParams.get("after");
+          return json(await linkArena.state(await fighter(req), { match: url.searchParams.get("match") ?? undefined, after: after === null ? undefined : Number(after), wait: url.searchParams.get("wait") === "1" }));
+        }
+        if (m === "POST" && path === "/api/link/move") return json(await linkArena.move(await fighter(req), await body(req)));
+        if (m === "POST" && path === "/api/link/leave") return json(await linkArena.leave(await fighter(req)));
+        if (m === "GET" && path === "/api/link/queue") return json({ waiting: await linkArena.queueSize() }, 200, "public, s-maxage=5");
+        if (m === "GET" && path === "/api/link/matches") return json(await linkArena.matches(), 200, "public, s-maxage=5");
+        if (m === "GET" && path === "/api/link/leaderboard") return json(await linkArena.leaderboard(), 200, "public, s-maxage=30");
+        const one = /^\/api\/link\/match\/([a-z2-9]{10})$/.exec(path);
+        if (m === "GET" && one) return json(await linkArena.spectate(one[1]!), 200, "public, s-maxage=2");
+      }
+      throw new RelayError("not_found", "No such route.");
     }
     if (path.startsWith("/api/arena/admin/")) {
       if (!o.adminToken || bearer(req) !== o.adminToken) throw new RelayError("not_found", "No such route.");
       if (m === "GET" && path === "/api/arena/admin/flags") return json(await referee.flags());
+      if (m === "GET" && path === "/api/arena/admin/metrics") return json(await referee.metrics(Number(url.searchParams.get("weeks") ?? 12)));
+      if (m === "POST" && path === "/api/arena/admin/metrics/backfill") return json(await referee.backfillMetrics());
       if (m === "POST" && path === "/api/arena/admin/hide") {
         const b = await body(req);
         if (typeof b.match !== "string" || typeof b.round !== "number" || (b.side !== "a" && b.side !== "b")) throw new RelayError("bad_request", "match, round and side.");
@@ -136,6 +232,10 @@ export function createRelay(o: RelayOptions): Relay {
   return {
     referee,
     registration,
+    link,
+    linkArena,
+    linkStakes,
+    linkFilmsVisible: (id) => linkFilmsVisible(o.store, id),
     async fetch(req) {
       try {
         return await route(req);

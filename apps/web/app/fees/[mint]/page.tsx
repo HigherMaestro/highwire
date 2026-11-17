@@ -88,6 +88,7 @@ export default async function CoinFeesPage({ params }: Props) {
           figureSub={`paid in fees${usd(c.totalFeesSol, data.solUsd) ? ` (${usd(c.totalFeesSol, data.solUsd)})` : ""}${c.last24h && c.last24h.feesSol > 0 ? `, ${sol(c.last24h.feesSol)} SOL of it in the last 24 hours (estimated)` : ""}`}
           facts={facts}
           readAt={data.generatedAt}
+          split={c.byRecipient}
         >
           <ShareLinks
             url={`${SITE_URL}/fees/${c.mint}`}

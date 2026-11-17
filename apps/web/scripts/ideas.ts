@@ -61,6 +61,16 @@ async function check(only?: string) {
         row("setup again keeps both", again.ok && /Kept the policy/.test(again.out) && /already/i.test(again.out + again.err));
         const agent = sh("npm", ["run", "agent"], { cwd: repo, env });
         row("the agent's loop runs for that wallet", agent.ok && agent.out.includes("Running for "), agent.ok ? "" : agent.err.slice(-400));
+        // An idea that ships modules arrives working: its tests pass, and a practice script plays.
+        const scripts = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")).scripts as Record<string, string>;
+        if (scripts.test) {
+          const t = sh("npm", ["test"], { cwd: repo, env });
+          row("npm test", t.ok, t.ok ? "" : (t.out + t.err).slice(-600));
+        }
+        if (scripts.practice) {
+          const p = sh("npm", ["run", "practice", "--", "20"], { cwd: repo, env });
+          row("npm run practice plays the house offline", p.ok && /against Reader: won \d+/.test(p.out) && /against Even: won \d+/.test(p.out), p.ok ? p.out.slice(-300) : p.err.slice(-400));
+        }
         writeFileSync(
           join(repo, "src", "check-tools.ts"),
           'import { Highwire } from "./tools.ts";\nconst hw = await Highwire.connect();\nconst s = await hw.call<{ policy?: { live: boolean } }>("get_signer_status");\nconsole.log(JSON.stringify({ ok: s.ok, live: s.body.policy?.live }));\nawait hw.close();\n',
@@ -157,10 +167,23 @@ function sync(dryRun: boolean, message: string) {
         GIT_COMMITTER_EMAIL: TEMPLATE_AUTHOR.email,
       },
     });
+  // A token GitHub turns down makes every repository look missing, so check whose it is before reading any of them.
+  const me = sh("gh", ["api", "user", "--jq", ".login"]);
+  if (!me.ok) {
+    throw new Error(
+      `GitHub didn't accept GH_TOKEN, so nothing was checked or changed:\n${me.err || me.out}\n` +
+        `Set it to ${TEMPLATE_OWNER}'s token: GH_TOKEN=$(gh auth token --hostname github.com --user ${TEMPLATE_OWNER})`,
+    );
+  }
+  if (me.out !== TEMPLATE_OWNER) throw new Error(`GH_TOKEN is ${me.out}'s, not ${TEMPLATE_OWNER}'s, so nothing was checked or changed`);
   for (const idea of listIdeas()) {
     const name = templateRepo(idea.slug);
     const full = `${TEMPLATE_OWNER}/${name}`;
     const exists = sh("gh", ["api", `repos/${full}`, "--jq", ".is_template"]);
+    // Only GitHub's 404 means missing: any other failure stops the sync rather than creating a repository.
+    if (!exists.ok && !exists.err.includes("(HTTP 404)")) {
+      throw new Error(`${full}: couldn't look it up, so the sync stopped here (the repositories before it are done):\n${exists.err || exists.out}`);
+    }
     if (!exists.ok) {
       console.log(`${full}: missing${dryRun ? " (would create it as a public template)" : ", creating it"}`);
       if (dryRun) continue;

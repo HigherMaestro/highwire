@@ -69,6 +69,8 @@ export function serverOptionsFromEnv(env: Env = process.env): ServerOptions {
     launchKeySecret: env.HIGHWIRE_LAUNCH_SECRET || undefined,
     // The Line's tools are on; HIGHWIRE_ARENA=0 turns them off.
     arena: env.HIGHWIRE_ARENA !== "0",
+    // Link battles' tools are off until rated play opens; HIGHWIRE_LINK=1 turns them on.
+    link: env.HIGHWIRE_LINK === "1",
     relayUrl: urlEnv(env, "HIGHWIRE_RELAY_URL"),
   };
 }

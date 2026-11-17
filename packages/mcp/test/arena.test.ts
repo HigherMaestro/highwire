@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Keypair, VersionedTransaction, type Connection } from "@solana/web3.js";
 import bs58 from "bs58";
-import { agentPaths, LocalSigner, type ExecuteRequest, type ExecuteResult } from "highwire-agent";
+import { AuditLog, agentPaths, LocalSigner, type ExecuteRequest, type ExecuteResult } from "highwire-agent";
 import { createRelay, FakeClock, MemoryStore, type Relay } from "highwire-relay";
 import { FakeCoins, FakeRpc, launchTx, memoTx, MINT } from "highwire-relay/testing";
 import { createServer, type ServerOptions } from "../src/server.ts";
@@ -20,7 +20,7 @@ import { ALL_TOOLS, EXECUTE_TOOLS, FAKE_OPTIONS, HOSTED_TOOLS } from "./fake.ts"
 // relay, in process, with an in-memory store and a fake RPC. Nothing touches a network.
 
 const PLAY_TOOLS = ["line_join", "line_move", "line_register", "line_retire", "line_state"];
-const READ = ["line_leaderboard", "line_rules"];
+const READ = ["line_leaderboard", "line_practice", "line_rules"];
 const BLOCKHASH = bs58.encode(new Uint8Array(32).fill(9));
 
 /** A fake Solana RPC for building the registration transaction: fees, a blockhash and a clean simulation. */
@@ -188,11 +188,52 @@ test("the wager extension: passed in code, it registers its tools and gets every
   assert.equal(registered, 1, "the extension ran once, for the server with the signer");
 });
 
-test("registration goes through the user's policy: refused without \"register\", a dry run unless live", async () => {
+test("practice: anyone, even on the hosted endpoint, plays the house to the end with no wallet, and the replay is exact", async () => {
+  const w = world();
+  const hosted = await connect(w, { hosted: true });
+  const start = await call(hosted, "line_practice", { opponent: "even" });
+  assert.equal(start.isError, false, start.text);
+  assert.match(start.body.practice, /^p1\.even\.[ab]\.[0-9a-f]{32}$/);
+  assert.equal(start.body.round, 1);
+  assert.deepEqual(start.body.energy, { you: 30, them: 30 });
+  const id = start.body.practice;
+  const pulls: number[] = [];
+  let v = start.body;
+  while (v.round !== null) {
+    pulls.push(Math.min(3, v.energy.you));
+    const next = await call(hosted, "line_practice", { practice: id, pulls });
+    assert.equal(next.isError, false, next.text);
+    // The same id and pulls always give the same match: the house's moves come from the seed.
+    assert.deepEqual((await call(hosted, "line_practice", { practice: id, pulls })).body.rounds, next.body.rounds);
+    v = next.body;
+    if (v.round !== null) assert.equal(v.replay_url, undefined, "no replay link until the match ends");
+  }
+  // The finished match's replay page, on the site: the id and every pull, nothing else.
+  assert.equal(v.replay_url, `https://highwire.fun/line/try/${id}/${pulls.join("-")}`);
+  assert.ok(v.next_step.includes(v.replay_url));
+  assert.ok(["win", "draw", "loss"].includes(v.ending.result));
+  assert.equal(v.rounds.length, pulls.length);
+  assert.match(v.next_step, /line\.md/);
+  assert.deepEqual(w.calls, [], "practice reaches no network");
+
+  // A pull past the end is refused: by the tool when the match ended early, by the schema after all 15 rounds.
+  const tooMany = await hosted.callTool({ name: "line_practice", arguments: { practice: id, pulls: [...pulls, 0] } });
+  assert.equal(tooMany.isError, true);
+  if (pulls.length < 15) assert.match(JSON.stringify(tooMany.content), /ended after round/);
+  assert.equal((await hosted.callTool({ name: "line_practice", arguments: { practice: id, pulls: [31] } })).isError, true, "the schema caps a pull");
+  const broke = await call(hosted, "line_practice", { practice: id, pulls: [30, 30] });
+  assert.equal(broke.isError, true);
+  assert.match(broke.body.error, /Round 2: a pull can't be more than the 2 energy left/);
+  assert.equal((await call(hosted, "line_practice", { pulls: [1] })).isError, true, "pulls need an id");
+  assert.equal((await hosted.callTool({ name: "line_practice", arguments: { practice: "p1.reader.c.00", pulls: [] } })).isError, true);
+});
+
+test("registration goes through the user's policy first: a refusal or a dry run never asks The Line, so nothing is locked", async () => {
   const w = world();
   const key = Keypair.generate();
   const launch = w.rpc.add(launchTx({ payer: key.publicKey.toBase58() }));
   const args = { mint: MINT, launch_signature: launch, confirm: true };
+  const asked = () => w.calls.filter((c) => c === "relay.test/api/agents/challenge").length;
 
   const noRegister = await connect(w, { signer: new LocalSigner(key, home({ ...POLICY, actions: ["trade"] })) });
   const refused = await call(noRegister, "line_register", args);
@@ -200,13 +241,50 @@ test("registration goes through the user's policy: refused without \"register\",
   assert.equal(refused.body.code, "policy_refused");
   assert.match(refused.body.error, /registrations/);
 
-  // A second challenge for the same wallet and coin waits for the first to expire.
-  w.clock.advance(601_000);
   const dry = await connect(w, { signer: new LocalSigner(key, home({ ...POLICY, live: false })) });
   const out = await call(dry, "line_register", args);
   assert.equal(out.body.registered, false);
-  assert.equal(out.body.signer.status, "dry_run");
+  assert.equal(out.body.dry_run, true);
   assert.match(out.body.next_step, /dry run/);
+  assert.equal(asked(), 0, "The Line wasn't asked for a code");
+
+  // Fixed at once, it registers at once: no code was left waiting.
+  const signer = new LandingSigner(key, home(POLICY), w);
+  const live = await call(await connect(w, { signer }), "line_register", args);
+  assert.equal(live.body.registered, true, live.text);
+  assert.match(live.body.page, /\/line\/fighter\//);
+  assert.match(live.body.next_step, /line_join/);
+});
+
+test("a code someone else left waiting doesn't block the wallet's own registration", async () => {
+  const w = world();
+  const key = Keypair.generate();
+  const launch = w.rpc.add(launchTx({ payer: key.publicKey.toBase58() }));
+  // Anyone can ask for a code for this wallet and coin: it needs only public facts.
+  await w.relay.fetch(new Request("https://relay.test/api/agents/challenge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet: key.publicKey.toBase58(), mint: MINT, launchSignature: launch, secretHash: "0".repeat(64) }) }));
+  const client = await connect(w, { signer: new LandingSigner(key, home(POLICY), w) });
+  const reg = await call(client, "line_register", { mint: MINT, launch_signature: launch, confirm: true });
+  assert.equal(reg.body.registered, true, reg.text);
+});
+
+test("without launch_signature, registration reads the wallet's confirmed launch of that coin from its audit log", async () => {
+  const w = world();
+  const key = Keypair.generate();
+  const wallet = key.publicKey.toBase58();
+  const launch = w.rpc.add(launchTx({ payer: wallet }));
+  const paths = home(POLICY);
+  const signer = new LandingSigner(key, paths, w);
+  const client = await connect(w, { signer });
+  const missing = await call(client, "line_register", { mint: MINT, confirm: true });
+  assert.equal(missing.isError, true);
+  assert.match(missing.body.error, /no confirmed launch .*Pass launch_signature/);
+  const log = new AuditLog(paths.audit);
+  const entry = { action: "launch" as const, cluster: "mainnet" as const, sol: "0.02", lamports: "20000000", mint: MINT };
+  log.append({ ...entry, tool: "execute_launch", wallet, outcome: "sent", signature: "1".repeat(88) });
+  log.append({ ...entry, tool: "execute_launch", wallet: "someoneElse", outcome: "confirmed", signature: "2".repeat(88) });
+  log.append({ ...entry, tool: "execute_launch", wallet, outcome: "confirmed", signature: launch });
+  const reg = await call(client, "line_register", { mint: MINT, confirm: true });
+  assert.equal(reg.body.registered, true, reg.text);
 });
 
 test("an agent registers through the signer, plays the house to the end, and every reveal checks out", async () => {

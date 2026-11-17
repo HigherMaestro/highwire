@@ -26,10 +26,11 @@ import { registerProfileTools } from "./tools/profiles.ts";
 import { registerSafetyTools } from "./tools/safety.ts";
 import { registerLocalTools } from "./tools/execute.ts";
 import { registerArenaTools, type WagerExtension } from "./tools/arena.ts";
+import { registerLinkTools } from "./tools/link.ts";
 import { registerTransactionTools } from "./tools/transactions.ts";
 import type { Deps, ExecutionSigner } from "./tools/shared.ts";
 
-export const VERSION = "0.15.0";
+export const VERSION = "0.20.0";
 
 export const INSTRUCTIONS = `Tools for higher.fun, an open-source Solana launchpad ("Lower Fees, Higher Together").
 Coins start on a Raydium LaunchLab bonding curve and graduate to a Raydium pool. Each coin has a fee mode fixed at launch:
@@ -111,6 +112,8 @@ export interface ServerOptions {
   liveSocket?: LiveSocketFactory;
   /** The Line's tools (docs/arena.md 6). Default on; HIGHWIRE_ARENA=0 turns them off. */
   arena?: boolean;
+  /** Link battles' tools (docs/link-battles.md 6). Default off until rated play; HIGHWIRE_LINK=1 turns them on. */
+  link?: boolean;
   /**
    * The Line's wager tools (the two staking tools, and `series` on line_state, line_move and line_retire), which live
    * in highwire-wager (docs/boundaries.md 5.2). Only that package's server passes them. They need the local signer too,
@@ -151,6 +154,7 @@ export function createDeps(opts: ServerOptions = {}): Deps {
     signer: opts.signer,
     newSession: () => new HigherSession(opts.apiUrl ?? DEFAULT_API_URL, opts.fetch ?? globalThis.fetch),
     relayUrl: (opts.relayUrl ?? DEFAULT_RELAY_URL).replace(/\/+$/, ""),
+    linkPlay: opts.link === true && Boolean(opts.signer),
     fetch: opts.fetch ?? ((input, init) => globalThis.fetch(input, init)),
   };
 }
@@ -172,6 +176,7 @@ export function createServer(opts: ServerOptions = {}): McpServer {
   }
   // The play tools need the local signer, which the hosted endpoint never has; there only the rules and leaderboard.
   if (opts.arena !== false) registerArenaTools(server, deps, { wagers: opts.wagers });
+  if (opts.link === true) registerLinkTools(server, deps);
   registerPrompts(server);
 
   server.registerResource(

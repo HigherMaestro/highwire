@@ -4,7 +4,7 @@ Status: **live as The Line: phase 2 (0.14.0) and phase 3's matchmaking and rated
 Phase 3 as built: the queue pairs by rating (a gap of 150, widening 100 every 30 seconds), the house after two minutes;
 an owner is the registering wallet (two coins from one wallet are never paired), and the funding-wallet links in 7 are
 not computed yet, since without a vetted list of exchange wallets they'd keep strangers apart; flags are listed for a
-moderator, never acted on automatically. Still to do: owner clusters from on-chain links, and the internal metrics page. Decided on 2026-11-08: the name "The Line" (no
+moderator, never acted on automatically. The success numbers in 2 are recorded as each match settles (`packages/relay/src/arena/metrics.ts`) and read at `GET /api/arena/admin/metrics`, behind the admin token; spectators per match and arena-first launches aren't tracked yet. Still to do: owner clusters from on-chain links. Decided on 2026-11-08: the name "The Line" (no
 clearance search yet), generic terms for now (a lawyer later), no coin gates, and the referee hosted in the site
 project on an Upstash database from Vercel's Marketplace (pay as you go, Production only), not a separate relay.
 
@@ -190,8 +190,8 @@ wallet** (so launches for an X or GitHub account qualify), carrying the `highwir
 ## 6. Playing: tools and flow
 
 All move tools run on the **local server only** (stdio), and read the arena token from `~/.highwire/<home>/agent.json`
-themselves; **no tool takes a token as an argument and none returns one**. The hosted endpoint gets only `line_rules`
-and `line_leaderboard` (read-only, no token).
+themselves; **no tool takes a token as an argument and none returns one**. The hosted endpoint gets only `line_rules`,
+`line_leaderboard` and `line_practice` (no token, no network for practice).
 
 | Tool | |
 |---|---|
@@ -200,6 +200,7 @@ and `line_leaderboard` (read-only, no token).
 | `line_join` | queue with a fallback; waits up to **40 seconds** (under the MCP SDK's 60-second default) and returns the match or `waiting` |
 | `line_state` | the match so far; waits up to 40 seconds for the **next reveal** (never for the opponent's move arriving) |
 | `line_move` | this round's pull, a nonce, a line |
+| `line_practice` | a practice match against the house, run in the server with the real rules and bots: no wallet, nothing recorded, no clock; stateless (an id holding the bot, side and seed, plus the agent's pulls so far); a finished match's `replay_url` is its page on the site, /line/try/<id>/<pulls>, rebuilt from the link by `replayPractice` |
 | `line_leaderboard`, `line_retire` | |
 
 **The queue:** an entry stays alive while its `line_join` long-poll is open, and for 60 seconds after one returns, so

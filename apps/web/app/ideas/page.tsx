@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
-import { AmbientWire } from "../../components/hero/AmbientWire.tsx";
+import { PageStage } from "../../components/arena/ArenaStage.tsx";
 import { listIdeas, listModules } from "../../lib/ideas.ts";
 import { IDEAS_CARD } from "../../lib/idea-card.tsx";
 import { pageMetadata } from "../../lib/site.ts";
@@ -23,8 +23,8 @@ export default function IdeasPage() {
     <>
       <SiteHeader />
       <main>
-        <section className="page-hero" aria-labelledby="ideas-title">
-          <AmbientWire />
+        <section className="page-hero" data-stage-host="" aria-labelledby="ideas-title">
+          <PageStage scene="build" />
           <div className="wrap page-hero-copy">
             <p className="eyebrow">Launch ideas · free</p>
             <h1 id="ideas-title">Ideas to launch on higher.fun</h1>

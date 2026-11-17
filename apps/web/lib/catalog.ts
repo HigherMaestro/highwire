@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { HOSTED_TRANSACTION_TOOLS, LIST_ONLY_SIGNER, createServer } from "highwire-mcp";
+import { BUILD_TOOL_NAMES, HOSTED_TRANSACTION_TOOLS, LIST_ONLY_SIGNER, createServer } from "highwire-mcp";
 
 // Everything the site says about the server comes from the server itself, so the
 // pages can't drift from what an agent actually sees. No network involved.
@@ -93,6 +93,9 @@ function firstSentence(text: string): string {
   return (match ? match[0] : text).trim();
 }
 
+/** The tools that return an unsigned transaction for the user's own wallet to sign. */
+const BUILDS = new Set<string>([...BUILD_TOOL_NAMES, "build_transfer"]);
+
 let cached: Promise<Catalog> | undefined;
 
 export function getCatalog(): Promise<Catalog> {
@@ -109,10 +112,10 @@ async function connect(opts: Parameters<typeof createServer>[0]) {
 }
 
 async function load(): Promise<Catalog> {
-  // The full local server (with the local signer's tools, listed from a signer that holds no key), and the hosted one
-  // as the /mcp route configures it.
+  // The full local server (with the local signer's tools, listed from a signer that holds no key, and Link battles'
+  // tools, which HIGHWIRE_LINK=1 turns on), and the hosted one as the /mcp route configures it.
   const [client, hostedClient] = await Promise.all([
-    connect({ signer: LIST_ONLY_SIGNER }),
+    connect({ signer: LIST_ONLY_SIGNER, link: true }),
     connect({ transactionTools: HOSTED_TRANSACTION_TOOLS, hosted: true }),
   ]);
   try {
@@ -128,7 +131,9 @@ async function load(): Promise<Catalog> {
       tools: tools.map((t) => {
         const readOnly = t.annotations?.readOnlyHint === true;
         const executes = t.annotations?.destructiveHint === true;
-        const builds = !readOnly && !executes;
+        // Only the tools that hand back an unsigned transaction: the rest of the tools that aren't read-only (orders,
+        // posts, the arena's play) act on their own, and nobody signs anything.
+        const builds = BUILDS.has(t.name);
         return {
           name: t.name,
           title: t.title ?? t.annotations?.title ?? t.name,
@@ -200,6 +205,12 @@ export const TOOL_GROUPS: { id: string; title: string; blurb: string; tools: str
     title: "Local signer",
     blurb: "Opt-in, on your own machine: signs and sends only inside the policy file you write, and dry-runs by default.",
     tools: ["get_signer_status", "execute_trade", "execute_launch", "execute_claim", "execute_transfer", "place_order", "list_orders", "cancel_order", "post_comment", "post_chat", "build_transfer"],
+  },
+  {
+    id: "arena",
+    title: "The arena",
+    blurb: "Games against other agents: The Line, and Link battles. The rules, the ladders and practice against the house, then a fighter to register and matches to play. Link battles' tools are on with HIGHWIRE_LINK=1.",
+    tools: ["line_rules", "line_leaderboard", "line_practice", "line_register", "line_join", "line_state", "line_move", "line_retire", "link_rules", "link_leaderboard", "link_practice", "link_join", "link_state", "link_move", "link_leave"],
   },
 ];
 

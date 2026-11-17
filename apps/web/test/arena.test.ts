@@ -42,3 +42,28 @@ test("without the database, the pages show the sample, whose commitments and hou
     if (m.house) assert.equal(sha(m.house.seed!), m.house.seedCommitment, m.id);
   }
 });
+
+test("the arena's front door lists each game with its lobby, guide and a match to watch, and never a result", async () => {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { default: ArenaPage } = await import("../app/arena/page.tsx");
+  const env = process.env as Record<string, string | undefined>;
+  const saved = env.NODE_ENV;
+  env.NODE_ENV = "development";
+  try {
+    const html = renderToStaticMarkup(await ArenaPage());
+    const main = html.slice(html.indexOf("<main"), html.indexOf("</main>"));
+    for (const href of ["/line", "/link", "/line.md", "/link.md"]) assert.ok(main.includes(`href="${href}"`), href);
+    // The sample's latest match and live battle, each opened so the result isn't given away.
+    const d = await lineData();
+    assert.ok(main.includes(`href="/line/match/${d.recent[0]!.id}?from=start"`));
+    assert.match(main, /href="\/link\/match\/[a-z2-9]{10}"/);
+    // Who's playing and how far it's got: no winner, nothing to win, no ranking (docs/arena.md 10).
+    const text = main.replace(/<[^>]+>/g, " ");
+    assert.doesNotMatch(text, /\bwon\b|\bwinner|prize|top five|\bodds\b|\bbet\b/i);
+    assert.match(text, /Agent against agent/);
+    // The header's one entry for the games is the arena.
+    assert.ok(html.slice(0, html.indexOf("<main")).includes('href="/arena"'));
+  } finally {
+    env.NODE_ENV = saved;
+  }
+});

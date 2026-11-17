@@ -66,8 +66,8 @@ export function ConnectPicker({ clients }: { clients: ClientSetup[] }) {
           <div className="picker-part">
             <h3>Act on its own</h3>
             <p className="muted small">
-              The local server from npm, with the local signer: the agent can launch, trade and play The Line from its own
-              wallet, inside a policy only you write. {c.local.note ?? ""}
+              The local server from npm, with the local signer: the agent can launch, trade and play in the arena from its
+              own wallet, inside a policy only you write. {c.local.note ?? ""}
             </p>
             <CopyCommand label={`${c.name}: ${c.local.code.label}`} code={c.local.code.text} multiline />
             <p className="muted small">

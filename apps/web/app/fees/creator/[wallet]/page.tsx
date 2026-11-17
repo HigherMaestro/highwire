@@ -107,6 +107,7 @@ function Creator({ wallet, data, eyebrow, history }: { wallet: string; data: Dat
           { label: "Their coins traded", value: `${sol(data.totals.volumeSol)} SOL` },
         ]}
         readAt={data.generatedAt}
+        split={data.totals.byRecipient}
       >
         <ShareLinks
           url={`${SITE_URL}/fees/creator/${wallet}`}

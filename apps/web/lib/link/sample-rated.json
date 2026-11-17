@@ -1,0 +1,1546 @@
+{
+ "matches": [
+  {
+   "match": "samplerat2",
+   "rated": true,
+   "house": false,
+   "sides": [
+    {
+     "name": "Wire Cat",
+     "kind": "fighter",
+     "fighter": "sample-fighter-a",
+     "clock_seconds": 480
+    },
+    {
+     "name": "Second",
+     "kind": "fighter",
+     "fighter": "sample-fighter-b",
+     "clock_seconds": 480
+    }
+   ],
+   "turn": 22,
+   "live": false,
+   "started_at": 1794759799185,
+   "ended": {
+    "reason": "knockout",
+    "winner": 1
+   },
+   "spectator": {
+    "live": false,
+    "turn": 22,
+    "sides": [
+     {
+      "species": "Blastoise",
+      "level": 50,
+      "hp_percent": 0,
+      "status": null,
+      "field": [],
+      "seen": [
+       "Charizard",
+       "Blastoise",
+       "Venusaur"
+      ],
+      "fainted": 3,
+      "hp": 0,
+      "max_hp": 186
+     },
+     {
+      "species": "Venusaur",
+      "level": 50,
+      "hp_percent": 54,
+      "status": null,
+      "field": [],
+      "seen": [
+       "Charizard",
+       "Venusaur",
+       "Blastoise"
+      ],
+      "fainted": 2,
+      "hp": 105,
+      "max_hp": 187
+     }
+    ],
+    "start": [
+     {
+      "species": "Charizard",
+      "level": 50,
+      "hp_percent": 100,
+      "status": null,
+      "field": [],
+      "seen": [
+       "Charizard"
+      ],
+      "fainted": 0,
+      "hp": 185,
+      "max_hp": 185
+     },
+     {
+      "species": "Charizard",
+      "level": 50,
+      "hp_percent": 100,
+      "status": null,
+      "field": [],
+      "seen": [
+       "Charizard"
+      ],
+      "fainted": 0,
+      "hp": 185,
+      "max_hp": 185
+     }
+    ],
+    "turns": [
+     {
+      "turn": 1,
+      "lines": [
+       "Wire Cat's Charizard used Flamethrower.",
+       "It's not very effective…",
+       "Second's Charizard used Flamethrower.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 67,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0,
+        "hp": 127,
+        "max_hp": 185
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 81,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0,
+        "hp": 154,
+        "max_hp": 185
+       }
+      ]
+     },
+     {
+      "turn": 2,
+      "lines": [
+       "Wire Cat's Charizard used Flamethrower.",
+       "It's not very effective…",
+       "Second's Charizard used Flamethrower.",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 52,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0,
+        "hp": 98,
+        "max_hp": 185
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 67,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0,
+        "hp": 127,
+        "max_hp": 185
+       }
+      ]
+     },
+     {
+      "turn": 3,
+      "lines": [
+       "Wire Cat's Charizard used Flamethrower.",
+       "It's not very effective…",
+       "Second's Charizard used Flamethrower.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 23,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0,
+        "hp": 43,
+        "max_hp": 185
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 52,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0,
+        "hp": 99,
+        "max_hp": 185
+       }
+      ]
+     },
+     {
+      "turn": 4,
+      "lines": [
+       "Wire Cat's Charizard used Flamethrower.",
+       "A critical hit!",
+       "It's not very effective…",
+       "Second's Charizard used Flamethrower.",
+       "A critical hit!",
+       "It's not very effective…",
+       "Wire Cat's Charizard fainted!"
+      ],
+      "after": [
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 0,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 1,
+        "hp": 0,
+        "max_hp": 185
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 23,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0,
+        "hp": 44,
+        "max_hp": 185
+       }
+      ]
+     },
+     {
+      "turn": 5,
+      "lines": [
+       "Wire Cat's side sent out Blastoise."
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 100,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise"
+        ],
+        "fainted": 1,
+        "hp": 186,
+        "max_hp": 186
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 23,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0,
+        "hp": 44,
+        "max_hp": 185
+       }
+      ]
+     },
+     {
+      "turn": 6,
+      "lines": [
+       "Second's side sent out Venusaur.",
+       "Wire Cat's Blastoise used Surf.",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 100,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise"
+        ],
+        "fainted": 1,
+        "hp": 186,
+        "max_hp": 186
+       },
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 85,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur"
+        ],
+        "fainted": 0,
+        "hp": 162,
+        "max_hp": 187
+       }
+      ]
+     },
+     {
+      "turn": 7,
+      "lines": [
+       "Wire Cat's side sent out Venusaur.",
+       "Second's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 90,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1,
+        "hp": 170,
+        "max_hp": 187
+       },
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 85,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur"
+        ],
+        "fainted": 0,
+        "hp": 162,
+        "max_hp": 187
+       }
+      ]
+     },
+     {
+      "turn": 8,
+      "lines": [
+       "Second's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's not very effective…",
+       "Wire Cat's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 81,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1,
+        "hp": 154,
+        "max_hp": 187
+       },
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 77,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur"
+        ],
+        "fainted": 0,
+        "hp": 147,
+        "max_hp": 187
+       }
+      ]
+     },
+     {
+      "turn": 9,
+      "lines": [
+       "Second's side sent out Blastoise.",
+       "Wire Cat's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's super effective!"
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 81,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1,
+        "hp": 154,
+        "max_hp": 187
+       },
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 15,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 0,
+        "hp": 30,
+        "max_hp": 186
+       }
+      ]
+     },
+     {
+      "turn": 10,
+      "lines": [
+       "Wire Cat's side sent out Blastoise.",
+       "Second's Blastoise used Surf.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 71,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1,
+        "hp": 133,
+        "max_hp": 186
+       },
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 15,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 0,
+        "hp": 30,
+        "max_hp": 186
+       }
+      ]
+     },
+     {
+      "turn": 11,
+      "lines": [
+       "Second's Blastoise used Surf.",
+       "It's not very effective…",
+       "Wire Cat's Blastoise used Surf.",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 56,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1,
+        "hp": 106,
+        "max_hp": 186
+       },
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 2,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 0,
+        "hp": 2,
+        "max_hp": 186
+       }
+      ]
+     },
+     {
+      "turn": 12,
+      "lines": [
+       "Second's side sent out Venusaur.",
+       "Wire Cat's Blastoise used Surf.",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 56,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1,
+        "hp": 106,
+        "max_hp": 186
+       },
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 65,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 0,
+        "hp": 122,
+        "max_hp": 187
+       }
+      ]
+     },
+     {
+      "turn": 13,
+      "lines": [
+       "Wire Cat's side sent out Venusaur.",
+       "Second's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 73,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1,
+        "hp": 137,
+        "max_hp": 187
+       },
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 65,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 0,
+        "hp": 122,
+        "max_hp": 187
+       }
+      ]
+     },
+     {
+      "turn": 14,
+      "lines": [
+       "Wire Cat's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's not very effective…",
+       "Second's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 65,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1,
+        "hp": 122,
+        "max_hp": 187
+       },
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 54,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 0,
+        "hp": 105,
+        "max_hp": 187
+       }
+      ]
+     },
+     {
+      "turn": 15,
+      "lines": [
+       "Second's side sent out Blastoise.",
+       "Wire Cat's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's super effective!",
+       "Second's Blastoise fainted!"
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 65,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1,
+        "hp": 122,
+        "max_hp": 187
+       },
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 0,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 1,
+        "hp": 0,
+        "max_hp": 186
+       }
+      ]
+     },
+     {
+      "turn": 16,
+      "lines": [
+       "Second's side sent out Charizard."
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 65,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1,
+        "hp": 122,
+        "max_hp": 187
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 23,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 1,
+        "hp": 44,
+        "max_hp": 185
+       }
+      ]
+     },
+     {
+      "turn": 17,
+      "lines": [
+       "Second's Charizard used Flamethrower.",
+       "It's super effective!",
+       "Wire Cat's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 8,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1,
+        "hp": 16,
+        "max_hp": 187
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 15,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 1,
+        "hp": 27,
+        "max_hp": 185
+       }
+      ]
+     },
+     {
+      "turn": 18,
+      "lines": [
+       "Second's Charizard used Flamethrower.",
+       "It's super effective!",
+       "Wire Cat's Venusaur fainted!"
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 0,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 2,
+        "hp": 0,
+        "max_hp": 187
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 15,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 1,
+        "hp": 27,
+        "max_hp": 185
+       }
+      ]
+     },
+     {
+      "turn": 19,
+      "lines": [
+       "Wire Cat's side sent out Blastoise."
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 56,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 2,
+        "hp": 106,
+        "max_hp": 186
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 15,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 1,
+        "hp": 27,
+        "max_hp": 185
+       }
+      ]
+     },
+     {
+      "turn": 20,
+      "lines": [
+       "Second's Charizard used Flamethrower.",
+       "It's not very effective…",
+       "Wire Cat's Blastoise used Seismic Toss.",
+       "Second's Charizard fainted!"
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 40,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 2,
+        "hp": 75,
+        "max_hp": 186
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 0,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 2,
+        "hp": 0,
+        "max_hp": 185
+       }
+      ]
+     },
+     {
+      "turn": 21,
+      "lines": [
+       "Second's side sent out Venusaur."
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 40,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 2,
+        "hp": 75,
+        "max_hp": 186
+       },
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 54,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 2,
+        "hp": 105,
+        "max_hp": 187
+       }
+      ]
+     },
+     {
+      "turn": 22,
+      "lines": [
+       "Second's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's super effective!",
+       "Wire Cat's Blastoise fainted!"
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 0,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 3,
+        "hp": 0,
+        "max_hp": 186
+       },
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 54,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 2,
+        "hp": 105,
+        "max_hp": 187
+       }
+      ]
+     }
+    ]
+   },
+   "lines": [
+    {
+     "turn": 1,
+     "side": 0,
+     "line": "good luck from 0"
+    },
+    {
+     "turn": 1,
+     "side": 1,
+     "line": "good luck from 1"
+    }
+   ]
+  },
+  {
+   "match": "sampleliv3",
+   "rated": true,
+   "house": false,
+   "sides": [
+    {
+     "name": "Wire Cat",
+     "kind": "fighter",
+     "fighter": "sample-fighter-a",
+     "clock_seconds": 480
+    },
+    {
+     "name": "Second",
+     "kind": "fighter",
+     "fighter": "sample-fighter-b",
+     "clock_seconds": 480
+    }
+   ],
+   "turn": 10,
+   "live": true,
+   "started_at": 1794759799185,
+   "ended": null,
+   "spectator": {
+    "live": true,
+    "turn": 10,
+    "sides": [
+     {
+      "species": "Blastoise",
+      "level": 50,
+      "hp_percent": 71,
+      "status": null,
+      "field": [],
+      "seen": [
+       "Charizard",
+       "Blastoise",
+       "Venusaur"
+      ],
+      "fainted": 1
+     },
+     {
+      "species": "Blastoise",
+      "level": 50,
+      "hp_percent": 15,
+      "status": null,
+      "field": [],
+      "seen": [
+       "Charizard",
+       "Venusaur",
+       "Blastoise"
+      ],
+      "fainted": 0
+     }
+    ],
+    "start": [
+     {
+      "species": "Charizard",
+      "level": 50,
+      "hp_percent": 100,
+      "status": null,
+      "field": [],
+      "seen": [
+       "Charizard"
+      ],
+      "fainted": 0
+     },
+     {
+      "species": "Charizard",
+      "level": 50,
+      "hp_percent": 100,
+      "status": null,
+      "field": [],
+      "seen": [
+       "Charizard"
+      ],
+      "fainted": 0
+     }
+    ],
+    "turns": [
+     {
+      "turn": 1,
+      "lines": [
+       "Wire Cat's Charizard used Flamethrower.",
+       "It's not very effective…",
+       "Second's Charizard used Flamethrower.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 67,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 81,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0
+       }
+      ]
+     },
+     {
+      "turn": 2,
+      "lines": [
+       "Wire Cat's Charizard used Flamethrower.",
+       "It's not very effective…",
+       "Second's Charizard used Flamethrower.",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 52,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 67,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0
+       }
+      ]
+     },
+     {
+      "turn": 3,
+      "lines": [
+       "Wire Cat's Charizard used Flamethrower.",
+       "It's not very effective…",
+       "Second's Charizard used Flamethrower.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 23,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 52,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0
+       }
+      ]
+     },
+     {
+      "turn": 4,
+      "lines": [
+       "Wire Cat's Charizard used Flamethrower.",
+       "A critical hit!",
+       "It's not very effective…",
+       "Second's Charizard used Flamethrower.",
+       "A critical hit!",
+       "It's not very effective…",
+       "Wire Cat's Charizard fainted!"
+      ],
+      "after": [
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 0,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 1
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 23,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0
+       }
+      ]
+     },
+     {
+      "turn": 5,
+      "lines": [
+       "Wire Cat's side sent out Blastoise."
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 100,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise"
+        ],
+        "fainted": 1
+       },
+       {
+        "species": "Charizard",
+        "level": 50,
+        "hp_percent": 23,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard"
+        ],
+        "fainted": 0
+       }
+      ]
+     },
+     {
+      "turn": 6,
+      "lines": [
+       "Second's side sent out Venusaur.",
+       "Wire Cat's Blastoise used Surf.",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 100,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise"
+        ],
+        "fainted": 1
+       },
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 85,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur"
+        ],
+        "fainted": 0
+       }
+      ]
+     },
+     {
+      "turn": 7,
+      "lines": [
+       "Wire Cat's side sent out Venusaur.",
+       "Second's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 90,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1
+       },
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 85,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur"
+        ],
+        "fainted": 0
+       }
+      ]
+     },
+     {
+      "turn": 8,
+      "lines": [
+       "Second's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's not very effective…",
+       "Wire Cat's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 81,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1
+       },
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 77,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur"
+        ],
+        "fainted": 0
+       }
+      ]
+     },
+     {
+      "turn": 9,
+      "lines": [
+       "Second's side sent out Blastoise.",
+       "Wire Cat's Venusaur used Razor Leaf.",
+       "A critical hit!",
+       "It's super effective!"
+      ],
+      "after": [
+       {
+        "species": "Venusaur",
+        "level": 50,
+        "hp_percent": 81,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1
+       },
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 15,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 0
+       }
+      ]
+     },
+     {
+      "turn": 10,
+      "lines": [
+       "Wire Cat's side sent out Blastoise.",
+       "Second's Blastoise used Surf.",
+       "A critical hit!",
+       "It's not very effective…"
+      ],
+      "after": [
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 71,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Blastoise",
+         "Venusaur"
+        ],
+        "fainted": 1
+       },
+       {
+        "species": "Blastoise",
+        "level": 50,
+        "hp_percent": 15,
+        "status": null,
+        "field": [],
+        "seen": [
+         "Charizard",
+         "Venusaur",
+         "Blastoise"
+        ],
+        "fainted": 0
+       }
+      ]
+     }
+    ]
+   },
+   "lines": [
+    {
+     "turn": 1,
+     "side": 0,
+     "line": "good luck from 0"
+    },
+    {
+     "turn": 1,
+     "side": 1,
+     "line": "good luck from 1"
+    }
+   ]
+  }
+ ],
+ "lobby": {
+  "live": [
+   {
+    "match": "sampleliv3",
+    "rated": true,
+    "house": false,
+    "sides": [
+     {
+      "name": "Wire Cat",
+      "kind": "fighter",
+      "fighter": "sample-fighter-a",
+      "clock_seconds": 480
+     },
+     {
+      "name": "Second",
+      "kind": "fighter",
+      "fighter": "sample-fighter-b",
+      "clock_seconds": 480
+     }
+    ],
+    "turn": 10,
+    "live": true,
+    "ended": null,
+    "started_at": 1794759799185
+   }
+  ],
+  "recent": [
+   {
+    "match": "samplerat2",
+    "rated": true,
+    "house": false,
+    "sides": [
+     {
+      "name": "Wire Cat",
+      "kind": "fighter",
+      "fighter": "sample-fighter-a",
+      "clock_seconds": 480
+     },
+     {
+      "name": "Second",
+      "kind": "fighter",
+      "fighter": "sample-fighter-b",
+      "clock_seconds": 480
+     }
+    ],
+    "turn": 22,
+    "live": false,
+    "ended": {
+     "reason": "knockout",
+     "winner": 1
+    },
+    "started_at": 1794759799185
+   }
+  ],
+  "ladder": {
+   "format": "colosseum-1",
+   "ranked": [],
+   "fighters": [
+    {
+     "fighter": "sample-fighter-a",
+     "name": "Wire Cat",
+     "ticker": "WCAT",
+     "rating": 1447,
+     "provisional": true,
+     "record": {
+      "rated": {
+       "win": 0,
+       "draw": 0,
+       "loss": 1
+      },
+      "unrated": {
+       "win": 0,
+       "draw": 0,
+       "loss": 0
+      },
+      "house": {
+       "win": 0,
+       "draw": 0,
+       "loss": 0
+      }
+     },
+     "operator": false
+    },
+    {
+     "fighter": "sample-fighter-b",
+     "name": "Second",
+     "ticker": "TWO",
+     "rating": 1553,
+     "provisional": true,
+     "record": {
+      "rated": {
+       "win": 1,
+       "draw": 0,
+       "loss": 0
+      },
+      "unrated": {
+       "win": 0,
+       "draw": 0,
+       "loss": 0
+      },
+      "house": {
+       "win": 0,
+       "draw": 0,
+       "loss": 0
+      }
+     },
+     "operator": false
+    }
+   ],
+   "house": {
+    "name": "The house",
+    "rating": 1500,
+    "record": {
+     "win": 0,
+     "draw": 0,
+     "loss": 0
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "highwire-link",
+  "version": "0.20.0",
+  "private": true,
+  "description": "Link battles' rig: two emulated Game Boys on an emulated link cable (SameBoy's core in WebAssembly), for the referee. Never published; the game itself is never in this package.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "highwire-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./film": {
+      "highwire-source": "./src/film.ts",
+      "types": "./dist/film.d.ts",
+      "default": "./dist/film.js"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && mkdir -p dist/wasm && cp src/wasm/sameboy.mjs dist/wasm/",
+    "build-wasm": "bash scripts/build-wasm.sh",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --conditions=highwire-source --test test/*.test.ts",
+    "phase0": "tsx --conditions=highwire-source scripts/phase0.ts",
+    "fuzz": "tsx --conditions=highwire-source scripts/fuzz.ts",
+    "skill": "tsx --conditions=highwire-source scripts/skill.ts",
+    "screens": "tsx --conditions=highwire-source scripts/screens.ts",
+    "practice": "tsx --conditions=highwire-source scripts/practice.ts",
+    "bootstrap": "tsx --conditions=highwire-source scripts/bootstrap.ts",
+    "film": "tsx --conditions=highwire-source scripts/film.ts"
+  }
+}

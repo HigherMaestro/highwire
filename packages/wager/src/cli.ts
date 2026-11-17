@@ -24,7 +24,9 @@ if (args[0] === "run" || args[0] === "series") {
 if (args.includes("--help") || args.length) {
   io.out(`highwire-wager ${VERSION}: Highwire's MCP server (stdio) with The Line's wager tools
 
-  highwire-wager           the server: everything highwire-mcp serves, plus line_stake, line_wagers and staked series
+  highwire-wager           the server: everything highwire-mcp serves, plus line_stake, line_wagers and staked series;
+                           and, with HIGHWIRE_LINK=1 on the cluster link battles' practice stakes are deployed on
+                           (devnet), link_stake, link_settle and link_wagers
 ${LINE_USAGE.split("\n").slice(1).join("\n")}
 
 Environment: as for highwire-mcp (npx -y highwire-mcp --help). Staking needs the local signer (HIGHWIRE_KEYPAIR_PATH),

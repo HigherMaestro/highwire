@@ -1,8 +1,11 @@
 import { Chain, createHttpConfig, DEFAULT_API_URL, evaluateRisk, HigherApi, HIGHWIRE_WALLET, NotFoundError, SolanaRpc, solToLamports } from "highwire-core";
-import { readWagerConfig, seriesOutcome, WAGER_PROGRAM_IDS } from "highwire-wager/chain";
+import { LINK_WAGER_PROGRAM_IDS, readWagerConfig, seriesOutcome, WAGER_PROGRAM_IDS } from "highwire-wager/chain";
 import { GENESIS_HASHES } from "highwire-agent";
 import { serverOptionsFromEnv } from "highwire-mcp";
 import { createRelay, JsonRpc, realClock, UpstashStore, type CoinDirectory, type Relay, type WagerConfig } from "highwire-relay";
+import { linkStakeConfig, settingOrOff } from "./stake-config.ts";
+import { after } from "next/server";
+import { lazyLinkEngine, linkConfigured, linkRatedOn } from "../link/lazy.ts";
 
 // The Line's referee, hosted in the site (docs/arena.md 8): highwire-relay over the Upstash database Vercel connected
 // as LINE_*, mainnet's RPC for registrations, and higher.fun's API with the rug check for coins. Null until the
@@ -114,7 +117,9 @@ export function lineRelay(): Relay | null {
   if (relay) return relay;
   const rpcUrl = serverOptionsFromEnv(process.env).rpcUrl ?? "https://api.mainnet-beta.solana.com";
   const options = {
-    store: new UpstashStore({ url: process.env.LINE_KV_REST_API_URL!, token: process.env.LINE_KV_REST_API_TOKEN! }),
+    // Link battles run the emulator in this process, holding it for a few seconds a turn (a step, or a film after one),
+    // so a store call that overlaps one gets well past that before it counts as the store not answering.
+    store: new UpstashStore({ url: process.env.LINE_KV_REST_API_URL!, token: process.env.LINE_KV_REST_API_TOKEN!, timeoutMs: 15_000 }),
     clock: realClock,
     rpc: new JsonRpc(rpcUrl),
     coins: coinDirectory(rpcUrl),
@@ -126,17 +131,36 @@ export function lineRelay(): Relay | null {
       operatorWallets: [HIGHWIRE_WALLET, ...(process.env.LINE_OPERATOR_WALLETS ?? "").split(",").map((w) => w.trim()).filter(Boolean)],
       // The house takes 4 seconds a round, so a match against it lasts about a minute and /line can show it live.
       housePaceMs: 4000,
-      wager: wagerConfig(),
+      // A setting that can't even be read (a tier that isn't a number, an RPC URL without a scheme) turns that desk
+      // off and nothing else: The Line, link battles and registration never go down with it.
+      wager: settingOrOff("wagering", wagerConfig),
     },
+    // Link battles' practice (docs/link-battles.md): the engine runs the emulator, from the private Blob store.
+    // Each turn is filmed after the answer (13.3), in the same function: after() starts it once the response is out.
+    // Rated battles resolve their turns the same way, after the answer that completes them (8.2). Off until LINK_RATED=1.
+    link: linkConfigured() ? { engine: lazyLinkEngine, agentSide: 1, defer: (task: () => Promise<unknown>) => after(task), rated: linkRatedOn(), stakes: settingOrOff("link battles' stakes", () => linkStakeConfig(process.env, LINK_WAGER_PROGRAM_IDS.devnet, linkRatedOn())) } : undefined,
   } satisfies Parameters<typeof createRelay>[0];
-  try {
-    relay = createRelay(options);
-  } catch (err) {
-    // A wager setting the desk refuses turns wagering off, not The Line.
-    console.error(`line: wagering is off: ${err instanceof Error ? err.message : String(err)}`);
-    relay = createRelay({ ...options, referee: { ...options.referee, wager: undefined } });
+  // A stake or wager setting a desk refuses turns that desk off, never The Line or link battles: link battles'
+  // stakes go first, then The Line's wagers, then both.
+  const noStakes = options.link ? { ...options.link, stakes: undefined } : undefined;
+  const noWager = { ...options.referee, wager: undefined };
+  const attempts: [string, Parameters<typeof createRelay>[0]][] = [
+    ["", options],
+    ["link battles' stakes are off", { ...options, link: noStakes }],
+    ["wagering is off", { ...options, referee: noWager }],
+    ["wagering and link battles' stakes are off", { ...options, link: noStakes, referee: noWager }],
+  ];
+  let failed: unknown = null;
+  for (const [what, o] of attempts) {
+    try {
+      relay = createRelay(o);
+      if (what) console.error(`line: ${what}: ${failed instanceof Error ? failed.message : String(failed)}`);
+      return relay;
+    } catch (err) {
+      failed = err;
+    }
   }
-  return relay;
+  throw failed;
 }
 
 /** The routes' handler: the referee, or a plain "not open yet" while the database isn't connected. */

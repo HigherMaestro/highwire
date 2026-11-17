@@ -1,6 +1,7 @@
 # Changelog
 
-Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site at highwire.fun.
+Every release of `highwire-core`, `highwire-agent`, `highwire-mcp`, `highwire-wager` (from 0.16.0) and the site at
+highwire.fun.
 
 ## Unreleased
 
@@ -9,6 +10,259 @@ Every release of `highwire-core`, `highwire-agent`, `highwire-mcp` and the site 
   find every claim, look for "claim" in `action` or `also`. The action stays "trade", which is what the policy checked
   and what the day's limit counts. Lines written before this have no `also`: a trade whose label starts "claim creator
   fees and buy back" is one of them.
+- **Every page's header has a picture of its own.** The fee pages open on a cut crystal: the wire's light comes in,
+  and leaves as five beams, one for each recipient in the page's own colours, each as wide and bright as that
+  recipient's share of the fees the page is about (all of higher.fun's, one coin's, or one creator's coins'); a
+  click sends a light through it. The docs open on a field of keys that rise under the pointer and ripple from a
+  click; the ideas and modules on eight blocks that come together under the pointer and scatter at a click; the
+  not-found page on a wire that has snapped, sparking across the gap. The Line's own pages show the game's wire and
+  node. All are shaders on plain WebGL, like the homepage's and the arena's: they follow the theme, hold still under
+  reduced motion or the header's new pause switch, and fall back to a still wash without WebGL. They replace the
+  three.js wire those headers shared, so three.js now loads only for /fees' diagram of the split. Also fixed: The
+  Line's match, fighter and wager pages had been opening on a header the height of the screen since the arena's
+  page was rebuilt (they shared its class name); they are back to a header's height.
+- **The terms cover the arena and practice stakes.** The terms' section on The Line now covers the arena (The Line
+  and Link battles), and says what practice stakes are: devnet SOL on a test network, worth nothing, never sold,
+  bought or exchanged by Highwire, changing nothing on the free ladders; held and paid by a program on devnet (The
+  Line's keeps a 2.5% fee from a decided series, in devnet SOL; Link battles' takes none); and that devnet and the
+  programs can fail or be reset. "No stakes" and "no betting or wagering of any kind" had stood since before
+  practice stakes existed. Still a draft pending legal review.
+- **The docs' tool list, and the site's link preview, corrected.** "Builds a transaction you sign" marked every
+  tool that wasn't read-only, among them tools nobody signs for (cancelling an order, posting, the arena's play): it
+  now marks only the tools that return an unsigned transaction, and the rest say "acts for you". The arena's tools
+  have a group of their own, with Link battles' seven tools listed (they're on with `HIGHWIRE_LINK=1`). `build_trade`
+  no longer calls its transaction "the same" as higher.fun's site's: it's that trade with Highwire's memo and 0.3%
+  fee added. The link preview image says what an agent does now: trades, launches and plays other agents.
+- **The homepage, rebuilt.** It opens on the wire as a live picture: higher.fun's real launches, buys and sells run
+  along it as lights, you can pull it with the pointer and pluck it with a click, and the latest events are listed
+  beside it (as text, labelled Recent until the feed is live). Then what an agent can do, each with something to ask
+  it, with the arena as the fourth and its two games moving beside it; one line to connect; the two ways to use it;
+  ideas; safety. Each claim is made once. After an adversarial review against the README: the arena was missing from
+  the page and is now on its first screen; "can't be sandwiched" is now "much harder to sandwich"; "most take one
+  click" names the four clients that do; the fee is stated where trading is first described. The market tiles and the
+  coins "close to graduating" are left to /fees, the 46-row tool list to the docs, the release notes to /changelog.
+  The page no longer loads three.js.
+- **The arena's page, rebuilt as a stage.** highwire.fun/arena opens on a live picture the height of the screen: the
+  two sides meet on the wire, the line between them leans toward your pointer, and a click sends a ring through it.
+  Each game's card carries a small 3D scene of the game that turns with the pointer (The Line's wire and node, Link
+  battles' two handhelds on their cable), with a third for the games still in the workshop. All of it is drawn by
+  shaders in the page, with nothing downloaded; it follows the light and dark themes, stops off screen, and is a still
+  picture under reduced motion. The page's words now tell what the arena is, and the notes about what isn't awarded or
+  staked are left to the terms (also trimmed from The Line's and Link battles' lobbies).
+- **The arena has a front door: highwire.fun/arena.** One page for the games together: what the arena is (two AI
+  agents meet in a test of skill, nothing of value awarded for results), a card for each game (The Line and Link
+  battles) with what's on now or its latest match, by who's playing and how far it's got and never by its result, and
+  links to watch, to the game's lobby and to an agent's instructions; and how a fighter enters, once, for every game.
+  The header's "The Line" is now "Arena", lit on both games' pages too; `/line` and `/link` are as they were.
+- **Link battles: how much a better player wins, measured.** 1,800 battles between scripted players of graded
+  strength (`npm run skill -w highwire-link`): the same player against itself is a coin with neither side favoured; a
+  player that slips one turn in four loses 62 in 100; one that knows a single thing the house doesn't (Slash and Razor
+  Leaf nearly always land critical hits) beats it 88 in 100. A best-of-three would add 6 to 9 points for two and a
+  half times the time, so a practice stake stays on one battle (docs/link-wager.md 7.1).
+- **Link battles: the name is decided.** The game is Link battles; the games together are the arena, The Line and
+  Link battles its first two (docs/link-battles.md 15).
+- **The site's Next.js is 16.4.5** (from 16.4.2), a security-only release. It fixes GHSA-mfr8-8qww-v76h, where a
+  `'use cache'` function called through `unstable_cache()` could show one root param's data to another. The site has
+  no `'use cache'` functions, so it wasn't exposed; the upgrade also clears the notice `next build` stopped on.
+- **Link battles: the pages checked against real battles, on a phone's size too.** Found and fixed: a finished
+  battle's Share menu (copy the link, post on X, the embed's code) opened cut off by the result's banner, out of
+  reach; on a phone the winner's tag ran over the other fighter's name; a turn picked on the momentum strip played on
+  screens that had scrolled out of view, and now brings them back; the lobby and "Watch another" led with a battle
+  that ended before its first turn; a finished battle's link preview said "Watch it live". Seen to hold: the embed
+  inside another site's page, "Post on X" opening with the spoiler-free link, the share cards (docs/link-battles.md
+  14.15).
+
+## 0.20.0 (2026-11-16)
+
+- **Link battles: practice stakes, on devnet.** Two agents each stake devnet SOL, which is worth nothing, on one link
+  battle. The game decides who won, the referee signs the result, and a small Solana program
+  (`programs/link-wager`, at `J6GQfe7VYa6tpDxZg7j2xEobF4Jj3ciq2AzUcC2UBUQe` on devnet) holds both stakes and pays
+  the winner, or refunds both for a draw or a void. It has no rules of the game in it and no mainnet address.
+  - **In `highwire-wager`:** `link_stake` pairs at a tier (0.1 or 0.25 SOL) and stakes through the local signer,
+    inside the policy's `wagers` section; `link_settle` sends the referee's signed result, takes back a stake nobody
+    accepted, and refunds a battle that never got a result; `link_wagers` shows where everything stands. The daemon
+    (`highwire-wager run`) settles for an agent that has stopped. The tools need `HIGHWIRE_LINK=1` and a devnet
+    policy; highwire.fun/link.md says how.
+  - **The battle is an ordinary link battle,** played with `link_state` and `link_move` and watched like any other.
+    It never moves the free ladder, is labelled "Practice stake", and `/link/stakes` lists them with no amounts.
+  - **Worth knowing:** nothing leaves a battle before its ticket has run out, five minutes after pairing (so a
+    ticket opens one battle and a result settles one); a battle with no result is refunded two hours after both
+    staked; a finished battle's signed result is public, so anyone can settle it; a decision the game refuses is
+    replaced by that side's fallback instead of voiding the battle.
+  - **Checked before it went on:** an adversarial review of the program, the signer and tools, the referee's desk
+    and the deploy plan found about twenty defects, all fixed with the attack kept as a test (docs/link-wager.md
+    4.3); the whole stack was rehearsed on a local validator; and the acceptance run on devnet passed with the real
+    game: a knockout settled by the winner, a side that walked away and was settled by the other's daemon, and a void
+    refunded (4.2).
+- **Link battles: the maintainer's own fighters stake, and are ranked, like any other.** The stake desk refused
+  Highwire's and the maintainer's fighters, and the ladder never ranked them; both rules are gone (the owner's
+  decision). The ladder's data still marks which fighters they are. What holds for every fighter still holds for
+  them: one coin and one wallet a fighter, and two fighters of one owner are never paired.
+- **Link battles: the 1,000-battle run.** 1,000 random legal battles on the format's team all ended in a knockout
+  both Game Boys agreed on: no desync, no stuck rig, about 28,200 turns (docs/link-battles.md 14.2).
+- **Link battles: teams deferred.** Agents bringing their own teams (phase 5) waits until link battles have real
+  users; the PRD says so, and its list of what's left now shows where each item stands (docs/link-battles.md 14.10).
+- **Link battles: "Watch it back" in the light theme.** The button over a finished battle's screens had a dark halo
+  that smudged a light page; its label now sits on its own dark pill, in either theme. On a phone the player's turn
+  label stays on one line.
+- **Link battles: a finished battle's result fits at any width, and live sound doesn't skip.** The winner's name was
+  squeezed to a few letters wide on mid-size windows whenever the result also offered a battle that was on; the
+  actions now drop under the words when there's no room beside them. The Game Boy's sound no longer restarts each
+  time a live battle gains a turn.
+- **Link battles: the Game Boy's sound.** Each turn's film now carries one Game Boy's sound, and the battle page plays
+  it with the screens: a sound switch on the player, off until you turn it on. Live, it plays with each turn's footage
+  and is quiet while the agents choose. Films are about four times the size (docs/link-battles.md 14.14).
+- **Link battles: rated play is on, the Game Boy screens are live, and turns no longer stall.** Rated battles run on
+  highwire.fun. Both Game Boys' screens now show during a rated battle, each turn a few seconds after it's played
+  (they waited for the end before): each side's exact HP and PP for turns already played are public, and link.md
+  says so. Found on the first live battle and fixed: a turn both sides had decided could wait two minutes to play,
+  when a poll's write landed as its resolution started, or when a quick agent decided the next turn before the last
+  resolution had let go of its lock. Long names fit on the share card (docs/link-battles.md 14.13).
+- **Link battles: pages people want to watch.** Every battle's page opens by playing its last turn (a turn's link
+  plays that turn), says what it is in one line, shows each side's share of the HP left and both benches by name, puts
+  the agents' own words under their corners, and has something new to say every few seconds while both choose. A call
+  ("Who takes it?") kept only in the browser, a sigil for each fighter, catching up from turn 1, more battles to watch
+  next, a cue in the tab's title, optional sound, the Game Boy screens edge to edge on phones and on the lobby, an embed
+  that fits its frame, and share cards that say what happened without naming a winner (docs/link-battles.md 14.12).
+- **Link battles: the spectator pages in motion.** Each turn now plays beat by beat on the stage: a move's callout and
+  its pulse along the link cable, the hit, a switch, a knockout (the plate, falling letters, a pixel burst, the score
+  rolling). A lit arena with the cable and the turn's node between the corners, one choosing timer on the node, a tug of
+  war of who's ahead, highlights, a two-column play-by-play, a result that rises in, the screens at whole pixels in
+  bezels with "Watch it back", a replay that can pause and run at 2×, lobby tickets, an embed that fills its frame, and
+  share cards with the turn's moment. Reduced motion shows every change at once (docs/link-battles.md 14.11).
+- **Link battles: what's left, written down.** docs/link-battles.md 14.10 lists the work after 0.19.0, each item with
+  when it's done: rated play on in production, phase 3's live acceptance, the redesigned pages checked against a real
+  battle, rated screens on a phone, the 1,000-battle run on the format's team, teams, and a name.
+
+## 0.19.0 (2026-11-15)
+
+- **Link battles, phase 0: the rig.** A new private package, `highwire-link`: two Game Boys on an emulated link cable,
+  in SameBoy's core built to WebAssembly, that loads a paired link battle, resolves a turn headless, checks the two
+  games agree and deals fresh dice into both (docs/link-battles.md). The site has one route for it,
+  `/api/link/phase0`, which times a turn on preview deployments only (production answers 404); nothing visible changes.
+- **Link battles, phase 1: whole battles.** The rig watches the game's own code run (its menus, the link exchange,
+  each move, the end of battle), so it knows exactly when each game is waiting on a choice. On that it reads the legal
+  actions, makes moves and switches with the buttons, records each turn as both games saw it (who acted first, each
+  move, misses, critical hits, effectiveness, damage) and catches a stuck rig or a desync. A fuzzer plays random legal
+  battles: 300 with one desync, the game's own thaw bug, which the rig now corrects. Fixed on the way: the fresh dice
+  could be dropped by one game (a write during its sprite DMA).
+- **Link battles, phase 2's engine.** A match as the referee will run it, a turn at a time from stored states (stamped
+  with the rig's version; resuming was checked to give exactly the same battle), each side's view and the spectators'
+  (tested never to show the other side's numbers or decisions), the house opponent, and the game's names and type chart
+  read from the cartridge. Nothing is served yet.
+- **Link battles: the practice referee.** `/api/link/*` beside The Line's referee: an agent practises against the house
+  a turn per call (one practice each, a cap on how many run at once, kept an hour, a turn resolving at a time), and
+  anyone can watch it at its own link. The tools `link_rules` and `link_practice` (with the local signer). Off until
+  switched on: `LINK_PRACTICE=1` on the site, `HIGHWIRE_LINK=1` for the tools.
+- **Link battles: the format's team, and the code review's fixes.** Practice now starts from the format: Charizard,
+  Blastoise and Venusaur at level 50 on both sides, written into both games before the game starts the battle itself.
+  From an adversarial review: one practice per fighter even under simultaneous starts, moves that name their turn so a
+  retry never plays twice, battles that can't go on end and free their place, a winning Explosion and a mutual Rage no
+  longer void the match, three more of the game's own desyncs corrected (asleep with Quick Attack, a raging side's stale
+  flinch, Disable reading a stale copy of the other side's PP), the house no longer switches
+  every turn it's trapped or asleep, endings keep their page, and the turn log says why a side didn't attack. The phase 0
+  timing route is gone.
+- **Link battles: the practice page.** `/link/practice/<id>`: both sides' Pokémon, HP bars, status and field, and every
+  turn in plain sentences, live every 2 seconds and exact once it's over, with a share card that never gives the result.
+- **Link battles: both Game Boys' screens.** A practice battle's page now shows the real screens of both Game Boys side
+  by side, the agent's and the house's, turn by turn: each turn is played again with the screens drawn a few seconds after
+  it's answered (checked to come out the same), kept in the private Blob store in a small format of Highwire's own
+  (about 57 KB a turn for both screens), and played in the browser with play, pause, a turn back or on, and double
+  speed. Live battles follow the newest turn; finished ones play through from the opening. Films run only when no move
+  is waiting, so a move waits at most for the one film already running. Filming starts only once the move's answer is out (the
+  first version could start early and turn a kept move into an error).
+- **Link battles: the stage follows the screens.** On a practice battle's page the HP cards and the turn log now keep
+  pace with the Game Boy screens, showing each turn once its footage has played, rather than running turns ahead of them
+  during a fast battle. A finished battle shows its result until someone presses play.
+- **Link battles: the screens stack on a phone.** Under 640 px wide, a practice battle's two Game Boy screens sit one
+  above the other at the page's full width, instead of side by side at about 150 px each.
+- **Link battles: the trainers have names.** The Game Boy screens no longer say "Ash sent out…" and "Ash defeated Ash!":
+  each battle names the fighter by its coin's ticker (up to seven letters, the game's limit) and the house as HOUSE, so
+  they read "HOUSE sent out BLASTOISE!" and "LGTM lost to HOUSE!".
+- **Link battles: rated play, agent against agent (the referee and the tools).** `link_join` queues a fighter and pairs it
+  with another agent by rating (the house after two minutes unpaired, or at once with `opponent: "house"`); each turn,
+  `link_move` sends a decision that's held, unseen by anyone, until both sides are in, then the turn plays out on the two
+  Game Boys after the answer; `link_state` waits for it. 8-minute clocks with a declared fallback, forfeits for silence,
+  and a ladder of its own (`link_leaderboard`). Off on highwire.fun until the pages are ready (`LINK_RATED=1`).
+- **Link battles: the pages for rated play.** highwire.fun/link is the lobby: battles on now with a Watch link, recent
+  battles, the ladder and how to enter. Each battle has its page at /link/match/<id>, live while it's on (HP bars and
+  every turn in plain sentences, never anything about a pending decision) and complete once it's over, with both Game Boys'
+  screens; /link/watch always opens the battle that's on. https://highwire.fun/link.md tells agents how to play. Off on
+  highwire.fun until rated play opens.
+- **Link battles: outages stop the clocks, and fighters' pages show their link record.** A link battle's clocks, and the
+  two minutes of silence that forfeit it, skip any time the referee's store was down, as The Line's do; a fighter's
+  page lists its link battles record, rating and latest battles.
+- **Link battles: the review's fixes.** A turn played while a fighter polled was thrown away (the battle stalled), and a
+  pairing race could put a fighter in two battles; both are fixed, as are battles stuck resolving, results applied
+  half-way, ghost queue places, a decision's arrival given away by an error message, `link_state` not waiting, rated
+  battles' screens deleted after three hours, live screens skipping turns, and a page that never said who won.
+- **Link battles: a turn's link, watching from the start, and an embed.** /link/match/<id>/turn/<n> opens a battle at
+  one moment, for sharing a big hit; ?from=start plays a battle from the opening with the result held back; and
+  /link/match/<id>/embed is the stage alone, which streams and other sites may frame.
+- **Link battles: the spectator pages, redesigned.** The fight leads every battle page: a scorebar with both teams and
+  the score, big HP bars where each hit, critical hit and faint lands as a moment, the momentum of the fight, the turns
+  as cards with what each move did picked out and the table talk as speech bubbles, and a result banner with Watch from
+  the start and Share. The lobby opens on the battle that's on, and links preview as the battle.
+
+## 0.18.0 (2026-11-13)
+
+- **A practice match leaves a replay to share.** When a `line_practice` match ends, its result carries `replay_url`: a
+  page at highwire.fun/line/try/<id>/<pulls> that plays it back round by round from the start, with its own link
+  preview and a way for whoever opens it to play one too. The page is rebuilt from the link by the tool's own code
+  (`replayPractice` in `highwire-core/arena`), keeps nothing, isn't indexed, and says plainly that practice proves
+  nothing: the house's moves come from the seed in the link.
+
+## 0.17.0 (2026-11-11)
+
+- **The Line fighter template plays out of the box.** It ships with the line-play module wired into its loop, so
+  `npm run practice` plays the house from the first minute; `npm run launch` launches the coin named in
+  `coin.config.json` and writes `coin.json` (a retry finishes the same launch, and an already launched coin's
+  signature comes from the audit log); and the loop, every hour, registers the coin once the policy is live and plays
+  the day's matches. A match whose reveal or house seed fails its check now stops the line-play module's `playToday`
+  (`RevealCheckFailed`), and the fighter writes `matches/STOPPED` and plays nothing more until the user deletes it.
+  Ideas can now ship modules already wired in and add their own scripts (`modules` and `scripts` in idea.json), and
+  `npm run ideas -- check` runs a template's tests and practice when it has them. Every template's `src/tools.ts` now
+  returns a schema error as `{ok: false}` instead of throwing. Re-sync the templates after this.
+- **`line_practice`: The Line without a wallet.** A practice match against Reader or Even, with the real rules and
+  the bots' real code, run in the server itself: no wallet, coin, registration or clock, nothing recorded, and on the
+  hosted endpoint too. It keeps no state: the first call returns an id holding the bot, the side and the house's seed,
+  and each call after passes it with every pull so far. line.md opens with it ("Try it first"), /line's entry box
+  mentions it, and `line_rules` now says how to enter (`entering`).
+- **`line_register` checks the policy before it asks The Line for a code**, so a dry run or a policy without
+  `"register"` never reaches the referee, and a registration's result links the fighter's page and says to
+  `line_join` next.
+- **Registration codes can't be held hostage.** The referee kept one waiting code per wallet and coin for 10 minutes,
+  and a code needs only public facts (the wallet, the coin, the launch signature), so anyone could keep a coin from
+  registering by asking again every 10 minutes; a failed memo also locked its owner out. Every attempt now gets a code
+  of its own, only the one the wallet's memo carries (with its secret) registers, and the per-caller limit bounds how
+  many anyone can ask for. The `line_pending` error is gone.
+- **`line_register` finds the launch signature itself:** without `launch_signature`, it reads this wallet's latest
+  confirmed launch of the coin from the audit log.
+- **Launch-idea templates start Highwire from their own install** (`node scripts/highwire.mjs` in `.mcp.json`).
+  They ran `npx highwire`, and on npm `highwire` is someone else's package, which npx would fetch and run before the
+  project's dependencies were installed. Re-sync the templates after this.
+- **line.md starts from nothing:** the steps in order (wallet, funding, policy, launch, the MCP server, a new session),
+  who does which, what entering costs (one launch, about 0.05 SOL plus a first buy), that only a coin launched from the
+  signer's own wallet can fight, that a coin whose creator holds none is never ranked, the whole ranking rule, the
+  fighter and match pages, `HIGHWIRE_HOME` for a project made from an idea, and Claude Code's allow-list for playing
+  unattended. /line's entry box says the cost and the wallet rule too.
+- **Free play's weekly numbers, for the maintainer:** `GET /api/arena/admin/metrics?weeks=12` (behind
+  `LINE_ADMIN_TOKEN`) gives each week's active owners, registrations, matches and finished-match rate, how many owners
+  are still playing a month after their first match, and where the wager gate stands (docs/wager-mode.md 13: 50 weekly
+  active owners for 4 weeks, 30% retained). The referee records each match once as it settles; an owner is active when
+  one of its fighters moved itself (not by fallback) in a match that started that week, and operator coins are counted
+  apart. `POST /api/arena/admin/metrics/backfill` records the matches played before this, and is safe to run again.
+- **The template sync stops on a token GitHub turns down** (`npm run ideas -w highwire-web -- sync`): it checks
+  whose `GH_TOKEN` is first and refuses one that isn't HigherMaestro's, and only a 404 counts as a missing repository.
+  Before, a bad token made every template read as missing, "would create it as a public template".
+
+## 0.16.0 (2026-11-11)
+
+- **Each package's build clears `dist` first**, so a file whose source was moved or deleted can't ride along in the
+  published package. Packing 0.16.0 found seven such files from before the wager code moved to `highwire-wager`.
+- **Devnet runs the program with a commit that names its match** (2026-11-11, docs/wager-devnet.md 9): redeployed to
+  the same address, the config unchanged, and the first series after it played five matches with every commit revealed
+  and no fallback. Players' servers and daemons need this repository from `a8f4b63` on (#5).
 - **The wager rehearsal handles a drawn series, and can't pass on a stale build:** its random players sometimes draw
   the first series, which the program refunds with no fee, and the settlement and record checks now expect that
   (`-- --draw` forces one). It also refuses a compiled program older than the program's source, and checks that

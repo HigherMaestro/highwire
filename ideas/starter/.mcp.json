@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "highwire": {
-      "command": "npx",
-      "args": ["highwire"],
+      "command": "node",
+      "args": ["scripts/highwire.mjs"],
       "env": {
         "HIGHWIRE_HOME": "${HOME}/.highwire/{{slug}}",
         "HIGHWIRE_KEYPAIR_PATH": "${HOME}/.highwire/{{slug}}/wallet.json"

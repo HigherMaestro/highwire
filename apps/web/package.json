@@ -1,6 +1,6 @@
 {
   "name": "highwire-web",
-  "version": "0.15.0",
+  "version": "0.20.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -12,7 +12,9 @@
     "test": "tsx --conditions=highwire-source --test test/*.test.ts",
     "smoke": "tsx scripts/smoke.ts",
     "ideas": "tsx --conditions=highwire-source scripts/ideas.ts",
-    "arena-sample": "tsx --conditions=highwire-source scripts/arena-sample.ts"
+    "arena-sample": "tsx --conditions=highwire-source scripts/arena-sample.ts",
+    "link-practice": "tsx --conditions=highwire-source scripts/link-practice.ts",
+    "link-rated": "tsx --conditions=highwire-source scripts/link-rated.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
@@ -20,15 +22,17 @@
     "@noble/hashes": "1.8.0",
     "@solana/web3.js": "1.99.0",
     "@vercel/analytics": "2.0.1",
+    "@vercel/blob": "2.8.2",
     "@wallet-standard/app": "1.1.1",
     "@wallet-standard/base": "1.1.1",
     "bs58": "6.0.0",
-    "highwire-agent": "0.15.0",
-    "highwire-core": "0.15.0",
-    "highwire-mcp": "0.15.0",
-    "highwire-relay": "0.15.0",
-    "highwire-wager": "0.15.0",
-    "next": "16.4.2",
+    "highwire-agent": "0.20.0",
+    "highwire-core": "0.20.0",
+    "highwire-link": "0.20.0",
+    "highwire-mcp": "0.20.0",
+    "highwire-relay": "0.20.0",
+    "highwire-wager": "0.20.0",
+    "next": "16.4.5",
     "react": "19.2.9",
     "react-dom": "19.2.9",
     "three": "0.186.1"

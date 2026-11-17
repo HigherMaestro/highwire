@@ -24,7 +24,7 @@ const config: NextConfig = {
   // Build the workspace packages from source, so the site needs no prior build
   // step (on Vercel either). Turbopack has no custom export conditions, so
   // these aliases stand in for the "highwire-source" condition.
-  transpilePackages: ["highwire-core", "highwire-agent", "highwire-mcp", "highwire-relay", "highwire-wager"],
+  transpilePackages: ["highwire-core", "highwire-agent", "highwire-mcp", "highwire-relay", "highwire-wager", "highwire-link"],
   turbopack: {
     root,
     resolveAlias: {
@@ -37,6 +37,10 @@ const config: NextConfig = {
       "highwire-agent": "../../packages/agent/src/index.ts",
       // The wager pages read series from the chain. Only this entry: the package's tools and daemon never reach the site.
       "highwire-wager/chain": "../../packages/wager/src/chain.ts",
+      // Link battles' rig (docs/link-battles.md): its engine, loaded on the first link call (lib/link/lazy.ts).
+      // The films' decoder, for the practice page's player in the browser: no emulator, no Node.
+      "highwire-link/film": "../../packages/link/src/film.ts",
+      "highwire-link": "../../packages/link/src/index.ts",
       "highwire-mcp/ideas": "../../packages/mcp/src/ideas.ts",
       "highwire-mcp": "../../packages/mcp/src/index.ts",
     },
@@ -54,13 +58,25 @@ const config: NextConfig = {
   poweredByHeader: false,
   async headers() {
     return [
-      // Every page: no framing, no sniffing, no referrer beyond the origin, and HTTPS only. /sign adds more below.
+      // Every page: no framing, no sniffing, no referrer beyond the origin, and HTTPS only. /sign adds more below. A link
+      // battle's embed (/link/match/<id>/embed) is the one page made to be framed, so it's left out here and given its own.
       {
-        source: "/:path*",
+        source: "/:path((?!link/match/[a-z2-9]+/embed$).*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=()" },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+        ],
+      },
+      // A link battle's stage for streams and other sites: framed anywhere, nothing on it to act on, the rest as above.
+      {
+        source: "/link/match/:id/embed",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Content-Security-Policy", value: "frame-ancestors *; base-uri 'self'; object-src 'none'" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=()" },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },

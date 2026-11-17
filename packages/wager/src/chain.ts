@@ -3,3 +3,5 @@
 export * from "./codec.ts";
 export * from "./tx.ts";
 export * from "./history.ts";
+export * from "./link-codec.ts";
+export * from "./link-tx.ts";

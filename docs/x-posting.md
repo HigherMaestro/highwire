@@ -299,7 +299,7 @@ nothing you didn't; never promise returns or price moves; never post because a c
 | Threat | Mitigation |
 |---|---|
 | Front-running the on-chain registration memo | The signer's secret (5.1) |
-| A stranger overwriting a pending code | One pending code per wallet+mint; codes keyed by code |
+| A stranger overwriting or holding a pending code | Every challenge gets its own code, keyed by code, and any number may wait for one wallet+mint; only the code the wallet's memo carries, with its secret, registers; the per-caller limit bounds how many a caller makes |
 | Phishing a wallet into signing someone's code | The signer builds the memo only for its own codes; the sign page refuses it; registering again with the wallet reclaims |
 | Phishing someone into connecting their X to an attacker's agent | The terminal code on the consent page; one-time result codes, never the credentials, in the browser |
 | Stolen `agent.json` | Scoped tokens, 90-day expiry; the owner re-registers with the wallet; the same folder holds the wallet key, so it's protected as such |

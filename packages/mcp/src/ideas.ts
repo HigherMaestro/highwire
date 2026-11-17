@@ -39,6 +39,10 @@ export interface Idea {
   /** One line on each top-level key of policy.example.json. */
   policyNotes: Record<string, string>;
   faq: { q: string; a: string }[];
+  /** Modules the template ships with, already wired in: their files and scripts go into it as `highwire add` would. */
+  modules: string[];
+  /** package.json scripts the idea adds to the starter's (and its modules'). */
+  scripts: Record<string, string>;
 }
 
 /** The PRD sections every idea has, in this order, so coding agents learn the shape once. */
@@ -122,6 +126,16 @@ export function validateIdea(raw: unknown, dirName: string): Idea {
           return { q: str(ff.q, `faq[${i}].q`, 200), a: str(ff.a, `faq[${i}].a`) };
         });
       })(),
+      modules: ((): string[] => {
+        const m = strs(o.modules ?? [], "modules");
+        if (m.some((s) => !SLUG.test(s))) throw new Error("modules must be module slugs");
+        return m;
+      })(),
+      scripts: ((): Record<string, string> => {
+        const sc = o.scripts ?? {};
+        if (typeof sc !== "object" || Array.isArray(sc)) throw new Error("scripts must be an object");
+        return Object.fromEntries(Object.entries(sc).map(([k, v]) => [k, str(v, `scripts.${k}`, 200)]));
+      })(),
     };
   } catch (err) {
     throw new Error(`ideas/${dirName}/idea.json: ${(err as Error).message}`);
@@ -158,8 +172,9 @@ function walk(root: string, dir = root): string[] {
 }
 
 /**
- * The template repository's files for an idea: the starter, with the idea's own files laid over it (idea.json stays
- * behind), and {{slug}}, {{title}}, {{oneLiner}}, {{prompt}}, {{ideaUrl}} and {{version}} filled in. Paths use /.
+ * The template repository's files for an idea: the starter, then the modules the idea ships with (their files, their
+ * spec at modules/<slug>.md and their scripts, as `highwire add` writes them), then the idea's own files laid over all
+ * of it (idea.json stays behind, and the idea's `scripts` join package.json's), and {{slug}}, {{title}}, {{oneLiner}}, {{prompt}}, {{ideaUrl}} and {{version}} filled in. Paths use /.
  * The starter keeps its .gitignore as `gitignore`, since npm leaves .gitignore files out of packages.
  */
 export function assemble(slug: string, opts: { version: string; siteUrl: string; dir: string }): Map<string, Buffer | string> {
@@ -175,7 +190,7 @@ export function assemble(slug: string, opts: { version: string; siteUrl: string;
     version: opts.version,
   };
   const files = new Map<string, Buffer | string>();
-  for (const base of [join(dir, "starter"), join(dir, slug)]) {
+  const layer = (base: string) => {
     for (const rel of walk(base)) {
       const key = rel.split("\\").join("/").replace(/(^|\/)gitignore$/, "$1.gitignore");
       if (base !== join(dir, "starter") && key === "idea.json") continue;
@@ -191,10 +206,25 @@ export function assemble(slug: string, opts: { version: string; siteUrl: string;
       });
       files.set(key, text);
     }
+  };
+  layer(join(dir, "starter"));
+  for (const m of idea.modules) {
+    if (!getModule(m, dir)) throw new Error(`ideas/${slug}: there's no module ${m}`);
+    for (const [rel, content] of moduleFiles(m, dir)) files.set(rel, content);
   }
+  layer(join(dir, slug));
   for (const need of ["PRD.md", "policy.example.json", "package.json", "AGENTS.md", ".gitignore"]) {
     if (!files.has(need)) throw new Error(`ideas/${slug}: the assembled template has no ${need}`);
   }
+  // Scripts from the modules, then the idea's own; the starter's are never replaced.
+  const pkg = JSON.parse(files.get("package.json") as string) as { scripts: Record<string, string> };
+  for (const add of [...idea.modules.map((m) => getModule(m, dir)!.scripts), idea.scripts]) {
+    for (const [name, cmd] of Object.entries(add)) {
+      if (pkg.scripts[name] !== undefined && pkg.scripts[name] !== cmd) throw new Error(`ideas/${slug}: the script ${name} is already ${pkg.scripts[name]}`);
+      pkg.scripts[name] = cmd;
+    }
+  }
+  files.set("package.json", JSON.stringify(pkg, null, 2) + "\n");
   return files;
 }
 

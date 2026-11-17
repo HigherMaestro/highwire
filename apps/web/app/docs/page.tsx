@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { Connect } from "../../components/Connect.tsx";
-import { AmbientWire } from "../../components/hero/AmbientWire.tsx";
+import { PageStage } from "../../components/arena/ArenaStage.tsx";
 import { SectionNav } from "../../components/ideas/SectionNav.tsx";
 import { getCatalog, groupTools, type ToolInfo } from "../../lib/catalog.ts";
 import { MCP_URL, REPO_URL, pageMetadata } from "../../lib/site.ts";
@@ -97,8 +97,10 @@ function ToolDoc({ tool }: { tool: ToolInfo }) {
             <span className="badge">read-only</span>
           ) : tool.executes ? (
             <span className="badge badge-warn">signs and sends inside your policy</span>
-          ) : (
+          ) : tool.builds ? (
             <span className="badge badge-warn">builds a transaction you sign</span>
+          ) : (
+            <span className="badge badge-warn">acts for you</span>
           )}
           {tool.signLink ? <span className="badge">returns a sign link</span> : null}
         </span>
@@ -266,8 +268,8 @@ export default async function Docs() {
     <>
       <SiteHeader />
       <main>
-        <section className="page-hero docs-hero" aria-labelledby="docs-title">
-          <AmbientWire />
+        <section className="page-hero docs-hero" data-stage-host="" aria-labelledby="docs-title">
+          <PageStage scene="keys" />
           <div className="wrap page-hero-copy">
             <p className="eyebrow">Docs · generated from the running server</p>
             <h1 id="docs-title">Highwire docs</h1>
@@ -406,8 +408,8 @@ export default async function Docs() {
 
           <section id="tools" className="doc-block" aria-labelledby="tools-h">
             <Head id="tools" title="Tools">
-              {catalog.tools.length} tools. The hosted endpoint serves {hosted} of them; the other {localOnly}, which sign with
-              your own key, run only on the local server. Amounts come back in SOL, whole tokens and percentages, and prices are
+              {catalog.tools.length} tools. The hosted endpoint serves {hosted} of them; the other {localOnly} run only on
+              the local server, most of them with your own key. Amounts come back in SOL, whole tokens and percentages, and prices are
               SOL per whole token. Coin text written by users is marked and flagged, so agents treat it as data.
             </Head>
             <nav className="doc-chips" aria-label="Tool groups">
@@ -420,6 +422,7 @@ export default async function Docs() {
             {groups.map((g) => (
               <div key={g.id} className="doc-group">
                 <h3 id={`group-${g.id}`}>{g.title}</h3>
+                {g.blurb ? <p className="muted">{g.blurb}</p> : null}
                 {g.items.map((t) => (
                   <ToolDoc key={t.name} tool={t} />
                 ))}

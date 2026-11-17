@@ -66,6 +66,7 @@ export default async function FeesPage() {
               { label: "Last 24 hours", value: `${sol(t.last24h.feesSol)} SOL` },
             ]}
             readAt={data.generatedAt}
+            split={t.byRecipient}
           />
         ) : (
           <FeeHero id="fees-title" eyebrow="Ecosystem fees · read from Solana" title="Every fee on higher.fun, and who got it">

@@ -23,6 +23,8 @@ export interface Deps {
   newSession: () => HigherSession;
   /** Highwire's relay: agent registration and the arena's referee. */
   relayUrl: string;
+  /** Whether this server has link battles' play tools (link_state, link_move): the `link` option, with a signer. */
+  linkPlay: boolean;
   fetch: typeof globalThis.fetch;
 }
 
