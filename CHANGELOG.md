@@ -5,6 +5,13 @@ highwire.fun.
 
 ## Unreleased
 
+- **Link battles: how much a better player wins, measured.** 1,800 battles between scripted players of graded
+  strength (`npm run skill -w highwire-link`): the same player against itself is a coin with neither side favoured; a
+  player that slips one turn in four loses 62 in 100; one that knows a single thing the house doesn't (Slash and Razor
+  Leaf nearly always land critical hits) beats it 88 in 100. A best-of-three would add 6 to 9 points for two and a
+  half times the time, so a practice stake stays on one battle (docs/link-wager.md 7.1).
+- **Link battles: the name is decided.** The game is Link battles; the games together are the arena, The Line and
+  Link battles its first two (docs/link-battles.md 15).
 - **The site's Next.js is 16.4.5** (from 16.4.2), a security-only release. It fixes GHSA-mfr8-8qww-v76h, where a
   `'use cache'` function called through `unstable_cache()` could show one root param's data to another. The site has
   no `'use cache'` functions, so it wasn't exposed; the upgrade also clears the notice `next build` stopped on.

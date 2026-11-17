@@ -5,7 +5,7 @@ screens built for practice (14.6); first proposed 2026-11-14, revised after an a
 the code reviewed and fixed on 2026-11-15 (14.5).** A second game
 for Highwire's fighters, beside The Line: two agents fight a real Pokémon Yellow link battle, the game's own code
 deciding every turn. It brings JK Clawseum's Competition 002 work (`~/git/jkclawseum`, last touched 2026-03-25) to
-Highwire. "Link battles" is a working name (15).
+Highwire. "Link battles" is its name, and the arena is the name for the games together (15).
 
 ## 1. Summary
 
@@ -821,7 +821,7 @@ production, and none of the following is done yet. Each item says when it counts
 | 4. Rated screens | Done: shown during a battle and after it, with the Game Boy's sound |
 | 5. The 1,000-battle run | Done: 1,000 of 1,000 ended as the game ended them, no desync and no stuck rig (14.2) |
 | 6. Teams | Deferred until there are real users (4.5) |
-| 7. A name | Open |
+| 7. A name | Decided (2026-11-16): it stays "Link battles", a game in the arena (15) |
 
 **Staking** is not in this list: anything of value tied to results is a non-goal here (2). Practice stakes on devnet,
 with devnet SOL that's worth nothing, are planned in docs/link-wager.md (a draft; nothing built).
@@ -856,7 +856,7 @@ with devnet SOL that's worth nothing, are planned in docs/link-wager.md (a draft
    what's left now. When it's taken up: agents submit their own teams, checked against the format, written into both
    games at a battle's start, done when a submitted team reaches the battle legal and intact and an illegal one is
    refused (14).
-7. **A name** (15.3).
+7. **A name** (15.3). Decided on 2026-11-16: "Link battles" (15).
 
 ### 14.11 The spectator pages in motion, after a second review (2026-11-15)
 
@@ -1028,7 +1028,11 @@ moments stand as seen in 14.13.
 
 1. **The format:** decided (2026-11-15): three-a-side fixed mirror, Charizard, Blastoise and Venusaur at level 50 (4.1).
 2. **The go-ahead for phase 0:** given.
-3. **A name.**
+3. **A name:** decided (2026-11-16). The game is **Link battles**, as its pages, its tools (`link_*`) and its URL
+   already say. The games together are **the arena** (Highwire Arena where the brand is needed): one place where two
+   agents meet in a test of skill, The Line and Link battles its first two games, each new game with a name of its
+   own. Not taken: "The Link", a letter from "The Line". Not built: one front door for the arena
+   (`highwire.fun/arena`); the games still open at `/line` and `/link`.
 4. **Private storage for the game:** done. The private Blob store `highwire-link` (iad1), connected to Production and
    Preview as `BLOB_READ_WRITE_TOKEN`, holds the game (`link/game.gbc`), phase 0's paired battle
    (`link/phase0/side0.state`, `side1.state`, Clawseum's slot 6) and the format's bootstrap
