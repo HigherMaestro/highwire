@@ -1,25 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import type * as Three from "three";
 import type { TapeItem } from "../../lib/tape.ts";
 
-// The homepage's live wire: higher.fun's real trades riding the Highwire wire. Buys run left to right, sells right to
-// left, each pulse sized by its SOL; a launch ripples out from the wire and a graduation lights the whole of it. The
-// tape comes from /api/tape every few seconds, and each event plays at its real spacing. Behind it, two wires out of
-// focus and drifting bokeh give the depth. It follows the site's theme as it changes: on paper the wire deepens and the
-// glow and bokeh blend normally, since light added to cream disappears. three.js loads only when the hero is on screen;
-// reduced motion gets a still frame, and no WebGL gets a plain wire.
+// The wire as a three.js scene, for the page headers' backdrop (AmbientWire.tsx): pulses ride the Highwire wire, buys
+// left to right and sells right to left, each sized by its SOL; a launch ripples out and a graduation lights the whole
+// of it. Behind it, two wires out of focus and drifting bokeh give the depth. It follows the site's theme as it
+// changes: on paper the wire deepens and the glow and bokeh blend normally, since light added to cream disappears. The
+// homepage's own wire is a shader now (components/arena/shaders.ts), fed by HomeTape.tsx.
 
-const POLL_MS = 5_000;
-/** The feed counts as live while its newest event is this recent. */
-const FRESH_MS = 120_000;
 const MAX_PULSES = 48;
 const TRAIL = 7;
-
-type Status = "connecting" | "live" | "quiet" | "replay";
-
-const fmtSol = (n: number) => (n > 0 && n < 0.001 ? "<0.001" : n.toLocaleString("en-US", { maximumFractionDigits: n >= 10 ? 1 : n >= 1 ? 2 : 3 }));
 
 // The wire's own gradient, sampled along it.
 const STOPS: [number, [number, number, number]][] = [
@@ -459,138 +450,4 @@ export function startScene(THREE: typeof Three, stage: HTMLDivElement, framing: 
       renderer.domElement.remove();
     },
   };
-}
-
-interface Shown extends TapeItem {
-  key: string;
-}
-
-export function LiveWire({ initial }: { initial: TapeItem[] }) {
-  const stageRef = useRef<HTMLDivElement>(null);
-  const sceneRef = useRef<Scene | null>(null);
-  // Trades that arrive before three.js has loaded; the latest few play once the scene is up.
-  const pending = useRef<TapeItem[]>([]);
-  const [mode, setMode] = useState<"idle" | "running" | "flat">("idle");
-  const [status, setStatus] = useState<Status>("connecting");
-  const [shown, setShown] = useState<Shown[]>([]);
-  const [count, setCount] = useState({ trades: 0, sol: 0 });
-
-  // three.js only once the hero is near the screen.
-  useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    let disposed = false;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((e) => e.isIntersecting) || sceneRef.current || disposed) return;
-        io.disconnect();
-        import("three")
-          .then((THREE) => {
-            if (disposed) return;
-            sceneRef.current = startScene(THREE, stage);
-            setMode(sceneRef.current ? "running" : "flat");
-            pending.current.slice(-6).forEach((item, i) => setTimeout(() => sceneRef.current?.play(item), i * 450));
-            pending.current = [];
-          })
-          .catch(() => setMode("flat"));
-      },
-      { rootMargin: "200px" },
-    );
-    io.observe(stage);
-    return () => {
-      disposed = true;
-      io.disconnect();
-      sceneRef.current?.dispose();
-      sceneRef.current = null;
-    };
-  }, []);
-
-  // The tape: replay what the page was built with, then poll and play each new event at its real spacing.
-  useEffect(() => {
-    const seen = new Set<string>();
-    const timers = new Set<ReturnType<typeof setTimeout>>();
-    let stopped = false;
-    let newest = 0;
-    const emit = (item: TapeItem) => {
-      if (stopped) return;
-      if (sceneRef.current) sceneRef.current.play(item);
-      else pending.current.push(item);
-      setShown((s) => [{ ...item, key: `${item.id}-${Date.now()}` }, ...s].slice(0, 4));
-      if (item.kind === "buy" || item.kind === "sell") setCount((c) => ({ trades: c.trades + 1, sol: c.sol + (item.sol ?? 0) }));
-    };
-    const schedule = (items: TapeItem[], spreadMs: number) => {
-      const fresh = items.filter((i) => !seen.has(i.id)).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
-      if (!fresh.length) return;
-      for (const i of fresh) seen.add(i.id);
-      const first = Date.parse(fresh[0]!.at);
-      const span = Math.max(1, Date.parse(fresh[fresh.length - 1]!.at) - first);
-      fresh.forEach((item) => {
-        const delay = ((Date.parse(item.at) - first) / span) * spreadMs + Math.random() * 300;
-        const t = setTimeout(() => {
-          timers.delete(t);
-          emit(item);
-        }, delay);
-        timers.add(t);
-      });
-      newest = Math.max(newest, ...fresh.map((i) => Date.parse(i.at)));
-    };
-    // What the page was built with plays first, quickly: it's the recent past.
-    schedule(initial.slice(0, 14), 6_000);
-    const poll = async () => {
-      try {
-        const res = await fetch("/api/tape", { cache: "no-store" });
-        const body = (await res.json()) as { items?: TapeItem[] };
-        if (!res.ok || !body.items) throw new Error("tape");
-        schedule(body.items, POLL_MS);
-        setStatus(Date.now() - newest < FRESH_MS ? "live" : "quiet");
-      } catch {
-        setStatus("replay");
-      }
-    };
-    void poll();
-    const iv = setInterval(() => {
-      if (document.visibilityState === "visible") void poll();
-    }, POLL_MS);
-    return () => {
-      stopped = true;
-      clearInterval(iv);
-      for (const t of timers) clearTimeout(t);
-    };
-  }, [initial]);
-
-  const label = { connecting: "Connecting", live: "Live", quiet: "Live · quiet", replay: "Replay" }[status];
-  return (
-    <div className="livewire" ref={stageRef} data-mode={mode} aria-hidden="true">
-      {mode === "flat" ? (
-        <svg className="livewire-flat" viewBox="0 0 1000 300" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="lw-flat" x1="0" x2="1">
-              <stop offset="0" stopColor="#F7C84C" />
-              <stop offset=".35" stopColor="#F6A9C4" />
-              <stop offset=".7" stopColor="#93E2FB" />
-              <stop offset="1" stopColor="#A6EFCB" />
-            </linearGradient>
-          </defs>
-          <path d="M0 120 Q500 290 1000 120" fill="none" stroke="url(#lw-flat)" strokeWidth="3" vectorEffect="non-scaling-stroke" />
-        </svg>
-      ) : null}
-      <div className="livewire-vignette" />
-      <div className="livewire-corner livewire-tr">
-        <span className="livewire-dot" data-status={status} />
-        {label} · higher.fun tape
-      </div>
-      <ol className="livewire-corner livewire-bl">
-        {shown.map((e) => (
-          <li key={e.key} data-kind={e.kind}>
-            <span className="livewire-kind">{e.kind}</span>
-            {e.ticker ? <span>${e.ticker}</span> : null}
-            {e.sol != null && (e.kind === "buy" || e.kind === "sell") ? <span>{fmtSol(e.sol)} SOL</span> : null}
-          </li>
-        ))}
-      </ol>
-      <div className="livewire-corner livewire-br">
-        {count.trades ? `${count.trades} trades · ${fmtSol(count.sol)} SOL on the wire so far` : "Every pulse is a real trade"}
-      </div>
-    </div>
-  );
 }

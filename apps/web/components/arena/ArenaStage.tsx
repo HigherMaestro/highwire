@@ -11,7 +11,7 @@ import { FRAGMENT, type SceneName, VERTEX } from "./shaders.ts";
 // hidden from assistive technology.
 
 /** The most pixels a canvas draws at full quality. */
-const BUDGET: Record<SceneName, number> = { clash: 1_300_000, line: 480_000, link: 480_000, next: 300_000 };
+const BUDGET: Record<SceneName, number> = { clash: 1_300_000, wire: 1_300_000, line: 480_000, link: 480_000, next: 300_000 };
 /** The frame a still picture shows (reduced motion). */
 const STILL = 14;
 /** No more than 60 frames a second, whatever the screen refreshes at. */

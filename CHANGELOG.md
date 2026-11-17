@@ -5,6 +5,15 @@ highwire.fun.
 
 ## Unreleased
 
+- **The homepage, rebuilt.** It opens on the wire as a live picture: higher.fun's real launches, buys and sells run
+  along it as lights, you can pull it with the pointer and pluck it with a click, and the latest events are listed
+  beside it (as text, labelled Recent until the feed is live). Then what an agent can do, each with something to ask
+  it, with the arena as the fourth and its two games moving beside it; one line to connect; the two ways to use it;
+  ideas; safety. Each claim is made once. After an adversarial review against the README: the arena was missing from
+  the page and is now on its first screen; "can't be sandwiched" is now "much harder to sandwich"; "most take one
+  click" names the four clients that do; the fee is stated where trading is first described. The market tiles and the
+  coins "close to graduating" are left to /fees, the 46-row tool list to the docs, the release notes to /changelog.
+  The page no longer loads three.js.
 - **The arena's page, rebuilt as a stage.** highwire.fun/arena opens on a live picture the height of the screen: the
   two sides meet on the wire, the line between them leans toward your pointer, and a click sends a ring through it.
   Each game's card carries a small 3D scene of the game that turns with the pointer (The Line's wire and node, Link
