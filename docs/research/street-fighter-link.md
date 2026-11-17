@@ -310,6 +310,8 @@ mid-move doesn't gain time; it's committed, as a person mid-motion is.
   or without a wait. So most likely the jump's press fell inside the close move and the game ignored it, which is the
   first item under "still open" below. Not reproduced directly.
 
+*(Corrected in 5.8: this round was stopped by the referee with Ryu at exactly 0 health and still standing, a hit before a knockout.)*
+
 **The round** (the same two agents, the same instructions as 5.3): 60 windows, 2,138 frames, a knockout (Ken, 82
 against 0), 2.8 minutes, no missed plan, both games agreeing throughout.
 
@@ -474,6 +476,9 @@ each seeing exactly the state an agent sees and answering with plans, every pair
 with the seats swapped every round and seeded choices. **1,440 rounds: no desync, no stuck rig, every round ended by
 the game** (1,165 knockouts, 275 on the clock, 128 of those drawn). A round averaged 43 seconds of game and 98 windows,
 and about 9 seconds of one core. This grid ran on the referee as it stood before 5.6's sharper motions (6-frame holds).
+*(5.8: the referee then ended a round when a fighter reached exactly 0 health, a hit before the game's knockout. About a
+quarter of rounds reach that state and the fighter at 0 wins about one in fifty of them, so the table below stands to
+within a round or two in a hundred; the knockout count includes rounds stopped early.)*
 
 **What the first trial runs found, each fixed in the referee before the grid:**
 - **Player 1 had an edge, and it was the game's.** The game moves a step every 5 frames and reads player 2's pad 2
@@ -542,6 +547,157 @@ rounds went to the clock and 9% were drawn, nearly all between careful players: 
 here. Before phase 2 can pass it needs a throw or another answer to a block, a rule for a drawn round, a look at
 whether the reaction window can open sooner without showing a side what isn't on its screen yet, and players found
 by search. The seat fix belongs in phase 1's map whatever else happens.
+
+### 5.8 Rounds seven and eight: what the state tells a player, the game's own match, and three questions answered (2026-11-17)
+
+5.6's and 5.7's open lists, worked through. Two rounds were played: seven on the first version of the new state
+fields, and eight after fixing what seven's players found wrong with them.
+
+**A fault found on the way, which corrects earlier sections: the referee ended rounds a hit early.** A fighter at
+exactly 0 health is still standing. The game knocks out on the hit that takes health below 0, when the byte reads
+255. The referee ended a round at 0, and health is 112 with hits of 7, 14 and 16, so exactly 0 is common. Rounds
+four (5.4: "82 against 0") and seven below were stopped with the loser at 0 and still up. In a 210-round grid on
+the fixed referee a fighter stood at exactly 0 in about a quarter of rounds (44 to 52 of 210) and went on to win
+one of them, so 5.7's table stands to within a round or two in a hundred, but its "1,165 knockouts" includes rounds
+stopped early. Fixed: a round ends on a 255 or the clock, and a state shows `knocked_out`. Found by reading each
+round's winner from the game's own stars (below), which disagreed with the referee.
+
+**1. How long the next press must wait.** `your_next_press` gives `starts_in_about` (frames before a press sent now
+plays its first input), `held_up_by` (the reason, in words) and `fireball_starts_in_about` (a fireball also waits
+for a forward press to be forgotten, and for the fighter's earlier ball to leave the screen: the game allows one,
+and a second came out as a punch in round seven until the referee made it wait). The gap was bigger than 5.6 said.
+A button takes 14 to 18 frames to show as a move, and until then `free_to_act` reads true: the fighter's own last
+press is what makes the estimate. Checked by sending a press from 1,196 states of scripted fights and timing it:
+
+| What holds the press | Checks | Within 2 frames | Within 6 |
+|---|---|---|---|
+| Nothing, or only the referee's own waits (stated exactly) | 319 | 94% | 97% |
+| The fighter is busy, or its own press hasn't shown yet (estimated) | 874 | 77% | 86% |
+| of which: in a block pose (a guess from the other fighter's move) | 112 | 31% | 66% |
+
+`free_to_act` was true in 425 of those states; the press then waited more than 6 frames in 156, and
+`your_next_press` was within 6 frames of the wait in 138 of the 156. The misses are mostly a hit taken in between.
+
+**2. When a held block works.** `your_block` gives `works_now`, `works_in_about` and what a block stops. Measured
+first (8,800 windows of a fighter that only blocks, or blocks after a move of its own): a standing block lost full
+health only to sweeps and to some jump attacks that cross over; a crouching block only to jump attacks; and a
+block does nothing from the frame the blocker's own button goes down until that move is over. A block held through
+that starts working a frame or two after the fighter is free (a hit on the very frame still lands), so the estimate
+allows 3. Holding a block where the state said it worked, 411 windows passed without a full hit; of the 29 full hits
+taken, 25 were sweeps on a standing block, which the field names, and 4 were other things.
+
+**3. A fireball's arrival.** A ball sits 9 frames, then moves 4, 4 and 8 x on the game's 5-frame steps (16 x in 15
+frames, not the 1.3 a frame the rules claimed), and lands with about 12 x to go. `their_fireball.arrives_in_about`
+is within 6 frames three times in four for a fighter standing still (16 of 16 within 13). `passed_you` marks a ball
+already behind its target; until now the state kept showing balls that had hit or left, for lack of the record's
+in-flight byte (its first: 2 while flying). `their_fireball_coming` covers the 24 frames between the throw showing
+and the ball existing. A hit by a ball whose thrower has moved on is listed as "fireball (in flight)".
+
+**4. `free_in_about`** now comes from each move's measured length by code, not one number a move: a punch 19 to 20
+frames from showing, a heavy punch or kick or a sweep 49 to 50, a fireball 65, a dragon punch 64, a hurricane kick
+79 to 80, hit stun 39 (19 after a light hit), a knockdown 95. A jump is 79, of which 15 are on the ground before it
+leaves, 55 in the air and 9 landing; the state had said 48, and that is what misled after a jump attack. A jump's
+state says straight up, forward or back.
+
+**5. A throw: none found.** 1,728 trials: each seat, touching and at three steps back, forward, back or no
+direction with punch, kick or both, tapped, held 14 and held 30 frames, against a fighter standing, walking in,
+blocking and crouch-blocking. Every attacker code was a strike's (the close versions of punch and kick are codes of
+their own), no victim code was anything but hit stun or a block, and no blocker lost any health. Ryu and Ken have
+no throw in this release by those inputs. Other fighters weren't tried (Zangief is in the roster). What answers a
+block without one, all of it the game's own:
+- **High and low.** A sweep beats a standing block and a jump attack beats a crouching one. Round eight was decided
+  by it: jump over a fireball, kick, sweep.
+- **Chip.** A blocked fireball costs 4 or 5 and can knock out. Round seven's last ten windows were a fighter at 10
+  health chipping one at 73 down to 0.
+- **The clock,** with the game's own match rules behind it (next).
+- Not proposed: any referee rule that changes what a block does. That would be inventing the game.
+
+**6. A drawn round: the game has a rule, and the referee now follows it.** Left alone after a drawn round, the game
+plays it again. Two drawn rounds leave no mark, a third gives both fighters a star, and a fourth ends the match
+with neither a win nor a loss on the game's RESULT screen. A double knockout is a drawn round too. A match is the
+first to two stars. The referee's `nextRound()` holds nothing and lets the game do this, reads each round's winner
+from the star it awards, and stops when the game stops. Nothing is invented: a match the game leaves undecided is a
+draw, which the rating takes as one. **90 matches** between five of 5.7's players: 244 rounds, no desync, none
+stuck, and the referee's reading of every round agreed with the game's stars. 78 rounds were drawn; **18 matches
+had no winner, and all 18 were the three pairings 5.7 already showed as dead** (the recipe against itself, the
+defender against itself, one against the other). Every other pairing was decided every time, the hand-written
+punisher's mirror included, where two to four rounds in ten had been drawn. A match took 3.5 minutes of game.
+
+**7. The reaction window can open five frames sooner, and that is a choice about the game, not a leak.** The window
+opens 6 frames after a committed move's code appears, and the code is what the game draws from: nothing earlier is
+on either screen except the motion's own crouch or step, which the state already shows as such. So the 6 is the
+referee's, and can be 1. What it decides, for 138 strikes that would have hit a fighter doing nothing:
+
+| Window opens after | Punch or kick blocked in reaction | Heavy punch | Heavy kick | Sweep |
+|---|---|---|---|---|
+| 6 frames (now) | 0 of 48 | 10 of 30 | 20 of 30 | 0 of 30 |
+| 3 frames | 0 of 48 | 10 of 30 | 20 of 30 | 0 of 30 |
+| 1 frame, or none | 48 of 48 | 30 of 30 | 30 of 30 | 30 of 30 |
+
+At 6 a light strike or a sweep has landed before the window even ends; at 1 every strike can be blocked by a
+player who was doing nothing. Neither is the game as people play it. At 6 the first to commit wins at close range
+(5.7). At 1 nothing lands on a waiting fighter but a fireball's chip. The reactive anti-air doesn't care (a dragon
+punch beat the jump 3 times in 6 at 6 and at 1, 2 in 6 at 3). A 210-round grid at each setting (six players, 10
+rounds a pairing) moved little: 33, 35 and 34 drawn rounds, 62, 58 and 71 on the clock, and no pairing moved by more than
+10 rounds can explain. **Left at 6.** It is a dial for phase 2, to be set with searched players.
+
+**The suites on the final referee:** 5.3's cases 2,238 of 2,240 (the two walk-backs); 5.4's cuts 390 of 390, 146
+mid-input; 5.5's can't-act cases 572 of 598 (the same 26: a block dropped for a move while a blocked kick is still
+out); the reactive anti-air 3 in 6, never lost; the seat check equal to the frame for a punch, a jump, a fireball
+and a sweep at all five phases. Across the three grids Ryu's seat won 243 decided rounds and Ken's 285 (75 to 102
+in one of them). The seat check says the inputs are even, so this is the fighters or chance, and it wants more
+rounds before phase 2 trusts it.
+
+**Round seven** (same two agents and instructions, on the first version of items 1 to 4): 85 windows, 3,917 frames,
+no missed plan, both games agreeing. **The referee stopped it at Ryu 2, Ken 0 with 12 on the clock, and Ken was
+still standing** (the fault above). Ken led 73 to 10 at window 59; Ryu then threw a fireball every time it was
+free, for chip and three full hits on a cornered fighter's late answers. Both dragon punches sent were anti-airs on
+a jump the state had just shown, and both landed. What the players reported, each confirmed and fixed before round
+eight unless noted: `your_next_press` empty in a block pose; a second fireball coming out as a punch; `passed_you`
+wrong just after a ball appears, and a passed ball shown again from the far edge; no arrival before the ball
+exists; a block that "works in 14" losing to a hit on frame 14; a jump not saying which way; a ball's hit listed
+under the thrower's later move.
+
+**Round eight** (the fixed referee, true knockouts): 90 windows, 4,678 frames, the first round to go the full
+clock: **Ryu on time, 32 to 29,** no missed plan, both games agreeing, 12 minutes of wall time. Ryu's damage was
+one sequence four times: jump a fireball, kick, sweep. Ken's was a jump kick, two sweeps, one clean fireball and, from window 78, fireballs
+from close range for chip, 56 down to 32, one short.
+
+| | 5.1 | 5.2 | 5.3 | 5.4 | 5.5 | 5.6 | Seven | Eight |
+|---|---|---|---|---|---|---|---|---|
+| Windows | 26 | 70 | 84 | 60 | 30 | 68 | 85 | 90 |
+| Ended | knockout | knockout | knockout | stopped at 0 | knockout | knockout | stopped at 0 | the clock |
+| Fireball steps, both sides | 65 | 50 | 43 | 23 | 12 | 31 | 31 | 31 |
+| Sweeps, strikes, jump kicks and hurricane kicks sent | 25 | 13 | 29 | 25 | 8 | 23 | 28 | 51 |
+| Hits that weren't a fireball | 2 | 4 | 5 | 7 | 3 | 6 | 8: five sweeps (two a trade), two dragon punches, a jump kick | 9: six sweeps (two a trade), three jump kicks |
+| Blocked fireballs that still cost health | | | | | | 2 | 7 | 8 |
+| Dragon punch steps sent, and landed | 1, 0 | 2, 0 | 1, 0 | 5, 0 | 2, 1 | 1, 1 | 2, 2 | 1, 0 |
+| Steps dropped while waiting | | | | | | 16 | 8 | 11 |
+
+Both of eight's players said the block and fireball fields were right where they leaned on them (a block "works in
+42" held in time against a jump-in; arrivals of 26 and 27 jumped cleanly; `passed_you` right every time).
+
+**Still open, from round eight's accounts:**
+- **A carried move that never came out still held the next plan.** A sweep's inputs kept playing through the hit
+  stun that had stopped it (up to 34 frames), and `your_next_press` called a dragon punch "on its way" that had been
+  hit out of existence. Fixed after the round (a carried move is dropped when its fighter is hit), with the suites
+  rerun, but not yet played by agents.
+- **The block-pose guess is poor** when the other fighter's attack misses: the pose ends at once and the state said
+  about 44. It is labelled a guess; better is to learn what ends the pose.
+- **`their_fireball_coming` runs about 10 frames late at close range** (39 said, 29 seen, five times running), where
+  the ball appears already touching.
+- **Ryu sometimes shows a fireball under codes the length table doesn't have** (`free_in_about` 44 in place of 59,
+  and no `their_fireball_coming`). Not traced.
+- A rule I added from one player's account in round seven, that a fireball from closer than 28 passes through, was
+  wrong (it hit from 24 in round eight) and is taken out. x is a place on the scrolling screen, so it moves while a
+  fighter stands still; only `distance` is safe, and the map should find the stage position.
+- A blocked strike costs nothing and isn't listed, so a player can't tell blocked from missed. A blocked sweep
+  pushes the blocker back about 18, which makes the answering sweep miss.
+- In round seven a jump on its 15 ground frames turned into a block as a fireball arrived. Seen once, not reproduced
+  with no attack near (the jump always left the ground): probably the game's own guard, unmapped.
+- **Phase 2's test is still not met above "knows a recipe".** The game's match rule settles a drawn round where
+  players differ at all, and leaves two careful scripts drawn, as it should. The remaining lever in the referee is
+  the reaction dial; the rest is players found by search, and fighters with a throw.
 
 ## 6. The game file, and the law
 
