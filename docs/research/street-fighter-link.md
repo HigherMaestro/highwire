@@ -241,6 +241,56 @@ and the big hits were punishes of a walk-in or a whiffed attack. Both agents cal
 starting, and weren't built. They'd matter for anything faster than the reaction window, where no player reacts
 either.
 
+### 5.3 Round three: moves that come out as asked, and what cut them short (2026-11-16)
+
+**The wrong moves of 5.2, found and fixed in the referee's macro layer:**
+- **The game remembers a forward press for most of a second** (more than 26 frames, less than 46). Walk forward, then a
+  fireball's down, down-forward, forward and punch, is a dragon punch's motion, for Ryu and Ken alike; a neutral gap of
+  20 frames, a tap back or a tap down doesn't clear it. A fireball now waits until forward has been up 46 frames.
+  (A person meets the same thing on the cartridge.)
+- **Presses were dropped or misdirected after another step:** a tap after a crouch did nothing, and a jump after a walk
+  went the way of the walk. Every press or motion now starts with 6 frames of nothing held, presses are held 6 frames
+  or more, and a directed jump holds its direction before up.
+- **Forward and back are worked out when each step starts,** not when the window opens, so swapping sides inside a
+  window no longer turns a move round.
+- **Names:** Ryu's and Ken's specials use different codes (0xB8 to 0xC6 is a fireball for Ryu and a hurricane kick for
+  Ken), and close-range punches and kicks have their own (0x20 to 0x26).
+
+**Checked case by case from saved states:** 16 actions × both fighters × facing each way (the opening, and after
+crossing sides) × after each of seven steps (nothing, forward, back, crouch, crouch block, a punch, a kick) × two
+starting frames: **893 of 896 came out as asked.** The three left are a 24-frame walk back that hadn't moved a whole x
+yet, and two jumps asked for while a close punch or kick was still playing (the game ignores them, correctly).
+
+**Added to the state:** how many frames each fighter has been in its current move; walking speed (about 0.5 x a frame)
+and rough move lengths in the rules. The game doesn't expose a "frames until free" counter that was found.
+
+**The round** (the same two agents, told not to settle for fireball and block): 84 windows, 2,717 frames, a knockout
+(Ken, 54 against 0), 3.6 minutes, no missed plan, both games agreeing throughout.
+
+| | 5.1 | 5.2 | 5.3 |
+|---|---|---|---|
+| Windows | 26 | 70 | 84 |
+| Fireball steps, both sides | 65 | 50 | 43 |
+| Close-range attack steps sent (sweeps, jump-ins, dragon punches, hurricane kicks, crouch punches) | 25 | 13 | 29 |
+| Hits that weren't a fireball | 2 (by the agents' accounts) | 4 | 5: three sweeps, each on a crouching fighter, a dragon punch against a jump, a crouch punch |
+| Fireballs that caught a walk, a jump or an attack | (unseen: nearly all) | 3 | 5 |
+
+More of a fight: both sides came in, sweeps traded knockdowns at about 40 range, a jump-in was dragon-punched, and
+fireballs punished walking in or jumping late. The winner led on sweeps and spacing.
+
+**What round three found instead: a window's end cuts a move in half.** When a window ends (6 frames after the other
+fighter starts a move), whatever is left of a plan is dropped, including the rest of a move's own inputs. Of 70
+presses and motions begun, about 44 were cut before their last button frame (21 fireballs, 14 sweeps, 7 jump kicks, 2
+jumps; counted from the log, roughly). A fireball cut mid-motion never comes out, a sweep whose button is let go early
+is a lighter crouching attack, and a jump kick loses its kick. Both agents reported exactly these ("a fireball only
+came out as a lone step", "sweep came out as a crouch punch", "dragon_punch only crouched"), and they are not the
+macro bugs above: the case check has no windows ending early. **The fix is a rule, not a patch: a move once begun
+finishes its inputs across the window's end, and the new plan starts after it**, as a person's hands would. Not yet
+built; it's the next thing to do before any conclusion about how good the game is.
+
+Also reported, and true: holding block walks a fighter backward into the corner (it's the same button); "block stun"
+shows for as long as back is held near an attack; the state doesn't say whether a step's move began.
+
 ## 6. The game file, and the law
 
 **How Yellow does it, and what would be the same:** the image stays out of the repository and packages, in private
