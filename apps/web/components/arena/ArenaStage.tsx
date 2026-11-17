@@ -11,7 +11,7 @@ import { FRAGMENT, type SceneName, VERTEX } from "./shaders.ts";
 // hidden from assistive technology.
 
 /** The most pixels a canvas draws at full quality. */
-const BUDGET: Record<SceneName, number> = { clash: 1_300_000, wire: 1_300_000, line: 480_000, link: 480_000, next: 300_000 };
+const BUDGET: Record<SceneName, number> = { clash: 1_300_000, wire: 1_300_000, line: 480_000, link: 480_000, next: 300_000, split: 1_000_000, keys: 620_000, build: 700_000, snap: 1_300_000 };
 /** The frame a still picture shows (reduced motion). */
 const STILL = 14;
 /** No more than 60 frames a second, whatever the screen refreshes at. */
@@ -37,8 +37,14 @@ function rgb(css: string): [number, number, number] | null {
   return m ? [Number(m[1]) / 255, Number(m[2]) / 255, Number(m[3]) / 255] : null;
 }
 
-export function ShaderCanvas({ scene, className }: { scene: SceneName; className?: string }) {
+export function ShaderCanvas({ scene, className, values }: { scene: SceneName; className?: string; values?: readonly number[] }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  // Up to eight figures a scene may draw from (uValues): the page's own, kept current and read on every frame.
+  const figures = useRef(new Float32Array(8));
+  useEffect(() => {
+    figures.current.fill(0);
+    figures.current.set((values ?? []).slice(0, 8).map((v) => (Number.isFinite(v) ? v : 0)));
+  });
   // No WebGL, or a shader this GPU won't take: the CSS picture, on a plain element (a canvas that once had a context
   // paints over its own background).
   const [flat, setFlat] = useState(false);
@@ -95,7 +101,7 @@ export function ShaderCanvas({ scene, className }: { scene: SceneName; className
       gl.enableVertexAttribArray(at);
       gl.vertexAttribPointer(at, 2, gl.FLOAT, false, 0, 0);
       uniforms = {};
-      for (const name of ["uRes", "uTime", "uPointer", "uHover", "uLight", "uBg", "uPulse", "uTrade"]) uniforms[name] = gl.getUniformLocation(program, name);
+      for (const name of ["uRes", "uTime", "uPointer", "uHover", "uLight", "uBg", "uPulse", "uTrade", "uValues"]) uniforms[name] = gl.getUniformLocation(program, name);
       return true;
     };
 
@@ -133,6 +139,7 @@ export function ShaderCanvas({ scene, className }: { scene: SceneName; className
       gl.uniform3f(uniforms.uBg!, bg[0], bg[1], bg[2]);
       gl.uniform3f(uniforms.uPulse!, pulse[0], pulse[1], frozen ? -100 : pulse[2]);
       if (uniforms.uTrade) gl.uniform4fv(uniforms.uTrade, trades);
+      if (uniforms.uValues) gl.uniform1fv(uniforms.uValues, figures.current);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     };
 
@@ -270,6 +277,21 @@ export function ShaderCanvas({ scene, className }: { scene: SceneName; className
   const cls = `${className ?? ""}${flat ? " is-flat" : ""}`.trim();
   // Keyed by scene: a canvas whose context was given back can't start another.
   return flat ? <div className={cls} data-scene={scene} aria-hidden="true" /> : <canvas key={scene} ref={ref} className={cls} data-scene={scene} aria-hidden="true" />;
+}
+
+/**
+ * A page header's picture: the scene behind the words, the scrim that keeps the words readable, and the pause switch.
+ * The header itself is what the picture follows the pointer over: give it data-stage-host. A scene made for a card
+ * (a game's) keeps to the header's right side with "side"; one made for a header fills it and finds its own place.
+ */
+export function PageStage({ scene, values, side }: { scene: SceneName; values?: readonly number[]; side?: boolean }) {
+  return (
+    <>
+      <ShaderCanvas scene={scene} values={values} className={side ? "page-stage is-side" : "page-stage"} />
+      <div className="page-stage-scrim" aria-hidden="true" />
+      <MotionSwitch className="arena-motion" />
+    </>
+  );
 }
 
 /**

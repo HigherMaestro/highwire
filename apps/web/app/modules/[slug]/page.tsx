@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter, SiteHeader } from "../../../components/Chrome.tsx";
-import { AmbientWire } from "../../../components/hero/AmbientWire.tsx";
+import { PageStage } from "../../../components/arena/ArenaStage.tsx";
 import { SectionNav } from "../../../components/ideas/SectionNav.tsx";
 import { CopyCommand } from "../../../components/CopyCommand.tsx";
 import { addCommand, defaultIdeasDir, fileTree, getModule, listIdeas, listModules, moduleFiles, moduleSpecPath, readModuleSpec } from "../../../lib/ideas.ts";
@@ -68,8 +68,8 @@ export default async function ModulePage({ params }: Props) {
     <>
       <SiteHeader />
       <main>
-        <section className="page-hero idea-hero" aria-labelledby="module-title">
-          <AmbientWire />
+        <section className="page-hero idea-hero" data-stage-host="" aria-labelledby="module-title">
+          <PageStage scene="build" />
           <div className="wrap page-hero-copy">
             <nav className="crumbs" aria-label="Breadcrumb">
               <a href="/ideas">Ideas</a>

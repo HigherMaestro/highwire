@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Recipient } from "highwire-core";
-import { AmbientWire } from "../hero/AmbientWire.tsx";
+import { PageStage } from "../arena/ArenaStage.tsx";
 import { RECIPIENTS, sol, updatedAt, type FeeHistory } from "../../lib/fees.ts";
 import { FeeChart } from "./FeeChart.tsx";
 
@@ -20,6 +20,7 @@ export function FeeHero({
   figureSub,
   facts,
   readAt,
+  split,
   children,
 }: {
   id: string;
@@ -30,11 +31,13 @@ export function FeeHero({
   figureSub?: ReactNode;
   facts?: Fact[];
   readAt?: string;
+  /** What each recipient got of the fees this page is about: the header's five beams follow it. */
+  split?: Record<Recipient, number>;
   children?: ReactNode;
 }) {
   return (
-    <section className="page-hero fees-hero" aria-labelledby={id}>
-      <AmbientWire />
+    <section className="page-hero fees-hero" data-stage-host="" aria-labelledby={id}>
+      <PageStage scene="split" values={beams(split)} />
       <div className="wrap page-hero-copy">
         <p className="eyebrow">{eyebrow}</p>
         <h1 id={id}>{title}</h1>
@@ -68,6 +71,16 @@ export function FeeHero({
       </div>
     </section>
   );
+}
+
+/**
+ * The header's beams, one a recipient in RECIPIENTS' order: each recipient's share of the fees, from 0 to 1. With no
+ * figures to go on (or none paid yet) the five are even, so the picture never claims a split it wasn't given.
+ */
+export function beams(split?: Record<Recipient, number>): number[] {
+  const got = RECIPIENTS.map((r) => Math.max(0, split?.[r.key] ?? 0));
+  const total = got.reduce((a, b) => a + b, 0);
+  return total > 0 ? got.map((v) => v / total) : RECIPIENTS.map(() => 1 / RECIPIENTS.length);
 }
 
 /** A section's heading, numbered like the ideas pages, with a line under it. */
