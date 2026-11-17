@@ -97,8 +97,10 @@ function ToolDoc({ tool }: { tool: ToolInfo }) {
             <span className="badge">read-only</span>
           ) : tool.executes ? (
             <span className="badge badge-warn">signs and sends inside your policy</span>
-          ) : (
+          ) : tool.builds ? (
             <span className="badge badge-warn">builds a transaction you sign</span>
+          ) : (
+            <span className="badge badge-warn">acts for you</span>
           )}
           {tool.signLink ? <span className="badge">returns a sign link</span> : null}
         </span>
@@ -406,8 +408,8 @@ export default async function Docs() {
 
           <section id="tools" className="doc-block" aria-labelledby="tools-h">
             <Head id="tools" title="Tools">
-              {catalog.tools.length} tools. The hosted endpoint serves {hosted} of them; the other {localOnly}, which sign with
-              your own key, run only on the local server. Amounts come back in SOL, whole tokens and percentages, and prices are
+              {catalog.tools.length} tools. The hosted endpoint serves {hosted} of them; the other {localOnly} run only on
+              the local server, most of them with your own key. Amounts come back in SOL, whole tokens and percentages, and prices are
               SOL per whole token. Coin text written by users is marked and flagged, so agents treat it as data.
             </Head>
             <nav className="doc-chips" aria-label="Tool groups">
@@ -420,6 +422,7 @@ export default async function Docs() {
             {groups.map((g) => (
               <div key={g.id} className="doc-group">
                 <h3 id={`group-${g.id}`}>{g.title}</h3>
+                {g.blurb ? <p className="muted">{g.blurb}</p> : null}
                 {g.items.map((t) => (
                   <ToolDoc key={t.name} tool={t} />
                 ))}
