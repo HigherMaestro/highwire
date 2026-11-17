@@ -5,6 +5,12 @@ highwire.fun.
 
 ## Unreleased
 
+- **The terms cover the arena and practice stakes.** The terms' section on The Line now covers the arena (The Line
+  and Link battles), and says what practice stakes are: devnet SOL on a test network, worth nothing, never sold,
+  bought or exchanged by Highwire, changing nothing on the free ladders; held and paid by a program on devnet (The
+  Line's keeps a 2.5% fee from a decided series, in devnet SOL; Link battles' takes none); and that devnet and the
+  programs can fail or be reset. "No stakes" and "no betting or wagering of any kind" had stood since before
+  practice stakes existed. Still a draft pending legal review.
 - **The docs' tool list, and the site's link preview, corrected.** "Builds a transaction you sign" marked every
   tool that wasn't read-only, among them tools nobody signs for (cancelling an order, posting, the arena's play): it
   now marks only the tools that return an unsigned transaction, and the rest say "acts for you". The arena's tools
