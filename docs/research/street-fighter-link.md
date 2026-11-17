@@ -176,6 +176,71 @@ over HTTP, each seeing only its own state.
   when the other side starts a special, and then graded scripted players (8, phase 2) to see whether anything beats
   fireballs on a rhythm.
 
+### 5.2 Round two: seeing and reacting (2026-11-16)
+
+Asked for after 5.1: this is competitive play, so an agent has to see a fireball and answer it.
+
+**What was found in memory** (this release only; by running each action from a saved state and reading what changed):
+
+| What | Where |
+|---|---|
+| A fighter's current move | +0x01 in its record (0xC001, 0xC101) |
+| Its x, and its height (0x78 on the ground, less in the air) | +0x57, +0x58 |
+| Player 1's fireball: its own record, laid out like a fighter's | 0xC200: x at 0xC257, live while 0xC201 is set and x is moving |
+| Player 2's fireball | 0xC300 (x at 0xC357), by the same layout; tracked in play |
+
+Move codes: 0x02 standing, 0x04 crouching, 0x06 and 0x08 walking forward and back, 0x0C to 0x10 jumping, 0x28/0x2A
+punch (light/heavy, by how long the button is held), 0x2C/0x2E kick, 0x30 crouch punch, 0x36 sweep, 0x46 jump kick,
+0xA0 to 0xA8 dragon punch, 0xAC to 0xB6 fireball, 0xC8 to 0xD0 hurricane kick, **0x12 and 0x14 block stun (standing,
+crouching), 0x80 hit stun, 0x8A knocked down, 0x8E getting up**, 0x16 the round's end. There is no meter in this game.
+
+Timings, in frames: a button shows as a move about 9 frames later (the pad is read slowly, and the link adds its
+delay); a punch lasts 20, a heavy kick 50, a sweep 50; hit stun 25 to 40, block stun 20 to 50, a knockdown about 80
+before the fighter stands. A fireball leaves the hand about 30 frames after its motion starts and travels about 1.3 x
+a frame, so from across the screen it's roughly a second from start to arrival.
+
+**The game reads the pad less often than every frame.** Special-move motions held 3 frames a direction came out about
+half the time (the dragon punch never), which is why 5.1's specials were unreliable; held 6 frames, all three came out
+6 times in 6 at every starting frame tried.
+
+**What changed in the referee:**
+- The state gained each fighter's move by name, and each side's fireball in flight with its gap to its target. Both
+  sides get the same facts, all of them on screen; nothing of a pending plan.
+- **A window now also ends 6 frames after either fighter starts a committed move** (a jump, an attack, a special), and
+  both sides plan again from the same frame. With the 9 frames a button takes, that's a reaction of about 15 frames, a
+  quarter of a second: enough for a fireball or a jump-in, not for a jab at close range, as for a person. Symmetric by
+  construction: one frame, one state, both sides.
+- Each hit is reported with who was hit, for how much, and what each fighter was doing.
+
+**The round** (the same two agents, each made to read the state and send one plan at a time): 70 windows, 2,442
+frames, a knockout (82 against 1 of 112), 2.8 minutes of wall time, no missed plan, both games agreeing throughout.
+
+| | 5.1 | 5.2 |
+|---|---|---|
+| Windows | 26 | 70 (23 ended by a move starting, 7 by a hit) |
+| Winner's fireballs | 50 | 34, with 37 blocks |
+| A fireball starting, answered by | nothing (unseen) | a block 8 times in 10 |
+| A fireball's cost | 16 every time | 4 or 5 blocked; 20 when it caught a walk, a punch or a kick |
+| Other damage | a sweep, a jump-in | two dragon punches (one an anti-air against a jump), a sweep punishing a walk-in |
+
+Fireballs still decided it, but as a contest: thrown fireballs cancelled each other, blocked ones did chip damage,
+and the big hits were punishes of a walk-in or a whiffed attack. Both agents called their decisions partly decisive.
+
+**Still wrong, from the agents' reports and the log:**
+- **Moves that weren't the move asked for** ("fireball" coming out as a dragon punch or a crouch punch, a jump kick
+  going backward). Likely the macro layer: a direction held by the previous step counts toward the next motion, and
+  "forward" is fixed when the window opens although fighters can swap sides inside it. A neutral gap between steps and
+  facing read every frame should fix both. Not yet verified case by case.
+- "doing" went stale or unnamed in places (0xC6, a fireball's recovery; the stun codes, since named).
+- The state doesn't say how many frames until a fighter can act again, and didn't give walking speed (about 0.4 x a
+  frame).
+- Both agents played passively (block was each side's commonest step). Whether a stronger line beats
+  fireball-and-block is still phase 2's question (8), now with the facts an agent needs.
+
+**Conditional plans** ("if a fireball is coming, block") weren't needed for fireballs once windows ended on a move
+starting, and weren't built. They'd matter for anything faster than the reaction window, where no player reacts
+either.
+
 ## 6. The game file, and the law
 
 **How Yellow does it, and what would be the same:** the image stays out of the repository and packages, in private
