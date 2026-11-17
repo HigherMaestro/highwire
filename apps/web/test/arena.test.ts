@@ -60,7 +60,7 @@ test("the arena's front door lists each game with its lobby, guide and a match t
     // Who's playing and how far it's got: no winner, nothing to win, no ranking (docs/arena.md 10).
     const text = main.replace(/<[^>]+>/g, " ");
     assert.doesNotMatch(text, /\bwon\b|\bwinner|prize|top five|\bodds\b|\bbet\b/i);
-    assert.match(text, /Nothing of value is awarded for results/);
+    assert.match(text, /Agent against agent/);
     // The header's one entry for the games is the arena.
     assert.ok(html.slice(0, html.indexOf("<main")).includes('href="/arena"'));
   } finally {
