@@ -15,7 +15,11 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
 `;
 
 const COMMON = /* glsl */ `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
+#else
+precision mediump float;
+#endif
 uniform vec2 uRes;
 uniform float uTime;
 uniform vec2 uPointer;
@@ -43,6 +47,22 @@ float fbm(vec2 p) {
   }
   return s;
 }
+// Three octaves: enough for a shape that only has to wander.
+float fbm3(vec2 p) {
+  float a = 0.5, s = 0.0;
+  for (int i = 0; i < 3; i++) {
+    s += a * noise(p);
+    p = p * 2.03 + vec2(17.1, 9.2);
+    a *= 0.5;
+  }
+  return s;
+}
+// exp(-x*x): pow() of a negative number is undefined in GLSL, so squares are multiplied out.
+float bell(float x) { return exp(-x * x); }
+// 1 inside lo, 0 past hi (smoothstep with its edges the wrong way round is undefined too).
+float within(float lo, float hi, float x) { return 1.0 - smoothstep(lo, hi, x); }
+// The edge light on a surface facing away: the base kept from 0 to 1.
+float rimOf(float facing, float power) { return pow(clamp(1.0 - facing, 0.0, 1.0), power); }
 // The brand's wire: gold, pink, blue, mint.
 vec3 wireGradient(float t) {
   t = clamp(t, 0.0, 1.0);
@@ -55,7 +75,7 @@ vec3 wireGradient(float t) {
   return mix(c, d, (t - 0.7) / 0.3);
 }
 // A colour as ink on paper: deeper, so it reads on the light theme.
-vec3 deepen(vec3 c) { return pow(c, vec3(1.9)) * 0.86; }
+vec3 deepen(vec3 c) { return pow(max(c, vec3(0.0)), vec3(1.9)) * 0.86; }
 // Light added to a colour: it glows on ink, and stains on paper.
 vec3 glow(vec3 base, vec3 c, float amount) {
   return mix(base + c * amount, mix(base, deepen(c), clamp(amount * 0.8, 0.0, 0.9)), uLight);
@@ -70,8 +90,8 @@ float gHome;
 // Where the two sides meet, at height y: it leans toward the pointer, most where the pointer is, and never sits still.
 float frontAt(float y) {
   float lean = ((uPointer.x - 0.5) * gAspect - gHome) * 0.6 * uHover;
-  float near = exp(-pow((y - (uPointer.y - 0.5)) * 2.4, 2.0));
-  return gHome + lean * (0.3 + 0.7 * near) + 0.07 * sin(y * 3.3 + uTime * 0.6) + 0.12 * (fbm(vec2(y * 1.9 + 3.0, uTime * 0.2)) - 0.5);
+  float near = bell((y - (uPointer.y - 0.5)) * 2.4);
+  return gHome + lean * (0.3 + 0.7 * near) + 0.07 * sin(y * 3.3 + uTime * 0.6) + 0.14 * (fbm3(vec2(y * 1.9 + 3.0, uTime * 0.2)) - 0.44);
 }
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
@@ -91,7 +111,7 @@ void main() {
   float w = fbm(f + 1.8 * warp);
   float pile = exp(-abs(d) * 4.2);
   float body = smoothstep(0.3, 0.85, w + pile * 0.32);
-  float ridge = pow(1.0 - abs(2.0 * fbm(f * 2.4 + warp * 2.0) - 1.0), 7.0);
+  float ridge = pow(clamp(1.0 - abs(2.0 * fbm(f * 2.4 + warp * 2.0) - 1.0), 0.0, 1.0), 7.0);
 
   float half_ = gAspect * 0.5;
   vec3 ca = mix(vec3(0.969, 0.784, 0.298), vec3(0.965, 0.663, 0.769), smoothstep(-half_, gHome, p.x));
@@ -104,10 +124,10 @@ void main() {
   // A press sends a ring out from where it landed.
   float age = t - uPulse.z;
   vec2 at = (uPulse.xy - 0.5) * vec2(gAspect, 1.0);
-  float ring = exp(-pow((length(p - at) - age * 0.95) * 9.0, 2.0)) * exp(-age * 1.5) * step(0.0, age);
+  float ring = age < 0.0 ? 0.0 : bell((length(p - at) - age * 0.95) * 9.0) * exp(-age * 1.5);
 
   // The wire across the stage, and the node where the front crosses it.
-  float y0 = 0.36;
+  float y0 = 0.41;
   float f0 = frontAt(y0);
   float sag = 0.03 * exp(-abs(p.x - f0) * 2.6);
   float wd = abs(p.y - (y0 - sag));
@@ -115,7 +135,7 @@ void main() {
   float wireHalo = exp(-wd * 55.0) * 0.22;
   vec3 wcol = wireGradient(uv.x);
   float nd = length(p - vec2(f0, y0 - 0.03));
-  float core = smoothstep(0.017, 0.011, nd);
+  float core = within(0.011, 0.017, nd);
   float halo = exp(-nd * 13.0) * 0.75 + exp(-nd * 4.0) * 0.18;
 
   // Quieter toward the edges and the bottom, where the words are.
@@ -208,7 +228,7 @@ void main() {
     vec3 n = normalAt(p);
     vec3 key = normalize(vec3(0.4, 0.9, 0.5));
     float dif = max(dot(n, key), 0.0);
-    float rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+    float rim = rimOf(dot(n, -rd), 3.0);
     float lamp = 1.0 / (1.0 + 9.0 * dot(p - node, p - node));
     vec3 here = wireGradient((p.x + 2.0) / 4.0);
     vec3 metal = mix(vec3(0.16, 0.18, 0.22), vec3(0.78, 0.76, 0.72), uLight);
@@ -231,7 +251,7 @@ void main() {
       vec3 base = mix(uBg * 1.25 + 0.012, uBg * 0.97, uLight);
       col = glow(base, here, under * 0.16);
       col = glow(col, nodeCol, pool * 0.5);
-      float grid = smoothstep(0.03, 0.0, abs(fract(p.x / STEP_X + 0.5) - 0.5) * STEP_X) * exp(-abs(p.z) * 1.4);
+      float grid = within(0.0, 0.03, abs(fract(p.x / STEP_X + 0.5) - 0.5) * STEP_X) * exp(-abs(p.z) * 1.4);
       col = glow(col, here, grid * 0.12);
     }
     float fog = 1.0 - exp(-0.012 * t * t);
@@ -249,12 +269,16 @@ ${MARCH}
 float gCable;
 vec3 gLocal;
 float gUnit;
+// Worked out once a frame (main): where each handheld is, how it's turned, and the cable's nine points.
+vec3 gPosL, gPosR;
+mat2 gTurnL, gTurnR, gLean;
+vec3 gCab[9];
 vec3 unitPos(float s) { return vec3(s * 0.78, 0.04 * sin(uTime * 1.2 + s * 1.3) - 0.02, 0.0); }
 // A point in one handheld's own frame: turned in toward the other, leaning back.
-vec3 toUnit(vec3 p, float s) {
-  p -= unitPos(s);
-  p.xz *= rot(s * 0.42);
-  p.yz *= rot(-0.22);
+vec3 toUnit(vec3 p, vec3 at, mat2 turn) {
+  p -= at;
+  p.xz *= turn;
+  p.yz *= gLean;
   return p;
 }
 float unit(vec3 q) {
@@ -265,23 +289,30 @@ float unit(vec3 q) {
   return min(body, min(pad, keys));
 }
 vec3 cablePoint(float u) {
-  vec3 a = unitPos(-1.0) + vec3(0.06, 0.5, -0.06);
-  vec3 b = unitPos(1.0) + vec3(-0.06, 0.5, -0.06);
+  vec3 a = gPosL + vec3(0.06, 0.5, -0.06);
+  vec3 b = gPosR + vec3(-0.06, 0.5, -0.06);
   vec3 c = vec3(0.0, 1.02 + 0.03 * sin(uTime * 0.8), -0.5);
   return mix(mix(a, c, u), mix(c, b, u), u);
 }
+void setScene() {
+  gPosL = unitPos(-1.0);
+  gPosR = unitPos(1.0);
+  gTurnL = rot(-0.42);
+  gTurnR = rot(0.42);
+  gLean = rot(-0.22);
+  for (int i = 0; i < 9; i++) gCab[i] = cablePoint(float(i) / 8.0);
+}
 // 1 a handheld (gUnit says which, gLocal where on it), 2 the cable (gCable how far along), 3 the floor.
 vec2 map(vec3 p) {
-  vec3 ql = toUnit(p, -1.0), qr = toUnit(p, 1.0);
+  vec3 ql = toUnit(p, gPosL, gTurnL), qr = toUnit(p, gPosR, gTurnR);
   float dl = unit(ql), dr = unit(qr);
   vec2 m = vec2(min(dl, dr), 1.0);
   gUnit = dl < dr ? -1.0 : 1.0;
   gLocal = dl < dr ? ql : qr;
   float dc = 9.0;
-  vec3 a = cablePoint(0.0);
+  vec3 a = gCab[0];
   for (int i = 1; i <= 8; i++) {
-    float u = float(i) / 8.0;
-    vec3 b = cablePoint(u);
+    vec3 b = gCab[i];
     vec3 pa = p - a, ba = b - a;
     float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
     float di = length(pa - ba * h) - 0.017;
@@ -308,6 +339,7 @@ float screen(vec2 s, float which) {
 }
 void main() {
   vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
+  setScene();
   float yaw = 0.2 * sin(uTime * 0.21) + (uPointer.x - 0.5) * 0.7 * uHover;
   float pitch = 0.1 + (0.5 - uPointer.y) * 0.22 * uHover;
   vec3 ro = vec3(0.0, 0.2, 4.0);
@@ -338,7 +370,7 @@ void main() {
     vec3 n = normalAt(p);
     vec3 key = normalize(vec3(0.3, 0.8, 0.6));
     float dif = max(dot(n, key), 0.0);
-    float rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+    float rim = rimOf(dot(n, -rd), 3.0);
     float spec = pow(max(dot(reflect(rd, n), key), 0.0), 24.0);
     if (id < 1.5) {
       vec3 mine = which < 0.0 ? sideA : sideB;
@@ -354,13 +386,13 @@ void main() {
       }
     } else if (id < 2.5) {
       // Light runs the cable both ways: each side's colour toward the other.
-      float there = exp(-pow((fract(along - uTime * 0.45) - 0.5) * 9.0, 2.0));
-      float back = exp(-pow((fract(1.0 - along - uTime * 0.45 + 0.5) - 0.5) * 9.0, 2.0));
+      float there = bell((fract(along - uTime * 0.45) - 0.5) * 9.0);
+      float back = bell((fract(1.5 - along - uTime * 0.45) - 0.5) * 9.0);
       col = mix(vec3(0.07, 0.08, 0.1), vec3(0.3, 0.31, 0.33), uLight) * (0.4 + 0.6 * dif) + rim * 0.15;
       col = glow(col, sideA, there * 1.3);
       col = glow(col, sideB, back * 1.3);
     } else {
-      float l = exp(-length(p.xz - unitPos(-1.0).xz) * 2.4), r = exp(-length(p.xz - unitPos(1.0).xz) * 2.4);
+      float l = exp(-length(p.xz - gPosL.xz) * 2.4), r = exp(-length(p.xz - gPosR.xz) * 2.4);
       vec3 base = mix(uBg * 1.25 + 0.012, uBg * 0.97, uLight);
       col = glow(base, sideA, l * 0.3);
       col = glow(col, sideB, r * 0.3);
@@ -406,7 +438,7 @@ void main() {
   if (hit > 0.5) {
     vec3 p = ro + rd * t;
     vec3 n = normalAt(p);
-    float fres = pow(1.0 - max(dot(n, -rd), 0.0), 2.2);
+    float fres = rimOf(dot(n, -rd), 2.2);
     // Contour lines over the shape, in the wire's colours: a thing being drawn, not finished.
     float bands = smoothstep(0.42, 0.5, abs(fract(p.y * 7.0 + uTime * 0.15) - 0.5));
     vec3 hue = wireGradient(fract(0.5 + 0.5 * n.x + 0.25 * n.y));

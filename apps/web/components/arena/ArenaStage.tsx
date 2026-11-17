@@ -3,15 +3,22 @@
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { FRAGMENT, type SceneName, VERTEX } from "./shaders.ts";
 
-// The arena's moving pictures (shaders.ts), each a fragment shader on one canvas: plain WebGL, nothing downloaded. A
+// The site's moving pictures (shaders.ts), each a fragment shader on one canvas: plain WebGL, nothing downloaded. A
 // canvas starts when it's near the screen and stops when it leaves; it follows the pointer over its host (the nearest
-// [data-stage-host], or itself), the site's theme, and the colour behind it. Reduced motion gets one still frame, and a
-// browser without WebGL the CSS behind the canvas. All decoration: hidden from assistive technology.
+// [data-stage-host], or itself), the site's theme, and the colour behind it. It draws at most 60 times a second and
+// draws smaller when the machine can't keep up. Reduced motion, or the page's pause switch (MotionSwitch), holds one
+// still frame; a browser without WebGL (or with only software WebGL) gets the CSS picture instead. All decoration:
+// hidden from assistive technology.
 
-/** The most pixels a canvas draws: a phone's GPU runs the raymarched scenes comfortably under this. */
-const BUDGET: Record<SceneName, number> = { clash: 1_500_000, line: 520_000, link: 520_000, next: 300_000 };
+/** The most pixels a canvas draws at full quality. */
+const BUDGET: Record<SceneName, number> = { clash: 1_300_000, line: 480_000, link: 480_000, next: 300_000 };
 /** The frame a still picture shows (reduced motion). */
 const STILL = 14;
+/** No more than 60 frames a second, whatever the screen refreshes at. */
+const FRAME_MS = 1000 / 62;
+/** The attribute on <html> while the page's motion is paused, and the event that says it changed. */
+const PAUSED = "data-stage-paused";
+const MOTION_EVENT = "stage-motion";
 
 function compile(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
   const shader = gl.createShader(type);
@@ -19,7 +26,7 @@ function compile(gl: WebGLRenderingContext, type: number, source: string): WebGL
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return shader;
-  console.warn(`The arena's shader didn't compile: ${gl.getShaderInfoLog(shader) ?? ""}`);
+  console.warn(`A stage's shader didn't compile: ${gl.getShaderInfoLog(shader) ?? ""}`);
   gl.deleteShader(shader);
   return null;
 }
@@ -32,6 +39,8 @@ function rgb(css: string): [number, number, number] | null {
 
 export function ShaderCanvas({ scene, className }: { scene: SceneName; className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  // No WebGL, or a shader this GPU won't take: the CSS picture, on a plain element (a canvas that once had a context
+  // paints over its own background).
   const [flat, setFlat] = useState(false);
 
   useEffect(() => {
@@ -43,21 +52,32 @@ export function ShaderCanvas({ scene, className }: { scene: SceneName; className
     let uniforms: Record<string, WebGLUniformLocation | null> = {};
     let frame = 0;
     let visible = false;
+    let disposed = false;
     let last = performance.now();
     let clock = 0;
+    let dpr = window.devicePixelRatio || 1;
+    // How much of the budget it draws: it drops when frames run long, and stays down.
+    let quality = 1;
+    let slow = 0;
     const target = { x: 0.5, y: 0.5, hover: 0 };
     const eased = { x: 0.5, y: 0.5, hover: 0 };
     let pulse: [number, number, number] = [0.5, 0.5, -100];
     let bg: [number, number, number] = [0.04, 0.047, 0.063];
     let light = 0;
+    // The last eight events it was told of (a "stage-trade" on the canvas): when, how big, which colour.
+    const trades = new Float32Array(32).fill(0);
+    for (let i = 0; i < 8; i++) trades[i * 4] = -100;
+    let nextTrade = 0;
 
+    const still = () => reduced.matches || document.documentElement.hasAttribute(PAUSED);
     const readTheme = () => {
       light = document.documentElement.dataset.theme === "light" ? 1 : 0;
       bg = rgb(getComputedStyle(canvas).backgroundColor) ?? bg;
     };
 
     const start = (): boolean => {
-      gl = canvas.getContext("webgl", { antialias: false, alpha: false, depth: false, stencil: false });
+      // Software WebGL would run these on the processor: better the still picture.
+      gl = canvas.getContext("webgl", { antialias: false, alpha: false, depth: false, stencil: false, failIfMajorPerformanceCaveat: true });
       if (!gl) return false;
       const vs = compile(gl, gl.VERTEX_SHADER, VERTEX);
       const fs = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT[scene]);
@@ -74,134 +94,206 @@ export function ShaderCanvas({ scene, className }: { scene: SceneName; className
       const at = gl.getAttribLocation(program, "aPos");
       gl.enableVertexAttribArray(at);
       gl.vertexAttribPointer(at, 2, gl.FLOAT, false, 0, 0);
-      for (const name of ["uRes", "uTime", "uPointer", "uHover", "uLight", "uBg", "uPulse"]) uniforms[name] = gl.getUniformLocation(program, name);
+      uniforms = {};
+      for (const name of ["uRes", "uTime", "uPointer", "uHover", "uLight", "uBg", "uPulse", "uTrade"]) uniforms[name] = gl.getUniformLocation(program, name);
       return true;
     };
 
-    const size = () => {
-      if (!gl) return;
-      const box = canvas.getBoundingClientRect();
-      const scale = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(BUDGET[scene] / Math.max(1, box.width * box.height)));
-      const w = Math.max(2, Math.round(box.width * scale)), h = Math.max(2, Math.round(box.height * scale));
-      if (canvas.width !== w || canvas.height !== h) {
-        canvas.width = w;
-        canvas.height = h;
-        gl.viewport(0, 0, w, h);
-      }
+    /** Sets the canvas to its box (its own, whatever its parents' transforms) times the screen's density, inside the budget. */
+    const size = (): boolean => {
+      if (!gl) return false;
+      dpr = window.devicePixelRatio || 1;
+      const cw = canvas.clientWidth, ch = canvas.clientHeight;
+      const scale = Math.min(dpr, 2, Math.sqrt((BUDGET[scene] * quality) / Math.max(1, cw * ch)));
+      const w = Math.max(2, Math.round(cw * scale)), h = Math.max(2, Math.round(ch * scale));
+      if (canvas.width === w && canvas.height === h) return false;
+      canvas.width = w;
+      canvas.height = h;
+      gl.viewport(0, 0, w, h);
+      return true;
     };
 
     const draw = (now: number) => {
       if (!gl) return;
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
-      clock += dt;
+      const held = still();
+      if (!held) clock += dt;
       // The pointer is followed with a little weight, so the picture never snaps.
       const k = 1 - Math.exp(-dt * 6);
       eased.x += (target.x - eased.x) * k;
       eased.y += (target.y - eased.y) * k;
       eased.hover += (target.hover - eased.hover) * (1 - Math.exp(-dt * 4));
-      const still = reduced.matches;
+      const frozen = reduced.matches;
       gl.uniform2f(uniforms.uRes!, canvas.width, canvas.height);
-      gl.uniform1f(uniforms.uTime!, still ? STILL : clock);
-      gl.uniform2f(uniforms.uPointer!, still ? 0.5 : eased.x, still ? 0.5 : eased.y);
-      gl.uniform1f(uniforms.uHover!, still ? 0 : eased.hover);
+      gl.uniform1f(uniforms.uTime!, frozen ? STILL : clock);
+      gl.uniform2f(uniforms.uPointer!, frozen ? 0.5 : eased.x, frozen ? 0.5 : eased.y);
+      gl.uniform1f(uniforms.uHover!, frozen ? 0 : eased.hover);
       gl.uniform1f(uniforms.uLight!, light);
       gl.uniform3f(uniforms.uBg!, bg[0], bg[1], bg[2]);
-      gl.uniform3f(uniforms.uPulse!, pulse[0], pulse[1], still ? -100 : pulse[2]);
+      gl.uniform3f(uniforms.uPulse!, pulse[0], pulse[1], frozen ? -100 : pulse[2]);
+      if (uniforms.uTrade) gl.uniform4fv(uniforms.uTrade, trades);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     };
 
     const loop = (now: number) => {
-      draw(now);
-      frame = visible && !document.hidden && !reduced.matches ? requestAnimationFrame(loop) : 0;
+      frame = 0;
+      if (disposed || !gl) return;
+      const since = now - last;
+      if (since >= FRAME_MS - 1) {
+        // Frames that keep running long: draw fewer pixels from here on.
+        if (since > 30 && since < 250) slow++;
+        else slow = Math.max(0, slow - 0.25);
+        if (slow > 24 && quality > 0.4) {
+          quality *= 0.75;
+          slow = 0;
+          size();
+        }
+        if ((window.devicePixelRatio || 1) !== dpr) size();
+        draw(now);
+      }
+      if (visible && !document.hidden && !still()) frame = requestAnimationFrame(loop);
     };
+    /** Draws now, and keeps drawing if it should be moving. */
     const wake = () => {
-      if (!gl || frame) return;
-      last = performance.now();
+      if (!gl || disposed) return;
+      if (frame) return;
+      last = performance.now() - FRAME_MS;
       frame = requestAnimationFrame(loop);
     };
 
-    const where = (e: PointerEvent) => {
+    const where = (x: number, y: number) => {
       const box = canvas.getBoundingClientRect();
-      return [Math.min(1, Math.max(0, (e.clientX - box.left) / box.width)), 1 - Math.min(1, Math.max(0, (e.clientY - box.top) / box.height))] as const;
+      return [Math.min(1, Math.max(0, (x - box.left) / box.width)), 1 - Math.min(1, Math.max(0, (y - box.top) / box.height))] as const;
     };
     const move = (e: PointerEvent) => {
       if (e.pointerType === "touch") return;
-      [target.x, target.y] = where(e);
+      [target.x, target.y] = where(e.clientX, e.clientY);
       target.hover = 1;
     };
     const leave = () => {
       target.hover = 0;
     };
-    const press = (e: PointerEvent) => {
-      const [x, y] = where(e);
+    // A click, not a touch going down: a finger that scrolls the page past isn't a press.
+    const press = (e: MouseEvent) => {
+      const [x, y] = where(e.clientX, e.clientY);
       pulse = [x, y, clock];
     };
+    // An event to show: size from 0 to 1, hue along the wire's gradient.
+    const trade = (e: Event) => {
+      const d = (e as CustomEvent<{ size?: number; hue?: number }>).detail ?? {};
+      trades.set([clock, Math.min(1, Math.max(0.05, d.size ?? 0.3)), Math.min(1, Math.max(0, d.hue ?? 0.5)), 0], nextTrade * 4);
+      nextTrade = (nextTrade + 1) % 8;
+    };
+    canvas.addEventListener("stage-trade", trade);
     host.addEventListener("pointermove", move);
     host.addEventListener("pointerleave", leave);
-    host.addEventListener("pointerdown", press);
+    host.addEventListener("click", press);
 
+    const begin = (): boolean => {
+      if (!start()) {
+        gl = null;
+        return false;
+      }
+      readTheme();
+      size();
+      return true;
+    };
     const seen = new IntersectionObserver(
       (entries) => {
-        visible = entries.some((e) => e.isIntersecting);
-        if (!visible) return;
-        if (!gl) {
-          if (!start()) {
-            gl = null;
-            seen.disconnect();
-            setFlat(true);
-            return;
-          }
-          readTheme();
-          size();
+        visible = entries[entries.length - 1]?.isIntersecting ?? false;
+        if (!visible || disposed) return;
+        if (!gl && !begin()) {
+          seen.disconnect();
+          setFlat(true);
+          return;
         }
         wake();
       },
       { rootMargin: "120px" },
     );
     seen.observe(canvas);
+    // Sizing a canvas clears it: draw again at once, or every step of a resize flashes empty.
     const resized = new ResizeObserver(() => {
-      size();
+      if (size()) draw(performance.now());
       wake();
     });
     resized.observe(canvas);
     // The theme switch changes the page's colours a moment after the attribute: read them on the next frame.
-    const themed = new MutationObserver(() => requestAnimationFrame(() => (readTheme(), wake())));
+    const themed = new MutationObserver(() =>
+      requestAnimationFrame(() => {
+        readTheme();
+        draw(performance.now());
+        wake();
+      }),
+    );
     themed.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const shown = () => wake();
     document.addEventListener("visibilitychange", shown);
+    document.addEventListener(MOTION_EVENT, shown);
     reduced.addEventListener("change", shown);
+    // A lost context (the GPU reset, or too many on the page) comes back: wait for it, then start over.
     const lost = (e: Event) => {
       e.preventDefault();
       cancelAnimationFrame(frame);
       frame = 0;
       gl = null;
-      uniforms = {};
-      setFlat(true);
+    };
+    const restored = () => {
+      if (disposed) return;
+      if (begin()) wake();
+      else setFlat(true);
     };
     canvas.addEventListener("webglcontextlost", lost);
+    canvas.addEventListener("webglcontextrestored", restored);
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(frame);
       seen.disconnect();
       resized.disconnect();
       themed.disconnect();
       document.removeEventListener("visibilitychange", shown);
+      document.removeEventListener(MOTION_EVENT, shown);
       reduced.removeEventListener("change", shown);
       canvas.removeEventListener("webglcontextlost", lost);
+      canvas.removeEventListener("webglcontextrestored", restored);
+      canvas.removeEventListener("stage-trade", trade);
       host.removeEventListener("pointermove", move);
       host.removeEventListener("pointerleave", leave);
-      host.removeEventListener("pointerdown", press);
+      host.removeEventListener("click", press);
+      // Give the context back now: a browser allows only so many, and a page left behind would hold its own.
       gl?.getExtension("WEBGL_lose_context")?.loseContext();
     };
-  }, [scene]);
+  }, [scene, flat]);
 
-  return <canvas ref={ref} className={`${className ?? ""}${flat ? " is-flat" : ""}`.trim()} data-scene={scene} aria-hidden="true" />;
+  const cls = `${className ?? ""}${flat ? " is-flat" : ""}`.trim();
+  // Keyed by scene: a canvas whose context was given back can't start another.
+  return flat ? <div className={cls} data-scene={scene} aria-hidden="true" /> : <canvas key={scene} ref={ref} className={cls} data-scene={scene} aria-hidden="true" />;
+}
+
+/**
+ * The page's pause switch: holds every picture still, and lets them go again. Anything that moves on its own for more
+ * than a few seconds needs one; reduced motion already holds them without it, so it isn't shown then (CSS).
+ */
+export function MotionSwitch({ className }: { className?: string }) {
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (paused) document.documentElement.setAttribute(PAUSED, "");
+    else document.documentElement.removeAttribute(PAUSED);
+    document.dispatchEvent(new Event(MOTION_EVENT));
+    return () => document.documentElement.removeAttribute(PAUSED);
+  }, [paused]);
+  return (
+    <button type="button" className={className} aria-pressed={paused} onClick={() => setPaused(!paused)}>
+      <span aria-hidden="true">{paused ? "▶" : "❚❚"}</span> {paused ? "Play motion" : "Pause motion"}
+    </button>
+  );
 }
 
 /**
  * A card that leans toward the pointer, and the host its picture follows. Only where there's a pointer to lean toward
- * (a mouse), and never under reduced motion: the CSS reads --tilt-x and --tilt-y, which stay 0 otherwise.
+ * (a mouse), and never under reduced motion: the CSS reads --tilt-x and --tilt-y while the card is hovered.
  */
 export function Tilt({ className, children, labelledBy }: { className?: string; children: ReactNode; labelledBy?: string }) {
   const ref = useRef<HTMLElement>(null);

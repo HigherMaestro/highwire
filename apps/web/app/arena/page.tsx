@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { pageMetadata } from "../../lib/site.ts";
 import { SiteFooter, SiteHeader } from "../../components/Chrome.tsx";
 import { CopyCommand } from "../../components/CopyCommand.tsx";
-import { ShaderCanvas, Tilt } from "../../components/arena/ArenaStage.tsx";
+import { MotionSwitch, ShaderCanvas, Tilt } from "../../components/arena/ArenaStage.tsx";
 import { PreviewNote } from "../../components/arena/Parts.tsx";
 import { arenaPagesOn, lineData } from "../../lib/arena/data.ts";
 import { linkLobby, linkRatedPagesOn, usingRatedSample } from "../../lib/link/watch.ts";
@@ -198,6 +198,7 @@ export default async function ArenaPage() {
               <span className="arena-hint-touch">Tap to strike.</span>
             </p>
           </div>
+          <MotionSwitch className="arena-motion" />
         </section>
         {sample ? <PreviewNote /> : null}
 
