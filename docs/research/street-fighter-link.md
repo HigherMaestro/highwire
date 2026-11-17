@@ -403,6 +403,146 @@ unseen fireballs (5.2), motions misread (5.3), moves cut by a window (5.4), inpu
 margin on small differences in line (5.4's block-and-sweep, 5.5's patient fireballs), so one round says little about
 who is better: the next step is still graded scripted players over many rounds (8, phase 2).
 
+### 5.6 Round six: 5.5's open items closed, and sharper motions (2026-11-17)
+
+Played on the referee with 5.7's fixes in it too (the seats evened, the faster sweep, blocks that follow a jump over).
+
+**5.5's list:**
+- **The carried jump kick.** A plan already queues behind a carried move; what was missing was saying so. The state
+  now has `your_plan_starts_in` (frames, 0 when nothing is carried) for every side alike, and the carried move says
+  that the next plan, a block included, starts then and not now, and that a fighter in the air can't block anyway.
+  Neither agent misread it this round.
+- **The knockout hit** is listed: a hit that takes health past zero (it wraps) counts for what was left. Round six's
+  last window names it (a fireball, 10, into a jump).
+- **The unnamed codes,** from 20 rounds between scripted players: 0x0A is the last 10 to 15 frames of getting up;
+  0x66 is the knocked-out fall (about 180 frames, then the round ends); 0x98 is being hit while getting up, and 0x94
+  being hit out of one's own fireball (both shown as hit stun); 0x6C, new, is 4 frames at the start of a kick.
+- **Sharper motions: adopted, to the limit the game allows.** The game moves a step every 5 frames (5.7), so a
+  direction held 5 frames is always read once: motions now hold each direction 5 frames (were 6), the last with its
+  button 5 (was 8), after 5 frames of nothing (was 6). A dragon punch's button goes down 25 frames after the step
+  starts, where it took 30. Tried and refused: 4-frame holds (857 of 896 cases; dragon punches came out as crouch
+  punches and fireballs), and a dragon punch with no pause between forward and down (846 of 896; it walked).
+- **A frames-until-free counter: not found, and not cheap.** Across 325 busy stretches no byte of a fighter's record
+  only falls to the frame it's free (the nearest, +0xC1, is the trailing health bar): the game seems to step through
+  each move's own animation rather than count down. The same data checked the estimate's lengths instead (sweep 49
+  to 50, dragon punch 65, a knockdown to standing 95, a fireball 45 to 70 by fighter), which is what `free_in_about`
+  already used.
+
+**The suites, on this referee:**
+- **5.3's cases,** now at all five phases of the game's step: **2,238 of 2,240.** The two left are the 24-frame walk
+  back, one for each seat.
+- **5.4's cuts:** 390 cuts, 146 mid-input, all 146 came out.
+- **5.5's can't-act cases:** 572 of 598 (it was 591). Every other state is clean (78 of 78 for each of a fireball's
+  recovery, a heavy kick, a jump, a sweep, a dragon punch and a knockdown; 52 of 52 in hit stun). All 26 are 5.5's one
+  case, more often: the fighter stops blocking to start a move while the blocked heavy kick is still out, and is hit.
+  A move now starts sooner, so it meets the kick more often. The game, not a lost input; but see "still open".
+- **The reactive anti-air** (5.5's scripted check, a dragon punch sent in the window after a jump starts): **it beat
+  the jump 3 times in 6, where it was 1 in 6,** and still never lost.
+
+**The round** (the same two agents and instructions): 68 windows, 2,416 frames, a knockout (Ryu, 91 against 0), 3.1
+minutes, no missed plan, both games agreeing.
+
+| | 5.1 | 5.2 | 5.3 | 5.4 | 5.5 | 5.6 |
+|---|---|---|---|---|---|---|
+| Windows | 26 | 70 | 84 | 60 | 30 | 68 |
+| Fireball steps, both sides | 65 | 50 | 43 | 23 | 12 | 31 |
+| Close-range attack steps sent | 25 | 13 | 29 | 25 | 8 | 23 |
+| Hits that weren't a fireball | 2 (agents' accounts) | 4 | 5 | 7 | 3 | 6: four sweeps (two of them a trade), a hurricane kick, a dragon punch |
+| Fireballs that caught a walk, a jump or an attack | (nearly all) | 3 | 5 | 3 | 4, and the knockout | 3, the knockout among them |
+| Dragon punch steps sent, and landed | 1, 0 | 2, 0 | 1, 0 | 5, 0 | 2, 1 | 1, 1 |
+
+**The first anti-air that worked:** Ken jumped in with a kick, Ryu's dragon punch was sent in the window the jump
+opened, and it took Ken out of the air for 16. Both opened with fireballs, which now cancel every time (the seats are
+even), and both said so; Ryu broke it by jumping a fireball into a sweep on landing, twice, then led and sat behind
+fireballs and a block. Ken blocked the jump-ins but lost each race to sweep the landing, the first-to-commit rule 5.7
+measures. 16 steps were dropped while waiting, each named in the state.
+
+**Still open, from the agents' accounts:**
+- **`free_to_act` is true while a queued press still can't start.** A press also waits for 5 frames of nothing held,
+  12 frames after its side's last button, and, for a fireball, 46 after walking forward; a move sent from a block
+  came out 30 to 50 frames late, and one agent was wrong about it four times. The state should say how long the next
+  press must wait (the referee knows), and whether it's the forward rule.
+- **A block does nothing during the blocker's own recovery,** and the state doesn't say when a held block will work.
+  Both agents asked for it. It also answers the can't-act suite's one case.
+- `free_in_about` misled once (48 shown after a jump attack; the fighter swept at once). It's still an estimate.
+- A fireball's arrival frame, asked for by one agent, is distance over its speed: cheap to add.
+
+### 5.7 Graded scripted players: does the better one win? (2026-11-17)
+
+Phase 2's question (8), asked of the proof of concept's referee before any of it is built: eight scripted players,
+each seeing exactly the state an agent sees and answering with plans, every pairing and every mirror, 40 rounds each
+with the seats swapped every round and seeded choices. **1,440 rounds: no desync, no stuck rig, every round ended by
+the game** (1,165 knockouts, 275 on the clock, 128 of those drawn). A round averaged 43 seconds of game and 98 windows,
+and about 9 seconds of one core. This grid ran on the referee as it stood before 5.6's sharper motions (6-frame holds).
+
+**What the first trial runs found, each fixed in the referee before the grid:**
+- **Player 1 had an edge, and it was the game's.** The game moves a step every 5 frames and reads player 2's pad 2
+  frames before player 1's, so the same input on the same frame came out up to a whole step (5 frames) later for
+  player 2. Two identical fireball-throwers: **player 1 won 48 rounds of 48**, whichever fighter sat where (Ryu and
+  Ken, Ken and Ryu, Ryu twice, Ken twice). The referee now holds player 1's inputs back 2 frames. After it, every move
+  tried shows on the same frame for both seats at every phase of the step, the same mirror is drawn every time, and
+  over the grid player 1 won 652 rounds and player 2 660. The five agent rounds before this (5.1 to 5.5) were played
+  with the edge.
+- **The two games can be one frame apart on a hit** (game 2 took the damage a frame after game 1, once in a trial
+  run). The check for a desync now asks whether they stay apart; over the grid they never were for more than a frame.
+- **Buttons held on the pads outlive a loaded state:** a match resumed from a stored state must let go of everything
+  first. (One trial grid played out as two fighters walking for 78 seconds.)
+- **The sweep was 8 frames slower than it need be:** down and kick together come out as fast as a standing kick (14
+  to 18 frames from the button); the macro crouched first. Fixed, with the crouch punch.
+- **A block didn't follow a jump over it:** "away from the opponent" was settled when the step began, so a jump that
+  crossed over turned the block into a walk forward. Held actions now follow the other fighter frame by frame.
+
+**The players:**
+
+| Player | What it does |
+|---|---|
+| random | Any action at all, every window |
+| masher | Walks in; in range, a random punch, kick, sweep or jump kick. Never blocks, never looks |
+| zoner | A recipe by distance: a fireball beyond 70, a sweep within 40, either between. Never looks at the other fighter |
+| reactor | The zoner, plus blocking what the state shows coming: a fireball about to arrive, a jump-in, an attack in range |
+| punisher | The reactor's blocks, and ideas: walks in behind its block, jumps a fireball as it's thrown and kicks the thrower, sweeps a recovery, blocks low at close range more than it attacks |
+| reactor-25, -50, -75 | The reactor, erring: that share of its windows' plans is any action at all |
+
+**The same player, erring less, wins, and steeply** (rounds won of 40):
+
+| | against reactor-25 | reactor-50 | reactor-75 |
+|---|---|---|---|
+| reactor | 40–0 | 40–0 | 40–0 |
+| reactor-25 | | 37–3 | 38–2 |
+| reactor-50 | | | 33–7 |
+
+**A recipe beats none:** the zoner and the reactor each beat random 40–0 and the masher 39–1. The masher is no better
+than random (17–23).
+
+**Above the recipe, the players go in a circle, and care isn't rewarded:**
+
+| Pairing | Result |
+|---|---|
+| reactor against zoner | 39 of 40 drawn on the clock; every mirror of either drawn the same way |
+| zoner against reactor-25, -50, -75 | 40–0 each: the plain recipe beats the reactor at any error |
+| punisher against zoner | 31–8 (its jump over a fireball into the thrower works) |
+| punisher against reactor | 3–37, and it loses to the erring reactors too (6–34, 8–32, 13–27) |
+| punisher against masher | 25–15 |
+| punisher against random | 12–27, 38 of the 40 on the clock: it blocks, and a stray hit leads at time |
+
+**Why,** from tallies of what hit what:
+- **At close range the first to commit wins.** A move shows 14 to 18 frames after its button, the window that lets
+  the other side answer opens 6 frames after that, and an attack sent then needs its own 14 to 18: only a block can
+  answer in time. Nearly all the damage the punisher took landed during the start of its own sweep. Punish windows that exist for a person don't exist at this latency.
+- **A block has no counter in the vocabulary.** There is no throw, so two careful players can't hurt each other:
+  that's the 40 drawn mirrors. The arcade game's answer to a blocker is a throw; whether this port has one isn't mapped.
+- **Fireballs thrown on the same frame cancel,** now that the seats are even, so a fireball war between equals is a
+  draw too.
+
+**What it says about the plan (8, phase 2).** "The better player wins clearly more" holds where better means fewer
+mistakes (25 points of error is worth 82% to 100%) and where it means knowing a recipe at all. It isn't shown above
+that: the player with more ideas lost to the simpler one, for reasons that are the model's and the vocabulary's, not
+only the script's (it was written by hand in an afternoon, and a searched or tuned player may do better). 19% of
+rounds went to the clock and 9% were drawn, nearly all between careful players: risk 7's "agents turtle" is real
+here. Before phase 2 can pass it needs a throw or another answer to a block, a rule for a drawn round, a look at
+whether the reaction window can open sooner without showing a side what isn't on its screen yet, and players found
+by search. The seat fix belongs in phase 1's map whatever else happens.
+
 ## 6. The game file, and the law
 
 **How Yellow does it, and what would be the same:** the image stays out of the repository and packages, in private
