@@ -291,6 +291,57 @@ built; it's the next thing to do before any conclusion about how good the game i
 Also reported, and true: holding block walks a fighter backward into the corner (it's the same button); "block stun"
 shows for as long as back is held near an attack; the state doesn't say whether a step's move began.
 
+### 5.4 Round four: a move begun is a move finished (2026-11-16)
+
+**The rule, built:** when a window ends, a press or motion whose first button frame has played and whose last hasn't
+is carried: its remaining inputs play first in the next window, with the facing they began with, and the side's new
+plan starts after them. A step that had pressed nothing yet is dropped as before. **Symmetry holds:** both sides
+still plan from the same frame and the same state, neither sees the other's plan or carried inputs, and the state
+tells a side only about its own move in progress (`your_move_in_progress`, with the input frames left). The side
+mid-move doesn't gain time; it's committed, as a person mid-motion is.
+
+**Checked:**
+- **Cuts:** every press and motion (13), by both fighters, with the window ended at 15 points through it: 390 cuts, 154
+  of them mid-input, and **all 154 moves came out.**
+- **The case suite of 5.3, run again on this engine:** 893 of 896, the same three.
+- **Those three:** the walk back is slow to start (Ken, after walking forward: 0 x in 24 frames, 6 in 40, 10 in 60), so
+  the check's 24 frames were too few: not a fault. The two jumps after a punch or kick happened at 24 apart, where the
+  game plays its longer close-range punch and kick (0x20 to 0x26); at 32 apart the same plan jumped every time, with
+  or without a wait. So most likely the jump's press fell inside the close move and the game ignored it, which is the
+  first item under "still open" below. Not reproduced directly.
+
+**The round** (the same two agents, the same instructions as 5.3): 60 windows, 2,138 frames, a knockout (Ken, 82
+against 0), 2.8 minutes, no missed plan, both games agreeing throughout.
+
+| | 5.1 | 5.2 | 5.3 | 5.4 |
+|---|---|---|---|---|
+| Windows | 26 | 70 | 84 | 60 |
+| Fireball steps, both sides | 65 | 50 | 43 | 23 |
+| Close-range attack steps sent | 25 | 13 | 29 | 25 |
+| Hits that weren't a fireball | 2 (by the agents' accounts) | 4 | 5 | 7: four sweeps, two jump kicks, a crouch punch |
+| Fireballs that caught a walk, a jump or an attack | (unseen: nearly all) | 3 | 5 | 3, all jumps |
+
+The first round where the two sides played differently and it showed. Ryu jumped in over fireballs and landed two
+jump kicks; Ken answered by blocking the jump, sweeping the landing (four knockdowns for 14 each) and throwing a
+fireball as Ryu stood up; Ryu's later jumps left the ground too early and were hit three times for 16. Most damage
+was no longer fireballs, and neither agent reported a move coming out as a different move.
+
+**Still open, from the agents and the log:**
+- **Inputs sent while a fighter can't act are lost.** The game ignores the pad during a move's recovery, a landing or
+  getting up, and the referee plays a step's inputs regardless: a sweep asked for on landing showed as crouching and
+  never came out, a jump sent during a fireball's recovery vanished, and Ken's five dragon punch steps never landed one
+  (by his account he was still recovering from a fireball, or already being hit; not checked frame by frame). Nothing told the agent. The fix is the same
+  kind as the last: hold a press or motion until the fighter's move code says it is free, and say so in the state.
+  Until then anti-air dragon punches, the game's main answer to a jump-in, are mostly out of reach.
+- No frames-until-free for either fighter, when a jump lands, or which fighter is in front when they overlap.
+- "doing" still had one unnamed code (0x88).
+
+**Where this leaves the question of 5.1** ("can an agent even play this?"): yes. Across four rounds the same two
+agents went from a blind fireball war to reading jumps, blocking, punishing landings and losing to their own
+mistimed jumps, and each referee fix moved the fight further from one pattern. What it still doesn't show is whether
+a stronger player reliably beats a weaker one, which needs graded scripted players over many rounds (8, phase 2), and
+one more referee rule (inputs waiting for a free fighter) before that's worth measuring.
+
 ## 6. The game file, and the law
 
 **How Yellow does it, and what would be the same:** the image stays out of the repository and packages, in private
