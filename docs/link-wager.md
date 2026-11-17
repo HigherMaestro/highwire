@@ -35,7 +35,7 @@ Line's practice wagers (docs/wager-mode.md 13, W1; docs/wager-devnet.md), which 
 ## 1. What a staked battle is
 
 - **Stake:** both sides stake the same amount of devnet SOL, from fixed tiers. Symmetric: no odds.
-- **Format:** the fixed mirror format (`colosseum-1`), one battle. (A series is an open question, section 7.)
+- **Format:** the fixed mirror format (`colosseum-1`), one battle. (A series was measured and not taken, 7.1.)
 - **Play:** unchanged. `link_join`, `link_state` and `link_move` through the referee, the same clocks and fallbacks
   (docs/link-battles.md 4.2), the screens and sound public as each turn plays. Nothing about a turn goes on-chain.
 - **The result:** the game's. A knockout: the side with a Pokémon left wins. A forfeit (leaving, or two minutes silent
@@ -192,7 +192,7 @@ them, as The Line's wager desk does; with devnet SOL that rule only kept the mai
 acceptance run and out of play. On the free ladder they're ranked like any other too, since the same day
 (docs/link-battles.md 5); one coin and one wallet a fighter, and never two of one owner paired, still hold.
 
-**Choices made in building it,** each easy to change: one battle per stake (section 7); no fee (the winner takes both
+**Choices made in building it,** each easy to change: one battle per stake (7.1); no fee (the winner takes both
 stakes whole); tiers of 0.1 and 0.25 devnet SOL; the program's refund two hours after both staked; the battle starts
 only after both deposits are seen on-chain (nothing to unwind); and a third tool, `link_settle`, so an agent can
 settle without the daemon.
@@ -445,14 +445,14 @@ pages say practice.
 ## 6. Decisions needed from you
 
 1. **Go ahead with Part 1?** It's engineering only.
-2. **One battle, or a series** (section 7).
+2. **One battle, or a series:** one battle, as built. The measurement in 7.1 says a series isn't worth its time.
 3. **The tiers** in devnet SOL (The Line's design names 0.1 and 0.25 a side).
 
 ## 7. Open questions
 
-- One battle swings on a single critical hit. A best-of-3 halves that and triples the time (a battle between model
-  agents runs 5 to 15 minutes). Measure first: a strong scripted player against a weaker one over a few hundred
-  battles says how much a better player actually wins.
+- ~~One battle swings on a single critical hit. A best-of-3 halves that and triples the time. Measure first.~~
+  Measured (7.1): one battle already goes to the better player most of the time, and a series adds less than it
+  costs. One battle per stake stays.
 - ~~Does the referee start the battle only after seeing both deposits on-chain, or pair first and void if a deposit
   never lands?~~ After both deposits: nothing to unwind (4.1).
 - How long before `refund` opens: long enough for the longest battle (the turn cap) plus a margin. Two hours for now
@@ -468,6 +468,48 @@ pages say practice.
 
 None of this is needed for Part 1. It's here because each point would have to be answered before real SOL, and some
 answers change the design.
+
+### 7.1 How much a better player wins (measured 2026-11-16)
+
+1,800 battles on the format's team, between scripted players of graded strength, with fresh dice every turn and the
+sides swapped every battle (`npm run skill -w highwire-link`, seed 20261116; no battle reached the cap or stuck). Each
+player decides from its own side's facts, as an agent does:
+
+- **random:** any legal action, switches included.
+- **strongest:** its most powerful move, never switching (a policy's `strongest` fallback).
+- **house 90, 75, 50:** the house that many turns in 100, a random legal action otherwise: a sound player that slips.
+- **house:** Highwire's house fighter (`house.ts`).
+- **sharp:** the house, knowing one more thing about the game: Slash and Razor Leaf nearly always land critical hits.
+
+| The better player v the other | Battles | Wins one battle (95%) | Best of 3 | Best of 5 | Turns |
+|---|---|---|---|---|---|
+| house v house (the same player) | 300 | 49.0% (43.4 to 54.6) | 48.5% | 48.1% | 17.1 |
+| house v house 90 | 300 | 49.7% (44.0 to 55.3) | 49.5% | 49.4% | 17.1 |
+| house v house 75 | 300 | 62.3% (56.7 to 67.6) | 68.1% | 72.2% | 17.1 |
+| house v house 50 | 150 | 72.0% (64.3 to 78.6) | 80.9% | 86.2% | 18.2 |
+| sharp v house | 300 | 88.0% (83.8 to 91.2) | 96.0% | 98.6% | 15.5 |
+| house v random | 150 | 92.0% (86.5 to 95.4) | 98.2% | 99.5% | 19.0 |
+| house v strongest | 150 | 100% (97.5 to 100) | 100% | 100% | 18.6 |
+| strongest v random | 150 | 68.0% (60.2 to 74.9) | 75.8% | 80.9% | 23.9 |
+
+The series columns are worked out from the one-battle share (battles are independent: fresh dice, the same start),
+not played.
+
+- **A battle is decided by play far more than by the dice.** Knowing one thing about the game the house doesn't is
+  worth 88 battles in 100 against it. The same player against itself is a coin, with neither side favoured (side 0
+  took 145 of the 300).
+- **A rare slip costs nothing that shows.** A random action one turn in ten (about two a battle) didn't move the
+  share; one in four did (62%).
+- **A plan that never adapts loses every time** to one that reads the board: "strongest move, never switch" took no
+  battle of 150 from the house, though it beats a random player two times in three. A fallback is a floor, not play.
+- **A series adds 6 to 9 points where it adds anything** (62% to 68%, 72% to 81%, 88% to 96%), nothing between
+  equals, and takes 2.2 to 2.5 battles: 11 to 37 minutes for model agents against 5 to 15. It would also need the desk
+  and the program to hold a stake across battles, where today a ticket opens one battle and a result settles one.
+  **Not taken.** A ladder already adds battles up; a stake is on one.
+- **What this doesn't say:** how model agents compare. These are scripts, the house is the strongest of them without
+  searching, and "sharp" differs from it by a single rule. Nor is it a view on the law (9): that a better player
+  usually wins doesn't make a staked battle a game of skill in any legal sense. Counsel's question, not this
+  table's.
 
 ## 8. The result would need more than the referee's word
 
