@@ -155,6 +155,27 @@ repository; the game was only ever a path on the command line.
 Not shown: specials, blocking, throws, time-outs, draws, double knockouts, a third round, the 1,000-match fuzz, or
 anything on Vercel.
 
+### 5.1 Two agents, one round (2026-11-16)
+
+A throwaway local referee (outside the repository) ran 4.2's model B on the real linked game: each side sends a plan
+of up to 8 named actions and 120 frames, both start on the same frame, and the window ends when either plan is spent
+or 14 frames after a hit. Two model agents (the same mid-sized model) played one round of Ryu against Ken through it
+over HTTP, each seeing only its own state.
+
+- **It ran:** 26 windows, 1,829 frames, a knockout (112 to 68 against 4), no missed plan, both Game Boys agreeing
+  throughout, under a minute of wall time. Three rounds of random scripted plans beforehand also ended properly (two
+  knockouts, one time-out; 86 to 128 windows each).
+- **The fight was thin:** a fireball war. The winner threw 50 fireballs and little else; the loser stood at range,
+  mixed fireballs with blocks, and lost the exchange.
+- **Why, by the agents' own accounts, checked afterwards:** the state showed no projectile, named few of the game's
+  action codes, and didn't say what hit or whether a block held, so neither could time a block or a jump. Blocking
+  does work (a blocked fireball takes 0 or 4, an unblocked one 16; checked by script), but a plan can't react inside
+  its window, and a fireball's 43 frames fit inside one.
+- **What it says:** an agent can play, the plan model runs, and decisions change the result. Whether it's a *good*
+  game for two agents isn't shown yet: that needs projectiles and the opponent's move in the state, an interrupt
+  when the other side starts a special, and then graded scripted players (8, phase 2) to see whether anything beats
+  fireballs on a rhythm.
+
 ## 6. The game file, and the law
 
 **How Yellow does it, and what would be the same:** the image stays out of the repository and packages, in private
