@@ -1,8 +1,9 @@
 # Assessment: Street Fighter II link battles
 
-Status: **due diligence, 2026-11-16. Nothing built, nothing decided.** Whether Highwire can run a Game Boy Street
-Fighter II link-cable fight between two agents the way it runs Pokémon Yellow's (docs/link-battles.md), and what it
-would take. Not legal advice.
+Status: **due diligence, 2026-11-16 and 17. Nothing built. The engine side works; the test of skill failed (5.9), and
+the recommendation is not to build this game as a rated ladder.** Whether Highwire can run a Game Boy Street Fighter
+II link-cable fight between two agents the way it runs Pokémon Yellow's (docs/link-battles.md), and what it would
+take. The decision is the owner's. Not legal advice.
 
 ## 1. The answer
 
@@ -18,6 +19,20 @@ read. The pair stays in step, the run is deterministic, and a fight saved mid-ro
 decision model that's still Street Fighter (4.2). That design, and reverse-engineering a game with no public
 disassembly, are most of the work. **The open non-technical question is the same one Yellow already carries,** with a
 second rights holder (6): the owner's call, ideally with counsel.
+
+**The verdict after nine rounds and the grids (5.1 to 5.9): the rig passes and the game, as agents would play it,
+doesn't.**
+- **What works.** Two linked Game Boys under a plan-and-window referee: no desync and no stuck rig in about 4,000
+  scripted rounds and nine rounds between agents; moves come out as asked; the seats are close to even; rounds end on
+  the game's own knockouts and matches by the game's own rule; the state tells a player when its press will start,
+  when its block works and when a fireball lands. Rounds between agents look like fights (5.8, 5.9).
+- **What doesn't.** Phase 2's test, that the better player wins clearly more, holds up to "plays a careful recipe"
+  and stops there. Search found no player that beats the careful ones: the strongest player found never loses to
+  anything and never beats its like. Every match among the three strongest players (72 of 72) ended with no winner,
+  by the game's own rule. No fighter in the roster has a throw, so a block has no answer but chip, and two players
+  throwing fireballs on the same frames cancel each other for ever.
+- **So:** a ladder on this game would put its best fighters in undecided matches. **Recommended: don't build it as a
+  rated game.** 5.9 says what could still be tried, and what I'd expect of it.
 
 ## 2. How link battles are built today
 
@@ -698,6 +713,140 @@ Both of eight's players said the block and fireball fields were right where they
 - **Phase 2's test is still not met above "knows a recipe".** The game's match rule settles a drawn round where
   players differ at all, and leaves two careful scripts drawn, as it should. The remaining lever in the referee is
   the reaction dial; the rest is players found by search, and fighters with a throw.
+
+### 5.9 The deciding round: searched players, the whole roster's throws, seat or fighter, and the bar (2026-11-17)
+
+The question 5.8 left: is there a clearly stronger player in this vocabulary, or does skill stop at a recipe? Run
+on 5.8's referee (true knockouts, the game's match rule, the carried-move fix).
+
+**The bar, written down before the grid ran** (the reviewing session's, with one clause added: a win rate needs
+matches that are decided). Matches as the game runs them, 12 a pairing, seats swapped, seeds the search never saw.
+1. The best searched player wins two in three or more of its decided matches against each recipe player, and at
+   least half its matches against each are decided.
+2. No recipe player wins more matches against it than it wins.
+3. Between the two strongest distinct players in the grid, nine matches in ten are decided.
+
+**Result: fail,** on 1 and 3.
+
+**A throw: none in the roster.** 5.8's trials (direction and button, touching and three steps back, tapped and held,
+on a fighter standing, walking in, blocking and crouch-blocking) plus full and half circles, 1,152 for each of the
+eight fighters played as player 1 against Ken: no blocker lost more than chip to anyone, and no victim showed a code
+that wasn't hit stun, a knockdown or a block. Zangief got 2,880 more (every rotation of four and of eight
+directions, both ways, from each start, one to five frames a direction, the button with the last direction or
+after): strikes and jumps only. What Zangief has is both buttons together, a spinning attack that takes 8 to 12
+from a standing blocker, nothing from a crouching one, and knocks down for 16 to 19 when it hits. That is chip, and
+a crouching block answers it. So no fighter was added to the grid, and the vocabulary has no answer to a block
+beyond 5.8's list. The select screen, mapped on the way: Ryu, Blanka, Guile; Ken, M. Bison, Chun Li; Zangief,
+Balrog, Sagat.
+
+**Seat or fighter: the seat.** The same scripted player on both sides (three of them, 60 rounds each) in all four
+seatings, 720 rounds, 707 decided:
+
+| | Player 1's seat | Player 2's seat |
+|---|---|---|
+| Ryu v Ken | 83 | 94 |
+| Ken v Ryu | 83 | 96 |
+| Ryu v Ryu | 81 | 95 |
+| Ken v Ken | 77 | 98 |
+| All | 324 (46%) | 383 (54%) |
+
+Ryu and Ken won 179 and 177 of the rounds where they met: no fighter edge. Player 2's seat won 54% whoever sat
+there (95% interval for player 1's share 42% to 50%). Before 5.7's fix player 1 won everything; holding player 1's
+inputs back 2 frames now gives player 2 a small edge, though the same press shows on the same frame for both. Not
+chased further: the game steps every 5 frames and the delay can only be whole frames, so the fair fix is to play
+every pairing in both seats, as every grid here does. In the final grid's matches the seats split 244 to 224.
+
+**The search.** A player with 31 open choices (`tuned.mts`: what to do far, mid and near with nothing to answer;
+whether and when to jump a fireball; whether to dragon punch a jump; when to sweep a fighter that's stuck; what to
+time for a fighter getting up; when to sit on a lead), seeing what an agent sees and using 5.8's fields. Scored by
+rounds against the field, a draw worth less than half a win.
+- **Search A,** against all five recipe players (8 generations of 14, 4 rounds an opponent): it became a fireball
+  thrower that blocks, beat the masher, the punisher and the noisy reactor every round, and drew the zoner and the
+  reactor every round at full health.
+- **Search B,** aimed only at those two (8 generations of 15, 6 rounds each): the mean never left the draw.
+- **A flaw of mine found here:** the player only reacted with a move if its press could start within 3 frames, and
+  after any block a press waits 5, so it almost never jumped a fireball or anti-aired. A and B ran with it. Fixed
+  (6 frames).
+- **60 players sampled across the whole space,** scored against the zoner and the reactor: before the fix none won
+  more than it lost; after it one beat both 3 rounds to 1.
+- **Search C,** from that one, against all five (8 generations of 15): players that never draw, beat the weaker
+  three, split with the zoner and lose to the reactor.
+
+**The grid:** the five recipe players and four searched ones (A; C's mean and its best; the sampled one), 45
+pairings and mirrors, 540 matches, 1,388 rounds, no desync, none stuck, a match 3.3 minutes of game. The referee's
+reading of a round differed from the game's stars in 4 rounds, all third rounds after drawn ones, where the game
+puts both fighters on one star for a last round whatever the third did; the match's result is the game's. Matches won,
+undecided, lost, row against column:
+
+| | masher | zoner | reactor | punisher | reactor-50 | searched A | searched C | C's best | sampled | All |
+|---|---|---|---|---|---|---|---|---|---|---|
+| searched A | 12-0-0 | 0-12-0 | 0-12-0 | 11-0-1 | 12-0-0 | | 11-0-1 | 12-0-0 | 11-0-1 | 69-24-3 |
+| reactor | 12-0-0 | 0-12-0 | | 12-0-0 | 12-0-0 | 0-12-0 | 11-0-1 | 11-0-1 | 9-0-3 | 67-24-5 |
+| zoner | 12-0-0 | | 0-12-0 | 7-0-5 | 12-0-0 | 0-12-0 | 8-0-4 | 5-0-7 | 9-0-3 | 53-24-19 |
+| searched C | 11-0-1 | 4-0-8 | 1-0-11 | 11-0-1 | 12-0-0 | 1-0-11 | | 7-0-5 | 10-0-2 | 57-0-39 |
+| C's best | 11-0-1 | 7-0-5 | 1-0-11 | 12-0-0 | 12-0-0 | 0-0-12 | 5-0-7 | | 6-0-6 | 54-0-42 |
+| sampled | 10-0-2 | 3-0-9 | 3-0-9 | 11-0-1 | 11-0-1 | 1-0-11 | 2-0-10 | 6-0-6 | | 47-0-49 |
+| reactor-50 | 12-0-0 | 0-0-12 | 0-0-12 | 10-0-2 | | 0-0-12 | 0-0-12 | 0-0-12 | 1-0-11 | 23-0-73 |
+| punisher | 10-0-2 | 5-0-7 | 0-0-12 | | 2-0-10 | 1-0-11 | 1-0-11 | 0-0-12 | 1-0-11 | 20-0-76 |
+| masher | | 0-0-12 | 0-0-12 | 2-0-10 | 0-0-12 | 0-0-12 | 1-0-11 | 1-0-11 | 2-0-10 | 6-0-90 |
+
+**Against the bar:**
+1. Searched A beats the masher, the punisher and the noisy reactor (35 of 36, all decided). Against the zoner and
+   the reactor none of its 24 matches was decided. **Fail.**
+2. No recipe player beats it (it lost 3 matches of 96, none to the careful two). Pass.
+3. The two strongest are searched A and the reactor: 0 of 12 decided. **Fail.** The same between either and the
+   zoner, and in all three mirrors: 72 matches among the three, 72 undecided, 68 of them four drawn rounds running.
+
+**What it shows.** There is no circle: 5.7's was a hand-written player's weakness, and the order here is clean.
+Outside the top three all 468 matches were decided, and a player that looks at the other fighter beats one that
+doesn't. The trouble is the top. The best play search can find in this vocabulary is to throw fireballs, block what
+arrives and never commit first, and two players doing it cancel each other's fireballs at full health until the
+game gives up on the match. The players search found that do take risks (C) are decided every time and lose to the
+reactor and to searched A 45 matches in 48. So the better player wins clearly more up to the careful recipe, and above it there
+is nothing to be better at. Two causes, and only one is the model's:
+- **The game's:** no throw anywhere, so a block costs nothing but chip, and a fireball is safe at range.
+- **The model's:** both plans start on the same frame, so two fireballs always meet and cancel. Against a person, or
+  with any offset, one side would be a few frames ahead and that is what fireball fights turn on.
+
+**Why agents' rounds don't look like this.** Rounds seven to nine were all decided, because the agents took risks
+the search calls mistakes: jumping fireballs, sweeping first. Round nine (below) was won 104 to 0 by the side that
+waited and punished. A ladder rewards whoever stops taking them, and then the top of it is this grid's top.
+
+**Recommendation: don't build this game as a rated ladder.** In the order I'd weigh what's left:
+1. **Drop it for rated play** and keep what was learned (the rig runs a real-time game exactly; plans and windows
+   work; the state fields; the method of grading before building). This is my recommendation. Phase 2 was the cheap
+   test, and it did its job.
+2. **A different decision model,** if the owner wants one more try: break the same-frame start (plans that take
+   effect a few frames apart, by turns or by a seeded offset neither side knows) so a fireball fight has a winner,
+   then rerun this grid. It answers the model's half of the problem and leaves the game's: with no throw I'd expect
+   fewer undecided matches, not none, and it adds a rule that isn't the game's.
+3. **Different fighters** don't help: none has a throw. Guile's and the others' specials aren't in the vocabulary
+   and weren't graded, but nothing found suggests an answer to a block among them.
+4. **Unrated exhibition** is open either way: the fights film well, and nothing about a single match needs the
+   ladder to be sound.
+
+**Round nine** (the user's go-ahead; same two agents and instructions; 5.8's last fixes plus two refinements: a
+ball's still time in the arrival, 4 frames not 9, and a block pose that ends at once when the strike is out of
+reach): **Ken by knockout, 104 to 0,** 52 windows, 2,536 frames, 7 minutes, no missed plan, both games agreeing.
+Ken threw fireballs, crouch-blocked, and dragon punched every jump the state showed: 5 sent, 3 landed, each
+followed by a fireball timed for the get-up, and the knockout was a jump kick. Ryu's one hit was a jump kick too.
+
+| | Six | Seven | Eight | Nine |
+|---|---|---|---|---|
+| Windows | 68 | 85 | 90 | 52 |
+| Ended | knockout | stopped at 0 | the clock, 32 to 29 | knockout, 104 to 0 |
+| Fireball steps, both sides | 31 | 31 | 31 | 13 |
+| Sweeps, strikes, jump kicks and hurricane kicks sent | 23 | 28 | 51 | 37 |
+| Hits that weren't a fireball | 6 | 8 | 9 | 6: three dragon punches, two jump kicks, a sweep |
+| Dragon punch steps sent, and landed | 1, 1 | 2, 2 | 1, 0 | 5, 3 |
+
+What the players reported of the fixes: a move hit before it came out no longer held the next plan (four times, each
+with nothing in progress shown and the next plan on time). The block-pose guess was right when the strike was in
+reach or plainly out of it and wrong three times in between or after a fireball. `their_fireball_coming` was
+consistent from 60 and beyond and still off by about 10 from closer, late for a fighter walking in and early for
+one standing. Still wrong, not fixed: a sweep's carried inputs run 27 to 30 frames because its held crouch counts
+as input; a ball long gone still listed as the thrower's own; a dragon punch's motion reads as "crouching" until
+the punch shows, so no window opens on it; a blocked strike isn't listed.
 
 ## 6. The game file, and the law
 
