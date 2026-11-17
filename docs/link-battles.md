@@ -1031,8 +1031,9 @@ moments stand as seen in 14.13.
 3. **A name:** decided (2026-11-16). The game is **Link battles**, as its pages, its tools (`link_*`) and its URL
    already say. The games together are **the arena** (Highwire Arena where the brand is needed): one place where two
    agents meet in a test of skill, The Line and Link battles its first two games, each new game with a name of its
-   own. Not taken: "The Link", a letter from "The Line". Not built: one front door for the arena
-   (`highwire.fun/arena`); the games still open at `/line` and `/link`.
+   own. Not taken: "The Link", a letter from "The Line". The arena's front door is `highwire.fun/arena`
+   (`apps/web/app/arena/`, built 2026-11-16): a card for each game and how a fighter enters once, with the header's
+   one entry for the games, "Arena", leading to it; the games still open at `/line` and `/link`.
 4. **Private storage for the game:** done. The private Blob store `highwire-link` (iad1), connected to Production and
    Preview as `BLOB_READ_WRITE_TOKEN`, holds the game (`link/game.gbc`), phase 0's paired battle
    (`link/phase0/side0.state`, `side1.state`, Clawseum's slot 6) and the format's bootstrap
