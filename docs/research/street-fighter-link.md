@@ -1,10 +1,10 @@
 # Assessment: Street Fighter II link battles
 
-Status: **due diligence, 2026-11-16 and 17. Nothing built. The engine side works, and the test of skill, failed in
-5.9, passes in 5.10 with a better-searched player and no change to the rules. 5.9's recommendation to drop the game
-is withdrawn; one check remains before building (5.10).** Whether Highwire can run a Game Boy Street Fighter
-II link-cable fight between two agents the way it runs Pokémon Yellow's (docs/link-battles.md), and what it would
-take. The decision is the owner's. Not legal advice.
+Status: **due diligence, 2026-11-16 and 17. Nothing built. The engine side works. The test of skill failed (5.9),
+passed with a better-searched player (5.10), and then failed where it matters (5.11): the players that nothing
+beats don't decide matches against each other. The recommendation is not to build this game as a rated ladder.**
+Whether Highwire can run a Game Boy Street Fighter II link-cable fight between two agents the way it runs Pokémon
+Yellow's (docs/link-battles.md), and what it would take. The decision is the owner's. Not legal advice.
 
 ## 1. The answer
 
@@ -21,24 +21,25 @@ decision model that's still Street Fighter (4.2). That design, and reverse-engin
 disassembly, are most of the work. **The open non-technical question is the same one Yellow already carries,** with a
 second rights holder (6): the owner's call, ideally with counsel.
 
-**The verdict after ten rounds and the grids (5.1 to 5.10): the rig passes, and so does the test of skill, on the
-second attempt.**
+**The verdict after ten rounds and the grids (5.1 to 5.11): the rig passes; the game, as a rated ladder, doesn't.**
 - **What works.** Two linked Game Boys under a plan-and-window referee: no desync and no stuck rig in several
   thousand scripted rounds and ten rounds between agents; moves come out as asked; rounds end on the game's own
   knockouts and matches by the game's own rule; the state tells a player when its press will start, when its block
   works and when a fireball lands. Rounds between agents look like fights.
-- **The test of skill.** 5.9 failed it: the strongest player its search found only drew the careful recipe players,
-  72 undecided matches in 72. 5.10 searched again and found a player that walks in, jumps a fireball as it is thrown
-  and times its own for the other fighter's get-up. With the rules unchanged it won 60 of 72 matches against the
-  five recipe players and its sibling, every one decided, and the bar set in 5.9 is met on all three counts. **5.9's
-  failure was the search's, not the game's.**
-- **The offset rule the owner asked for was tried and isn't needed.** Plans that start a hidden few frames apart left
-  the careful players exactly as stuck with each other, and added luck: the strong player's wins over the weakest
-  fell from 12 in 12 to 8 in 12. Not recommended.
-- **What is still true from 5.9.** No fighter has a throw. Careful recipe players still can't beat each other; they
-  now have something that beats them. Player 2's seat keeps a small edge, so pairings need both seats.
-- **What isn't shown yet.** The top of the field is one family of player from one search. Whether something beats
-  it, or draws it, wasn't searched. That is the check to make first in phase 2 proper, before anything is built.
+- **Skill is rewarded most of the way up.** A player that looks beats one that doesn't; a player that walks in and
+  jumps fireballs as they're thrown beats the careful recipe players, in decided matches (5.10).
+- **The top doesn't decide matches.** The answer to that attacker is a careful fireball thrower that also reacts:
+  it anti-airs the jump, blocks the strike and punishes what's left. It beat the attacker 10 and 11 matches in 12,
+  and its sharper sibling lost 5 and 10 matches of 84 to anyone, and against their own kind and the careful recipe
+  players three matches in four ended with no winner by the game's own rule (5.11). Sixty players sampled across the whole space won 27 rounds of
+  480 against the two of them. So the best play found, three searches deep, is not to lose, and two players doing
+  it don't produce a result.
+- **Why.** No fighter in the roster has a throw (5.9), so a block costs nothing but chip; a fireball is safe at
+  range and two of them cancel; and a player with the state in front of it and time to think answers every jump.
+  The offset rule tried in 5.10 changes none of that and adds luck.
+- **So:** a ladder on this game would sort its lower half well and leave its best fighters in undecided matches.
+  **Recommended: don't build it as a rated game.** An unrated exhibition between agents is a different question and
+  stays open: their rounds are decided and watchable, because they take risks the search wouldn't.
 
 ## 2. How link battles are built today
 
@@ -722,8 +723,9 @@ Both of eight's players said the block and fireball fields were right where they
 
 ### 5.9 The deciding round: searched players, the whole roster's throws, seat or fighter, and the bar (2026-11-17)
 
-*(Overturned by 5.10: the fail below was this section's search, which stopped at a fireball thrower. A player found
-in 5.10 passes the same bar under the same rules. The throw and seat findings stand; the recommendation doesn't.)*
+*(5.10 found a player that passes this section's bar under the same rules, and 5.11 found what beats that player:
+a careful one of the kind described here, which draws its like. So this section's search was too weak, and its
+conclusion and recommendation stand all the same.)*
 
 The question 5.8 left: is there a clearly stronger player in this vocabulary, or does skill stop at a recipe? Run
 on 5.8's referee (true knockouts, the game's match rule, the carried-move fix).
@@ -859,6 +861,9 @@ the punch shows, so no window opens on it; a blocked strike isn't listed.
 
 ### 5.10 One more try: plans that start apart, a fresh search, and the same bar (2026-11-17)
 
+*(5.11 made the check this section asks for. The player found here is beaten by a careful one that draws its
+like, so the recommendation at this section's end is withdrawn. The findings on the offset rule stand.)*
+
 The owner chose 5.9's second option. The design and the test for skill or luck were written down before the search
 and the grid ran.
 
@@ -954,6 +959,68 @@ never came out; a fireball's `free_in_about` reading 44 in some windows where it
 `their_fireball_coming` (a code the length table lacks, still not traced); `their_fireball.arrives_in_about` about
 8 late inside 50; a jump attack landing about 8 frames before `lands_in_about`. The rules text doesn't say that a
 blocked sweep pushes the fighters about 16 apart, or when a jump leaves the ground (15 frames after it shows).
+
+### 5.11 What beats the top player, and what beats that (2026-11-17)
+
+5.10's open check, on the owner's go-ahead. Rules unchanged, no offset. What would count was written down first:
+the top "closes up" if matches among the searched players are decided less than nine times in ten; an order among
+them, or a circle of players beating each other in decided matches, would both be fine.
+
+**Three searches, each an answer to the last** (6 generations of 15 each):
+- **F answers D.** 60 sampled players were scored against D and its sibling (3 won more rounds than they lost), and
+  a search from the best became a player that throws fireballs from range and walks, like 5.9's, but also reacts:
+  it dragon-punches a jump nine times in ten, blocks a strike in range, sweeps a fighter that's stuck, jumps a
+  fireball as it's thrown, and attacks more when behind. It took 10 of 12 rounds from D and its sibling.
+- **G, D's family searching against F:** found nothing that held. A generation's best took as many as 6 rounds of
+  8 from F and its sibling, on four rounds each; the search's mean stayed where D was, and in the grid G lost to F
+  12 matches in 12.
+- **H, F's family searching against G and D:** F again, a little sharper.
+
+**The grid:** three recipe players, 5.9's A, and D, F, G and H; 432 matches, 1,287 rounds, no desync, none stuck,
+seats 140 to 139. Won, undecided, lost:
+
+| | masher | zoner | reactor | A | D | F | G | H | All |
+|---|---|---|---|---|---|---|---|---|---|
+| searched D | 10-0-2 | 12-0-0 | 11-0-1 | 9-0-3 | | 2-0-10 | 6-0-6 | 1-0-11 | 51-0-33 |
+| searched G | 10-0-2 | 12-0-0 | 11-0-1 | 11-0-1 | 6-0-6 | 0-0-12 | | 0-0-12 | 50-0-34 |
+| searched H | 11-0-1 | 1-8-3 | 1-9-2 | 5-6-1 | 11-0-1 | 1-9-2 | 12-0-0 | | 42-32-10 |
+| searched F | 10-0-2 | 2-10-0 | 0-12-0 | 0-12-0 | 10-0-2 | | 12-0-0 | 2-9-1 | 36-43-5 |
+| searched A | 12-0-0 | 0-11-1 | 0-11-1 | | 3-0-9 | 0-12-0 | 1-0-11 | 1-6-5 | 17-40-27 |
+| reactor | 12-0-0 | 0-12-0 | | 1-11-0 | 1-0-11 | 0-12-0 | 1-0-11 | 2-9-1 | 17-44-23 |
+| zoner | 12-0-0 | | 0-12-0 | 1-11-0 | 0-0-12 | 0-10-2 | 0-0-12 | 3-8-1 | 16-41-27 |
+
+Mirrors: D 12 of 12 decided and G 12 of 12; F 2 of 12 and H 5 of 12.
+
+**The top closes up.** Among D, F, G and H, 63 of 72 matches were decided, under the nine in ten set beforehand,
+and the count flatters it: every match with an attacker in it was decided, and F against H was decided 3 times in
+12. What the table says, in three layers:
+1. **The attackers (D, G) beat the careful players that don't react** (the zoner, the reactor, A): 66 of 72, all
+   decided. That is 5.10's pass.
+2. **The careful players that do react (F, H) beat the attackers:** 45 of 48, all decided.
+3. **F and H against the zoner, the reactor, A, each other and themselves: 83 of 108 matches undecided,** and 11 of
+   the 25 that were decided belong to H against A and to H's mirror. F lost 5 matches of 84 and H 10 of 84.
+So nothing found beats the top, and the top doesn't beat its like. **The 60 sampled players against F and H: 27
+rounds won, 53 drawn, 400 lost;** the three that won more than they lost did it on draws.
+
+**This is 5.9's finding again, on firmer ground.** 5.9's search was too weak to see the middle layer and called
+the game on a fireball thrower that couldn't react. With the middle layer found and answered, the answer is the
+same kind of player, better. The reason hasn't changed: with no throw, a block is free, a fireball is safe and two
+cancel, and a jump at a player that can see it coming and has time to think is a jump into a dragon punch. Round
+nine was that fight between agents (three dragon punches, 104 to 0). What D exploited was that the recipe players
+don't look up.
+
+**What this doesn't show.** One family of player, 31 choices wide, searched for a few hours on one machine; six
+generations is a short search, and G's failure to answer F is the weakest link (a wider search, or a player that can
+mix its timing, might find a way through F's reactions). The reaction window (5.8) is a real lever here: at 6
+frames a dragon punch answers a jump half the time and F still wins, and nothing was tried that makes reacting
+harder. And agents are not these scripts: their rounds have all been decided. I'd weigh those against how
+consistent the picture has been across 5.7, 5.9 and this section.
+
+**Recommendation: 5.9's stands. Don't build this game as a rated ladder.** Phase 2's test asks that the better
+player win clearly more; here the best players found mostly don't win at all against each other, and the game's own
+rule for that is "no result". The offset rule doesn't help (5.10). What I would not rule out is the unrated use:
+agents' fights are decided, watchable and cheap to run, and nothing about showing one needs a sound ladder. If the
+owner wants a rated fighting game, the thing to look for first is in 5.9's list: a game with a throw.
 
 ## 6. The game file, and the law
 
