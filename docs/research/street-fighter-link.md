@@ -1,7 +1,8 @@
 # Assessment: Street Fighter II link battles
 
-Status: **due diligence, 2026-11-16 and 17. Nothing built. The engine side works; the test of skill failed (5.9), and
-the recommendation is not to build this game as a rated ladder.** Whether Highwire can run a Game Boy Street Fighter
+Status: **due diligence, 2026-11-16 and 17. Nothing built. The engine side works, and the test of skill, failed in
+5.9, passes in 5.10 with a better-searched player and no change to the rules. 5.9's recommendation to drop the game
+is withdrawn; one check remains before building (5.10).** Whether Highwire can run a Game Boy Street Fighter
 II link-cable fight between two agents the way it runs Pokémon Yellow's (docs/link-battles.md), and what it would
 take. The decision is the owner's. Not legal advice.
 
@@ -20,19 +21,24 @@ decision model that's still Street Fighter (4.2). That design, and reverse-engin
 disassembly, are most of the work. **The open non-technical question is the same one Yellow already carries,** with a
 second rights holder (6): the owner's call, ideally with counsel.
 
-**The verdict after nine rounds and the grids (5.1 to 5.9): the rig passes and the game, as agents would play it,
-doesn't.**
-- **What works.** Two linked Game Boys under a plan-and-window referee: no desync and no stuck rig in about 4,000
-  scripted rounds and nine rounds between agents; moves come out as asked; the seats are close to even; rounds end on
-  the game's own knockouts and matches by the game's own rule; the state tells a player when its press will start,
-  when its block works and when a fireball lands. Rounds between agents look like fights (5.8, 5.9).
-- **What doesn't.** Phase 2's test, that the better player wins clearly more, holds up to "plays a careful recipe"
-  and stops there. Search found no player that beats the careful ones: the strongest player found never loses to
-  anything and never beats its like. Every match among the three strongest players (72 of 72) ended with no winner,
-  by the game's own rule. No fighter in the roster has a throw, so a block has no answer but chip, and two players
-  throwing fireballs on the same frames cancel each other for ever.
-- **So:** a ladder on this game would put its best fighters in undecided matches. **Recommended: don't build it as a
-  rated game.** 5.9 says what could still be tried, and what I'd expect of it.
+**The verdict after ten rounds and the grids (5.1 to 5.10): the rig passes, and so does the test of skill, on the
+second attempt.**
+- **What works.** Two linked Game Boys under a plan-and-window referee: no desync and no stuck rig in several
+  thousand scripted rounds and ten rounds between agents; moves come out as asked; rounds end on the game's own
+  knockouts and matches by the game's own rule; the state tells a player when its press will start, when its block
+  works and when a fireball lands. Rounds between agents look like fights.
+- **The test of skill.** 5.9 failed it: the strongest player its search found only drew the careful recipe players,
+  72 undecided matches in 72. 5.10 searched again and found a player that walks in, jumps a fireball as it is thrown
+  and times its own for the other fighter's get-up. With the rules unchanged it won 60 of 72 matches against the
+  five recipe players and its sibling, every one decided, and the bar set in 5.9 is met on all three counts. **5.9's
+  failure was the search's, not the game's.**
+- **The offset rule the owner asked for was tried and isn't needed.** Plans that start a hidden few frames apart left
+  the careful players exactly as stuck with each other, and added luck: the strong player's wins over the weakest
+  fell from 12 in 12 to 8 in 12. Not recommended.
+- **What is still true from 5.9.** No fighter has a throw. Careful recipe players still can't beat each other; they
+  now have something that beats them. Player 2's seat keeps a small edge, so pairings need both seats.
+- **What isn't shown yet.** The top of the field is one family of player from one search. Whether something beats
+  it, or draws it, wasn't searched. That is the check to make first in phase 2 proper, before anything is built.
 
 ## 2. How link battles are built today
 
@@ -716,6 +722,9 @@ Both of eight's players said the block and fireball fields were right where they
 
 ### 5.9 The deciding round: searched players, the whole roster's throws, seat or fighter, and the bar (2026-11-17)
 
+*(Overturned by 5.10: the fail below was this section's search, which stopped at a fireball thrower. A player found
+in 5.10 passes the same bar under the same rules. The throw and seat findings stand; the recommendation doesn't.)*
+
 The question 5.8 left: is there a clearly stronger player in this vocabulary, or does skill stop at a recipe? Run
 on 5.8's referee (true knockouts, the game's match rule, the carried-move fix).
 
@@ -847,6 +856,104 @@ consistent from 60 and beyond and still off by about 10 from closer, late for a 
 one standing. Still wrong, not fixed: a sweep's carried inputs run 27 to 30 frames because its held crouch counts
 as input; a ball long gone still listed as the thrower's own; a dragon punch's motion reads as "crouching" until
 the punch shows, so no window opens on it; a blocked strike isn't listed.
+
+### 5.10 One more try: plans that start apart, a fresh search, and the same bar (2026-11-17)
+
+The owner chose 5.9's second option. The design and the test for skill or luck were written down before the search
+and the grid ran.
+
+**The rule tried.** At the start of every window each side's first press or motion is held back by its own number
+of frames, 0 to 9, drawn independently for the two sides from a hash of the match's seed, the window, its first
+frame and the side. Held actions and a move already in progress aren't delayed.
+- **Why a hidden draw and not turns:** a side that knows it moves second can plan around it; a draw neither side
+  sees gives nothing to plan around, and each side's delay has the same distribution in every window, so it is even
+  between the seats window by window. It doesn't touch the 2-frame hold or the seat edge that comes with it.
+- **What a side sees:** nothing before it plays. The seed is the match's, committed before and shown after, as
+  Yellow's dice are, and the draw is a function of it, so a stored match replays exactly.
+- **The suites with it on:** cases 2,238 of 2,240, cuts 390 of 390, can't-act 572 of 598, as without.
+
+**What it did to 5.9's top three: nothing.** Their matches again, 12 a pairing: 71 of 72 undecided at 0 to 9 frames
+and 70 of 72 at 0 to 30. Two fireballs thrown a few frames apart still meet and cancel; the offset only moves where.
+My guess in 5.9, "fewer undecided matches, not none", was too kind to it.
+
+**The fresh search, under the rule,** with 5.9's reaction flaw kept fixed. The 60 sampled players were scored
+against the two careful recipe players, and a search started from the best of them (6 generations of 15, against
+all five recipe players); a second started from 5.9's searched A.
+- **Searched D** (from the sample): by the fifth generation it won every round against all five. It walks in and
+  seldom throws from range, jump-kicks over a fireball as it is thrown, sweeps a fighter that is stuck, and times a
+  fireball for a knocked-down fighter's get-up.
+- **Searched E** (from A): stayed a fireball thrower and kept drawing the careful two.
+
+**The grid, under the rule:** 5.9's five recipe players, the four new ones (D and its best generation, E and its
+best) and 5.9's A; 660 matches, 1,813 rounds, no desync, none stuck. Won, undecided, lost:
+
+| | masher | zoner | reactor | punisher | reactor-50 | D | D's best | E | E's best | A | All |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| searched D | 8-0-4 | 11-0-1 | 10-0-2 | 12-0-0 | 12-0-0 | | 6-0-6 | 9-0-3 | 10-0-2 | 10-0-2 | 88-0-20 |
+| D's best | 10-0-2 | 9-0-3 | 8-0-4 | 12-0-0 | 12-0-0 | 6-0-6 | | 6-0-6 | 9-0-3 | 8-0-4 | 80-0-28 |
+| searched E | 12-0-0 | 1-11-0 | 0-12-0 | 12-0-0 | 12-0-0 | 3-0-9 | 6-0-6 | | 0-9-3 | 1-11-0 | 47-43-18 |
+| reactor | 12-0-0 | 0-12-0 | | 12-0-0 | 12-0-0 | 2-0-10 | 4-0-8 | 0-12-0 | 0-12-0 | 0-12-0 | 42-48-18 |
+| searched A | 11-0-1 | 0-12-0 | 0-12-0 | 12-0-0 | 12-0-0 | 2-0-10 | 4-0-8 | 0-11-1 | 1-11-0 | | 42-46-20 |
+| zoner | 12-0-0 | | 0-12-0 | 2-0-10 | 12-0-0 | 1-0-11 | 3-0-9 | 0-11-1 | 1-11-0 | 0-12-0 | 31-46-31 |
+
+(The punisher, the noisy reactor and the masher won 19, 21 and 13 of 108.)
+
+**Against 5.9's bar, unchanged: pass.**
+1. Searched D against each recipe player: 8 of 12, 11, 10, 12 and 12, every match decided. The masher's 8 of 12 is
+   exactly two in three. Pass.
+2. No recipe player beats it. Pass.
+3. The two strongest are D and its own best generation: 12 of 12 decided, 6 each. They are one family, so the next
+   distinct player too: D against E 12 of 12 decided, D against the reactor 12 of 12. Pass.
+The mirrors among the top three: D 12 of 12 decided (3 to player 1's seat, 9 to player 2's), D's best 12 of 12 (5
+and 7), E 2 of 12.
+
+**But the rule isn't what passed it. The control, with no offset,** the same players, 12 a pairing, new seeds:
+
+| | masher | zoner | reactor | punisher | reactor-50 | D | D's best | All |
+|---|---|---|---|---|---|---|---|---|
+| searched D, no offset | 12-0-0 | 12-0-0 | 9-0-3 | 12-0-0 | 12-0-0 | | 3-0-9 | 60-0-12 |
+| D's best, no offset | 10-0-2 | 12-0-0 | 8-0-4 | 12-0-0 | 11-0-1 | 9-0-3 | | 62-0-10 |
+
+**The bar is met with the rules as they were in 5.9:** D wins 57 of 60 against the five recipe players, three in
+four or better against each, all decided; its mirror was 12 of 12 decided, six to each seat. A second control (D
+against the zoner, the reactor and 5.9's A, no offset) gave 10 of 12, 12 of 12 and 10 of 12. So 5.9 failed because
+its search did: two of its three searches ran with the reaction flaw, and the third started from a player that
+turned out weaker than the one this section's sample picked. The careful players can be beaten by a fighter that
+jumps the fireball when it is thrown, which is what the agents' rounds had been showing since round eight.
+
+**Skill or luck (the test written beforehand): the offset adds luck.**
+- A stronger player should beat a weaker one as often as before. 5.9's A and the reactor did (35 of 36 and 36 of 36
+  against the three weaker recipe players, as in 5.9). **D didn't: 12 of 12 against the masher with no offset, 11 of
+  12 in the second control, 8 of 12 with it.** A player that wins by timing loses some of it to a draw it can't see.
+- D's mirror went from six each to 3 and 9 by seat. Twelve matches can't make much of that, but it isn't nearer
+  even.
+- **Round ten** (two agents, under the rule): Ken on the clock, 62 to 52, 92 windows, 4,674 frames, no missed plan,
+  both games agreeing. Both players, separately, named the same moment as the round's biggest swing: at window 80
+  both threw a fireball from 44 apart, one left 5 frames sooner and hit the other in its startup for 16, turning a
+  10-point lead into a 6-point deficit. One called it "pure luck", the other "a coin flip I couldn't influence".
+  Both said estimates stayed usable where the margin was 15 frames or more.
+
+**So: the rule is not recommended.** It doesn't do what it was for (the careful players stay stuck with each other),
+the game passes the bar without it, and it costs skill where skill is timing. It also isn't the game's own. The
+switch stays in the proof of concept, off.
+
+**Recommendation, replacing 5.9's.** The reason to drop the game is gone: with the rules as they are, a player that
+plays better beats players that play worse, in decided matches. What I'd do before building anything:
+1. **Search for what beats D, and what D does about it** (a best response, then a response to that, two or three
+   times round). This grid's top is one family from one search. If the answer to D is another player that waits, the
+   top could close up again; if it's a different way of attacking, the game has depth. This is phase 2's real
+   question and it costs about what this section did.
+2. **Play every pairing in both seats.** Player 2's seat won 54% of mirror rounds in 5.9, and here 257 matches to
+   234 with the offset and 155 to 145 without.
+3. **The state's known faults** (below) before agents are asked to rely on it.
+The owner's other question (6) is unchanged, and nothing here bears on it.
+
+**Still wrong in the state, from round ten's accounts:** a press sent out of a block pose starts far later than the
+5 frames stated when the other fighter's attack missed; "your fireball is on its way" shown for a fireball that
+never came out; a fireball's `free_in_about` reading 44 in some windows where it should be 59, with no
+`their_fireball_coming` (a code the length table lacks, still not traced); `their_fireball.arrives_in_about` about
+8 late inside 50; a jump attack landing about 8 frames before `lands_in_about`. The rules text doesn't say that a
+blocked sweep pushes the fighters about 16 apart, or when a jump leaves the ground (15 frames after it shows).
 
 ## 6. The game file, and the law
 
