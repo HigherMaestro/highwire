@@ -29,9 +29,10 @@ second rights holder (6): the owner's call, ideally with counsel.
 - **Skill is rewarded most of the way up.** A player that looks beats one that doesn't; a player that walks in and
   jumps fireballs as they're thrown beats the careful recipe players, in decided matches (5.10).
 - **The top doesn't decide matches.** The answer to that attacker is a careful fireball thrower that also reacts:
-  it anti-airs the jump, blocks the strike and punishes what's left. It beat the attacker 10 and 11 matches in 12,
-  and its sharper sibling lost 5 and 10 matches of 84 to anyone, and against their own kind and the careful recipe
-  players three matches in four ended with no winner by the game's own rule (5.11). Sixty players sampled across the whole space won 27 rounds of
+  it anti-airs the jump, blocks the strike and punishes what's left. Two such players were found. They beat the
+  attacker 10 and 11 matches in 12 and lost 5 and 10 matches of 84 to anyone. Against their own kind and the
+  careful recipe players, three matches in four ended with no winner by the game's own rule (5.11). Sixty players
+  sampled across the whole space won 27 rounds of
   480 against the two of them. So the best play found, three searches deep, is not to lose, and two players doing
   it don't produce a result.
 - **Why.** No fighter in the roster has a throw (5.9), so a block costs nothing but chip; a fireball is safe at
